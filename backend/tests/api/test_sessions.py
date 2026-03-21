@@ -113,7 +113,7 @@ async def test_messages_persist_via_websocket(client, tmp_path, monkeypatch):
         raise LLMUnavailableError(LLM_UNAVAILABLE_MESSAGE)
         yield
 
-    with patch("routers.chat.build_system_prompt", return_value="test prompt"), \
+    with patch("routers.chat.build_chat_prompt", return_value="test prompt"), \
          patch("routers.chat.stream_response", mock_stream):
         with sync_client.websocket_connect(f"/chat?token={token}") as ws:
             ws.send_text(json.dumps({"message": "hello", "session_id": sid}))

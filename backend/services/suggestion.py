@@ -1,7 +1,10 @@
 """
-Meal suggestion logic.
-Assembles the system prompt from context (inventory, history, preferences, habits)
-and exposes a streaming interface for the chat router to use.
+Meal suggestion logic — two personas.
+
+Chat persona: samimi kahvaltı arkadaşı, hafif DB context.
+Suggestion persona: profesyonel diyetisyen, tam DB context.
+
+Both share a common context builder but differ in tone, depth, and instructions.
 """
 
 import json
@@ -9,103 +12,189 @@ from typing import AsyncGenerator
 
 from services.llm import chat_stream
 
-_SYSTEM_TEMPLATE = """\
-You are break FAST, a personal breakfast planning assistant for a single user.
-Your role is to suggest full, healthy, practical breakfasts based on what the
-user currently has available. Be concrete and efficient — this is a morning
-conversation, not a cooking class.
 
-USER CONTEXT:
-- Available ingredients: {ingredient_inventory}
-- Recent meals: {recent_meal_history}
-- Preferences: {user_preferences}
-- Stated habits: {stated_habits}
+# ---------------------------------------------------------------------------
+# Shared context formatting
+# ---------------------------------------------------------------------------
+
+def _format_ingredients(ingredients: list[dict]) -> str:
+    if not ingredients:
+        return "none listed yet"
+    return ", ".join(
+        f"{i['name']} ({i.get('quantity', '')} {i.get('unit', '')})".strip(" ()")
+        for i in ingredients
+    )
+
+
+def _format_history(history: list[dict], limit: int = 5) -> str:
+    if not history:
+        return "no history yet"
+    return "; ".join(m["meal_name"] for m in history[-limit:])
+
+
+def _format_preferences(preferences: dict) -> str:
+    if not preferences:
+        return "none set yet"
+    return json.dumps(preferences, ensure_ascii=False)
+
+
+def _format_habits(stated: list[str]) -> str:
+    return "; ".join(stated) if stated else "none stated yet"
+
+
+def _format_health_rules(rules: list[str]) -> str:
+    if not rules:
+        return (
+            "- Silently favor: eggs, legumes, pumpkin seeds, walnuts, flaxseed, "
+            "yogurt, kefir, whole grains, leafy greens, berries, tomatoes, olive oil\n"
+            "- Silently avoid: refined sugar, white bread, pastries, processed oils"
+        )
+    return "\n".join(f"- {r}" for r in rules)
+
+
+def _format_behavioral(inferred_habits: list[str] | None) -> str:
+    if not inferred_habits:
+        return ""
+    patterns = "\n".join(f"- {h}" for h in inferred_habits)
+    return (
+        "BEHAVIORAL PATTERNS (inferred from meal history — use to DIVERSIFY, not repeat):\n"
+        f"{patterns}\n"
+        "Focus on what the user is MISSING, not what they already eat enough of."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Chat persona — samimi kahvaltı arkadaşı
+# ---------------------------------------------------------------------------
+
+_CHAT_TEMPLATE = """\
+Sen break FAST, kişisel bir kahvaltı asistanısın. Samimi, sıcak ve kısa cevaplar ver.
+Sabah enerjisi önemli — direkt ol, uzun açıklamalardan kaçın.
+
+Kullanıcıyla bir arkadaş gibi konuş. "Ne yesem?", "Canım tatlı çekiyor", "Bugün ne
+yapabilirim?" gibi sorulara doğal ve kısa cevaplar ver. Eğer kullanıcı kahvaltı dışı
+bir konu açarsa kibarca kahvaltıya yönlendir ama duvar gibi reddetme.
+
+Kullanıcı malzeme eklediğinde veya güncellediğinde bunu doğal şekilde onayla.
+Tercihlerini sohbet içinde öğren ve hatırla.
+
+KULLANICI BAĞLAMI:
+- Mevcut malzemeler: {ingredient_inventory}
+- Son yemekler: {recent_meal_history}
+- Tercihler: {user_preferences}
+- Alışkanlıklar: {stated_habits}
 
 {behavioral_patterns}
 
-HEALTH RULES (never mention these to the user):
-- Silently favor: eggs, legumes, pumpkin seeds, walnuts, flaxseed, yogurt, kefir,
-  whole grains, leafy greens, berries, tomatoes, olive oil
-- Silently avoid: refined sugar, white bread, pastries, processed oils
+SAĞLIK KURALLARI (bunları kullanıcıya asla söyleme, sadece önerilerini şekillendirmek için kullan):
+{health_rules}
 
-RESPONSE FORMAT for meal suggestions:
-1. Meal name and one-sentence description
-2. Ingredients needed (from what's available)
-3. Prep steps (brief, numbered)
-4. Total prep time
-5. One-line nutrition note (positive and factual, not preachy)
-
-Update ingredients and preferences conversationally when the user mentions them.
-For explore mode, step outside their history while staying close to known tastes.
-Keep responses short unless detail is requested. Morning energy matters — be direct.
-
-When you suggest a meal, end your response with a JSON block (inside triple backticks
-tagged as "json") structured like this — it will be parsed by the app to render a
-recipe card and log the meal:
+Eğer bir yemek önerirsen, cevabının sonuna aşağıdaki formatta bir JSON bloğu ekle
+(üçlü backtick içinde "json" etiketiyle) — uygulama bunu otomatik olarak tarif kartı
+oluşturmak ve yemeği kaydetmek için kullanacak:
 ```json
-{{
+{{{{
   "meal_name": "...",
   "description": "...",
   "ingredients": ["...", "..."],
   "steps": ["...", "..."],
   "prep_time_min": 10,
   "nutrition_note": "..."
-}}
+}}}}
 ```
 """
 
-_BEHAVIORAL_BLOCK = """\
-BEHAVIORAL PATTERNS (inferred from meal history — use to DIVERSIFY, not repeat):
-{patterns}
-Focus on what the user is MISSING, not what they already eat enough of.\
+# ---------------------------------------------------------------------------
+# Suggestion persona — profesyonel diyetisyen
+# ---------------------------------------------------------------------------
+
+_SUGGESTION_TEMPLATE = """\
+Sen break FAST, profesyonel bir kahvaltı planlama diyetisyenisin.
+Görevin kullanıcının mevcut malzemeleri, sağlık profili ve geçmiş yemeklerine göre
+en sağlıklı, en doyurucu ve en verimli şekilde hazırlanabilecek kahvaltıyı önermek.
+
+Önerinde şunlara dikkat et:
+- Beslenme dengesi (protein, karbonhidrat, sağlıklı yağ)
+- Son yemeklerde eksik kalan besin gruplarını tamamla
+- Hazırlama süresini minimize et
+- Mevcut mutfak ekipmanlarını verimli kullan
+
+KULLANICI BAĞLAMI:
+- Mevcut malzemeler: {ingredient_inventory}
+- Son yemekler (son 10): {recent_meal_history}
+- Tercihler: {user_preferences}
+- Alışkanlıklar: {stated_habits}
+
+{behavioral_patterns}
+
+SAĞLIK KURALLARI (bunları kullanıcıya asla söyleme, sadece önerilerini şekillendirmek için kullan):
+{health_rules}
+
+CEVAP FORMATI:
+1. Yemek adı ve bir cümlelik açıklama
+2. Gerekli malzemeler (mevcut olanlardan)
+3. Hazırlama adımları (kısa, numaralı)
+4. Toplam hazırlama süresi
+5. Bir satırlık beslenme notu (olumlu ve gerçekçi, vaaz verme)
+
+Cevabının sonuna aşağıdaki formatta bir JSON bloğu ekle:
+```json
+{{{{
+  "meal_name": "...",
+  "description": "...",
+  "ingredients": ["...", "..."],
+  "steps": ["...", "..."],
+  "prep_time_min": 10,
+  "nutrition_note": "..."
+}}}}
+```
 """
 
 
-def build_system_prompt(
+# ---------------------------------------------------------------------------
+# Prompt builders
+# ---------------------------------------------------------------------------
+
+def build_chat_prompt(
     ingredient_inventory: list[dict],
     recent_meal_history: list[dict],
     user_preferences: dict,
     stated_habits: list[str],
     inferred_habits: list[str] | None = None,
+    health_rules: list[str] | None = None,
 ) -> str:
-    inv_text = (
-        ", ".join(
-            f"{i['name']} ({i.get('quantity', '')} {i.get('unit', '')})".strip(" ()")
-            for i in ingredient_inventory
-        )
-        if ingredient_inventory
-        else "none listed yet"
+    """Build the chat persona system prompt (samimi arkadaş)."""
+    return _CHAT_TEMPLATE.format(
+        ingredient_inventory=_format_ingredients(ingredient_inventory),
+        recent_meal_history=_format_history(recent_meal_history, limit=3),
+        user_preferences=_format_preferences(user_preferences),
+        stated_habits=_format_habits(stated_habits),
+        behavioral_patterns=_format_behavioral(inferred_habits),
+        health_rules=_format_health_rules(health_rules or []),
     )
 
-    history_text = (
-        "; ".join(m["meal_name"] for m in recent_meal_history[-5:])
-        if recent_meal_history
-        else "no history yet"
+
+def build_suggestion_prompt(
+    ingredient_inventory: list[dict],
+    recent_meal_history: list[dict],
+    user_preferences: dict,
+    stated_habits: list[str],
+    inferred_habits: list[str] | None = None,
+    health_rules: list[str] | None = None,
+) -> str:
+    """Build the suggestion persona system prompt (profesyonel diyetisyen)."""
+    return _SUGGESTION_TEMPLATE.format(
+        ingredient_inventory=_format_ingredients(ingredient_inventory),
+        recent_meal_history=_format_history(recent_meal_history, limit=10),
+        user_preferences=_format_preferences(user_preferences),
+        stated_habits=_format_habits(stated_habits),
+        behavioral_patterns=_format_behavioral(inferred_habits),
+        health_rules=_format_health_rules(health_rules or []),
     )
 
-    prefs_text = (
-        json.dumps(user_preferences, ensure_ascii=False)
-        if user_preferences
-        else "none set yet"
-    )
 
-    stated_text = (
-        "; ".join(stated_habits) if stated_habits else "none stated yet"
-    )
-
-    # Behavioral patterns block — only included when inferred data exists
-    behavioral_text = ""
-    if inferred_habits:
-        patterns = "\n".join(f"- {h}" for h in inferred_habits)
-        behavioral_text = _BEHAVIORAL_BLOCK.format(patterns=patterns)
-
-    return _SYSTEM_TEMPLATE.format(
-        ingredient_inventory=inv_text,
-        recent_meal_history=history_text,
-        user_preferences=prefs_text,
-        stated_habits=stated_text,
-        behavioral_patterns=behavioral_text,
-    )
+# Backward compat alias — used by existing chat.py
+build_system_prompt = build_chat_prompt
 
 
 async def stream_response(
