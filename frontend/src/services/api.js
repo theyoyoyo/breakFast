@@ -53,6 +53,9 @@ export const logout = () => {
   localStorage.removeItem('bf_user')
 }
 
+export const checkAuth = () =>
+  apiFetch(`${BASE_URL}/health/auth`)
+
 // ---------------------------------------------------------------------------
 // Ingredients
 // ---------------------------------------------------------------------------
@@ -107,6 +110,25 @@ export const addHabit = (description) =>
 
 export const deleteHabit = (id) =>
   apiFetch(`${BASE_URL}/preferences/habits/${id}`, { method: 'DELETE' })
+
+// ---------------------------------------------------------------------------
+// Sessions
+// ---------------------------------------------------------------------------
+
+export const getActiveSession = () =>
+  apiFetch(`${BASE_URL}/sessions/active`)
+
+export const createSession = () =>
+  apiFetch(`${BASE_URL}/sessions/`, { method: 'POST' })
+
+export const deleteSession = (sessionId) =>
+  apiFetch(`${BASE_URL}/sessions/${sessionId}`, { method: 'DELETE' })
+
+export const listSessions = () =>
+  apiFetch(`${BASE_URL}/sessions/`)
+
+export const getSessionMessages = (sessionId) =>
+  apiFetch(`${BASE_URL}/sessions/${sessionId}/messages`)
 
 // ---------------------------------------------------------------------------
 // WebSocket chat

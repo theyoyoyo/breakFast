@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import ChatInterface from './components/ChatInterface'
 import RecipeCard from './components/RecipeCard'
 import ScheduleTimeline from './components/ScheduleTimeline'
 import IngredientPanel from './components/IngredientPanel'
 import PreferencesPanel from './components/PreferencesPanel'
 import LoginScreen from './components/LoginScreen'
-import { logout } from './services/api'
+import { logout, checkAuth } from './services/api'
 
 const TABS = ['Chat', 'Ingredients', 'Preferences']
 
@@ -90,11 +90,25 @@ function getStoredAuth() {
 
 export default function App() {
   const [auth, setAuth] = useState(getStoredAuth)
+  const [authChecked, setAuthChecked] = useState(false)
   const [activeTab, setActiveTab] = useState('Chat')
+
+  // Validate stored token against backend on app start
+  useEffect(() => {
+    if (!auth) { setAuthChecked(true); return }
+    checkAuth()
+      .then(() => setAuthChecked(true))
+      .catch(() => {
+        logout()
+        setAuth(null)
+        setAuthChecked(true)
+      })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const [latestMeal, setLatestMeal] = useState(null)
   const [latestMealId, setLatestMealId] = useState(null)
   const [ingredientRefresh, setIngredientRefresh] = useState(0)
 
+  if (!authChecked) return null // wait for token validation
   if (!auth) {
     return <LoginScreen onLogin={(data) => setAuth(data)} />
   }
