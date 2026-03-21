@@ -43,14 +43,14 @@ When you suggest a meal, end your response with a JSON block (inside triple back
 tagged as "json") structured like this — it will be parsed by the app to render a
 recipe card and log the meal:
 ```json
-{
+{{
   "meal_name": "...",
   "description": "...",
   "ingredients": ["...", "..."],
   "steps": ["...", "..."],
   "prep_time_min": 10,
   "nutrition_note": "..."
-}
+}}
 ```
 """
 

@@ -134,8 +134,6 @@ export default function ChatInterface({ onMealLogged }) {
       (full) => {
         setMessages((prev) => [...prev, { role: 'assistant', content: full }])
         setStreamBuffer(null)
-        const firstSentence = full.split(/[.!?]/)[0]
-        speakRef.current?.(firstSentence)
       },
       // onMealLogged
       (meal) => onMealLoggedRef.current?.(meal),
@@ -146,6 +144,7 @@ export default function ChatInterface({ onMealLogged }) {
       },
       // onClose — auto-reconnect with exponential backoff (max 30s)
       () => {
+        setStreamBuffer(null)
         setConnected(false)
         wsRef.current = null
         reconnectTimer.current = setTimeout(() => {

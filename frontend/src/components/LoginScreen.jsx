@@ -58,7 +58,7 @@ export default function LoginScreen({ onLogin }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!name.trim() || !pin.trim()) return
+    if (!name.trim()) return
 
     setLoading(true)
     setError('')

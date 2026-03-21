@@ -131,6 +131,8 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                 response_text = "".join(full_response)
             except LLMUnavailableError:
                 response_text = LLM_UNAVAILABLE_MESSAGE
+            except Exception:
+                response_text = LLM_UNAVAILABLE_MESSAGE
 
             await websocket.send_json({"type": "done", "content": response_text})
 

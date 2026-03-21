@@ -9,13 +9,17 @@ feature specifications.
 
 ## What Is break FAST?
 
-break FAST is a personal AI-powered breakfast planner. It is not a recipe website or
-a generic nutrition app. It is a system that knows *this specific user* — their
-ingredients, their health context, their habits, and their kitchen — and uses that
-knowledge to plan the richest, healthiest, most efficiently prepared breakfast possible
-each morning with minimal decision-making effort from the user.
+break FAST is an AI-powered breakfast planner designed for home/trusted circle use.
+It is not a recipe website or a generic nutrition app. It is a system that knows
+*each user* — their ingredients, their health context, their habits, and their
+kitchen — and uses that knowledge to plan the richest, healthiest, most efficiently
+prepared breakfast possible each morning with minimal decision-making effort.
 
-The user talks to it, tells it what's in the fridge, and the app handles the rest:
+Multiple users can use the same instance, each with their own profile, preferences,
+health rules, and data — fully isolated. Authentication is simple (pin/name), managed
+by an admin via CLI. Security is important as the app is accessible via Tailscale.
+
+Users talk to it, tell it what's in the fridge, and the app handles the rest:
 suggesting a full meal, producing a parallel cooking schedule optimized for the
 available appliances, tracking what gets used, and getting smarter with every meal.
 
@@ -27,11 +31,10 @@ available appliances, tracking what gets used, and getting smarter with every me
 morning. The app suggests proactively; it doesn't interrogate. If it needs information
 it doesn't have, it asks one question at a time, not a form.
 
-**Health-aware by default, silently.** The user has seborrheic dermatitis. Diet is a
-meaningful factor in managing it. The app factors this in automatically at the
-suggestion layer — it never mentions the condition, never lectures, never explains why
-it's favoring certain ingredients. It just makes good choices. See the User Profile
-section for specifics.
+**Health-aware by default, silently.** Each user can define their own health rules
+(stored in DB, managed from Settings). The app factors these in automatically at the
+suggestion layer — it never mentions the rules, never lectures, never explains why
+it's favoring certain ingredients. It just makes good choices.
 
 **Prep time is kitchen time, not idle time.** The app produces a cooking schedule that
 treats the kitchen like a small factory floor — appliances are resources, food items
@@ -57,7 +60,7 @@ rules. Actual behavior over time gradually updates what the system recommends.
 | Frontend | React PWA |
 | Backend | Python / FastAPI |
 | Local LLM | Ollama + Llama 3.1 8B |
-| LLM Fallback | Anthropic Claude API (claude-sonnet-4-20250514) |
+| LLM Fallback | Anthropic Claude API (commented out, to be re-enabled later) |
 | Database | SQLite (local on third PC) |
 | Voice | Web Speech API (browser-native) |
 | Nutrition Data | Open Food Facts API + LLM estimation fallback |
@@ -98,21 +101,15 @@ stopped manually by the user for now.
 ## User Profile
 
 The owner is an advanced developer, comfortable with Python, FastAPI, and React. They
-use Cowork for development tasks and are on Android and Windows. They prefer to be
+use Claude Code for development tasks and are on Android and Windows. They prefer to be
 consulted before any architectural decision that goes beyond what is documented here.
 
 ### Health Context (Silent — Never Surface to User)
 
-The user has **seborrheic dermatitis**. Diet does not cause the condition but
-meaningfully affects severity. The suggestion engine silently applies these rules
-at all times — never referencing or explaining them to the user.
-
-**Favor:** zinc-rich foods (eggs, pumpkin seeds, legumes, chickpeas), omega-3 sources
-(walnuts, flaxseed, fatty fish), probiotic foods (yogurt, kefir), B-vitamin sources
-(whole grains, leafy greens), antioxidant-rich ingredients (berries, tomatoes, olive oil).
-
-**Avoid:** refined sugars, refined/processed carbohydrates (white bread, pastries),
-processed vegetable oils, highly processed foods.
+Health rules are per-user, stored in the `health_rules` DB table, and managed from
+the Settings page. Users enter rules as free-text sentences (e.g., "Avoid refined
+sugars", "Favor omega-3 sources like walnuts and flaxseed"). These rules are injected
+into the system prompt at runtime — never referenced or explained to the user.
 
 ---
 
@@ -269,7 +266,7 @@ Assembled dynamically at runtime by injecting current inventory, recent history,
 preferences into the template placeholders.
 
 ```
-You are break FAST, a personal breakfast planning assistant for a single user.
+You are break FAST, a personal breakfast planning assistant.
 Your role is to suggest full, healthy, practical breakfasts based on what the
 user currently has available. Be concrete and efficient — this is a morning
 conversation, not a cooking class.
@@ -281,9 +278,7 @@ USER CONTEXT:
 - Usual habits: {user_habits}
 
 HEALTH RULES (never mention these to the user):
-- Silently favor: eggs, legumes, pumpkin seeds, walnuts, flaxseed, yogurt, kefir,
-  whole grains, leafy greens, berries, tomatoes, olive oil
-- Silently avoid: refined sugar, white bread, pastries, processed oils
+{user_health_rules}
 
 RESPONSE FORMAT for meal suggestions:
 1. Meal name and one-sentence description
