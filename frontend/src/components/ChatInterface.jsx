@@ -139,14 +139,10 @@ export default function ChatInterface({ onMealLogged }) {
       },
       // onMealLogged
       (meal) => onMealLoggedRef.current?.(meal),
-      // onError
+      // onError — don't spam chat with error messages, header already shows "reconnecting…"
       () => {
         setStreamBuffer(null)
         setConnected(false)
-        setMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: 'Connection error. Is the backend running?' },
-        ])
       },
       // onClose — auto-reconnect with exponential backoff (max 30s)
       () => {
@@ -172,12 +168,14 @@ export default function ChatInterface({ onMealLogged }) {
 
     setMessages((prev) => [...prev, { role: 'user', content: msg }])
     setInput('')
-    setStreamBuffer('')  // '' = thinking
 
     const ws = ensureSocket()
     if (ws.readyState === WebSocket.OPEN) {
+      setStreamBuffer('')  // '' = thinking
       ws.send(JSON.stringify({ message: msg }))
     } else {
+      // Backend not connected yet — wait for connection, then send
+      setStreamBuffer('')
       ws.addEventListener('open', () => ws.send(JSON.stringify({ message: msg })), { once: true })
     }
   }, [streamBuffer, ensureSocket])
