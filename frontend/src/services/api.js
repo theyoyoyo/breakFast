@@ -112,6 +112,22 @@ export const deleteHabit = (id) =>
   apiFetch(`${BASE_URL}/preferences/habits/${id}`, { method: 'DELETE' })
 
 // ---------------------------------------------------------------------------
+// Ratings
+// ---------------------------------------------------------------------------
+
+export const getRatings = () =>
+  apiFetch(`${BASE_URL}/ratings/`)
+
+export const createRating = (product_name, rating = 10) =>
+  apiFetch(`${BASE_URL}/ratings/`, json('POST', { product_name, rating }))
+
+export const updateRating = (id, rating) =>
+  apiFetch(`${BASE_URL}/ratings/${id}`, json('PUT', { rating }))
+
+export const deleteRating = (id) =>
+  apiFetch(`${BASE_URL}/ratings/${id}`, { method: 'DELETE' })
+
+// ---------------------------------------------------------------------------
 // Sessions
 // ---------------------------------------------------------------------------
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import {
   getPreferences, setPreference, deletePreference,
   getHabits, addHabit, deleteHabit,
+  getRatings, createRating, updateRating, deleteRating,
 } from '../services/api'
 
 const s = {
@@ -104,6 +105,49 @@ const s = {
     fontSize: 12,
     color: '#e76f51',
   },
+  ratingsBtn: {
+    width: '100%',
+    padding: '12px 16px',
+    background: 'var(--accent)',
+    border: 'none',
+    borderRadius: 8,
+    color: '#fff',
+    fontWeight: 700,
+    fontSize: 14,
+    cursor: 'pointer',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+  },
+  ratingsPanel: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+  },
+  ratingRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    background: 'var(--surface2)',
+    border: '1px solid var(--border)',
+    borderRadius: 8,
+    padding: '6px 10px',
+    fontSize: 13,
+  },
+  ratingName: {
+    flex: 1,
+    color: 'var(--text)',
+  },
+  ratingInput: {
+    width: 45,
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: 6,
+    padding: '3px 6px',
+    color: 'var(--text)',
+    fontSize: 13,
+    textAlign: 'center',
+    outline: 'none',
+  },
 }
 
 function TagList({ items, onDelete, keyField = 'id', labelField = 'value' }) {
@@ -123,17 +167,21 @@ function TagList({ items, onDelete, keyField = 'id', labelField = 'value' }) {
 export default function PreferencesPanel() {
   const [prefs, setPrefs] = useState([])
   const [habits, setHabits] = useState([])
+  const [ratings, setRatings] = useState([])
+  const [showRatings, setShowRatings] = useState(false)
   const [newFav, setNewFav] = useState('')
   const [newDislike, setNewDislike] = useState('')
   const [newHabit, setNewHabit] = useState('')
+  const [newProduct, setNewProduct] = useState('')
   const [error, setError] = useState(null)
 
   const load = async () => {
     try {
       setError(null)
-      const [p, h] = await Promise.all([getPreferences(), getHabits()])
+      const [p, h, r] = await Promise.all([getPreferences(), getHabits(), getRatings()])
       setPrefs(p)
       setHabits(h)
+      setRatings(r)
     } catch (e) {
       setError('Failed to load preferences')
     }
@@ -186,6 +234,41 @@ export default function PreferencesPanel() {
       await deleteHabit(id)
     } catch (e) {
       setError('Failed to delete habit')
+      load()
+    }
+  }
+
+  const handleAddRating = async () => {
+    const v = newProduct.trim()
+    if (!v) return
+    try {
+      setError(null)
+      await createRating(v, 10)
+      setNewProduct('')
+      load()
+    } catch (e) {
+      setError('Product already rated or failed to save')
+    }
+  }
+
+  const handleUpdateRating = async (id, value) => {
+    const n = parseInt(value, 10)
+    if (isNaN(n) || n < 1 || n > 10) return
+    setRatings((prev) => prev.map((r) => r.id === id ? { ...r, rating: n } : r))
+    try {
+      await updateRating(id, n)
+    } catch (e) {
+      setError('Failed to update rating')
+      load()
+    }
+  }
+
+  const handleDeleteRating = async (id) => {
+    setRatings((prev) => prev.filter((r) => r.id !== id))
+    try {
+      await deleteRating(id)
+    } catch (e) {
+      setError('Failed to delete rating')
       load()
     }
   }
@@ -257,6 +340,42 @@ export default function PreferencesPanel() {
             />
             <button style={s.addBtn} onClick={handleAddHabit}>+</button>
           </div>
+        </div>
+
+        {/* Ratings */}
+        <div style={s.section}>
+          <button style={s.ratingsBtn} onClick={() => setShowRatings(!showRatings)}>
+            Ratings ({ratings.length})
+          </button>
+          {showRatings && (
+            <div style={s.ratingsPanel}>
+              {ratings.length === 0 && <span style={s.empty}>No ratings yet</span>}
+              {ratings.map((r) => (
+                <div key={r.id} style={s.ratingRow}>
+                  <span style={s.ratingName}>{r.product_name}</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    style={s.ratingInput}
+                    value={r.rating}
+                    onChange={(e) => handleUpdateRating(r.id, e.target.value)}
+                  />
+                  <button style={s.tagX} onClick={() => handleDeleteRating(r.id)}>×</button>
+                </div>
+              ))}
+              <div style={s.addRow}>
+                <input
+                  style={s.input}
+                  value={newProduct}
+                  onChange={(e) => setNewProduct(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddRating()}
+                  placeholder="Add product…"
+                />
+                <button style={s.addBtn} onClick={handleAddRating}>+</button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
