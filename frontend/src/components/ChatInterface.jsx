@@ -312,10 +312,10 @@ export default function ChatInterface({ onMealLogged }) {
           <span style={s.connStatus}> — reconnecting…</span>
         )}
         <button style={s.newSessionBtn} onClick={handleBack} title="Previous session">
-          &lt;
+          Back
         </button>
         <button style={s.newSessionBtn} onClick={handleNext} title="Next session">
-          &gt;
+          Next
         </button>
         <button style={s.newSessionBtn} onClick={handleNewSession} title="Start a new conversation">
           + New

@@ -2,8 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
+from fastapi import Depends
 from config import CORS_ORIGINS
 from database import init_db
+from auth import require_user
 from routers import auth, chat, ingredients, meals, preferences, sessions
 from services.insights import refresh_insights
 
@@ -41,3 +43,8 @@ app.include_router(sessions.router)
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/health/auth")
+async def health_auth(user_id: int = Depends(require_user)):
+    return {"status": "ok", "user_id": user_id}

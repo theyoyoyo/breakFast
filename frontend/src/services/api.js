@@ -53,6 +53,9 @@ export const logout = () => {
   localStorage.removeItem('bf_user')
 }
 
+export const checkAuth = () =>
+  apiFetch(`${BASE_URL}/health/auth`)
+
 // ---------------------------------------------------------------------------
 // Ingredients
 // ---------------------------------------------------------------------------
