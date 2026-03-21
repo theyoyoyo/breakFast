@@ -327,16 +327,12 @@ export default function ChatInterface({ onMealLogged }) {
         {!connected && wsRef.current && (
           <span style={s.connStatus}> — reconnecting…</span>
         )}
-        {hasOlder && (
-          <button style={s.newSessionBtn} onClick={handleBack} title="Previous session">
-            Back
-          </button>
-        )}
-        {hasNewer && (
-          <button style={s.newSessionBtn} onClick={handleNext} title="Next session">
-            Next
-          </button>
-        )}
+        <button style={{ ...s.newSessionBtn, visibility: hasOlder ? 'visible' : 'hidden' }} onClick={handleBack} title="Previous session">
+          Back
+        </button>
+        <button style={{ ...s.newSessionBtn, visibility: hasNewer ? 'visible' : 'hidden' }} onClick={handleNext} title="Next session">
+          Next
+        </button>
         <button style={s.newSessionBtn} onClick={handleNewSession} title="Start a new conversation">
           + New
         </button>
