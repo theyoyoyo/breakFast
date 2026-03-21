@@ -91,6 +91,16 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     content     TEXT    NOT NULL,
     created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS product_ratings (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES users(id),
+    product_name TEXT   NOT NULL,
+    rating      INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 10) DEFAULT 10,
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(user_id, product_name)
+);
 """
 
 
