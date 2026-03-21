@@ -66,10 +66,10 @@ class TestFormatters:
         assert "early breakfast" in result
         assert "no sugar" in result
 
-    def test_format_health_rules_empty_uses_defaults(self):
+    def test_format_health_rules_empty_deprioritize_not_exclude(self):
         result = _format_health_rules([])
-        assert "eggs" in result
-        assert "refined sugar" in result
+        assert "deprioritize" in result
+        assert "NEVER fully exclude" in result
 
     def test_format_health_rules_custom(self):
         result = _format_health_rules(["Avoid gluten", "Favor omega-3"])
@@ -87,8 +87,8 @@ class TestFormatters:
         assert "DIVERSIFY" in result
 
     def test_format_user_profile_empty(self):
-        assert _format_user_profile(None) == "Henüz girilmedi."
-        assert _format_user_profile({}) == "Henüz girilmedi."
+        assert "Not provided" in _format_user_profile(None)
+        assert "Not provided" in _format_user_profile({})
 
     def test_format_user_profile_with_data(self):
         profile = {
@@ -103,25 +103,25 @@ class TestFormatters:
         assert "orta" in result
 
     def test_format_supplements_empty(self):
-        assert "girilmedi" in _format_supplements(None)
-        assert "girilmedi" in _format_supplements([])
+        assert "No supplements" in _format_supplements(None)
+        assert "No supplements" in _format_supplements([])
 
     def test_format_supplements_daily(self):
-        supps = [{"name": "D Vitamini", "frequency": "her gün", "contents": "1000IU D3"}]
+        supps = [{"name": "Vitamin D", "frequency": "daily", "contents": "1000IU D3"}]
         result = _format_supplements(supps)
-        assert "D Vitamini" in result
-        assert "her gün" in result
+        assert "Vitamin D" in result
+        assert "daily" in result
         assert "1000IU D3" in result
 
     def test_format_supplements_sometimes_taken(self):
-        supps = [{"name": "Omega-3", "frequency": "bazen", "contents": "1000mg EPA/DHA", "taken_today": True}]
+        supps = [{"name": "Omega-3", "frequency": "sometimes", "contents": "1000mg EPA/DHA", "taken_today": True}]
         result = _format_supplements(supps)
-        assert "bugün alındı" in result
+        assert "taken today" in result
 
     def test_format_supplements_sometimes_not_taken(self):
-        supps = [{"name": "Omega-3", "frequency": "bazen", "contents": "", "taken_today": False}]
+        supps = [{"name": "Omega-3", "frequency": "sometimes", "contents": "", "taken_today": False}]
         result = _format_supplements(supps)
-        assert "bugün alınmadı" in result
+        assert "NOT taken today" in result
 
 
 # ---------------------------------------------------------------------------
@@ -142,7 +142,7 @@ class TestChatPrompt:
 
     def test_contains_chat_tone(self):
         prompt = build_chat_prompt([], [], {}, [])
-        assert "arkadaş" in prompt.lower() or "samimi" in prompt.lower()
+        assert "friendly" in prompt.lower() or "warm" in prompt.lower() or "friend" in prompt.lower()
 
     def test_includes_ingredients(self):
         prompt = build_chat_prompt(
@@ -166,8 +166,8 @@ class TestChatPrompt:
 
     def test_default_health_rules_when_none(self):
         prompt = build_chat_prompt([], [], {}, [])
-        assert "eggs" in prompt
-        assert "refined sugar" in prompt
+        assert "deprioritize" in prompt
+        assert "NEVER fully exclude" in prompt
 
     def test_json_block_present(self):
         """The JSON example block should render correctly (escaped braces)."""
@@ -196,7 +196,7 @@ class TestSuggestionPrompt:
 
     def test_contains_professional_tone(self):
         prompt = build_suggestion_prompt([], [], {}, [])
-        assert "diyetisyen" in prompt.lower() or "profesyonel" in prompt.lower()
+        assert "dietitian" in prompt.lower() or "professional" in prompt.lower()
 
     def test_history_limit_is_10(self):
         """Suggestion persona uses last 10 meals (fuller context)."""
@@ -229,30 +229,30 @@ class TestSuggestionPrompt:
         """Suggestion prompt should ask for detailed macro breakdown."""
         prompt = build_suggestion_prompt([], [], {}, [])
         assert "protein" in prompt.lower()
-        assert "kalori" in prompt.lower() or "kcal" in prompt.lower()
-        assert "lif" in prompt.lower() or "fiber" in prompt.lower()
+        assert "calori" in prompt.lower() or "kcal" in prompt.lower()
+        assert "fiber" in prompt.lower()
         assert "omega" in prompt.lower()
         assert "vitamin" in prompt.lower()
 
     def test_includes_advance_prep_tip(self):
-        """Suggestion prompt should mention advance prep (Tavsiye) section."""
+        """Suggestion prompt should mention advance prep section."""
         prompt = build_suggestion_prompt([], [], {}, [])
-        assert "Tavsiye" in prompt
+        assert "Tip:" in prompt or "advance prep" in prompt.lower()
 
     def test_includes_avoid_list_guidance(self):
         """Suggestion prompt should tell LLM to respect avoid list."""
         prompt = build_suggestion_prompt([], [], {}, [])
-        assert "avoid" in prompt.lower() or "kaçın" in prompt.lower()
+        assert "avoid" in prompt.lower()
 
     def test_includes_seasonality(self):
         """Suggestion prompt should mention seasonal produce preference."""
         prompt = build_suggestion_prompt([], [], {}, [])
-        assert "mevsim" in prompt.lower()
+        assert "seasonal" in prompt.lower()
 
     def test_includes_turkey_context(self):
         """Suggestion prompt should mention Turkey-available ingredients."""
         prompt = build_suggestion_prompt([], [], {}, [])
-        assert "Türkiye" in prompt
+        assert "Turkey" in prompt
 
     def test_nutrition_detail_in_json_block(self):
         """JSON block should include nutrition_detail fields."""
@@ -277,31 +277,31 @@ class TestSuggestionPrompt:
         prompt = build_suggestion_prompt(
             [], [], {}, [],
             supplements=[
-                {"name": "B12", "frequency": "her gün", "contents": "1000mcg"},
-                {"name": "Balık yağı", "frequency": "bazen", "contents": "EPA/DHA", "taken_today": False},
+                {"name": "B12", "frequency": "daily", "contents": "1000mcg"},
+                {"name": "Fish oil", "frequency": "sometimes", "contents": "EPA/DHA", "taken_today": False},
             ],
         )
         assert "B12" in prompt
         assert "1000mcg" in prompt
-        assert "Balık yağı" in prompt
-        assert "bugün alınmadı" in prompt
+        assert "Fish oil" in prompt
+        assert "NOT taken today" in prompt
 
     def test_profile_and_supplements_default_when_none(self):
         """When no profile/supplements given, should still render without error."""
         prompt = build_suggestion_prompt([], [], {}, [])
-        assert "Henüz girilmedi" in prompt
-        assert "girilmedi" in prompt
+        assert "Not provided" in prompt
+        assert "No supplements" in prompt
 
     def test_includes_calorie_calculation_guidance(self):
         """Prompt should mention Harris-Benedict or calorie calculation."""
         prompt = build_suggestion_prompt([], [], {}, [])
-        assert "kalori" in prompt.lower()
-        assert "%30" in prompt or "30" in prompt
+        assert "calori" in prompt.lower() or "kcal" in prompt.lower()
+        assert "30%" in prompt or "30" in prompt
 
     def test_includes_experienced_cook_note(self):
         """Prompt should indicate user is an experienced cook."""
         prompt = build_suggestion_prompt([], [], {}, [])
-        assert "deneyimli" in prompt.lower()
+        assert "experienced cook" in prompt.lower()
 
 
 # ---------------------------------------------------------------------------
