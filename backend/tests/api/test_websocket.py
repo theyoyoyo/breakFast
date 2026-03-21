@@ -90,3 +90,52 @@ async def test_websocket_accepts_valid_token(ws_setup):
             msg = ws.receive_json()
             assert msg["type"] == "done"
             assert "aklım başımda değil" in msg["content"]
+
+
+@pytest.mark.asyncio
+async def test_websocket_handles_generic_exception(ws_setup):
+    """WebSocket should return fallback message on unexpected exceptions (not crash)."""
+    app, token, _ = ws_setup
+    from starlette.testclient import TestClient
+    from unittest.mock import patch
+    from services.llm import LLM_UNAVAILABLE_MESSAGE
+
+    client = TestClient(app)
+
+    async def mock_stream_crash(*args, **kwargs):
+        raise RuntimeError("unexpected boom")
+        yield
+
+    with patch("routers.chat.build_system_prompt", return_value="test prompt"), \
+         patch("routers.chat.stream_response", mock_stream_crash):
+        with client.websocket_connect(f"/chat?token={token}") as ws:
+            ws.send_text(json.dumps({"message": "hello"}))
+
+            msg = ws.receive_json()
+            assert msg["type"] == "done"
+            assert msg["content"] == LLM_UNAVAILABLE_MESSAGE
+
+
+@pytest.mark.asyncio
+async def test_websocket_build_system_prompt_no_mock(ws_setup):
+    """WebSocket should work with real build_system_prompt (escaped JSON braces)."""
+    app, token, _ = ws_setup
+    from starlette.testclient import TestClient
+    from unittest.mock import patch
+    from services.llm import LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE
+
+    client = TestClient(app)
+
+    # Only mock stream_response — let build_system_prompt run for real
+    # to verify the JSON template braces are properly escaped
+    async def mock_stream(*args, **kwargs):
+        raise LLMUnavailableError(LLM_UNAVAILABLE_MESSAGE)
+        yield
+
+    with patch("routers.chat.stream_response", mock_stream):
+        with client.websocket_connect(f"/chat?token={token}") as ws:
+            ws.send_text(json.dumps({"message": "hello"}))
+
+            msg = ws.receive_json()
+            assert msg["type"] == "done"
+            assert "aklım başımda değil" in msg["content"]
