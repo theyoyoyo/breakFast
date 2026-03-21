@@ -109,6 +109,8 @@ export default function ChatInterface({ onMealLogged }) {
   const [streamBuffer, setStreamBuffer] = useState(null)
   const [connected, setConnected] = useState(false)
   const [sessionId, setSessionId] = useState(null)
+  const [hasOlder, setHasOlder] = useState(false)
+  const [hasNewer, setHasNewer] = useState(false)
   const wsRef = useRef(null)
   const messagesEndRef = useRef(null)
   const reconnectTimer = useRef(null)
@@ -123,6 +125,18 @@ export default function ChatInterface({ onMealLogged }) {
   useEffect(() => { speakRef.current = speak }, [speak])
   useEffect(() => { sessionIdRef.current = sessionId }, [sessionId])
 
+  const refreshNavState = useCallback(async (currentId) => {
+    try {
+      const sessions = await listSessions()
+      const idx = sessions.findIndex(s => s.id === currentId)
+      setHasOlder(idx < sessions.length - 1)
+      setHasNewer(idx > 0)
+    } catch {
+      setHasOlder(false)
+      setHasNewer(false)
+    }
+  }, [])
+
   // Load active session on mount
   useEffect(() => {
     let cancelled = false
@@ -135,12 +149,13 @@ export default function ChatInterface({ onMealLogged }) {
         if (cancelled) return
         const loaded = msgs.map(m => ({ role: m.role, content: m.content }))
         setMessages([WELCOME_MSG, ...loaded])
+        await refreshNavState(session.id)
       } catch {
         // Backend not available yet — will work once connected
       }
     })()
     return () => { cancelled = true }
-  }, [])
+  }, [refreshNavState])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -225,14 +240,14 @@ export default function ChatInterface({ onMealLogged }) {
       setMessages([WELCOME_MSG])
       setStreamBuffer(null)
       setInput('')
-      // Notify WebSocket about new session
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ session_id }))
       }
+      await refreshNavState(session_id)
     } catch {
       // Backend not available
     }
-  }, [])
+  }, [refreshNavState])
 
   const switchToSession = useCallback(async (targetId) => {
     setSessionId(targetId)
@@ -244,7 +259,8 @@ export default function ChatInterface({ onMealLogged }) {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ session_id: targetId }))
     }
-  }, [])
+    await refreshNavState(targetId)
+  }, [refreshNavState])
 
   const handleBack = useCallback(async () => {
     if (!sessionIdRef.current) return
@@ -291,7 +307,7 @@ export default function ChatInterface({ onMealLogged }) {
         }
       }
     } catch { /* Backend not available */ }
-  }, [switchToSession])
+  }, [switchToSession, refreshNavState])
 
   const handleMic = () => {
     if (isListening) {
@@ -311,12 +327,16 @@ export default function ChatInterface({ onMealLogged }) {
         {!connected && wsRef.current && (
           <span style={s.connStatus}> — reconnecting…</span>
         )}
-        <button style={s.newSessionBtn} onClick={handleBack} title="Previous session">
-          Back
-        </button>
-        <button style={s.newSessionBtn} onClick={handleNext} title="Next session">
-          Next
-        </button>
+        {hasOlder && (
+          <button style={s.newSessionBtn} onClick={handleBack} title="Previous session">
+            Back
+          </button>
+        )}
+        {hasNewer && (
+          <button style={s.newSessionBtn} onClick={handleNext} title="Next session">
+            Next
+          </button>
+        )}
         <button style={s.newSessionBtn} onClick={handleNewSession} title="Start a new conversation">
           + New
         </button>
