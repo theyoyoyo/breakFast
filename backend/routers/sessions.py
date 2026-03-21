@@ -64,6 +64,23 @@ async def get_active_session(user_id: int = Depends(require_user)):
         return {"id": session_id, "created_at": None, "updated_at": None}
 
 
+@router.delete("/{session_id}")
+async def delete_session(session_id: str, user_id: int = Depends(require_user)):
+    """Delete a session and its messages. Returns 204."""
+    async with get_db() as db:
+        await db.execute(
+            "DELETE FROM chat_messages WHERE session_id = ? AND user_id = ?",
+            (session_id, user_id),
+        )
+        await db.execute(
+            "DELETE FROM chat_sessions WHERE id = ? AND user_id = ?",
+            (session_id, user_id),
+        )
+        await db.commit()
+    from fastapi.responses import Response
+    return Response(status_code=204)
+
+
 @router.get("/{session_id}/messages")
 async def get_messages(session_id: str, user_id: int = Depends(require_user)):
     """Get all messages for a session."""

@@ -118,6 +118,12 @@ export const getActiveSession = () =>
 export const createSession = () =>
   apiFetch(`${BASE_URL}/sessions/`, { method: 'POST' })
 
+export const deleteSession = (sessionId) =>
+  apiFetch(`${BASE_URL}/sessions/${sessionId}`, { method: 'DELETE' })
+
+export const listSessions = () =>
+  apiFetch(`${BASE_URL}/sessions/`)
+
 export const getSessionMessages = (sessionId) =>
   apiFetch(`${BASE_URL}/sessions/${sessionId}/messages`)
 

@@ -58,6 +58,38 @@ async def test_get_messages_empty(client):
 
 
 @pytest.mark.asyncio
+async def test_delete_session(client):
+    """Deleting a session should remove it and its messages."""
+    r = await client.post("/sessions/")
+    sid = r.json()["session_id"]
+
+    r = await client.delete(f"/sessions/{sid}")
+    assert r.status_code == 204
+
+    # Session should be gone from list
+    r = await client.get("/sessions/")
+    ids = [s["id"] for s in r.json()]
+    assert sid not in ids
+
+
+@pytest.mark.asyncio
+async def test_delete_session_goes_back_to_previous(client):
+    """After deleting active session, previous session should become active."""
+    r1 = await client.post("/sessions/")
+    sid1 = r1.json()["session_id"]
+
+    r2 = await client.post("/sessions/")
+    sid2 = r2.json()["session_id"]
+
+    # Delete the newer session
+    await client.delete(f"/sessions/{sid2}")
+
+    # Active should now be the older session
+    r = await client.get("/sessions/active")
+    assert r.json()["id"] == sid1
+
+
+@pytest.mark.asyncio
 async def test_messages_persist_via_websocket(client, tmp_path, monkeypatch):
     """Messages sent via WebSocket should be persisted and retrievable."""
     import json
