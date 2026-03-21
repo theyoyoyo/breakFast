@@ -19,6 +19,8 @@ from services.suggestion import (
     _format_habits,
     _format_health_rules,
     _format_behavioral,
+    _format_user_profile,
+    _format_supplements,
 )
 
 
@@ -83,6 +85,43 @@ class TestFormatters:
         result = _format_behavioral(["eats eggs daily", "rarely has fruit"])
         assert "eats eggs daily" in result
         assert "DIVERSIFY" in result
+
+    def test_format_user_profile_empty(self):
+        assert _format_user_profile(None) == "Henüz girilmedi."
+        assert _format_user_profile({}) == "Henüz girilmedi."
+
+    def test_format_user_profile_with_data(self):
+        profile = {
+            "age": 30, "gender": "erkek",
+            "height_cm": 180, "weight_kg": 75,
+            "activity_level": "orta",
+        }
+        result = _format_user_profile(profile)
+        assert "30" in result
+        assert "180" in result
+        assert "75" in result
+        assert "orta" in result
+
+    def test_format_supplements_empty(self):
+        assert "girilmedi" in _format_supplements(None)
+        assert "girilmedi" in _format_supplements([])
+
+    def test_format_supplements_daily(self):
+        supps = [{"name": "D Vitamini", "frequency": "her gün", "contents": "1000IU D3"}]
+        result = _format_supplements(supps)
+        assert "D Vitamini" in result
+        assert "her gün" in result
+        assert "1000IU D3" in result
+
+    def test_format_supplements_sometimes_taken(self):
+        supps = [{"name": "Omega-3", "frequency": "bazen", "contents": "1000mg EPA/DHA", "taken_today": True}]
+        result = _format_supplements(supps)
+        assert "bugün alındı" in result
+
+    def test_format_supplements_sometimes_not_taken(self):
+        supps = [{"name": "Omega-3", "frequency": "bazen", "contents": "", "taken_today": False}]
+        result = _format_supplements(supps)
+        assert "bugün alınmadı" in result
 
 
 # ---------------------------------------------------------------------------
@@ -222,6 +261,47 @@ class TestSuggestionPrompt:
         assert '"calories_kcal"' in prompt
         assert '"protein_g"' in prompt
         assert '"advance_prep_tip"' in prompt
+
+    def test_includes_user_profile(self):
+        """Suggestion prompt should render user physical profile."""
+        prompt = build_suggestion_prompt(
+            [], [], {}, [],
+            user_profile={"age": 28, "gender": "kadın", "height_cm": 165, "weight_kg": 60},
+        )
+        assert "28" in prompt
+        assert "165" in prompt
+        assert "60" in prompt
+
+    def test_includes_supplements(self):
+        """Suggestion prompt should render supplement info."""
+        prompt = build_suggestion_prompt(
+            [], [], {}, [],
+            supplements=[
+                {"name": "B12", "frequency": "her gün", "contents": "1000mcg"},
+                {"name": "Balık yağı", "frequency": "bazen", "contents": "EPA/DHA", "taken_today": False},
+            ],
+        )
+        assert "B12" in prompt
+        assert "1000mcg" in prompt
+        assert "Balık yağı" in prompt
+        assert "bugün alınmadı" in prompt
+
+    def test_profile_and_supplements_default_when_none(self):
+        """When no profile/supplements given, should still render without error."""
+        prompt = build_suggestion_prompt([], [], {}, [])
+        assert "Henüz girilmedi" in prompt
+        assert "girilmedi" in prompt
+
+    def test_includes_calorie_calculation_guidance(self):
+        """Prompt should mention Harris-Benedict or calorie calculation."""
+        prompt = build_suggestion_prompt([], [], {}, [])
+        assert "kalori" in prompt.lower()
+        assert "%30" in prompt or "30" in prompt
+
+    def test_includes_experienced_cook_note(self):
+        """Prompt should indicate user is an experienced cook."""
+        prompt = build_suggestion_prompt([], [], {}, [])
+        assert "deneyimli" in prompt.lower()
 
 
 # ---------------------------------------------------------------------------
