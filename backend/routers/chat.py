@@ -12,7 +12,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from database import get_db
 from auth import get_user_id_from_token
 from services.llm import LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE
-from services.suggestion import build_system_prompt, stream_response
+from services.suggestion import build_chat_prompt, stream_response
 from utils import extract_json_block
 
 router = APIRouter()
@@ -54,8 +54,18 @@ async def _load_context(db, user_id: int) -> dict:
             inferred = [r["description"] for r in rows if r["source"] == "inferred"]
             return stated, inferred
 
-    ingredients, history, prefs, (stated_habits, inferred_habits) = await asyncio.gather(
-        fetch_ingredients(), fetch_history(), fetch_prefs(), fetch_habits()
+    async def fetch_health_rules():
+        async with db.execute(
+            "SELECT rule_text FROM health_rules WHERE user_id = ? ORDER BY created_at",
+            (user_id,),
+        ) as cur:
+            return [r["rule_text"] for r in await cur.fetchall()]
+
+    ingredients, history, prefs, (stated_habits, inferred_habits), health_rules = (
+        await asyncio.gather(
+            fetch_ingredients(), fetch_history(), fetch_prefs(),
+            fetch_habits(), fetch_health_rules(),
+        )
     )
     return {
         "ingredients": ingredients,
@@ -63,6 +73,7 @@ async def _load_context(db, user_id: int) -> dict:
         "preferences": prefs,
         "stated_habits": stated_habits,
         "inferred_habits": inferred_habits,
+        "health_rules": health_rules,
     }
 
 
@@ -170,12 +181,13 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                 async with get_db() as db:
                     cached_context = await _load_context(db, user_id)
 
-            system_prompt = build_system_prompt(
+            system_prompt = build_chat_prompt(
                 ingredient_inventory=cached_context["ingredients"],
                 recent_meal_history=cached_context["history"],
                 user_preferences=cached_context["preferences"],
                 stated_habits=cached_context["stated_habits"],
                 inferred_habits=cached_context["inferred_habits"],
+                health_rules=cached_context["health_rules"],
             )
 
             # Load persisted conversation history for LLM context

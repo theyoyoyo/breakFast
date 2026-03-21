@@ -81,7 +81,7 @@ async def test_websocket_accepts_valid_token(ws_setup):
         raise LLMUnavailableError(LLM_UNAVAILABLE_MESSAGE)
         yield  # makes this an async generator
 
-    with patch("routers.chat.build_system_prompt", return_value="test prompt"), \
+    with patch("routers.chat.build_chat_prompt", return_value="test prompt"), \
          patch("routers.chat.stream_response", mock_stream):
         with client.websocket_connect(f"/chat?token={token}") as ws:
             ws.send_text(json.dumps({"message": "hello"}))
@@ -106,7 +106,7 @@ async def test_websocket_handles_generic_exception(ws_setup):
         raise RuntimeError("unexpected boom")
         yield
 
-    with patch("routers.chat.build_system_prompt", return_value="test prompt"), \
+    with patch("routers.chat.build_chat_prompt", return_value="test prompt"), \
          patch("routers.chat.stream_response", mock_stream_crash):
         with client.websocket_connect(f"/chat?token={token}") as ws:
             ws.send_text(json.dumps({"message": "hello"}))

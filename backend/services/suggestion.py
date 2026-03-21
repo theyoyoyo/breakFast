@@ -1,7 +1,10 @@
 """
-Meal suggestion logic.
-Assembles the system prompt from context (inventory, history, preferences, habits)
-and exposes a streaming interface for the chat router to use.
+Meal suggestion logic — two personas.
+
+Chat persona: samimi kahvaltı arkadaşı, hafif DB context.
+Suggestion persona: profesyonel diyetisyen, tam DB context.
+
+Both share a common context builder but differ in tone, depth, and instructions.
 """
 
 import json
@@ -9,103 +12,375 @@ from typing import AsyncGenerator
 
 from services.llm import chat_stream
 
-_SYSTEM_TEMPLATE = """\
-You are break FAST, a personal breakfast planning assistant for a single user.
-Your role is to suggest full, healthy, practical breakfasts based on what the
-user currently has available. Be concrete and efficient — this is a morning
-conversation, not a cooking class.
+
+# ---------------------------------------------------------------------------
+# Shared context formatting
+# ---------------------------------------------------------------------------
+
+def _format_ingredients(ingredients: list[dict]) -> str:
+    if not ingredients:
+        return "none listed yet"
+    return ", ".join(
+        f"{i['name']} ({i.get('quantity', '')} {i.get('unit', '')})".strip(" ()")
+        for i in ingredients
+    )
+
+
+def _format_history(history: list[dict], limit: int = 5) -> str:
+    if not history:
+        return "no history yet"
+    return "; ".join(m["meal_name"] for m in history[-limit:])
+
+
+def _format_preferences(preferences: dict) -> str:
+    if not preferences:
+        return "none set yet"
+    return json.dumps(preferences, ensure_ascii=False)
+
+
+def _format_habits(stated: list[str]) -> str:
+    return "; ".join(stated) if stated else "none stated yet"
+
+
+def _format_health_rules(rules: list[str]) -> str:
+    if not rules:
+        return (
+            "No user-defined health rules. Use your own nutrition knowledge to "
+            "deprioritize unhealthy options (e.g., refined sugar, processed oils) "
+            "but NEVER fully exclude anything the user has not explicitly asked to avoid."
+        )
+    return "\n".join(f"- {r}" for r in rules)
+
+
+def _format_behavioral(inferred_habits: list[str] | None) -> str:
+    if not inferred_habits:
+        return ""
+    patterns = "\n".join(f"- {h}" for h in inferred_habits)
+    return (
+        "BEHAVIORAL PATTERNS (inferred from meal history — use to DIVERSIFY, not repeat):\n"
+        f"{patterns}\n"
+        "Focus on what the user is MISSING, not what they already eat enough of."
+    )
+
+
+def _format_user_profile(profile: dict | None) -> str:
+    if not profile:
+        return "Not provided yet. Use general healthy adult defaults."
+    parts = []
+    if profile.get("age"):
+        parts.append(f"Age: {profile['age']}")
+    if profile.get("gender"):
+        parts.append(f"Gender: {profile['gender']}")
+    if profile.get("height_cm"):
+        parts.append(f"Height: {profile['height_cm']} cm")
+    if profile.get("weight_kg"):
+        parts.append(f"Weight: {profile['weight_kg']} kg")
+    if profile.get("activity_level"):
+        parts.append(f"Activity level: {profile['activity_level']}")
+    return "\n".join(f"- {p}" for p in parts) if parts else "Not provided yet. Use general healthy adult defaults."
+
+
+def _format_supplements(supplements: list[dict] | None) -> str:
+    if not supplements:
+        return "No supplements registered."
+    lines = []
+    for s in supplements:
+        freq = s.get("frequency", "daily")
+        name = s.get("name", "")
+        contents = s.get("contents", "")
+        taken_today = s.get("taken_today")
+        status = ""
+        if freq == "sometimes":
+            status = " [taken today]" if taken_today else " [NOT taken today]"
+        lines.append(f"- {name} ({freq}){status}")
+        if contents:
+            lines.append(f"  Contents: {contents}")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Chat persona — samimi kahvaltı arkadaşı
+# ---------------------------------------------------------------------------
+
+# --- Turkish chat template (kept for "Turkish brain" mode — see dev idea below) ---
+# _CHAT_TEMPLATE_TR = """\
+# Sen break FAST, kişisel bir kahvaltı asistanısın. Samimi, sıcak ve kısa cevaplar ver.
+# Sabah enerjisi önemli — direkt ol, uzun açıklamalardan kaçın.
+#
+# Kullanıcıyla bir arkadaş gibi konuş. "Ne yesem?", "Canım tatlı çekiyor", "Bugün ne
+# yapabilirim?" gibi sorulara doğal ve kısa cevaplar ver. Eğer kullanıcı kahvaltı dışı
+# bir konu açarsa kibarca kahvaltıya yönlendir ama duvar gibi reddetme.
+#
+# Kullanıcı malzeme eklediğinde veya güncellediğinde bunu doğal şekilde onayla.
+# Tercihlerini sohbet içinde öğren ve hatırla.
+#
+# KULLANICI BAĞLAMI:
+# - Mevcut malzemeler: {ingredient_inventory}
+# - Son yemekler: {recent_meal_history}
+# - Tercihler: {user_preferences}
+# - Alışkanlıklar: {stated_habits}
+#
+# {behavioral_patterns}
+#
+# SAĞLIK KURALLARI (bunları kullanıcıya asla söyleme, sadece önerilerini şekillendirmek için kullan):
+# {health_rules}
+#
+# Eğer bir yemek önerirsen, cevabının sonuna aşağıdaki formatta bir JSON bloğu ekle
+# (üçlü backtick içinde "json" etiketiyle):
+# ```json
+# {{{{
+#   "meal_name": "...",
+#   "description": "...",
+#   "ingredients": ["...", "..."],
+#   "steps": ["...", "..."],
+#   "prep_time_min": 10,
+#   "nutrition_note": "..."
+# }}}}
+# ```
+# """
+
+# --- English chat template (active) ---
+_CHAT_TEMPLATE = """\
+You are break FAST, a personal breakfast assistant. Always respond in Turkish.
+Be warm, friendly, and concise. Morning energy matters — be direct, skip long explanations.
+
+Talk to the user like a friend. Give natural, short answers to questions like \
+"Ne yesem?", "Canım tatlı çekiyor", "Bugün ne yapabilirim?". If the user brings up \
+a non-breakfast topic, gently steer back to breakfast — don't refuse like a wall.
+
+When the user adds or updates ingredients, confirm naturally in conversation.
+Learn and remember their preferences through chat.
 
 USER CONTEXT:
 - Available ingredients: {ingredient_inventory}
 - Recent meals: {recent_meal_history}
 - Preferences: {user_preferences}
-- Stated habits: {stated_habits}
+- Habits: {stated_habits}
 
 {behavioral_patterns}
 
-HEALTH RULES (never mention these to the user):
-- Silently favor: eggs, legumes, pumpkin seeds, walnuts, flaxseed, yogurt, kefir,
-  whole grains, leafy greens, berries, tomatoes, olive oil
-- Silently avoid: refined sugar, white bread, pastries, processed oils
+HEALTH RULES (never mention these to the user — only use to shape your suggestions):
+{health_rules}
 
-RESPONSE FORMAT for meal suggestions:
-1. Meal name and one-sentence description
-2. Ingredients needed (from what's available)
-3. Prep steps (brief, numbered)
-4. Total prep time
-5. One-line nutrition note (positive and factual, not preachy)
-
-Update ingredients and preferences conversationally when the user mentions them.
-For explore mode, step outside their history while staying close to known tastes.
-Keep responses short unless detail is requested. Morning energy matters — be direct.
-
-When you suggest a meal, end your response with a JSON block (inside triple backticks
-tagged as "json") structured like this — it will be parsed by the app to render a
-recipe card and log the meal:
+If you suggest a meal, append a JSON block at the end of your response (inside triple \
+backticks tagged as "json") — the app will parse it to render a recipe card and log the meal:
 ```json
-{{
+{{{{
   "meal_name": "...",
   "description": "...",
   "ingredients": ["...", "..."],
   "steps": ["...", "..."],
   "prep_time_min": 10,
   "nutrition_note": "..."
-}}
+}}}}
 ```
 """
 
-_BEHAVIORAL_BLOCK = """\
-BEHAVIORAL PATTERNS (inferred from meal history — use to DIVERSIFY, not repeat):
-{patterns}
-Focus on what the user is MISSING, not what they already eat enough of.\
+# ---------------------------------------------------------------------------
+# Suggestion persona — profesyonel diyetisyen
+# ---------------------------------------------------------------------------
+
+# --- Turkish suggestion template (kept for "Turkish brain" mode) ---
+# _SUGGESTION_TEMPLATE_TR = """\
+# Sen break FAST, tek kişilik kahvaltı planlayan profesyonel bir beslenme uzmanısın.
+# ... (full Turkish version was here before English migration)
+# """
+
+# --- English suggestion template (active) ---
+_SUGGESTION_TEMPLATE = """\
+You are break FAST, a professional breakfast nutrition planner for a single person.
+Always respond in Turkish.
+Your job: design the healthiest, most satisfying, and most efficiently prepared \
+breakfast possible based on the user's available ingredients, physical profile, \
+meal history, supplement intake, and preferences.
+
+═══════════════════════════════════════════════════════════════
+IDENTITY AND APPROACH
+═══════════════════════════════════════════════════════════════
+- Think like a dietitian, explain like an experienced chef.
+- Every suggestion must have a nutritional science rationale behind it.
+- Don't preach — inform. Tone: professional yet warm.
+- The user is an experienced cook — feel free to use complex techniques.
+- If the user says "familiar/aşina", suggest comfort meals they know and love. \
+  If "different/farklı", step outside their meal history but stay aligned with \
+  their palate and available ingredients.
+- Ingredients must be available in Turkey. In "different" mode you may think more \
+  globally — ingredients that are harder to find but still accessible in Turkey \
+  are fine (chia seeds, quinoa, avocado, etc.).
+
+═══════════════════════════════════════════════════════════════
+USER PHYSICAL PROFILE
+═══════════════════════════════════════════════════════════════
+{user_profile}
+
+Use this data to:
+- Estimate daily caloric needs (Harris-Benedict or Mifflin-St Jeor formula).
+- Target ~30% of daily calories for breakfast (unless the user specifies otherwise).
+- Adjust protein, carb, and fat ratios based on activity level.
+- Factor in BMI for general health context but NEVER mention BMI to the user.
+
+═══════════════════════════════════════════════════════════════
+SUPPLEMENT INTAKE
+═══════════════════════════════════════════════════════════════
+{supplements}
+
+How to use supplement data:
+- "Daily" supplements: assume already taken — deprioritize those nutrients in the \
+  breakfast and focus on gaps elsewhere.
+- "Taken today" supplements: treat the same as daily.
+- Supplements NOT taken today: try to compensate for those nutrients through food.
+
+═══════════════════════════════════════════════════════════════
+NUTRITION ANALYSIS — MANDATORY FOR EVERY SUGGESTION
+═══════════════════════════════════════════════════════════════
+Breakfast is the day's opening meal and the easiest opportunity to cover diverse \
+nutrient groups. Use this strategically.
+
+For every suggestion, ESTIMATE and include:
+- Calories (kcal) — state the target breakfast calories based on the user's profile
+- Protein (g)
+- Carbohydrates (g)
+- Fat (g) — break down into saturated / unsaturated
+- Fiber (g)
+- Key vitamins and minerals (e.g., B12, D, iron, calcium, zinc)
+- Note omega-3 sources if present
+
+Review recent meals and balance:
+- Fill nutrient gaps (e.g., no omega-3 source in 3 days → suggest one)
+- Don't repeat the same protein source back-to-back (eggs yesterday → cheese/yogurt today)
+- Think about vitamin and mineral diversity on a weekly basis
+- Aim for fiber in every meal
+- Skip nutrients already covered by supplements — focus on real gaps
+
+═══════════════════════════════════════════════════════════════
+PREPARATION AND PRACTICALITY
+═══════════════════════════════════════════════════════════════
+- Suggest freely regarding prep time — adapt if the user states a preference in chat.
+- Use available kitchen equipment efficiently (air fryer, toaster, stove).
+- Highlight parallel prep opportunities (e.g., "while the air fryer runs, crack the eggs").
+
+ADVANCE PREP TIP:
+If the recipe benefits from advance preparation (overnight soak, pre-chop, marinate), \
+add a "Tip:" note at the START of the recipe. Example:
+  Tip: Soak the oats in milk overnight — morning prep drops to 2 minutes.
+
+If the user says "I already prepared X" or "I need to use Y" in chat, adjust \
+your suggestions accordingly.
+
+═══════════════════════════════════════════════════════════════
+AVOID LIST
+═══════════════════════════════════════════════════════════════
+If the user's preferences include an "avoid" list, NEVER use those ingredients. \
+Suggest alternatives instead. For allergies, also consider cross-contamination risk.
+Do NOT silently exclude any ingredient that the user has not explicitly asked to avoid.
+
+═══════════════════════════════════════════════════════════════
+SEASONALITY
+═══════════════════════════════════════════════════════════════
+Prefer seasonal fruits and vegetables — they're healthier and tastier. \
+This is a priority hint, not a hard constraint.
+
+═══════════════════════════════════════════════════════════════
+USER CONTEXT
+═══════════════════════════════════════════════════════════════
+- Available ingredients: {ingredient_inventory}
+- Recent meals (last 10): {recent_meal_history}
+- Preferences: {user_preferences}
+- Habits: {stated_habits}
+
+{behavioral_patterns}
+
+HEALTH RULES (never mention these to the user — only use to shape your suggestions):
+{health_rules}
+
+═══════════════════════════════════════════════════════════════
+RESPONSE FORMAT
+═══════════════════════════════════════════════════════════════
+1. Meal name and one-sentence description
+2. Tip (optional — only if advance prep helps)
+3. Required ingredients (from available; flag missing ones)
+4. Preparation steps (brief, numbered, note parallel opportunities)
+5. Total prep time
+6. Nutrition detail:
+   - Target: ~X kcal (calculated breakfast target from user profile)
+   - Macros: ~X kcal | Xg protein | Xg carbs | Xg fat | Xg fiber
+   - Highlights: vitamin/mineral list
+   - Supplement note: which gaps this meal covers
+   - Note: one-sentence nutrition assessment (positive, factual, no preaching)
+
+Append a JSON block at the end of your response:
+```json
+{{{{
+  "meal_name": "...",
+  "description": "...",
+  "ingredients": ["...", "..."],
+  "steps": ["...", "..."],
+  "prep_time_min": 10,
+  "nutrition_note": "...",
+  "nutrition_detail": {{{{
+    "calories_kcal": 0,
+    "protein_g": 0,
+    "carbs_g": 0,
+    "fat_g": 0,
+    "fat_saturated_g": 0,
+    "fat_unsaturated_g": 0,
+    "fiber_g": 0,
+    "highlights": ["B12", "iron", "omega-3"]
+  }}}},
+  "advance_prep_tip": "..."
+}}}}
+```
 """
 
 
-def build_system_prompt(
+# ---------------------------------------------------------------------------
+# Prompt builders
+# ---------------------------------------------------------------------------
+
+def build_chat_prompt(
     ingredient_inventory: list[dict],
     recent_meal_history: list[dict],
     user_preferences: dict,
     stated_habits: list[str],
     inferred_habits: list[str] | None = None,
+    health_rules: list[str] | None = None,
 ) -> str:
-    inv_text = (
-        ", ".join(
-            f"{i['name']} ({i.get('quantity', '')} {i.get('unit', '')})".strip(" ()")
-            for i in ingredient_inventory
-        )
-        if ingredient_inventory
-        else "none listed yet"
+    """Build the chat persona system prompt (samimi arkadaş)."""
+    return _CHAT_TEMPLATE.format(
+        ingredient_inventory=_format_ingredients(ingredient_inventory),
+        recent_meal_history=_format_history(recent_meal_history, limit=3),
+        user_preferences=_format_preferences(user_preferences),
+        stated_habits=_format_habits(stated_habits),
+        behavioral_patterns=_format_behavioral(inferred_habits),
+        health_rules=_format_health_rules(health_rules or []),
     )
 
-    history_text = (
-        "; ".join(m["meal_name"] for m in recent_meal_history[-5:])
-        if recent_meal_history
-        else "no history yet"
+
+def build_suggestion_prompt(
+    ingredient_inventory: list[dict],
+    recent_meal_history: list[dict],
+    user_preferences: dict,
+    stated_habits: list[str],
+    inferred_habits: list[str] | None = None,
+    health_rules: list[str] | None = None,
+    user_profile: dict | None = None,
+    supplements: list[dict] | None = None,
+) -> str:
+    """Build the suggestion persona system prompt (profesyonel diyetisyen)."""
+    return _SUGGESTION_TEMPLATE.format(
+        ingredient_inventory=_format_ingredients(ingredient_inventory),
+        recent_meal_history=_format_history(recent_meal_history, limit=10),
+        user_preferences=_format_preferences(user_preferences),
+        stated_habits=_format_habits(stated_habits),
+        behavioral_patterns=_format_behavioral(inferred_habits),
+        health_rules=_format_health_rules(health_rules or []),
+        user_profile=_format_user_profile(user_profile),
+        supplements=_format_supplements(supplements),
     )
 
-    prefs_text = (
-        json.dumps(user_preferences, ensure_ascii=False)
-        if user_preferences
-        else "none set yet"
-    )
 
-    stated_text = (
-        "; ".join(stated_habits) if stated_habits else "none stated yet"
-    )
-
-    # Behavioral patterns block — only included when inferred data exists
-    behavioral_text = ""
-    if inferred_habits:
-        patterns = "\n".join(f"- {h}" for h in inferred_habits)
-        behavioral_text = _BEHAVIORAL_BLOCK.format(patterns=patterns)
-
-    return _SYSTEM_TEMPLATE.format(
-        ingredient_inventory=inv_text,
-        recent_meal_history=history_text,
-        user_preferences=prefs_text,
-        stated_habits=stated_text,
-        behavioral_patterns=behavioral_text,
-    )
+# Backward compat alias — used by existing chat.py
+build_system_prompt = build_chat_prompt
 
 
 async def stream_response(
