@@ -2,15 +2,28 @@ const BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
 const WS_URL = BASE_URL.replace(/^http/, 'ws')
 
 // ---------------------------------------------------------------------------
+// Auth helpers
+// ---------------------------------------------------------------------------
+
+function getToken() {
+  return localStorage.getItem('bf_token') || ''
+}
+
+function authHeaders() {
+  return { Authorization: `Bearer ${getToken()}` }
+}
+
+// ---------------------------------------------------------------------------
 // Shared fetch helper — avoids repeating ok-check + json() everywhere
 // ---------------------------------------------------------------------------
 
 /** Fetch a URL, throw on non-2xx, and return parsed JSON (or undefined for 204). */
 async function apiFetch(url, options = {}) {
-  const r = await fetch(url, {
-    headers: options.body ? { 'Content-Type': 'application/json' } : undefined,
-    ...options,
-  })
+  const headers = {
+    ...authHeaders(),
+    ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+  }
+  const r = await fetch(url, { ...options, headers })
   if (!r.ok) throw new Error(`API error ${r.status}: ${url}`)
   if (r.status === 204) return undefined
   return r.json()
@@ -19,6 +32,25 @@ async function apiFetch(url, options = {}) {
 /** POST / PUT with a JSON body. */
 function json(method, body) {
   return { method, body: JSON.stringify(body) }
+}
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+export const login = async (name, pin) => {
+  const r = await fetch(`${BASE_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, pin }),
+  })
+  if (!r.ok) throw new Error('Login failed')
+  return r.json()
+}
+
+export const logout = () => {
+  localStorage.removeItem('bf_token')
+  localStorage.removeItem('bf_user')
 }
 
 // ---------------------------------------------------------------------------
@@ -81,12 +113,11 @@ export const deleteHabit = (id) =>
 // ---------------------------------------------------------------------------
 
 /**
- * Open a WebSocket to /chat.
- * Callbacks are looked up via refs inside the handler — callers should pass
- * stable refs or use the ref pattern in ChatInterface.jsx.
+ * Open a WebSocket to /chat with auth token as query param.
  */
 export function createChatSocket(onToken, onDone, onMealLogged, onError, onClose) {
-  const ws = new WebSocket(`${WS_URL}/chat`)
+  const token = getToken()
+  const ws = new WebSocket(`${WS_URL}/chat?token=${token}`)
 
   ws.onmessage = (event) => {
     try {

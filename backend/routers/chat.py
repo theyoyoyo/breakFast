@@ -6,8 +6,9 @@ Parses JSON meal blocks from LLM responses and auto-logs meals.
 
 import asyncio
 import json
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from database import get_db
+from auth import get_user_id_from_token
 from services.llm import LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE
 from services.suggestion import build_system_prompt, stream_response
 from utils import extract_json_block
@@ -15,30 +16,36 @@ from utils import extract_json_block
 router = APIRouter()
 
 
-async def _load_context(db) -> dict:
+async def _load_context(db, user_id: int) -> dict:
     """
     Load all context needed to build the system prompt.
     The four queries are independent and run concurrently via asyncio.gather.
     """
     async def fetch_ingredients():
         async with db.execute(
-            "SELECT name, quantity, unit FROM ingredient_inventory ORDER BY name"
+            "SELECT name, quantity, unit FROM ingredient_inventory WHERE user_id = ? ORDER BY name",
+            (user_id,),
         ) as cur:
             return [dict(r) for r in await cur.fetchall()]
 
     async def fetch_history():
         async with db.execute(
-            "SELECT meal_name FROM meal_history ORDER BY logged_at DESC LIMIT 10"
+            "SELECT meal_name FROM meal_history WHERE user_id = ? ORDER BY logged_at DESC LIMIT 10",
+            (user_id,),
         ) as cur:
             return [dict(r) for r in await cur.fetchall()]
 
     async def fetch_prefs():
-        async with db.execute("SELECT key, value FROM user_preferences") as cur:
+        async with db.execute(
+            "SELECT key, value FROM user_preferences WHERE user_id = ?",
+            (user_id,),
+        ) as cur:
             return {r["key"]: r["value"] for r in await cur.fetchall()}
 
     async def fetch_habits():
         async with db.execute(
-            "SELECT description, source FROM user_habits ORDER BY created_at DESC"
+            "SELECT description, source FROM user_habits WHERE user_id = ? ORDER BY created_at DESC",
+            (user_id,),
         ) as cur:
             rows = await cur.fetchall()
             stated = [r["description"] for r in rows if r["source"] == "stated"]
@@ -57,15 +64,16 @@ async def _load_context(db) -> dict:
     }
 
 
-async def _log_meal(db, meal_data: dict) -> None:
+async def _log_meal(db, user_id: int, meal_data: dict) -> None:
     """Insert a suggested meal into history. Called after a successful LLM suggestion."""
     await db.execute(
         """
         INSERT INTO meal_history
-            (meal_name, description, ingredients, steps, prep_time_min, nutrition_note)
-        VALUES (?, ?, ?, ?, ?, ?)
+            (user_id, meal_name, description, ingredients, steps, prep_time_min, nutrition_note)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         (
+            user_id,
             meal_data.get("meal_name", "Unknown"),
             meal_data.get("description"),
             json.dumps(meal_data.get("ingredients", []), ensure_ascii=False),
@@ -78,11 +86,15 @@ async def _log_meal(db, meal_data: dict) -> None:
 
 
 @router.websocket("/chat")
-async def chat_endpoint(websocket: WebSocket):
+async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
+    # Authenticate via query param: ws://host/chat?token=xxx
+    user_id = get_user_id_from_token(token)
+    if user_id is None:
+        await websocket.close(code=4001, reason="Invalid or expired token")
+        return
+
     await websocket.accept()
     conversation_history: list[dict] = []
-    # Context is cached per session and only refreshed after a meal is logged
-    # (the only DB write that occurs within this handler).
     cached_context: dict | None = None
 
     try:
@@ -97,10 +109,9 @@ async def chat_endpoint(websocket: WebSocket):
             if not user_message:
                 continue
 
-            # Load context; reuse cached value unless a meal was logged last turn
             if cached_context is None:
                 async with get_db() as db:
-                    cached_context = await _load_context(db)
+                    cached_context = await _load_context(db, user_id)
 
             system_prompt = build_system_prompt(
                 ingredient_inventory=cached_context["ingredients"],
@@ -133,9 +144,8 @@ async def chat_endpoint(websocket: WebSocket):
             meal_data = extract_json_block(response_text)
             if meal_data:
                 async with get_db() as db:
-                    await _log_meal(db, meal_data)
+                    await _log_meal(db, user_id, meal_data)
                 await websocket.send_json({"type": "meal_logged", "meal": meal_data})
-                # Invalidate context cache so next turn reflects the new history entry
                 cached_context = None
 
     except WebSocketDisconnect:

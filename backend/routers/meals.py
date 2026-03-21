@@ -1,10 +1,12 @@
 """
 /meals — meal history endpoints.
+All queries are scoped to the authenticated user.
 """
 
 import json
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from database import get_db
+from auth import require_user
 from models.meal import Meal, MealLog, MealRating
 
 router = APIRouter(prefix="/meals", tags=["meals"])
@@ -30,18 +32,22 @@ def _row_to_meal(row) -> dict:
 
 
 @router.get("/", response_model=list[Meal])
-async def list_meals(limit: int = 50):
+async def list_meals(limit: int = 50, user_id: int = Depends(require_user)):
     async with get_db() as db:
         async with db.execute(
-            "SELECT * FROM meal_history ORDER BY logged_at DESC LIMIT ?", (limit,)
+            "SELECT * FROM meal_history WHERE user_id = ? ORDER BY logged_at DESC LIMIT ?",
+            (user_id, limit),
         ) as cur:
             return [_row_to_meal(r) for r in await cur.fetchall()]
 
 
 @router.get("/{meal_id}", response_model=Meal)
-async def get_meal(meal_id: int):
+async def get_meal(meal_id: int, user_id: int = Depends(require_user)):
     async with get_db() as db:
-        async with db.execute("SELECT * FROM meal_history WHERE id = ?", (meal_id,)) as cur:
+        async with db.execute(
+            "SELECT * FROM meal_history WHERE id = ? AND user_id = ?",
+            (meal_id, user_id),
+        ) as cur:
             row = await cur.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Meal not found")
@@ -49,15 +55,16 @@ async def get_meal(meal_id: int):
 
 
 @router.post("/", response_model=Meal, status_code=201)
-async def log_meal(body: MealLog):
+async def log_meal(body: MealLog, user_id: int = Depends(require_user)):
     async with get_db() as db:
         await db.execute(
             """
             INSERT INTO meal_history
-                (meal_name, description, ingredients, steps, prep_time_min, nutrition_note, schedule)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (user_id, meal_name, description, ingredients, steps, prep_time_min, nutrition_note, schedule)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
+                user_id,
                 body.meal_name,
                 body.description,
                 json.dumps(body.ingredients or [], ensure_ascii=False),
@@ -75,17 +82,20 @@ async def log_meal(body: MealLog):
 
 
 @router.patch("/{meal_id}/rating", response_model=Meal)
-async def rate_meal(meal_id: int, body: MealRating):
+async def rate_meal(meal_id: int, body: MealRating, user_id: int = Depends(require_user)):
     """Rate a meal thumbs-up (5) or thumbs-down (1)."""
     if body.rating not in (1, 5):
         raise HTTPException(status_code=400, detail="Rating must be 1 (down) or 5 (up)")
     async with get_db() as db:
-        # UPDATE directly — check rowcount instead of a wasted SELECT
         cursor = await db.execute(
-            "UPDATE meal_history SET rating = ? WHERE id = ?", (body.rating, meal_id)
+            "UPDATE meal_history SET rating = ? WHERE id = ? AND user_id = ?",
+            (body.rating, meal_id, user_id),
         )
         await db.commit()
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Meal not found")
-        async with db.execute("SELECT * FROM meal_history WHERE id = ?", (meal_id,)) as cur:
+        async with db.execute(
+            "SELECT * FROM meal_history WHERE id = ? AND user_id = ?",
+            (meal_id, user_id),
+        ) as cur:
             return _row_to_meal(await cur.fetchone())
