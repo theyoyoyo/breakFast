@@ -8,6 +8,7 @@ import asyncio
 import json
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from database import get_db
+from services.llm import LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE
 from services.suggestion import build_system_prompt, stream_response
 from utils import extract_json_block
 
@@ -111,11 +112,15 @@ async def chat_endpoint(websocket: WebSocket):
 
             # Stream response token by token
             full_response = []
-            async for chunk in stream_response(system_prompt, conversation_history, user_message):
-                full_response.append(chunk)
-                await websocket.send_json({"type": "token", "content": chunk})
+            try:
+                async for chunk in stream_response(system_prompt, conversation_history, user_message):
+                    full_response.append(chunk)
+                    await websocket.send_json({"type": "token", "content": chunk})
 
-            response_text = "".join(full_response)
+                response_text = "".join(full_response)
+            except LLMUnavailableError:
+                response_text = LLM_UNAVAILABLE_MESSAGE
+
             await websocket.send_json({"type": "done", "content": response_text})
 
             # Maintain a bounded conversation history (20 turns = 10 exchanges)

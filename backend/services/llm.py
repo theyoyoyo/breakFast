@@ -1,51 +1,37 @@
 """
 LLM abstraction layer.
-Tries Ollama first; falls back to Claude API if Ollama is unavailable or returns an error.
-Supports both regular (one-shot) calls and streaming (async generator).
+Tries Ollama; if unavailable, raises LLMUnavailableError.
+Claude API fallback is commented out — to be re-enabled later.
 """
 
 import httpx
 import json
-import time
 from typing import AsyncGenerator
-import anthropic
 
 from config import (
     OLLAMA_BASE_URL,
     OLLAMA_MODEL,
-    ANTHROPIC_API_KEY,
-    CLAUDE_MODEL,
 )
 
 
-# ---------------------------------------------------------------------------
-# Ollama availability — cached with a 30-second TTL to avoid a health-check
-# round-trip on every single chat message.
-# ---------------------------------------------------------------------------
-
-_ollama_cache: dict = {"available": False, "checked_at": 0.0}
-_OLLAMA_CACHE_TTL = 30.0  # seconds
+LLM_UNAVAILABLE_MESSAGE = "Benim aklım başımda değil"
 
 
-async def _ollama_available() -> bool:
+class LLMUnavailableError(Exception):
+    """Raised when no LLM backend is reachable."""
+    pass
+
+
+async def check_llm_availability() -> bool:
     """
-    Returns True if the local Ollama server is reachable.
-    Result is cached for 30 s to avoid blocking the hot path on every message.
+    Check if Ollama is reachable. Called before every message.
     """
-    now = time.monotonic()
-    if now - _ollama_cache["checked_at"] < _OLLAMA_CACHE_TTL:
-        return _ollama_cache["available"]
-
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
             r = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
-            available = r.status_code == 200
+            return r.status_code == 200
     except Exception:
-        available = False
-
-    _ollama_cache["available"] = available
-    _ollama_cache["checked_at"] = now
-    return available
+        return False
 
 
 async def chat_stream(
@@ -53,19 +39,12 @@ async def chat_stream(
     messages: list[dict],
 ) -> AsyncGenerator[str, None]:
     """
-    Stream response tokens.  Each yielded value is a string chunk (may be partial word).
-    Tries Ollama first; invalidates the availability cache and falls back to Claude on error.
+    Stream response tokens. Raises LLMUnavailableError if Ollama is down.
     """
-    if await _ollama_available():
-        try:
-            async for chunk in _ollama_stream(system_prompt, messages):
-                yield chunk
-            return
-        except Exception:
-            # Ollama failed mid-stream — invalidate cache so next call re-checks
-            _ollama_cache["checked_at"] = 0.0
+    if not await check_llm_availability():
+        raise LLMUnavailableError(LLM_UNAVAILABLE_MESSAGE)
 
-    async for chunk in _claude_stream(system_prompt, messages):
+    async for chunk in _ollama_stream(system_prompt, messages):
         yield chunk
 
 
@@ -73,7 +52,7 @@ async def chat_complete(
     system_prompt: str,
     messages: list[dict],
 ) -> str:
-    """Non-streaming call.  Returns the full response as a single string."""
+    """Non-streaming call. Returns the full response as a single string."""
     chunks = []
     async for chunk in chat_stream(system_prompt, messages):
         chunks.append(chunk)
@@ -115,23 +94,26 @@ async def _ollama_stream(
 
 
 # ---------------------------------------------------------------------------
-# Claude API fallback
+# Claude API fallback — commented out, to be re-enabled later
 # ---------------------------------------------------------------------------
-
-async def _claude_stream(
-    system_prompt: str,
-    messages: list[dict],
-) -> AsyncGenerator[str, None]:
-    if not ANTHROPIC_API_KEY:
-        yield "[LLM unavailable: Ollama is down and no ANTHROPIC_API_KEY is set]"
-        return
-
-    client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
-    async with client.messages.stream(
-        model=CLAUDE_MODEL,
-        max_tokens=2048,
-        system=system_prompt,
-        messages=messages,
-    ) as stream:
-        async for text in stream.text_stream:
-            yield text
+#
+# import anthropic
+# from config import ANTHROPIC_API_KEY, CLAUDE_MODEL
+#
+# async def _claude_stream(
+#     system_prompt: str,
+#     messages: list[dict],
+# ) -> AsyncGenerator[str, None]:
+#     if not ANTHROPIC_API_KEY:
+#         yield "[LLM unavailable: Ollama is down and no ANTHROPIC_API_KEY is set]"
+#         return
+#
+#     client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+#     async with client.messages.stream(
+#         model=CLAUDE_MODEL,
+#         max_tokens=2048,
+#         system=system_prompt,
+#         messages=messages,
+#     ) as stream:
+#         async for text in stream.text_stream:
+#             yield text
