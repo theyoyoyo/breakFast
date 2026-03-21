@@ -234,37 +234,64 @@ export default function ChatInterface({ onMealLogged }) {
     }
   }, [])
 
-  const handleDeleteAndGoBack = useCallback(async () => {
+  const switchToSession = useCallback(async (targetId) => {
+    setSessionId(targetId)
+    const msgs = await getSessionMessages(targetId)
+    const loaded = msgs.map(m => ({ role: m.role, content: m.content }))
+    setMessages([WELCOME_MSG, ...loaded])
+    setStreamBuffer(null)
+    setInput('')
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ session_id: targetId }))
+    }
+  }, [])
+
+  const handleBack = useCallback(async () => {
+    if (!sessionIdRef.current) return
+    try {
+      const sessions = await listSessions()
+      const idx = sessions.findIndex(s => s.id === sessionIdRef.current)
+      if (idx < sessions.length - 1) {
+        await switchToSession(sessions[idx + 1].id)
+      }
+    } catch { /* Backend not available */ }
+  }, [switchToSession])
+
+  const handleNext = useCallback(async () => {
+    if (!sessionIdRef.current) return
+    try {
+      const sessions = await listSessions()
+      const idx = sessions.findIndex(s => s.id === sessionIdRef.current)
+      if (idx > 0) {
+        await switchToSession(sessions[idx - 1].id)
+      }
+    } catch { /* Backend not available */ }
+  }, [switchToSession])
+
+  const handleDeleteSession = useCallback(async () => {
     if (!sessionIdRef.current) return
     try {
       const currentId = sessionIdRef.current
-      await deleteSession(currentId)
-      // Find the previous session
       const sessions = await listSessions()
-      if (sessions.length > 0) {
-        const prev = sessions[0]
-        setSessionId(prev.id)
-        const msgs = await getSessionMessages(prev.id)
-        const loaded = msgs.map(m => ({ role: m.role, content: m.content }))
-        setMessages([WELCOME_MSG, ...loaded])
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({ session_id: prev.id }))
-        }
+      const idx = sessions.findIndex(s => s.id === currentId)
+      await deleteSession(currentId)
+
+      // Navigate to adjacent session or create new
+      if (sessions.length > 1) {
+        const nextIdx = idx > 0 ? idx - 1 : idx + 1
+        await switchToSession(sessions[nextIdx].id)
       } else {
-        // No previous sessions — create a fresh one
         const { session_id } = await createSession()
         setSessionId(session_id)
         setMessages([WELCOME_MSG])
+        setStreamBuffer(null)
+        setInput('')
         if (wsRef.current?.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify({ session_id }))
         }
       }
-      setStreamBuffer(null)
-      setInput('')
-    } catch {
-      // Backend not available
-    }
-  }, [])
+    } catch { /* Backend not available */ }
+  }, [switchToSession])
 
   const handleMic = () => {
     if (isListening) {
@@ -284,11 +311,17 @@ export default function ChatInterface({ onMealLogged }) {
         {!connected && wsRef.current && (
           <span style={s.connStatus}> — reconnecting…</span>
         )}
-        <button style={s.newSessionBtn} onClick={handleDeleteAndGoBack} title="Delete this session and go back">
-          Back
+        <button style={s.newSessionBtn} onClick={handleBack} title="Previous session">
+          &lt;
+        </button>
+        <button style={s.newSessionBtn} onClick={handleNext} title="Next session">
+          &gt;
         </button>
         <button style={s.newSessionBtn} onClick={handleNewSession} title="Start a new conversation">
           + New
+        </button>
+        <button style={{ ...s.newSessionBtn, color: 'var(--accent)' }} onClick={handleDeleteSession} title="Delete this session">
+          Del
         </button>
       </div>
 
