@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from config import CORS_ORIGINS
 from database import init_db
-from routers import chat, ingredients, meals, preferences
+from routers import auth, chat, ingredients, meals, preferences
 from services.insights import refresh_insights
 
 
@@ -30,6 +30,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(ingredients.router)
 app.include_router(meals.router)

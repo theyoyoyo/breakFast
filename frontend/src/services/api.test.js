@@ -41,13 +41,17 @@ describe('apiFetch error handling', () => {
 
 
 describe('ingredient API', () => {
-  it('GET /ingredients/ calls the right URL', async () => {
+  it('GET /ingredients/ calls the right URL with auth header', async () => {
     const stub = mockFetch(200, [])
     vi.stubGlobal('fetch', stub)
     await getIngredients()
     expect(stub).toHaveBeenCalledWith(
       expect.stringContaining('/ingredients/'),
-      expect.objectContaining({ headers: undefined }),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: expect.stringContaining('Bearer'),
+        }),
+      }),
     )
   })
 

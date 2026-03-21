@@ -8,9 +8,28 @@ A personal AI-powered breakfast planner. Knows your ingredients, your kitchen, a
 
 ### Prerequisites
 
-- Python 3.11+
-- [Ollama](https://ollama.ai) installed and running
+- Python 3.11+ (tested with 3.14)
 - Node.js 18+ (for frontend)
+- [Ollama](https://ollama.ai) — optional, only needed for local LLM
+
+### Quick Start (without LLM)
+
+You can run the app without Ollama or an API key. The UI and all CRUD features (ingredients, meals, preferences) will work — only the chat/suggestion engine requires an LLM connection.
+
+```bash
+# 1. Setup
+cp .env.example .env
+cd backend && pip install -r requirements.txt
+cd ../frontend && npm install
+
+# 2. Run (two terminals)
+cd backend && python -m uvicorn main:app --host 0.0.0.0 --port 8000
+cd frontend && npm run dev
+```
+
+Open http://localhost:5173 in your browser.
+
+### Full Setup (with LLM)
 
 ### 1. Pull the Ollama model
 
