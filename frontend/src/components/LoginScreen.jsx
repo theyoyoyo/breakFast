@@ -51,7 +51,7 @@ const s = {
 }
 
 export default function LoginScreen({ onLogin }) {
-  const [name, setName] = useState('')
+  const [name, setName] = useState('demo')
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)

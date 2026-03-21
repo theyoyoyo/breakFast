@@ -95,7 +95,19 @@ async def get_db():
 
 async def init_db() -> None:
     """Create all tables if they don't exist. Called once at startup."""
+    from auth import hash_pin
+
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("PRAGMA journal_mode=WAL")
         await db.executescript(_SCHEMA)
+
+        # Ensure a "demo" user always exists (for quick dev/demo access)
+        await db.execute(
+            """
+            INSERT OR IGNORE INTO users (name, pin_hash, is_admin)
+            VALUES (?, ?, 1)
+            """,
+            ("demo", hash_pin("")),
+        )
+
         await db.commit()
