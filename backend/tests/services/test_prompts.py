@@ -186,6 +186,43 @@ class TestSuggestionPrompt:
         assert "high egg consumption" in prompt
         assert "DIVERSIFY" in prompt
 
+    def test_includes_nutrition_detail_fields(self):
+        """Suggestion prompt should ask for detailed macro breakdown."""
+        prompt = build_suggestion_prompt([], [], {}, [])
+        assert "protein" in prompt.lower()
+        assert "kalori" in prompt.lower() or "kcal" in prompt.lower()
+        assert "lif" in prompt.lower() or "fiber" in prompt.lower()
+        assert "omega" in prompt.lower()
+        assert "vitamin" in prompt.lower()
+
+    def test_includes_advance_prep_tip(self):
+        """Suggestion prompt should mention advance prep (Tavsiye) section."""
+        prompt = build_suggestion_prompt([], [], {}, [])
+        assert "Tavsiye" in prompt
+
+    def test_includes_avoid_list_guidance(self):
+        """Suggestion prompt should tell LLM to respect avoid list."""
+        prompt = build_suggestion_prompt([], [], {}, [])
+        assert "avoid" in prompt.lower() or "kaçın" in prompt.lower()
+
+    def test_includes_seasonality(self):
+        """Suggestion prompt should mention seasonal produce preference."""
+        prompt = build_suggestion_prompt([], [], {}, [])
+        assert "mevsim" in prompt.lower()
+
+    def test_includes_turkey_context(self):
+        """Suggestion prompt should mention Turkey-available ingredients."""
+        prompt = build_suggestion_prompt([], [], {}, [])
+        assert "Türkiye" in prompt
+
+    def test_nutrition_detail_in_json_block(self):
+        """JSON block should include nutrition_detail fields."""
+        prompt = build_suggestion_prompt([], [], {}, [])
+        assert '"nutrition_detail"' in prompt
+        assert '"calories_kcal"' in prompt
+        assert '"protein_g"' in prompt
+        assert '"advance_prep_tip"' in prompt
+
 
 # ---------------------------------------------------------------------------
 # Backward compat
