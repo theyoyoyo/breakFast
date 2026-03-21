@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { createChatSocket } from '../services/api'
+import { createChatSocket, getActiveSession, createSession, getSessionMessages } from '../services/api'
 import { useVoice } from '../hooks/useVoice'
 
 const s = {
@@ -88,30 +88,60 @@ const s = {
     fontWeight: 400,
     color: 'var(--text-muted)',
   },
+  newSessionBtn: {
+    background: 'none',
+    border: '1px solid var(--border)',
+    borderRadius: 8,
+    padding: '4px 10px',
+    fontSize: 12,
+    color: 'var(--text-muted)',
+    cursor: 'pointer',
+    marginLeft: 'auto',
+  },
 }
 
+const WELCOME_MSG = { role: 'assistant', content: "Good morning! Tell me what's in your fridge and I'll plan your breakfast." }
+
 export default function ChatInterface({ onMealLogged }) {
-  const [messages, setMessages] = useState([
-    {
-      role: 'assistant',
-      content: "Good morning! Tell me what's in your fridge and I'll plan your breakfast.",
-    },
-  ])
+  const [messages, setMessages] = useState([WELCOME_MSG])
   const [input, setInput] = useState('')
   // null = idle, '' = thinking (no tokens yet), string = streaming content
   const [streamBuffer, setStreamBuffer] = useState(null)
   const [connected, setConnected] = useState(false)
+  const [sessionId, setSessionId] = useState(null)
   const wsRef = useRef(null)
   const messagesEndRef = useRef(null)
   const reconnectTimer = useRef(null)
   const reconnectDelay = useRef(1000)
   const onMealLoggedRef = useRef(onMealLogged)
+  const sessionIdRef = useRef(null)
   const { isListening, startListening, stopListening, speak, supported: voiceSupported } = useVoice()
   const speakRef = useRef(speak)
 
   // Keep refs in sync so socket callbacks always see the latest props/functions
   useEffect(() => { onMealLoggedRef.current = onMealLogged }, [onMealLogged])
   useEffect(() => { speakRef.current = speak }, [speak])
+  useEffect(() => { sessionIdRef.current = sessionId }, [sessionId])
+
+  // Load active session on mount
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const session = await getActiveSession()
+        if (cancelled) return
+        setSessionId(session.id)
+        const msgs = await getSessionMessages(session.id)
+        if (cancelled) return
+        if (msgs.length > 0) {
+          setMessages(msgs.map(m => ({ role: m.role, content: m.content })))
+        }
+      } catch {
+        // Backend not available yet — will work once connected
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -168,14 +198,17 @@ export default function ChatInterface({ onMealLogged }) {
     setMessages((prev) => [...prev, { role: 'user', content: msg }])
     setInput('')
 
+    const payload = { message: msg }
+    if (sessionIdRef.current) payload.session_id = sessionIdRef.current
+
     const ws = ensureSocket()
     if (ws.readyState === WebSocket.OPEN) {
       setStreamBuffer('')  // '' = thinking
-      ws.send(JSON.stringify({ message: msg }))
+      ws.send(JSON.stringify(payload))
     } else {
       // Backend not connected yet — wait for connection, then send
       setStreamBuffer('')
-      ws.addEventListener('open', () => ws.send(JSON.stringify({ message: msg })), { once: true })
+      ws.addEventListener('open', () => ws.send(JSON.stringify(payload)), { once: true })
     }
   }, [streamBuffer, ensureSocket])
 
@@ -185,6 +218,22 @@ export default function ChatInterface({ onMealLogged }) {
       sendMessage(input)
     }
   }
+
+  const handleNewSession = useCallback(async () => {
+    try {
+      const { session_id } = await createSession()
+      setSessionId(session_id)
+      setMessages([WELCOME_MSG])
+      setStreamBuffer(null)
+      setInput('')
+      // Notify WebSocket about new session
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ session_id }))
+      }
+    } catch {
+      // Backend not available
+    }
+  }, [])
 
   const handleMic = () => {
     if (isListening) {
@@ -199,11 +248,14 @@ export default function ChatInterface({ onMealLogged }) {
 
   return (
     <div style={s.container}>
-      <div style={s.header}>
-        break FAST
+      <div style={{ ...s.header, display: 'flex', alignItems: 'center' }}>
+        <span>break FAST</span>
         {!connected && wsRef.current && (
           <span style={s.connStatus}> — reconnecting…</span>
         )}
+        <button style={s.newSessionBtn} onClick={handleNewSession} title="Start a new conversation">
+          + New
+        </button>
       </div>
 
       <div style={s.messages}>

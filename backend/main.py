@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from config import CORS_ORIGINS
 from database import init_db
-from routers import auth, chat, ingredients, meals, preferences
+from routers import auth, chat, ingredients, meals, preferences, sessions
 from services.insights import refresh_insights
 
 
@@ -35,6 +35,7 @@ app.include_router(chat.router)
 app.include_router(ingredients.router)
 app.include_router(meals.router)
 app.include_router(preferences.router)
+app.include_router(sessions.router)
 
 
 @app.get("/health")

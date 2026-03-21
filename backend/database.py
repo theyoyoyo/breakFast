@@ -75,6 +75,22 @@ CREATE TABLE IF NOT EXISTS health_rules (
     created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
     updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS chat_sessions (
+    id          TEXT    PRIMARY KEY,
+    user_id     INTEGER NOT NULL REFERENCES users(id),
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id  TEXT    NOT NULL REFERENCES chat_sessions(id),
+    user_id     INTEGER NOT NULL REFERENCES users(id),
+    role        TEXT    NOT NULL CHECK(role IN ('user', 'assistant')),
+    content     TEXT    NOT NULL,
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 
@@ -108,6 +124,19 @@ async def init_db() -> None:
             VALUES (?, ?, 1)
             """,
             ("demo", hash_pin("")),
+        )
+
+        # Clean up chat sessions older than 48 hours
+        await db.execute(
+            """
+            DELETE FROM chat_messages WHERE session_id IN (
+                SELECT id FROM chat_sessions
+                WHERE updated_at < datetime('now', '-48 hours')
+            )
+            """
+        )
+        await db.execute(
+            "DELETE FROM chat_sessions WHERE updated_at < datetime('now', '-48 hours')"
         )
 
         await db.commit()

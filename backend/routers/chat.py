@@ -2,10 +2,12 @@
 /chat WebSocket endpoint.
 Handles streaming conversation with context loading from DB.
 Parses JSON meal blocks from LLM responses and auto-logs meals.
+Messages are persisted to chat_messages table for session continuity.
 """
 
 import asyncio
 import json
+import uuid
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from database import get_db
 from auth import get_user_id_from_token
@@ -85,6 +87,34 @@ async def _log_meal(db, user_id: int, meal_data: dict) -> None:
     await db.commit()
 
 
+async def _save_message(db, session_id: str, user_id: int, role: str, content: str):
+    """Persist a chat message and touch session updated_at."""
+    await db.execute(
+        "INSERT INTO chat_messages (session_id, user_id, role, content) VALUES (?, ?, ?, ?)",
+        (session_id, user_id, role, content),
+    )
+    await db.execute(
+        "UPDATE chat_sessions SET updated_at = datetime('now') WHERE id = ?",
+        (session_id,),
+    )
+    await db.commit()
+
+
+async def _load_session_history(db, session_id: str, user_id: int) -> list[dict]:
+    """Load persisted messages for a session (last 20 for LLM context)."""
+    async with db.execute(
+        """
+        SELECT role, content FROM chat_messages
+        WHERE session_id = ? AND user_id = ?
+        ORDER BY created_at DESC LIMIT 20
+        """,
+        (session_id, user_id),
+    ) as cur:
+        rows = await cur.fetchall()
+    # Reverse to chronological order
+    return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
+
+
 @router.websocket("/chat")
 async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
     # Authenticate via query param: ws://host/chat?token=xxx
@@ -94,8 +124,8 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
         return
 
     await websocket.accept()
-    conversation_history: list[dict] = []
     cached_context: dict | None = None
+    session_id: str | None = None
 
     try:
         while True:
@@ -105,9 +135,36 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
             except json.JSONDecodeError:
                 payload = {"message": raw}
 
+            # Handle session management messages
+            if "session_id" in payload and "message" not in payload:
+                session_id = payload["session_id"]
+                continue
+
             user_message = payload.get("message", "").strip()
             if not user_message:
                 continue
+
+            # Use session_id from payload if provided, otherwise keep current
+            if "session_id" in payload:
+                session_id = payload["session_id"]
+
+            # Ensure we have a session
+            if session_id is None:
+                async with get_db() as db:
+                    async with db.execute(
+                        "SELECT id FROM chat_sessions WHERE user_id = ? ORDER BY rowid DESC LIMIT 1",
+                        (user_id,),
+                    ) as cur:
+                        row = await cur.fetchone()
+                    if row:
+                        session_id = row["id"]
+                    else:
+                        session_id = str(uuid.uuid4())
+                        await db.execute(
+                            "INSERT INTO chat_sessions (id, user_id) VALUES (?, ?)",
+                            (session_id, user_id),
+                        )
+                        await db.commit()
 
             if cached_context is None:
                 async with get_db() as db:
@@ -120,6 +177,10 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                 stated_habits=cached_context["stated_habits"],
                 inferred_habits=cached_context["inferred_habits"],
             )
+
+            # Load persisted conversation history for LLM context
+            async with get_db() as db:
+                conversation_history = await _load_session_history(db, session_id, user_id)
 
             # Stream response token by token
             full_response = []
@@ -134,13 +195,12 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
             except Exception:
                 response_text = LLM_UNAVAILABLE_MESSAGE
 
-            await websocket.send_json({"type": "done", "content": response_text})
+            # Persist both messages to DB before signaling done
+            async with get_db() as db:
+                await _save_message(db, session_id, user_id, "user", user_message)
+                await _save_message(db, session_id, user_id, "assistant", response_text)
 
-            # Maintain a bounded conversation history (20 turns = 10 exchanges)
-            conversation_history.append({"role": "user", "content": user_message})
-            conversation_history.append({"role": "assistant", "content": response_text})
-            if len(conversation_history) > 20:
-                conversation_history = conversation_history[-20:]
+            await websocket.send_json({"type": "done", "content": response_text})
 
             # Auto-log meal if the response contains a ```json meal block
             meal_data = extract_json_block(response_text)

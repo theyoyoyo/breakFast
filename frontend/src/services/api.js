@@ -109,6 +109,19 @@ export const deleteHabit = (id) =>
   apiFetch(`${BASE_URL}/preferences/habits/${id}`, { method: 'DELETE' })
 
 // ---------------------------------------------------------------------------
+// Sessions
+// ---------------------------------------------------------------------------
+
+export const getActiveSession = () =>
+  apiFetch(`${BASE_URL}/sessions/active`)
+
+export const createSession = () =>
+  apiFetch(`${BASE_URL}/sessions/`, { method: 'POST' })
+
+export const getSessionMessages = (sessionId) =>
+  apiFetch(`${BASE_URL}/sessions/${sessionId}/messages`)
+
+// ---------------------------------------------------------------------------
 // WebSocket chat
 // ---------------------------------------------------------------------------
 
