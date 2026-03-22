@@ -158,7 +158,7 @@ const s = {
   ratingsBtn: {
     width: '100%',
     padding: '12px 16px',
-    background: 'var(--accent)',
+    background: 'var(--accent2)',
     border: 'none',
     borderRadius: 8,
     color: '#fff',
@@ -446,7 +446,7 @@ export default function SettingsPanel() {
                 value={newSuppContents}
                 onChange={(e) => setNewSuppContents(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddSupplement()}
-                placeholder="Contents (optional)…"
+                placeholder="e.g. Vitamin D3 1000IU, K2 100mcg, Zinc 15mg"
               />
               <button style={s.addBtn} onClick={handleAddSupplement}>+</button>
             </div>
