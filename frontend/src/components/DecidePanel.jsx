@@ -95,81 +95,89 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
     setSaving(false)
   }, [ratings, items, meal, onConfirm])
 
+  const handleOverlayClick = (e) => {
+    if (e.target === e.currentTarget) onClose()
+  }
+
   if (phase === 'rate') {
     const unratedItems = Object.keys(ratings)
     return (
-      <div style={s.panel}>
-        <div style={s.panelHeader}>Puanla</div>
-        <div style={s.itemList}>
-          {unratedItems.map(item => (
-            <div key={item} style={s.rateRow}>
-              <span style={s.rateLabel}>{item}</span>
-              <input
-                type="range"
-                min={1}
-                max={10}
-                value={ratings[item]}
-                onChange={(e) => setRatings(prev => ({ ...prev, [item]: Number(e.target.value) }))}
-                style={s.slider}
-              />
-              <span style={s.rateValue}>{ratings[item]}</span>
-            </div>
-          ))}
-        </div>
-        <div style={s.actions}>
-          <button style={s.backBtn} onClick={() => setPhase('edit')}>Geri</button>
-          <button style={s.confirmBtn} onClick={handleSave} disabled={saving}>
-            {saving ? '...' : 'Kaydet'}
-          </button>
+      <div style={s.overlay} onClick={handleOverlayClick}>
+        <div style={s.panel}>
+          <div style={s.panelHeader}>Puanla</div>
+          <div style={s.itemList}>
+            {unratedItems.map(item => (
+              <div key={item} style={s.rateRow}>
+                <span style={s.rateLabel}>{item}</span>
+                <input
+                  type="range"
+                  min={1}
+                  max={10}
+                  value={ratings[item]}
+                  onChange={(e) => setRatings(prev => ({ ...prev, [item]: Number(e.target.value) }))}
+                  style={s.slider}
+                />
+                <span style={s.rateValue}>{ratings[item]}</span>
+              </div>
+            ))}
+          </div>
+          <div style={s.actions}>
+            <button style={s.backBtn} onClick={() => setPhase('edit')}>Geri</button>
+            <button style={s.confirmBtn} onClick={handleSave} disabled={saving}>
+              {saving ? '...' : 'Kaydet'}
+            </button>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div style={s.panel}>
-      <div style={s.panelHeader}>Karar Verdim</div>
-      <div style={s.itemList}>
-        {items.map((item, idx) => (
-          <div key={idx} style={s.itemRow}>
-            {editIdx === idx ? (
-              <input
-                style={s.editInput}
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
-                onBlur={handleSaveEdit}
-                autoFocus
-              />
-            ) : (
-              <span style={s.itemText}>{item}</span>
-            )}
-            <div style={s.itemActions}>
-              <button style={s.editBtn} onClick={() => handleStartEdit(idx)} title="Düzenle">✏️</button>
-              <button style={s.deleteBtn} onClick={() => handleDelete(idx)} title="Sil">🗑️</button>
+    <div style={s.overlay} onClick={handleOverlayClick}>
+      <div style={s.panel}>
+        <div style={s.panelHeader}>Karar Verdim</div>
+        <div style={s.itemList}>
+          {items.map((item, idx) => (
+            <div key={idx} style={s.itemRow}>
+              {editIdx === idx ? (
+                <input
+                  style={s.editInput}
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
+                  onBlur={handleSaveEdit}
+                  autoFocus
+                />
+              ) : (
+                <span style={s.itemText}>{item}</span>
+              )}
+              <div style={s.itemActions}>
+                <button style={s.editBtn} onClick={() => handleStartEdit(idx)} title="Düzenle">✏️</button>
+                <button style={s.deleteBtn} onClick={() => handleDelete(idx)} title="Sil">🗑️</button>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
-      <div style={s.addRow}>
-        <input
-          style={s.addInput}
-          value={newItem}
-          onChange={(e) => setNewItem(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-          placeholder="Ürün ekle…"
-        />
-        <button style={s.addBtn} onClick={handleAdd}>+</button>
-      </div>
-      <div style={s.actions}>
-        <button style={s.cancelBtn} onClick={onClose}>Kapat</button>
-        <button
-          style={s.confirmBtn}
-          onClick={handleProceedToRating}
-          disabled={items.length === 0}
-        >
-          Onayla
-        </button>
+          ))}
+        </div>
+        <div style={s.addRow}>
+          <input
+            style={s.addInput}
+            value={newItem}
+            onChange={(e) => setNewItem(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+            placeholder="Ürün ekle…"
+          />
+          <button style={s.addBtn} onClick={handleAdd}>+</button>
+        </div>
+        <div style={s.actions}>
+          <button style={s.cancelBtn} onClick={onClose}>Kapat</button>
+          <button
+            style={s.confirmBtn}
+            onClick={handleProceedToRating}
+            disabled={items.length === 0}
+          >
+            Onayla
+          </button>
+        </div>
       </div>
     </div>
   )

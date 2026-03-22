@@ -326,6 +326,17 @@ export default function ChatInterface({ onMealLogged }) {
         <div ref={messagesEndRef} />
       </div>
 
+      {decideOpen && (
+        <DecidePanel
+          meal={lastMeal}
+          onClose={() => setDecideOpen(false)}
+          onConfirm={() => {
+            setDecideOpen(false)
+            setLastMeal(null)
+          }}
+        />
+      )}
+
       <div style={s.actionRow}>
         {todaySupps.length > 0 && (
           <div style={s.suppMenuWrapper}>
@@ -355,29 +366,17 @@ export default function ChatInterface({ onMealLogged }) {
           </div>
         )}
 
-        <div style={s.decideWrapper}>
-          {decideOpen && (
-            <DecidePanel
-              meal={lastMeal}
-              onClose={() => setDecideOpen(false)}
-              onConfirm={() => {
-                setDecideOpen(false)
-                setLastMeal(null)
-              }}
-            />
-          )}
-          <button
-            style={s.decideBtn(decideOpen)}
-            onClick={() => {
-              setDecideOpen(prev => !prev)
-              if (!decideOpen) setSuppMenuOpen(false)
-            }}
-            disabled={streamBuffer !== null}
-            title="Karar Verdim"
-          >
-            Karar Verdim
-          </button>
-        </div>
+        <button
+          style={s.decideBtn(decideOpen)}
+          onClick={() => {
+            setDecideOpen(prev => !prev)
+            if (!decideOpen) setSuppMenuOpen(false)
+          }}
+          disabled={streamBuffer !== null}
+          title="Karar Verdim"
+        >
+          🍽️
+        </button>
 
         <SuggestButton onSuggest={handleSuggest} disabled={streamBuffer !== null || decideOpen} />
       </div>
