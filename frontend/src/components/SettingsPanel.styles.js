@@ -91,10 +91,13 @@ export const ratingsBtn = {
   letterSpacing: '0.05em',
 }
 
-export const ratingsPanel = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 8,
+export const backBtn = {
+  background: 'none',
+  border: 'none',
+  fontSize: 18,
+  color: 'var(--accent)',
+  cursor: 'pointer',
+  padding: '0 4px',
 }
 
 export const ratingRow = {

@@ -8,7 +8,7 @@ import * as s from './SettingsPanel.styles'
 
 export default function SettingsPanel() {
   const [ratings, setRatings] = useState([])
-  const [showRatings, setShowRatings] = useState(false)
+  const [view, setView] = useState('settings')
   const [newProduct, setNewProduct] = useState('')
   const [error, setError] = useState(null)
 
@@ -142,6 +142,51 @@ export default function SettingsPanel() {
     }
   }
 
+  if (view === 'ratings') {
+    return (
+      <div style={s.container}>
+        <div style={{ ...s.header, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button style={s.backBtn} onClick={() => setView('settings')}>←</button>
+          <span>Ratings ({ratings.length})</span>
+        </div>
+        <div style={s.body}>
+          {error && <div style={s.error}>{error}</div>}
+          {ratings.length === 0 && <span style={s.empty}>No ratings yet</span>}
+          {ratings.map((r) => (
+            <div key={r.id} style={s.ratingRow}>
+              <div style={s.ratingTop}>
+                <span style={s.ratingName}>{r.product_name}</span>
+                <button style={s.tagX} onClick={() => handleDeleteRating(r.id)}>×</button>
+              </div>
+              <div style={s.starsRow}>
+                {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
+                  <div
+                    key={n}
+                    style={s.starCell}
+                    onClick={() => handleUpdateRating(r.id, n)}
+                  >
+                    <span style={s.starNum}>{n}</span>
+                    <span style={s.star(n <= r.rating)}>★</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          <div style={s.addRow}>
+            <input
+              style={s.input}
+              value={newProduct}
+              onChange={(e) => setNewProduct(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddRating()}
+              placeholder="Add product…"
+            />
+            <button style={s.addBtn} onClick={handleAddRating}>+</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={s.container}>
       <div style={s.header}>Settings</div>
@@ -259,46 +304,11 @@ export default function SettingsPanel() {
           </div>
         </div>
 
-        {/* Ratings */}
+        {/* Ratings — navigates to sub-page */}
         <div style={s.section}>
-          <button style={s.ratingsBtn} onClick={() => setShowRatings(!showRatings)}>
-            Ratings ({ratings.length})
+          <button style={s.ratingsBtn} onClick={() => setView('ratings')}>
+            Ratings ({ratings.length}) →
           </button>
-          {showRatings && (
-            <div style={s.ratingsPanel}>
-              {ratings.length === 0 && <span style={s.empty}>No ratings yet</span>}
-              {ratings.map((r) => (
-                <div key={r.id} style={s.ratingRow}>
-                  <div style={s.ratingTop}>
-                    <span style={s.ratingName}>{r.product_name}</span>
-                    <button style={s.tagX} onClick={() => handleDeleteRating(r.id)}>×</button>
-                  </div>
-                  <div style={s.starsRow}>
-                    {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
-                      <div
-                        key={n}
-                        style={s.starCell}
-                        onClick={() => handleUpdateRating(r.id, n)}
-                      >
-                        <span style={s.starNum}>{n}</span>
-                        <span style={s.star(n <= r.rating)}>★</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              <div style={s.addRow}>
-                <input
-                  style={s.input}
-                  value={newProduct}
-                  onChange={(e) => setNewProduct(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddRating()}
-                  placeholder="Add product…"
-                />
-                <button style={s.addBtn} onClick={handleAddRating}>+</button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
