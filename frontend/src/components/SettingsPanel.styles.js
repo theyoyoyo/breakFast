@@ -99,28 +99,48 @@ export const ratingsPanel = {
 
 export const ratingRow = {
   display: 'flex',
-  alignItems: 'center',
-  gap: 8,
+  flexDirection: 'column',
+  gap: 4,
   background: 'var(--surface2)',
   border: '1px solid var(--border)',
   borderRadius: 8,
-  padding: '6px 10px',
-  fontSize: 13,
+  padding: '8px 10px',
+}
+
+export const ratingTop = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
 }
 
 export const ratingName = {
-  flex: 1,
+  fontWeight: 600,
+  fontSize: 13,
   color: 'var(--text)',
 }
 
-export const ratingInput = {
-  width: 45,
-  background: 'var(--surface)',
-  border: '1px solid var(--border)',
-  borderRadius: 6,
-  padding: '3px 6px',
-  color: 'var(--text)',
-  fontSize: 13,
-  textAlign: 'center',
-  outline: 'none',
+export const starsRow = {
+  display: 'flex',
+  justifyContent: 'space-between',
 }
+
+export const starCell = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  cursor: 'pointer',
+  flex: 1,
+  userSelect: 'none',
+}
+
+export const starNum = {
+  fontSize: 9,
+  color: 'var(--text-muted)',
+  marginBottom: 1,
+}
+
+export const star = (lit) => ({
+  fontSize: 18,
+  color: lit ? '#f5a623' : 'var(--border)',
+  transition: 'color 0.1s',
+})

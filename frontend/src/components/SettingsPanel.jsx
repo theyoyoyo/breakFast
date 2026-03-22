@@ -269,16 +269,22 @@ export default function SettingsPanel() {
               {ratings.length === 0 && <span style={s.empty}>No ratings yet</span>}
               {ratings.map((r) => (
                 <div key={r.id} style={s.ratingRow}>
-                  <span style={s.ratingName}>{r.product_name}</span>
-                  <input
-                    type="number"
-                    min="1"
-                    max="10"
-                    style={s.ratingInput}
-                    value={r.rating}
-                    onChange={(e) => handleUpdateRating(r.id, e.target.value)}
-                  />
-                  <button style={s.tagX} onClick={() => handleDeleteRating(r.id)}>×</button>
+                  <div style={s.ratingTop}>
+                    <span style={s.ratingName}>{r.product_name}</span>
+                    <button style={s.tagX} onClick={() => handleDeleteRating(r.id)}>×</button>
+                  </div>
+                  <div style={s.starsRow}>
+                    {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
+                      <div
+                        key={n}
+                        style={s.starCell}
+                        onClick={() => handleUpdateRating(r.id, n)}
+                      >
+                        <span style={s.starNum}>{n}</span>
+                        <span style={s.star(n <= r.rating)}>★</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
               <div style={s.addRow}>
