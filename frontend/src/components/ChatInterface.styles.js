@@ -27,6 +27,12 @@ export const messages = {
   gap: 12,
 }
 
+export const messageWrapper = (role) => ({
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: role === 'user' ? 'flex-end' : 'flex-start',
+})
+
 export const bubble = (role) => ({
   maxWidth: '80%',
   alignSelf: role === 'user' ? 'flex-end' : 'flex-start',
