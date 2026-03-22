@@ -93,6 +93,51 @@ async def delete_old_meals(user_id: int = Depends(require_user)):
         return {"deleted": cursor.rowcount}
 
 
+@router.put("/{meal_id}", response_model=Meal)
+async def update_meal(meal_id: int, body: MealLog, user_id: int = Depends(require_user)):
+    """Update a meal's details."""
+    async with get_db() as db:
+        cursor = await db.execute(
+            """
+            UPDATE meal_history SET
+                meal_name = ?, description = ?, ingredients = ?,
+                steps = ?, prep_time_min = ?, nutrition_note = ?
+            WHERE id = ? AND user_id = ?
+            """,
+            (
+                body.meal_name,
+                body.description,
+                json.dumps(body.ingredients or [], ensure_ascii=False),
+                json.dumps(body.steps or [], ensure_ascii=False),
+                body.prep_time_min,
+                body.nutrition_note,
+                meal_id,
+                user_id,
+            ),
+        )
+        await db.commit()
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Meal not found")
+        async with db.execute(
+            "SELECT * FROM meal_history WHERE id = ? AND user_id = ?",
+            (meal_id, user_id),
+        ) as cur:
+            return _row_to_meal(await cur.fetchone())
+
+
+@router.delete("/{meal_id}", status_code=204)
+async def delete_meal(meal_id: int, user_id: int = Depends(require_user)):
+    """Delete a single meal from history."""
+    async with get_db() as db:
+        cursor = await db.execute(
+            "DELETE FROM meal_history WHERE id = ? AND user_id = ?",
+            (meal_id, user_id),
+        )
+        await db.commit()
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Meal not found")
+
+
 @router.patch("/{meal_id}/rating", response_model=Meal)
 async def rate_meal(meal_id: int, body: MealRating, user_id: int = Depends(require_user)):
     """Rate a meal thumbs-up (5) or thumbs-down (1)."""

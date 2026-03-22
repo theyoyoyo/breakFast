@@ -3,7 +3,7 @@ import {
   getRatings, createRating, updateRating, deleteRating,
   getProfile, upsertProfile,
   getSupplements, createSupplement, updateSupplement, deleteSupplement,
-  deleteOldMeals,
+  getMeals, updateMeal, deleteMeal, deleteOldMeals,
   getHealthRules, createHealthRule, updateHealthRule, deleteHealthRule,
 } from '../services/api'
 import * as s from './SettingsPanel.styles'
@@ -30,6 +30,12 @@ export default function SettingsPanel() {
   const [newSuppContents, setNewSuppContents] = useState('')
   const [newSuppFreq, setNewSuppFreq] = useState('daily')
 
+  // Meal history state
+  const [meals, setMeals] = useState([])
+  const [editingMealId, setEditingMealId] = useState(null)
+  const [editMealName, setEditMealName] = useState('')
+  const [editMealIngredients, setEditMealIngredients] = useState('')
+
   // Health rules state
   const [healthRules, setHealthRules] = useState([])
   const [newRuleText, setNewRuleText] = useState('')
@@ -37,10 +43,11 @@ export default function SettingsPanel() {
   const load = async () => {
     try {
       setError(null)
-      const [r, prof, supps, rules] = await Promise.all([
-        getRatings(), getProfile(), getSupplements(), getHealthRules(),
+      const [r, prof, supps, rules, m] = await Promise.all([
+        getRatings(), getProfile(), getSupplements(), getHealthRules(), getMeals(),
       ])
       setRatings(r)
+      setMeals(m)
       if (prof) {
         setProfile({
           age: prof.age ?? '',
@@ -187,6 +194,95 @@ export default function SettingsPanel() {
       setError('Failed to delete health rule')
       load()
     }
+  }
+
+  // Meal history handlers
+  const handleStartEditMeal = (meal) => {
+    setEditingMealId(meal.id)
+    setEditMealName(meal.meal_name)
+    setEditMealIngredients((meal.ingredients || []).join(', '))
+  }
+
+  const handleSaveEditMeal = async (meal) => {
+    try {
+      setError(null)
+      await updateMeal(meal.id, {
+        meal_name: editMealName,
+        ingredients: editMealIngredients.split(',').map(s => s.trim()).filter(Boolean),
+        description: meal.description,
+        steps: meal.steps,
+        prep_time_min: meal.prep_time_min,
+        nutrition_note: meal.nutrition_note,
+      })
+      setEditingMealId(null)
+      load()
+    } catch {
+      setError('Failed to update meal')
+    }
+  }
+
+  const handleDeleteMeal = async (id) => {
+    setMeals(prev => prev.filter(m => m.id !== id))
+    try {
+      await deleteMeal(id)
+    } catch {
+      setError('Failed to delete meal')
+      load()
+    }
+  }
+
+  // --- Meal History sub-page ---
+  if (view === 'meals') {
+    return (
+      <div style={s.container}>
+        <div style={{ ...s.header, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button style={s.backBtn} onClick={() => setView('settings')}>←</button>
+          <span>Meal History ({meals.length})</span>
+        </div>
+        <div style={s.body}>
+          {error && <div style={s.error}>{error}</div>}
+          {meals.length === 0 && <span style={s.empty}>No meals logged yet</span>}
+          {meals.map((meal) => (
+            <div key={meal.id} style={s.mealRow}>
+              {editingMealId === meal.id ? (
+                <div style={s.mealEditForm}>
+                  <input
+                    style={s.input}
+                    value={editMealName}
+                    onChange={(e) => setEditMealName(e.target.value)}
+                    placeholder="Meal name"
+                  />
+                  <input
+                    style={s.input}
+                    value={editMealIngredients}
+                    onChange={(e) => setEditMealIngredients(e.target.value)}
+                    placeholder="Ingredients (comma separated)"
+                  />
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button style={s.saveBtn} onClick={() => handleSaveEditMeal(meal)}>Save</button>
+                    <button style={s.cancelEditBtn} onClick={() => setEditingMealId(null)}>Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div style={s.mealInfo}>
+                    <span style={s.mealName}>{meal.meal_name}</span>
+                    <span style={s.mealDate}>{new Date(meal.logged_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                    {meal.ingredients?.length > 0 && (
+                      <span style={s.mealIngredients}>{meal.ingredients.join(', ')}</span>
+                    )}
+                  </div>
+                  <div style={s.mealActions}>
+                    <button style={s.editMealBtn} onClick={() => handleStartEditMeal(meal)} title="Edit">✏️</button>
+                    <button style={s.deleteMealBtn} onClick={() => handleDeleteMeal(meal.id)} title="Delete">🗑️</button>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    )
   }
 
   // --- Health Rules sub-page ---
@@ -396,6 +492,13 @@ export default function SettingsPanel() {
               <button style={s.addBtn} onClick={handleAddSupplement}>+</button>
             </div>
           </div>
+        </div>
+
+        {/* Meal History — navigates to sub-page */}
+        <div style={s.section}>
+          <button style={s.healthRulesBtn} onClick={() => setView('meals')}>
+            Meal History ({meals.length}) →
+          </button>
         </div>
 
         {/* Health Rules — navigates to sub-page */}

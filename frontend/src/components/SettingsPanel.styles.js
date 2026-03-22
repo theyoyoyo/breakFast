@@ -223,3 +223,83 @@ export const star = (lit) => ({
   color: lit ? '#f5a623' : 'var(--border)',
   transition: 'color 0.1s',
 })
+
+// --- Meal History styles ---
+
+export const mealRow = {
+  display: 'flex',
+  alignItems: 'flex-start',
+  justifyContent: 'space-between',
+  gap: 8,
+  background: 'var(--surface2)',
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  padding: '10px 12px',
+}
+
+export const mealInfo = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 3,
+  flex: 1,
+  minWidth: 0,
+}
+
+export const mealName = {
+  fontWeight: 600,
+  fontSize: 13,
+  color: 'var(--text)',
+}
+
+export const mealDate = {
+  fontSize: 11,
+  color: 'var(--text-muted)',
+}
+
+export const mealIngredients = {
+  fontSize: 11,
+  color: 'var(--text-muted)',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+}
+
+export const mealActions = {
+  display: 'flex',
+  gap: 4,
+  flexShrink: 0,
+}
+
+export const editMealBtn = {
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  fontSize: 16,
+  padding: '2px 4px',
+}
+
+export const deleteMealBtn = {
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  fontSize: 16,
+  padding: '2px 4px',
+}
+
+export const mealEditForm = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 6,
+  width: '100%',
+}
+
+export const cancelEditBtn = {
+  background: 'var(--surface2)',
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  color: 'var(--text-muted)',
+  fontWeight: 600,
+  fontSize: 12,
+  padding: '8px 16px',
+  cursor: 'pointer',
+}
