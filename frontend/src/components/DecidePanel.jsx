@@ -51,6 +51,8 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
   const handleAdd = () => {
     const v = newItem.trim()
     if (!v) return
+    // Prevent duplicate items (case-insensitive)
+    if (items.some(item => item.toLowerCase() === v.toLowerCase())) return
     setItems(prev => [...prev, v])
     setNewItem('')
   }
