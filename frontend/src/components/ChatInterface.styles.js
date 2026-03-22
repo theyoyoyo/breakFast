@@ -30,7 +30,7 @@ export const messages = {
 export const bubble = (role) => ({
   maxWidth: '80%',
   alignSelf: role === 'user' ? 'flex-start' : 'flex-end',
-  background: role === 'user' ? '#3d2a2a' : 'var(--accent2)',
+  background: role === 'user' ? 'var(--surface2)' : '#3d2a2a',
   color: 'var(--text)',
   border: 'none',
   borderRadius: role === 'user' ? '18px 18px 18px 4px' : '18px 18px 4px 18px',
