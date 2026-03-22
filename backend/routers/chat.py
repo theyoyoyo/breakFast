@@ -8,6 +8,7 @@ Messages are persisted to chat_messages table for session continuity.
 import asyncio
 import json
 import uuid
+from datetime import date as date_type
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from database import get_db
 from auth import get_user_id_from_token
@@ -61,11 +62,37 @@ async def _load_context(db, user_id: int) -> dict:
         ) as cur:
             return [r["rule_text"] for r in await cur.fetchall()]
 
-    ingredients, history, prefs, (stated_habits, inferred_habits), health_rules = (
-        await asyncio.gather(
-            fetch_ingredients(), fetch_history(), fetch_prefs(),
-            fetch_habits(), fetch_health_rules(),
-        )
+    async def fetch_profile():
+        async with db.execute(
+            "SELECT age, gender, height_cm, weight_kg, activity_level FROM user_profiles WHERE user_id = ?",
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+    async def fetch_supplements():
+        today = date_type.today().isoformat()
+        async with db.execute(
+            """
+            SELECT s.name, s.contents, s.frequency, COALESCE(l.taken, 0) AS taken_today
+            FROM user_supplements s
+            LEFT JOIN supplement_daily_log l
+                ON l.supplement_id = s.id AND l.user_id = s.user_id AND l.date = ?
+            WHERE s.user_id = ?
+            ORDER BY s.name
+            """,
+            (today, user_id),
+        ) as cur:
+            return [dict(r) for r in await cur.fetchall()]
+
+    (
+        ingredients, history, prefs,
+        (stated_habits, inferred_habits),
+        health_rules, user_profile, supplements,
+    ) = await asyncio.gather(
+        fetch_ingredients(), fetch_history(), fetch_prefs(),
+        fetch_habits(), fetch_health_rules(),
+        fetch_profile(), fetch_supplements(),
     )
     return {
         "ingredients": ingredients,
@@ -74,6 +101,8 @@ async def _load_context(db, user_id: int) -> dict:
         "stated_habits": stated_habits,
         "inferred_habits": inferred_habits,
         "health_rules": health_rules,
+        "user_profile": user_profile,
+        "supplements": supplements,
     }
 
 

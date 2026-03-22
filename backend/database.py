@@ -101,6 +101,36 @@ CREATE TABLE IF NOT EXISTS product_ratings (
     updated_at  TEXT    NOT NULL DEFAULT (datetime('now')),
     UNIQUE(user_id, product_name)
 );
+
+CREATE TABLE IF NOT EXISTS user_profiles (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL UNIQUE REFERENCES users(id),
+    age             INTEGER,
+    gender          TEXT,
+    height_cm       INTEGER,
+    weight_kg       REAL,
+    activity_level  TEXT,
+    updated_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS user_supplements (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES users(id),
+    name        TEXT    NOT NULL,
+    contents    TEXT    NOT NULL DEFAULT '',
+    frequency   TEXT    NOT NULL DEFAULT 'daily' CHECK(frequency IN ('daily', 'sometimes')),
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(user_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS supplement_daily_log (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL REFERENCES users(id),
+    supplement_id   INTEGER NOT NULL REFERENCES user_supplements(id),
+    date            TEXT    NOT NULL,
+    taken           INTEGER NOT NULL DEFAULT 1,
+    UNIQUE(user_id, supplement_id, date)
+);
 """
 
 
