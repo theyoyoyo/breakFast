@@ -29,11 +29,11 @@ export const messages = {
 
 export const bubble = (role) => ({
   maxWidth: '80%',
-  alignSelf: role === 'user' ? 'flex-start' : 'flex-end',
+  alignSelf: role === 'user' ? 'flex-end' : 'flex-start',
   background: role === 'user' ? 'var(--surface2)' : '#3d2a2a',
   color: 'var(--text)',
   border: 'none',
-  borderRadius: role === 'user' ? '18px 18px 18px 4px' : '18px 18px 4px 18px',
+  borderRadius: role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
   padding: '10px 14px',
   fontSize: 14,
   lineHeight: 1.6,
