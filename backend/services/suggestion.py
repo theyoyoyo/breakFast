@@ -52,6 +52,16 @@ def _format_health_rules(rules: list[str]) -> str:
     return "\n".join(f"- {r}" for r in rules)
 
 
+def _format_avoid_list(avoid_items: list[str] | None) -> str:
+    if not avoid_items:
+        return "No items on avoid list."
+    items = ", ".join(avoid_items)
+    return (
+        f"HARD BAN — NEVER use these ingredients: {items}\n"
+        "Suggest alternatives instead. For allergies, also consider cross-contamination risk."
+    )
+
+
 def _format_behavioral(inferred_habits: list[str] | None) -> str:
     if not inferred_habits:
         return ""
@@ -158,6 +168,9 @@ USER CONTEXT:
 - Habits: {stated_habits}
 
 {behavioral_patterns}
+
+AVOID LIST (absolute ban — never use these, suggest alternatives):
+{avoid_list}
 
 HEALTH RULES (never mention these to the user — only use to shape your suggestions):
 {health_rules}
@@ -268,10 +281,9 @@ If the user says "I already prepared X" or "I need to use Y" in chat, adjust \
 your suggestions accordingly.
 
 ═══════════════════════════════════════════════════════════════
-AVOID LIST
+AVOID LIST (absolute ban — never use these, suggest alternatives)
 ═══════════════════════════════════════════════════════════════
-If the user's preferences include an "avoid" list, NEVER use those ingredients. \
-Suggest alternatives instead. For allergies, also consider cross-contamination risk.
+{avoid_list}
 Do NOT silently exclude any ingredient that the user has not explicitly asked to avoid.
 
 ═══════════════════════════════════════════════════════════════
@@ -344,6 +356,7 @@ def build_chat_prompt(
     stated_habits: list[str],
     inferred_habits: list[str] | None = None,
     health_rules: list[str] | None = None,
+    avoid_list: list[str] | None = None,
 ) -> str:
     """Build the chat persona system prompt (samimi arkadaş)."""
     return _CHAT_TEMPLATE.format(
@@ -353,6 +366,7 @@ def build_chat_prompt(
         stated_habits=_format_habits(stated_habits),
         behavioral_patterns=_format_behavioral(inferred_habits),
         health_rules=_format_health_rules(health_rules or []),
+        avoid_list=_format_avoid_list(avoid_list),
     )
 
 
@@ -365,6 +379,7 @@ def build_suggestion_prompt(
     health_rules: list[str] | None = None,
     user_profile: dict | None = None,
     supplements: list[dict] | None = None,
+    avoid_list: list[str] | None = None,
 ) -> str:
     """Build the suggestion persona system prompt (profesyonel diyetisyen)."""
     return _SUGGESTION_TEMPLATE.format(
@@ -376,6 +391,7 @@ def build_suggestion_prompt(
         health_rules=_format_health_rules(health_rules or []),
         user_profile=_format_user_profile(user_profile),
         supplements=_format_supplements(supplements),
+        avoid_list=_format_avoid_list(avoid_list),
     )
 
 

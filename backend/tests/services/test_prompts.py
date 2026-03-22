@@ -21,6 +21,7 @@ from services.suggestion import (
     _format_behavioral,
     _format_user_profile,
     _format_supplements,
+    _format_avoid_list,
 )
 
 
@@ -76,6 +77,17 @@ class TestFormatters:
         assert "Avoid gluten" in result
         assert "Favor omega-3" in result
         assert "refined sugar" not in result
+
+    def test_format_avoid_list_empty(self):
+        assert "No items" in _format_avoid_list(None)
+        assert "No items" in _format_avoid_list([])
+
+    def test_format_avoid_list_with_data(self):
+        result = _format_avoid_list(["shellfish", "peanuts"])
+        assert "shellfish" in result
+        assert "peanuts" in result
+        assert "NEVER" in result
+        assert "cross-contamination" in result
 
     def test_format_behavioral_empty(self):
         assert _format_behavioral(None) == ""
@@ -175,6 +187,16 @@ class TestChatPrompt:
         assert '"meal_name"' in prompt
         assert '"ingredients"' in prompt
 
+    def test_includes_avoid_list_empty(self):
+        prompt = build_chat_prompt([], [], {}, [])
+        assert "No items on avoid list" in prompt
+
+    def test_includes_avoid_list_with_items(self):
+        prompt = build_chat_prompt([], [], {}, [], avoid_list=["shellfish", "peanuts"])
+        assert "shellfish" in prompt
+        assert "peanuts" in prompt
+        assert "NEVER" in prompt
+
     def test_history_limit_is_3(self):
         """Chat persona uses last 3 meals only (lighter context)."""
         meals = [{"meal_name": f"meal_{i}"} for i in range(10)]
@@ -239,10 +261,17 @@ class TestSuggestionPrompt:
         prompt = build_suggestion_prompt([], [], {}, [])
         assert "Tip:" in prompt or "advance prep" in prompt.lower()
 
-    def test_includes_avoid_list_guidance(self):
-        """Suggestion prompt should tell LLM to respect avoid list."""
+    def test_includes_avoid_list_empty(self):
+        """Suggestion prompt should show no items when avoid list is empty."""
         prompt = build_suggestion_prompt([], [], {}, [])
-        assert "avoid" in prompt.lower()
+        assert "No items on avoid list" in prompt
+
+    def test_includes_avoid_list_with_items(self):
+        """Suggestion prompt should inject actual avoid items."""
+        prompt = build_suggestion_prompt([], [], {}, [], avoid_list=["gluten", "lactose"])
+        assert "gluten" in prompt
+        assert "lactose" in prompt
+        assert "NEVER" in prompt
 
     def test_includes_seasonality(self):
         """Suggestion prompt should mention seasonal produce preference."""
