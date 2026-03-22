@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import {
   getRatings, createRating, updateRating, deleteRating,
   getProfile, upsertProfile,
-  getSupplements, createSupplement, deleteSupplement,
+  getSupplements, createSupplement, updateSupplement, deleteSupplement,
 } from '../services/api'
 
 const s = {
@@ -152,6 +152,8 @@ const s = {
     borderRadius: 4,
     background: 'var(--surface)',
     color: 'var(--text-muted)',
+    cursor: 'pointer',
+    border: 'none',
   },
   ratingsBtn: {
     width: '100%',
@@ -313,6 +315,17 @@ export default function SettingsPanel() {
     }
   }
 
+  const handleToggleFrequency = async (sup) => {
+    const newFreq = sup.frequency === 'daily' ? 'sometimes' : 'daily'
+    setSupplements((prev) => prev.map((s) => s.id === sup.id ? { ...s, frequency: newFreq } : s))
+    try {
+      await updateSupplement(sup.id, { name: sup.name, contents: sup.contents, frequency: newFreq })
+    } catch {
+      setError('Failed to update supplement')
+      load()
+    }
+  }
+
   const handleDeleteSupplement = async (id) => {
     setSupplements((prev) => prev.filter((s) => s.id !== id))
     try {
@@ -406,7 +419,7 @@ export default function SettingsPanel() {
             <div key={sup.id} style={s.suppRow}>
               <span style={s.suppName}>{sup.name}</span>
               {sup.contents && <span style={s.suppContents}>{sup.contents}</span>}
-              <span style={s.suppFreq}>{sup.frequency}</span>
+              <button style={s.suppFreq} onClick={() => handleToggleFrequency(sup)} title="Click to toggle">{sup.frequency}</button>
               <button style={s.tagX} onClick={() => handleDeleteSupplement(sup.id)}>×</button>
             </div>
           ))}
