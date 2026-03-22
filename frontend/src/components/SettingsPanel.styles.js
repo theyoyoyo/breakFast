@@ -226,15 +226,19 @@ export const star = (lit) => ({
 
 // --- Meal History styles ---
 
-export const mealRow = {
-  display: 'flex',
-  alignItems: 'flex-start',
-  justifyContent: 'space-between',
-  gap: 8,
+export const mealCard = {
   background: 'var(--surface2)',
   border: '1px solid var(--border)',
   borderRadius: 8,
+  overflow: 'hidden',
+}
+
+export const mealHeader = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
   padding: '10px 12px',
+  cursor: 'pointer',
 }
 
 export const mealInfo = {
@@ -256,18 +260,17 @@ export const mealDate = {
   color: 'var(--text-muted)',
 }
 
-export const mealIngredients = {
-  fontSize: 11,
-  color: 'var(--text-muted)',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-}
-
 export const mealActions = {
   display: 'flex',
+  alignItems: 'center',
   gap: 4,
   flexShrink: 0,
+}
+
+export const expandIcon = {
+  fontSize: 12,
+  color: 'var(--text-muted)',
+  padding: '2px 4px',
 }
 
 export const editMealBtn = {
@@ -286,11 +289,64 @@ export const deleteMealBtn = {
   padding: '2px 4px',
 }
 
-export const mealEditForm = {
+export const mealExpanded = {
+  padding: '0 12px 12px',
   display: 'flex',
   flexDirection: 'column',
   gap: 6,
-  width: '100%',
+  borderTop: '1px solid var(--border)',
+  paddingTop: 10,
+}
+
+export const mealNameEdit = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 3,
+}
+
+export const mealFieldLabel = {
+  fontSize: 10,
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  color: 'var(--text-muted)',
+}
+
+export const mealItemList = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 4,
+}
+
+export const mealItemRow = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: '6px 8px',
+  background: 'var(--surface)',
+  borderRadius: 6,
+  fontSize: 13,
+}
+
+export const mealItemText = {
+  flex: 1,
+  color: 'var(--text)',
+}
+
+export const mealItemInput = {
+  flex: 1,
+  background: 'var(--surface2)',
+  border: '1px solid var(--accent)',
+  borderRadius: 6,
+  padding: '4px 8px',
+  color: 'var(--text)',
+  fontSize: 13,
+  outline: 'none',
+}
+
+export const mealItemActions = {
+  display: 'flex',
+  gap: 2,
+  flexShrink: 0,
 }
 
 export const cancelEditBtn = {

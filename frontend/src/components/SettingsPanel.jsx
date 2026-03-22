@@ -32,9 +32,12 @@ export default function SettingsPanel() {
 
   // Meal history state
   const [meals, setMeals] = useState([])
-  const [editingMealId, setEditingMealId] = useState(null)
-  const [editMealName, setEditMealName] = useState('')
-  const [editMealIngredients, setEditMealIngredients] = useState('')
+  const [expandedMealId, setExpandedMealId] = useState(null)
+  const [mealItems, setMealItems] = useState([])
+  const [mealName, setMealName] = useState('')
+  const [editItemIdx, setEditItemIdx] = useState(null)
+  const [editItemValue, setEditItemValue] = useState('')
+  const [newMealItem, setNewMealItem] = useState('')
 
   // Health rules state
   const [healthRules, setHealthRules] = useState([])
@@ -197,24 +200,55 @@ export default function SettingsPanel() {
   }
 
   // Meal history handlers
-  const handleStartEditMeal = (meal) => {
-    setEditingMealId(meal.id)
-    setEditMealName(meal.meal_name)
-    setEditMealIngredients((meal.ingredients || []).join(', '))
+  const handleExpandMeal = (meal) => {
+    if (expandedMealId === meal.id) {
+      setExpandedMealId(null)
+      return
+    }
+    setExpandedMealId(meal.id)
+    setMealName(meal.meal_name)
+    setMealItems([...(meal.ingredients || [])])
+    setEditItemIdx(null)
+    setNewMealItem('')
   }
 
-  const handleSaveEditMeal = async (meal) => {
+  const handleDeleteMealItem = (idx) => {
+    setMealItems(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  const handleStartEditItem = (idx) => {
+    setEditItemIdx(idx)
+    setEditItemValue(mealItems[idx])
+  }
+
+  const handleSaveEditItem = () => {
+    if (editItemValue.trim() && editItemIdx !== null) {
+      setMealItems(prev => prev.map((item, i) => i === editItemIdx ? editItemValue.trim() : item))
+    }
+    setEditItemIdx(null)
+    setEditItemValue('')
+  }
+
+  const handleAddMealItem = () => {
+    const v = newMealItem.trim()
+    if (!v) return
+    if (mealItems.some(item => item.toLowerCase() === v.toLowerCase())) return
+    setMealItems(prev => [...prev, v])
+    setNewMealItem('')
+  }
+
+  const handleSaveMeal = async (meal) => {
     try {
       setError(null)
       await updateMeal(meal.id, {
-        meal_name: editMealName,
-        ingredients: editMealIngredients.split(',').map(s => s.trim()).filter(Boolean),
+        meal_name: mealName,
+        ingredients: mealItems,
         description: meal.description,
         steps: meal.steps,
         prep_time_min: meal.prep_time_min,
         nutrition_note: meal.nutrition_note,
       })
-      setEditingMealId(null)
+      setExpandedMealId(null)
       load()
     } catch {
       setError('Failed to update meal')
@@ -223,6 +257,7 @@ export default function SettingsPanel() {
 
   const handleDeleteMeal = async (id) => {
     setMeals(prev => prev.filter(m => m.id !== id))
+    if (expandedMealId === id) setExpandedMealId(null)
     try {
       await deleteMeal(id)
     } catch {
@@ -243,40 +278,69 @@ export default function SettingsPanel() {
           {error && <div style={s.error}>{error}</div>}
           {meals.length === 0 && <span style={s.empty}>No meals logged yet</span>}
           {meals.map((meal) => (
-            <div key={meal.id} style={s.mealRow}>
-              {editingMealId === meal.id ? (
-                <div style={s.mealEditForm}>
-                  <input
-                    style={s.input}
-                    value={editMealName}
-                    onChange={(e) => setEditMealName(e.target.value)}
-                    placeholder="Meal name"
-                  />
-                  <input
-                    style={s.input}
-                    value={editMealIngredients}
-                    onChange={(e) => setEditMealIngredients(e.target.value)}
-                    placeholder="Ingredients (comma separated)"
-                  />
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button style={s.saveBtn} onClick={() => handleSaveEditMeal(meal)}>Save</button>
-                    <button style={s.cancelEditBtn} onClick={() => setEditingMealId(null)}>Cancel</button>
+            <div key={meal.id} style={s.mealCard}>
+              <div style={s.mealHeader} onClick={() => handleExpandMeal(meal)}>
+                <div style={s.mealInfo}>
+                  <span style={s.mealName}>{meal.meal_name}</span>
+                  <span style={s.mealDate}>{new Date(meal.logged_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+                <div style={s.mealActions}>
+                  <span style={s.expandIcon}>{expandedMealId === meal.id ? '▼' : '▶'}</span>
+                  <button style={s.deleteMealBtn} onClick={(e) => { e.stopPropagation(); handleDeleteMeal(meal.id) }} title="Delete meal">🗑️</button>
+                </div>
+              </div>
+
+              {expandedMealId === meal.id && (
+                <div style={s.mealExpanded}>
+                  <div style={s.mealNameEdit}>
+                    <label style={s.mealFieldLabel}>Name</label>
+                    <input
+                      style={s.input}
+                      value={mealName}
+                      onChange={(e) => setMealName(e.target.value)}
+                    />
+                  </div>
+
+                  <label style={s.mealFieldLabel}>Ingredients</label>
+                  <div style={s.mealItemList}>
+                    {mealItems.map((item, idx) => (
+                      <div key={idx} style={s.mealItemRow}>
+                        {editItemIdx === idx ? (
+                          <input
+                            style={s.mealItemInput}
+                            value={editItemValue}
+                            onChange={(e) => setEditItemValue(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSaveEditItem()}
+                            onBlur={handleSaveEditItem}
+                            autoFocus
+                          />
+                        ) : (
+                          <span style={s.mealItemText}>{item}</span>
+                        )}
+                        <div style={s.mealItemActions}>
+                          <button style={s.editMealBtn} onClick={() => handleStartEditItem(idx)} title="Edit">✏️</button>
+                          <button style={s.deleteMealBtn} onClick={() => handleDeleteMealItem(idx)} title="Delete">🗑️</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={s.addRow}>
+                    <input
+                      style={s.input}
+                      value={newMealItem}
+                      onChange={(e) => setNewMealItem(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddMealItem()}
+                      placeholder="Add item…"
+                    />
+                    <button style={s.addBtn} onClick={handleAddMealItem}>+</button>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                    <button style={s.saveBtn} onClick={() => handleSaveMeal(meal)}>Save</button>
+                    <button style={s.cancelEditBtn} onClick={() => setExpandedMealId(null)}>Cancel</button>
                   </div>
                 </div>
-              ) : (
-                <>
-                  <div style={s.mealInfo}>
-                    <span style={s.mealName}>{meal.meal_name}</span>
-                    <span style={s.mealDate}>{new Date(meal.logged_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                    {meal.ingredients?.length > 0 && (
-                      <span style={s.mealIngredients}>{meal.ingredients.join(', ')}</span>
-                    )}
-                  </div>
-                  <div style={s.mealActions}>
-                    <button style={s.editMealBtn} onClick={() => handleStartEditMeal(meal)} title="Edit">✏️</button>
-                    <button style={s.deleteMealBtn} onClick={() => handleDeleteMeal(meal.id)} title="Delete">🗑️</button>
-                  </div>
-                </>
               )}
             </div>
           ))}
