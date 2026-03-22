@@ -42,14 +42,22 @@ def _format_habits(stated: list[str]) -> str:
     return "; ".join(stated) if stated else "none stated yet"
 
 
-def _format_health_rules(rules: list[str]) -> str:
+def _format_health_rules(rules: list[dict] | list[str]) -> str:
     if not rules:
         return (
             "No user-defined health rules. Use your own nutrition knowledge to "
             "deprioritize unhealthy options (e.g., refined sugar, processed oils) "
             "but NEVER fully exclude anything the user has not explicitly asked to avoid."
         )
-    return "\n".join(f"- {r}" for r in rules)
+    priority_labels = {"critical": "TOP PRIORITY", "high": "Important", "low": "Nice to have"}
+    lines = []
+    for r in rules:
+        if isinstance(r, dict):
+            label = priority_labels.get(r.get("priority", "high"), "Important")
+            lines.append(f"- [{label}] {r['rule_text']}")
+        else:
+            lines.append(f"- {r}")
+    return "\n".join(lines)
 
 
 def _format_avoid_list(avoid_items: list[str] | None) -> str:

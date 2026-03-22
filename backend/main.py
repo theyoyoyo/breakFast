@@ -6,7 +6,7 @@ from fastapi import Depends
 from config import CORS_ORIGINS
 from database import init_db
 from auth import require_user
-from routers import auth, chat, ingredients, meals, preferences, profile, ratings, sessions
+from routers import auth, chat, ingredients, meals, preferences, profile, ratings, sessions, health_rules
 from services.insights import refresh_insights
 
 
@@ -40,6 +40,7 @@ app.include_router(preferences.router)
 app.include_router(profile.router)
 app.include_router(ratings.router)
 app.include_router(sessions.router)
+app.include_router(health_rules.router)
 
 
 @app.get("/health")

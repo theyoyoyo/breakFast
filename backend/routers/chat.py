@@ -57,10 +57,10 @@ async def _load_context(db, user_id: int) -> dict:
 
     async def fetch_health_rules():
         async with db.execute(
-            "SELECT rule_text FROM health_rules WHERE user_id = ? ORDER BY created_at",
+            "SELECT rule_text, priority FROM health_rules WHERE user_id = ? ORDER BY created_at",
             (user_id,),
         ) as cur:
-            return [r["rule_text"] for r in await cur.fetchall()]
+            return [{"rule_text": r["rule_text"], "priority": r["priority"]} for r in await cur.fetchall()]
 
     async def fetch_profile():
         async with db.execute(

@@ -72,11 +72,24 @@ class TestFormatters:
         assert "deprioritize" in result
         assert "NEVER fully exclude" in result
 
+    # Formats rules with priority labels when passed as dicts
     def test_format_health_rules_custom(self):
+        rules = [
+            {"rule_text": "Avoid gluten", "priority": "critical"},
+            {"rule_text": "Favor omega-3", "priority": "low"},
+        ]
+        result = _format_health_rules(rules)
+        assert "TOP PRIORITY" in result
+        assert "Avoid gluten" in result
+        assert "Nice to have" in result
+        assert "Favor omega-3" in result
+        assert "refined sugar" not in result
+
+    # Backwards-compatible with plain string lists
+    def test_format_health_rules_plain_strings(self):
         result = _format_health_rules(["Avoid gluten", "Favor omega-3"])
         assert "Avoid gluten" in result
         assert "Favor omega-3" in result
-        assert "refined sugar" not in result
 
     def test_format_avoid_list_empty(self):
         assert "No items" in _format_avoid_list(None)

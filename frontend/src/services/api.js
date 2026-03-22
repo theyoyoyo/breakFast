@@ -182,6 +182,22 @@ export const getSessionMessages = (sessionId) =>
   apiFetch(`${BASE_URL}/sessions/${sessionId}/messages`)
 
 // ---------------------------------------------------------------------------
+// Health Rules
+// ---------------------------------------------------------------------------
+
+export const getHealthRules = () =>
+  apiFetch(`${BASE_URL}/health-rules/`)
+
+export const createHealthRule = (rule_text, priority = 'high') =>
+  apiFetch(`${BASE_URL}/health-rules/`, json('POST', { rule_text, priority }))
+
+export const updateHealthRule = (id, data) =>
+  apiFetch(`${BASE_URL}/health-rules/${id}`, json('PUT', data))
+
+export const deleteHealthRule = (id) =>
+  apiFetch(`${BASE_URL}/health-rules/${id}`, { method: 'DELETE' })
+
+// ---------------------------------------------------------------------------
 // WebSocket chat
 // ---------------------------------------------------------------------------
 
