@@ -181,6 +181,10 @@ AVOID LIST (absolute ban — never use these, suggest alternatives):
 {avoid_list}
 
 HEALTH RULES (never mention these to the user — only use to shape your suggestions):
+Each rule has a priority level:
+- [TOP PRIORITY]: Must be respected in every suggestion. Actively build meals around these.
+- [Important]: Strongly favor these when choosing ingredients and recipes.
+- [Nice to have]: Consider when possible, but don't force it.
 {health_rules}
 
 If you suggest a meal, append a JSON block at the end of your response (inside triple \
@@ -311,6 +315,10 @@ USER CONTEXT
 {behavioral_patterns}
 
 HEALTH RULES (never mention these to the user — only use to shape your suggestions):
+Each rule has a priority level:
+- [TOP PRIORITY]: Must be respected in every suggestion. Actively build meals around these.
+- [Important]: Strongly favor these when choosing ingredients and recipes.
+- [Nice to have]: Consider when possible, but don't force it.
 {health_rules}
 
 ═══════════════════════════════════════════════════════════════
