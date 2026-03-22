@@ -91,6 +91,18 @@ export const ratingsBtn = {
   letterSpacing: '0.05em',
 }
 
+export const dangerBtn = {
+  width: '100%',
+  padding: '10px 16px',
+  background: 'var(--surface2)',
+  border: '1px solid #c4533e',
+  borderRadius: 8,
+  color: '#c4533e',
+  fontWeight: 600,
+  fontSize: 13,
+  cursor: 'pointer',
+}
+
 export const backBtn = {
   background: 'none',
   border: 'none',

@@ -3,6 +3,7 @@ import {
   getRatings, createRating, updateRating, deleteRating,
   getProfile, upsertProfile,
   getSupplements, createSupplement, updateSupplement, deleteSupplement,
+  deleteOldMeals,
 } from '../services/api'
 import * as s from './SettingsPanel.styles'
 
@@ -308,6 +309,27 @@ export default function SettingsPanel() {
         <div style={s.section}>
           <button style={s.ratingsBtn} onClick={() => setView('ratings')}>
             Ratings ({ratings.length}) →
+          </button>
+        </div>
+
+        {/* Data management */}
+        <div style={s.section}>
+          <div style={s.sectionLabel}>Data</div>
+          <button
+            style={s.dangerBtn}
+            onClick={async () => {
+              try {
+                setError(null)
+                const result = await deleteOldMeals()
+                setError(result.deleted > 0
+                  ? `${result.deleted} old meal(s) deleted`
+                  : 'No meals older than 1 year')
+              } catch {
+                setError('Failed to delete old meals')
+              }
+            }}
+          >
+            🗑 Delete meals older than 1 year
           </button>
         </div>
       </div>
