@@ -32,6 +32,33 @@ async def test_delete_preference(client):
     assert "dislike:mushrooms" not in keys
 
 
+async def test_set_avoid_preference(client):
+    r = await client.put("/preferences/avoid:shellfish", json={"value": "shellfish"})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["key"] == "avoid:shellfish"
+    assert data["value"] == "shellfish"
+
+
+async def test_delete_avoid_preference(client):
+    await client.put("/preferences/avoid:peanuts", json={"value": "peanuts"})
+    r = await client.delete("/preferences/avoid:peanuts")
+    assert r.status_code == 204
+    keys = [p["key"] for p in (await client.get("/preferences/")).json()]
+    assert "avoid:peanuts" not in keys
+
+
+async def test_avoid_coexists_with_fav_and_dislike(client):
+    await client.put("/preferences/fav:eggs", json={"value": "eggs"})
+    await client.put("/preferences/dislike:olives", json={"value": "olives"})
+    await client.put("/preferences/avoid:gluten", json={"value": "gluten"})
+    prefs = (await client.get("/preferences/")).json()
+    keys = [p["key"] for p in prefs]
+    assert "fav:eggs" in keys
+    assert "dislike:olives" in keys
+    assert "avoid:gluten" in keys
+
+
 async def test_list_habits_empty(client):
     r = await client.get("/preferences/habits")
     assert r.status_code == 200

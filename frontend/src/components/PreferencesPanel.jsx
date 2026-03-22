@@ -24,6 +24,7 @@ export default function PreferencesPanel() {
   const [habits, setHabits] = useState([])
   const [newFav, setNewFav] = useState('')
   const [newDislike, setNewDislike] = useState('')
+  const [newAvoid, setNewAvoid] = useState('')
   const [newHabit, setNewHabit] = useState('')
   const [error, setError] = useState(null)
 
@@ -42,6 +43,7 @@ export default function PreferencesPanel() {
 
   const favorites = prefs.filter((p) => p.key.startsWith('fav:'))
   const dislikes = prefs.filter((p) => p.key.startsWith('dislike:'))
+  const avoidList = prefs.filter((p) => p.key.startsWith('avoid:'))
 
   const handleAddPref = async (prefix, value, clearInput) => {
     const v = value.trim()
@@ -135,6 +137,27 @@ export default function PreferencesPanel() {
               placeholder="Add dislike…"
             />
             <button style={s.addBtn} onClick={() => handleAddPref('dislike', newDislike, setNewDislike)}>+</button>
+          </div>
+        </div>
+
+        {/* Avoid List */}
+        <div style={s.section}>
+          <div style={s.sectionLabel}>Avoid List</div>
+          <TagList
+            items={avoidList}
+            onDelete={(key) => handleDeletePref(key)}
+            keyField="key"
+            labelField="value"
+          />
+          <div style={s.addRow}>
+            <input
+              style={s.input}
+              value={newAvoid}
+              onChange={(e) => setNewAvoid(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddPref('avoid', newAvoid, setNewAvoid)}
+              placeholder="Add avoided ingredient…"
+            />
+            <button style={s.addBtn} onClick={() => handleAddPref('avoid', newAvoid, setNewAvoid)}>+</button>
           </div>
         </div>
 

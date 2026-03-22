@@ -94,15 +94,20 @@ async def _load_context(db, user_id: int) -> dict:
         fetch_habits(), fetch_health_rules(),
         fetch_profile(), fetch_supplements(),
     )
+    # Separate avoid items from regular preferences
+    avoid_list = [v for k, v in prefs.items() if k.startswith("avoid:")]
+    filtered_prefs = {k: v for k, v in prefs.items() if not k.startswith("avoid:")}
+
     return {
         "ingredients": ingredients,
         "history": history,
-        "preferences": prefs,
+        "preferences": filtered_prefs,
         "stated_habits": stated_habits,
         "inferred_habits": inferred_habits,
         "health_rules": health_rules,
         "user_profile": user_profile,
         "supplements": supplements,
+        "avoid_list": avoid_list,
     }
 
 
@@ -217,6 +222,7 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                 stated_habits=cached_context["stated_habits"],
                 inferred_habits=cached_context["inferred_habits"],
                 health_rules=cached_context["health_rules"],
+                avoid_list=cached_context["avoid_list"],
             )
 
             # Load persisted conversation history for LLM context
