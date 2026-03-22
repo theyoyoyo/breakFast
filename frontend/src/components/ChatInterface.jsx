@@ -8,6 +8,13 @@ import * as s from './ChatInterface.styles'
 
 const WELCOME_MSG = { role: 'assistant', content: "Good morning! Tell me what's in your fridge and I'll plan your breakfast." }
 
+// Pipeline progress step labels (Turkish)
+const PIPELINE_STEPS = {
+  drafting: 'Tarif hazırlanıyor…',
+  analyzing: 'Besin analizi yapılıyor…',
+  finalizing: 'Son dokunuşlar…',
+}
+
 // Strip ```json { ... } ``` blocks from message text
 const JSON_BLOCK_RE = /```json\s*\{.*?\}\s*```/gs
 function stripJsonBlock(text) {
@@ -53,6 +60,8 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
   const [checkedMealIdx, setCheckedMealIdx] = useState(null)
   // analyzingIdx: the message index of a meal block currently being analyzed (null = idle)
   const [analyzingIdx, setAnalyzingIdx] = useState(null)
+  // pipelineStep: current pipeline progress step (null = not in pipeline)
+  const [pipelineStep, setPipelineStep] = useState(null)
   const wsRef = useRef(null)
   const messagesEndRef = useRef(null)
   const reconnectTimer = useRef(null)
@@ -152,7 +161,7 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, streamBuffer, analyzingIdx])
+  }, [messages, streamBuffer, analyzingIdx, pipelineStep])
 
   // Close socket and clear reconnect timer on unmount
   useEffect(() => () => {
@@ -165,14 +174,16 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
     if (state === WebSocket.OPEN || state === WebSocket.CONNECTING) return wsRef.current
 
     const ws = createChatSocket(
-      // onToken — skip if aborted
+      // onToken — skip if aborted; clear pipeline step when tokens start flowing
       (chunk) => {
         if (!abortedRef.current) {
+          setPipelineStep(null)
           setStreamBuffer((prev) => (prev ?? '') + chunk)
         }
       },
       // onDone
       (full) => {
+        setPipelineStep(null)
         if (abortedRef.current) {
           // Already handled by handleStop
           abortedRef.current = false
@@ -195,17 +206,23 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
       // onError — don't spam chat with error messages, header already shows "reconnecting…"
       () => {
         setStreamBuffer(null)
+        setPipelineStep(null)
         setConnected(false)
       },
       // onClose — auto-reconnect with exponential backoff (max 30s)
       () => {
         setStreamBuffer(null)
+        setPipelineStep(null)
         setConnected(false)
         wsRef.current = null
         reconnectTimer.current = setTimeout(() => {
           reconnectDelay.current = Math.min(reconnectDelay.current * 2, 30000)
           ensureSocket()
         }, reconnectDelay.current)
+      },
+      // onProgress — pipeline step updates
+      (step) => {
+        setPipelineStep(step)
       }
     )
     ws.addEventListener('open', () => {
@@ -347,6 +364,7 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
     if (streamBuffer !== null) {
       abortedRef.current = true
       setAborted(true)
+      setPipelineStep(null)
       setStreamBuffer((prev) => {
         const partial = prev || ''
         const stopped = partial ? partial + '\n\n[stopped]' : '[stopped]'
@@ -456,7 +474,7 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
           <div style={s.bubble('assistant')}>{streamBuffer}</div>
         )}
         {streamBuffer === '' && (
-          <div style={s.thinking}>Düşünüyorum…</div>
+          <div style={s.thinking}>{PIPELINE_STEPS[pipelineStep] || 'Düşünüyorum…'}</div>
         )}
         {analyzingIdx !== null && (
           <div style={s.thinking}>Analiz ediliyor…</div>
