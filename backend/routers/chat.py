@@ -12,7 +12,7 @@ from datetime import date as date_type
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from database import get_db
 from auth import get_user_id_from_token
-from services.llm import LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE
+from services.llm import LLMUnavailableError, FallbackLyricCycler
 from services.suggestion import build_chat_prompt, build_suggestion_prompt, stream_response
 from utils import extract_json_block
 
@@ -171,6 +171,7 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
     await websocket.accept()
     cached_context: dict | None = None
     session_id: str | None = None
+    lyric_cycler = FallbackLyricCycler()
 
     try:
         while True:
@@ -266,9 +267,9 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
 
                 response_text = "".join(full_response)
             except LLMUnavailableError:
-                response_text = LLM_UNAVAILABLE_MESSAGE
+                response_text = lyric_cycler.next()
             except Exception:
-                response_text = LLM_UNAVAILABLE_MESSAGE
+                response_text = lyric_cycler.next()
 
             # Persist both messages to DB before signaling done
             async with get_db() as db:

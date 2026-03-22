@@ -14,7 +14,35 @@ from config import (
 )
 
 
-LLM_UNAVAILABLE_MESSAGE = "Benim aklım başımda değil"
+FALLBACK_LYRICS = [
+    "Benim aklım başımda değil",
+    "Sana söylediklerimi kafana takma ne olursun",
+    "Onlar ipe sapa gelir şeyler değil",
+    "Seni sevmiyorum dedim; yalandı",
+    "İstemiyorum artık; palavra",
+    "Ellerimde çiçekler",
+    "Kapında sırıksıklam",
+    "Görürsen bir gün şaşırma",
+    "Beni böyle çaresiz",
+    "Beni böyle derbeder",
+    "Beni böyle ortalarda bırakma",
+    "Son zamanlar yaptıklarıma bakma ne olursun",
+]
+
+# Keep for backwards compatibility with imports
+LLM_UNAVAILABLE_MESSAGE = FALLBACK_LYRICS[0]
+
+
+class FallbackLyricCycler:
+    """Cycles through song lyrics on each call, looping back to start."""
+
+    def __init__(self):
+        self._index = 0
+
+    def next(self) -> str:
+        line = FALLBACK_LYRICS[self._index]
+        self._index = (self._index + 1) % len(FALLBACK_LYRICS)
+        return line
 
 
 class LLMUnavailableError(Exception):

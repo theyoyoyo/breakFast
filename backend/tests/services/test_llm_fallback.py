@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import pytest
 import pytest_asyncio
 from unittest.mock import patch, AsyncMock
-from services.llm import check_llm_availability, chat_stream, LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE
+from services.llm import check_llm_availability, chat_stream, LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE, FallbackLyricCycler, FALLBACK_LYRICS
 
 
 @pytest.mark.asyncio
@@ -56,5 +56,29 @@ async def test_chat_stream_raises_when_llm_unavailable():
 
 @pytest.mark.asyncio
 async def test_fallback_message_content():
-    """Fallback message is the expected Turkish string."""
+    """Fallback message is the expected Turkish string (first lyric line)."""
     assert LLM_UNAVAILABLE_MESSAGE == "Benim aklım başımda değil"
+
+
+def test_lyric_cycler_cycles_through_all_lines():
+    """Cycler returns each lyric line in order, then loops back to the start."""
+    cycler = FallbackLyricCycler()
+    for i, expected in enumerate(FALLBACK_LYRICS):
+        assert cycler.next() == expected
+    # After all 12 lines, loops back to first
+    assert cycler.next() == FALLBACK_LYRICS[0]
+
+
+def test_lyric_cycler_independent_instances():
+    """Each cycler instance tracks its own position independently."""
+    c1 = FallbackLyricCycler()
+    c2 = FallbackLyricCycler()
+    c1.next()  # advance c1 to index 1
+    c1.next()  # advance c1 to index 2
+    assert c1.next() == FALLBACK_LYRICS[2]
+    assert c2.next() == FALLBACK_LYRICS[0]  # c2 still at start
+
+
+def test_fallback_lyrics_has_12_lines():
+    """Song has exactly 12 lines."""
+    assert len(FALLBACK_LYRICS) == 12
