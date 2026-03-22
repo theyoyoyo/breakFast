@@ -174,30 +174,6 @@ export const addBtn = {
   cursor: 'pointer',
 }
 
-export const prepRow = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 10,
-  marginTop: 12,
-  flexShrink: 0,
-}
-
-export const prepLabel = {
-  fontSize: 14,
-  color: 'var(--text-muted)',
-}
-
-export const prepInput = {
-  width: 70,
-  background: 'var(--surface2)',
-  border: '1px solid var(--border)',
-  borderRadius: 8,
-  padding: '6px 10px',
-  color: 'var(--text)',
-  fontSize: 14,
-  outline: 'none',
-}
-
 export const actions = {
   display: 'flex',
   justifyContent: 'space-between',

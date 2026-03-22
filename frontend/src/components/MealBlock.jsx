@@ -12,8 +12,6 @@ export default function MealBlock({ meal, checked, onCheck, onSave }) {
   const [newItem, setNewItem] = useState('')
   const [editIdx, setEditIdx] = useState(null)
   const [editValue, setEditValue] = useState('')
-  const [prepTime, setPrepTime] = useState(meal?.prep_time_min || null)
-
   const displayNames = items.length > 0
     ? items.join(', ')
     : meal?.meal_name || 'Meal'
@@ -51,7 +49,6 @@ export default function MealBlock({ meal, checked, onCheck, onSave }) {
     const updated = {
       ...meal,
       ingredients: items,
-      prep_time_min: prepTime,
     }
     onSave?.(updated)
     setPanelOpen(false)
@@ -70,7 +67,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave }) {
         <div style={s.block} onClick={() => setPanelOpen(true)}>
           <span style={s.blockIcon}>🍳</span>
           <span style={s.blockText}>{displayNames}</span>
-          {prepTime && <span style={s.prepBadge}>⏱ {prepTime}m</span>}
+          {meal?.prep_time_min && <span style={s.prepBadge}>⏱ {meal.prep_time_min}m</span>}
         </div>
       </div>
 
@@ -113,17 +110,6 @@ export default function MealBlock({ meal, checked, onCheck, onSave }) {
                 placeholder="Add item…"
               />
               <button style={s.addBtn} onClick={handleAdd}>+</button>
-            </div>
-
-            <div style={s.prepRow}>
-              <span style={s.prepLabel}>Prep time (min):</span>
-              <input
-                type="number"
-                style={s.prepInput}
-                value={prepTime || ''}
-                onChange={(e) => setPrepTime(e.target.value ? Number(e.target.value) : null)}
-                min={1}
-              />
             </div>
 
             <div style={s.actions}>
