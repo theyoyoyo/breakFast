@@ -15,13 +15,10 @@ from pydantic import BaseModel
 from auth import require_user
 from database import get_db
 from services.suggestion import build_analyst_prompt, stream_response
-from services.llm import LLMUnavailableError, FallbackLyricCycler
+from services.llm import LLMUnavailableError, lyric_cycler
 from utils import extract_json_block
 
 router = APIRouter(prefix="/analyst", tags=["analyst"])
-
-# Shared cycler across requests so lyrics continue from where they left off
-_lyric_cycler = FallbackLyricCycler()
 
 
 class AnalyzeRequest(BaseModel):
@@ -110,7 +107,7 @@ async def analyze_meal(body: AnalyzeRequest, user_id: int = Depends(require_user
             full_response.append(chunk)
     except LLMUnavailableError:
         return AnalyzeResponse(
-            analysis_text=_lyric_cycler.next(),
+            analysis_text=lyric_cycler.next(),
             analysis_data=None,
         )
 

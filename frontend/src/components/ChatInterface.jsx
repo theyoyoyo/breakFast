@@ -152,7 +152,7 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, streamBuffer])
+  }, [messages, streamBuffer, analyzingIdx])
 
   // Close socket and clear reconnect timer on unmount
   useEffect(() => () => {
@@ -218,7 +218,7 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
 
   const sendMessage = useCallback((text, type = 'chat', mode = null) => {
     const msg = text.trim()
-    if (!msg || streamBuffer !== null) return
+    if (!msg || streamBuffer !== null || analyzingIdx !== null) return
 
     setMessages((prev) => [...prev, { role: 'user', content: msg }])
     setInput('')
@@ -239,7 +239,7 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
       setStreamBuffer('')
       ws.addEventListener('open', () => ws.send(JSON.stringify(payload)), { once: true })
     }
-  }, [streamBuffer, ensureSocket])
+  }, [streamBuffer, analyzingIdx, ensureSocket])
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -359,6 +359,7 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
       analyzeAbortRef.current.abort()
       analyzeAbortRef.current = null
       setAnalyzingIdx(null)
+      setMessages(prev => [...prev, { role: 'assistant', content: '📊 [Analiz durduruldu]' }])
     }
   }, [streamBuffer])
 
@@ -373,7 +374,7 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
 
   const handleAnalyze = useCallback(async (msgIdx) => {
     const meal = mealBlocks[msgIdx]
-    if (!meal || analyzingIdx !== null) return
+    if (!meal || streamBuffer !== null || analyzingIdx !== null) return
     setAnalyzingIdx(msgIdx)
     const abortCtrl = { cancelled: false }
     analyzeAbortRef.current = { abort: () => { abortCtrl.cancelled = true } }
@@ -393,7 +394,7 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
       analyzeAbortRef.current = null
       if (!abortCtrl.cancelled) setAnalyzingIdx(null)
     }
-  }, [mealBlocks, analyzingIdx])
+  }, [mealBlocks, analyzingIdx, streamBuffer])
 
   // True when anything is busy (streaming or analyzing)
   const isBusy = streamBuffer !== null || analyzingIdx !== null

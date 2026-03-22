@@ -413,7 +413,8 @@ Your response must end with a JSON block:
     {{{{"name": "Demir", "value": "~3mg", "daily_percent": 17}}}}
   ],
   "supplement_warnings": [
-    {{{{"nutrient": "Vitamin D", "meal_amount": "~15mcg", "supplement_amount": "25mcg", "total_percent_ul": 80, "risk": "low"}}}}
+    {{{{"nutrient": "Vitamin D", "meal_amount": "~15mcg", "supplement_amount": "25mcg", "total_percent_ul": 80, "risk": "medium"}}}},
+    {{{{"nutrient": "Demir", "meal_amount": "~8mg", "supplement_amount": "14mg", "total_percent_ul": 49, "risk": "low"}}}}
   ],
   "health_rule_compliance": [
     {{{{"rule": "...", "status": "aligned", "note": "..."}}}},

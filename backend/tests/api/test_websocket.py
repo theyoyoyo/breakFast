@@ -71,7 +71,7 @@ async def test_websocket_accepts_valid_token(ws_setup):
     app, token, _ = ws_setup
     from starlette.testclient import TestClient
     from unittest.mock import patch
-    from services.llm import LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE
+    from services.llm import LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE, FALLBACK_LYRICS
 
     client = TestClient(app)
 
@@ -86,10 +86,10 @@ async def test_websocket_accepts_valid_token(ws_setup):
         with client.websocket_connect(f"/chat?token={token}") as ws:
             ws.send_text(json.dumps({"message": "hello"}))
 
-            # Should get done message with fallback (LLM unavailable)
+            # Should get done message with a fallback lyric line
             msg = ws.receive_json()
             assert msg["type"] == "done"
-            assert "aklım başımda değil" in msg["content"]
+            assert msg["content"] in FALLBACK_LYRICS
 
 
 @pytest.mark.asyncio
@@ -98,7 +98,7 @@ async def test_websocket_handles_generic_exception(ws_setup):
     app, token, _ = ws_setup
     from starlette.testclient import TestClient
     from unittest.mock import patch
-    from services.llm import LLM_UNAVAILABLE_MESSAGE
+    from services.llm import FALLBACK_LYRICS
 
     client = TestClient(app)
 
@@ -113,7 +113,7 @@ async def test_websocket_handles_generic_exception(ws_setup):
 
             msg = ws.receive_json()
             assert msg["type"] == "done"
-            assert msg["content"] == LLM_UNAVAILABLE_MESSAGE
+            assert msg["content"] in FALLBACK_LYRICS
 
 
 @pytest.mark.asyncio
@@ -122,7 +122,7 @@ async def test_websocket_build_system_prompt_no_mock(ws_setup):
     app, token, _ = ws_setup
     from starlette.testclient import TestClient
     from unittest.mock import patch
-    from services.llm import LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE
+    from services.llm import LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE, FALLBACK_LYRICS
 
     client = TestClient(app)
 
@@ -138,7 +138,7 @@ async def test_websocket_build_system_prompt_no_mock(ws_setup):
 
             msg = ws.receive_json()
             assert msg["type"] == "done"
-            assert "aklım başımda değil" in msg["content"]
+            assert msg["content"] in FALLBACK_LYRICS
 
 
 @pytest.mark.asyncio
