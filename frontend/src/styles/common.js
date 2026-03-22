@@ -1,5 +1,8 @@
 // Shared styles used across multiple components
 
+// Secondary button color — dark orange-red, used for all action buttons
+export const secondaryColor = '#c4533e'
+
 export const panelContainer = {
   background: 'var(--surface)',
   borderRadius: 'var(--radius)',
@@ -59,7 +62,7 @@ export const addRow = {
 }
 
 export const addBtn = {
-  background: 'var(--accent)',
+  background: secondaryColor,
   border: 'none',
   borderRadius: 8,
   color: '#fff',

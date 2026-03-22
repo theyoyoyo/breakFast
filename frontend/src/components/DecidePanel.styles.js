@@ -1,3 +1,5 @@
+import { secondaryColor } from '../styles/common'
+
 export const overlay = {
   position: 'absolute',
   inset: 0,
@@ -143,7 +145,7 @@ export const backBtn = {
 }
 
 export const confirmBtn = {
-  background: 'var(--accent)',
+  background: secondaryColor,
   border: 'none',
   borderRadius: 10,
   padding: '12px 24px',

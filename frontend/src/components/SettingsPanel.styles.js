@@ -1,7 +1,7 @@
 import {
   panelContainer, panelHeader, panelBody,
   section, sectionLabel, input, addRow, addBtn,
-  tagX, empty, error, select,
+  tagX, empty, error, select, secondaryColor,
 } from '../styles/common'
 
 export { section, sectionLabel, tagX, empty, error, select }
@@ -32,7 +32,7 @@ export const profileLabel = {
 }
 
 export const saveBtn = {
-  background: 'var(--accent)',
+  background: secondaryColor,
   border: 'none',
   borderRadius: 8,
   color: '#fff',
@@ -80,7 +80,7 @@ export const suppFreq = {
 export const ratingsBtn = {
   width: '100%',
   padding: '12px 16px',
-  background: 'var(--accent)',
+  background: secondaryColor,
   border: 'none',
   borderRadius: 8,
   color: '#fff',
@@ -94,7 +94,7 @@ export const ratingsBtn = {
 export const healthRulesBtn = {
   width: '100%',
   padding: '12px 16px',
-  background: 'var(--accent)',
+  background: secondaryColor,
   border: 'none',
   borderRadius: 8,
   color: '#fff',
@@ -135,8 +135,8 @@ export const priorityRow = {
 
 const priorityColors = {
   low: { bg: 'var(--surface)', color: 'var(--text-muted)', activeBg: 'var(--text-muted)', activeColor: '#fff' },
-  high: { bg: 'var(--surface)', color: 'var(--accent)', activeBg: 'var(--accent)', activeColor: '#fff' },
-  critical: { bg: 'var(--surface)', color: 'var(--accent2)', activeBg: 'var(--accent2)', activeColor: '#fff' },
+  high: { bg: 'var(--surface)', color: secondaryColor, activeBg: secondaryColor, activeColor: '#fff' },
+  critical: { bg: 'var(--surface)', color: secondaryColor, activeBg: secondaryColor, activeColor: '#fff' },
 }
 
 export const priorityBtn = (active, level) => {
@@ -159,9 +159,9 @@ export const dangerBtn = {
   width: '100%',
   padding: '10px 16px',
   background: 'var(--surface2)',
-  border: '1px solid var(--accent)',
+  border: `1px solid ${secondaryColor}`,
   borderRadius: 8,
-  color: 'var(--accent)',
+  color: secondaryColor,
   fontWeight: 600,
   fontSize: 13,
   cursor: 'pointer',

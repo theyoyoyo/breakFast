@@ -1,3 +1,5 @@
+import { secondaryColor } from '../styles/common'
+
 export const container = {
   display: 'flex',
   flexDirection: 'column',
@@ -33,7 +35,7 @@ export const input = {
 }
 
 export const btn = {
-  background: 'var(--accent)',
+  background: secondaryColor,
   color: '#fff',
   border: 'none',
   borderRadius: 12,
