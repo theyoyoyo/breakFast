@@ -1,4 +1,4 @@
-import { panelContainer, panelHeader } from '../styles/common'
+import { panelContainer, panelHeader, secondaryColor } from '../styles/common'
 
 export const container = panelContainer
 
@@ -58,7 +58,7 @@ export const input = {
 }
 
 export const addBtn = {
-  background: 'var(--accent)',
+  background: secondaryColor,
   border: 'none',
   borderRadius: 8,
   color: '#fff',

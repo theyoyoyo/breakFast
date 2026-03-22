@@ -1,3 +1,5 @@
+import { secondaryColor } from '../styles/common'
+
 export const card = {
   background: 'var(--surface2)',
   borderRadius: 'var(--radius)',
@@ -70,7 +72,7 @@ export const ratingRow = {
 }
 
 export const ratingBtn = (active) => ({
-  background: active ? 'var(--accent)' : 'var(--surface)',
+  background: active ? secondaryColor : 'var(--surface)',
   border: '1px solid var(--border)',
   borderRadius: 8,
   padding: '6px 14px',

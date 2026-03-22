@@ -393,7 +393,7 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
           const displayText = hasMealBlock ? stripJsonBlock(m.content) : m.content
 
           return (
-            <div key={i}>
+            <div key={i} style={s.messageWrapper(m.role)}>
               {displayText && (
                 <div style={s.bubble(m.role)}>
                   {displayText}
@@ -415,7 +415,7 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
           <div style={s.bubble('assistant')}>{streamBuffer}</div>
         )}
         {streamBuffer === '' && (
-          <div style={s.thinking}>thinking…</div>
+          <div style={s.thinking}>Düşünüyorum…</div>
         )}
 
         <div ref={messagesEndRef} />

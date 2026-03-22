@@ -1,3 +1,5 @@
+import { secondaryColor } from '../styles/common'
+
 export const container = {
   display: 'flex',
   flexDirection: 'column',
@@ -25,13 +27,19 @@ export const messages = {
   gap: 12,
 }
 
+export const messageWrapper = (role) => ({
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: role === 'user' ? 'flex-end' : 'flex-start',
+})
+
 export const bubble = (role) => ({
   maxWidth: '80%',
-  alignSelf: role === 'user' ? 'flex-start' : 'flex-end',
-  background: role === 'user' ? 'var(--accent2)' : 'var(--surface)',
+  alignSelf: role === 'user' ? 'flex-end' : 'flex-start',
+  background: role === 'user' ? 'var(--surface2)' : '#3d2a2a',
   color: 'var(--text)',
-  border: role === 'user' ? 'none' : '1px solid var(--border)',
-  borderRadius: role === 'user' ? '18px 18px 18px 4px' : '18px 18px 4px 18px',
+  border: 'none',
+  borderRadius: role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
   padding: '10px 14px',
   fontSize: 14,
   lineHeight: 1.6,
@@ -61,7 +69,7 @@ export const input = {
 }
 
 export const sendBtn = {
-  background: 'var(--accent)',
+  background: secondaryColor,
   color: '#fff',
   border: 'none',
   borderRadius: 24,
@@ -100,7 +108,7 @@ export const suppMenuWrapper = {
 }
 
 export const suppToggleBtn = (active) => ({
-  background: active ? 'var(--accent)' : 'var(--surface2)',
+  background: active ? secondaryColor : 'var(--surface2)',
   color: active ? '#fff' : 'var(--text-muted)',
   border: '1px solid var(--border)',
   borderRadius: 12,
@@ -144,7 +152,7 @@ export const suppPill = (taken) => ({
   borderRadius: 16,
   fontSize: 12,
   border: '1px solid var(--border)',
-  background: taken ? 'var(--accent)' : 'var(--surface2)',
+  background: taken ? secondaryColor : 'var(--surface2)',
   color: taken ? '#fff' : 'var(--text-muted)',
   cursor: 'pointer',
   whiteSpace: 'nowrap',
@@ -161,7 +169,7 @@ export const actionRow = {
 }
 
 export const decideBtn = (active) => ({
-  background: active ? 'var(--accent)' : 'var(--surface2)',
+  background: active ? secondaryColor : 'var(--surface2)',
   color: active ? '#fff' : 'var(--text)',
   border: '1px solid var(--border)',
   borderRadius: 20,
@@ -176,7 +184,7 @@ export const decideBtn = (active) => ({
 })
 
 export const stopBtn = {
-  background: 'var(--accent)',
+  background: secondaryColor,
   color: '#fff',
   border: 'none',
   borderRadius: 24,

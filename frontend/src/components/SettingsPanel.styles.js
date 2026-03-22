@@ -1,7 +1,7 @@
 import {
   panelContainer, panelHeader, panelBody,
   section, sectionLabel, input, addRow, addBtn,
-  tagX, empty, error, select,
+  tagX, empty, error, select, secondaryColor,
 } from '../styles/common'
 
 export { section, sectionLabel, tagX, empty, error, select }
@@ -32,7 +32,7 @@ export const profileLabel = {
 }
 
 export const saveBtn = {
-  background: 'var(--accent)',
+  background: secondaryColor,
   border: 'none',
   borderRadius: 8,
   color: '#fff',
@@ -80,7 +80,7 @@ export const suppFreq = {
 export const ratingsBtn = {
   width: '100%',
   padding: '12px 16px',
-  background: '#c4533e',
+  background: secondaryColor,
   border: 'none',
   borderRadius: 8,
   color: '#fff',
@@ -94,7 +94,7 @@ export const ratingsBtn = {
 export const healthRulesBtn = {
   width: '100%',
   padding: '12px 16px',
-  background: 'var(--accent)',
+  background: secondaryColor,
   border: 'none',
   borderRadius: 8,
   color: '#fff',
@@ -135,8 +135,8 @@ export const priorityRow = {
 
 const priorityColors = {
   low: { bg: 'var(--surface)', color: 'var(--text-muted)', activeBg: 'var(--text-muted)', activeColor: '#fff' },
-  high: { bg: 'var(--surface)', color: 'var(--accent)', activeBg: 'var(--accent)', activeColor: '#fff' },
-  critical: { bg: 'var(--surface)', color: '#c4533e', activeBg: '#c4533e', activeColor: '#fff' },
+  high: { bg: 'var(--surface)', color: secondaryColor, activeBg: secondaryColor, activeColor: '#fff' },
+  critical: { bg: 'var(--surface)', color: secondaryColor, activeBg: secondaryColor, activeColor: '#fff' },
 }
 
 export const priorityBtn = (active, level) => {
@@ -159,9 +159,9 @@ export const dangerBtn = {
   width: '100%',
   padding: '10px 16px',
   background: 'var(--surface2)',
-  border: '1px solid #c4533e',
+  border: `1px solid ${secondaryColor}`,
   borderRadius: 8,
-  color: '#c4533e',
+  color: secondaryColor,
   fontWeight: 600,
   fontSize: 13,
   cursor: 'pointer',
@@ -223,3 +223,139 @@ export const star = (lit) => ({
   color: lit ? '#f5a623' : 'var(--border)',
   transition: 'color 0.1s',
 })
+
+// --- Meal History styles ---
+
+export const mealCard = {
+  background: 'var(--surface2)',
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  overflow: 'hidden',
+}
+
+export const mealHeader = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: '10px 12px',
+  cursor: 'pointer',
+}
+
+export const mealInfo = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 3,
+  flex: 1,
+  minWidth: 0,
+}
+
+export const mealName = {
+  fontWeight: 600,
+  fontSize: 13,
+  color: 'var(--text)',
+}
+
+export const mealDate = {
+  fontSize: 11,
+  color: 'var(--text-muted)',
+}
+
+export const mealActions = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 4,
+  flexShrink: 0,
+}
+
+export const expandIcon = {
+  fontSize: 12,
+  color: 'var(--text-muted)',
+  padding: '2px 4px',
+}
+
+export const editMealBtn = {
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  fontSize: 16,
+  padding: '2px 4px',
+}
+
+export const deleteMealBtn = {
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  fontSize: 16,
+  padding: '2px 4px',
+}
+
+export const mealExpanded = {
+  padding: '0 12px 12px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 6,
+  borderTop: '1px solid var(--border)',
+  paddingTop: 10,
+}
+
+export const mealNameEdit = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 3,
+}
+
+export const mealFieldLabel = {
+  fontSize: 10,
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  color: 'var(--text-muted)',
+}
+
+export const mealItemList = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 4,
+}
+
+export const mealItemRow = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: '6px 8px',
+  background: 'var(--surface)',
+  borderRadius: 6,
+  fontSize: 13,
+}
+
+export const mealItemText = {
+  flex: 1,
+  color: 'var(--text)',
+}
+
+export const mealItemInput = {
+  flex: 1,
+  background: 'var(--surface2)',
+  border: '1px solid var(--accent)',
+  borderRadius: 6,
+  padding: '4px 8px',
+  color: 'var(--text)',
+  fontSize: 13,
+  outline: 'none',
+}
+
+export const mealItemActions = {
+  display: 'flex',
+  gap: 2,
+  flexShrink: 0,
+}
+
+export const cancelEditBtn = {
+  background: 'var(--surface2)',
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  color: 'var(--text-muted)',
+  fontWeight: 600,
+  fontSize: 12,
+  padding: '8px 16px',
+  cursor: 'pointer',
+}

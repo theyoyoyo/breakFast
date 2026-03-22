@@ -88,6 +88,12 @@ export const logMeal = (meal) =>
 export const rateMeal = (id, rating) =>
   apiFetch(`${BASE_URL}/meals/${id}/rating`, json('PATCH', { rating }))
 
+export const updateMeal = (id, meal) =>
+  apiFetch(`${BASE_URL}/meals/${id}`, json('PUT', meal))
+
+export const deleteMeal = (id) =>
+  apiFetch(`${BASE_URL}/meals/${id}`, { method: 'DELETE' })
+
 export const deleteOldMeals = () =>
   apiFetch(`${BASE_URL}/meals/old`, { method: 'DELETE' })
 

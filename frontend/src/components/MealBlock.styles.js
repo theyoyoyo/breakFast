@@ -1,3 +1,5 @@
+import { secondaryColor } from '../styles/common'
+
 // --- Inline block in chat ---
 
 export const blockRow = {
@@ -193,7 +195,7 @@ export const cancelBtn = {
 }
 
 export const saveBtn = {
-  background: 'var(--accent)',
+  background: secondaryColor,
   border: 'none',
   borderRadius: 10,
   padding: '12px 24px',
