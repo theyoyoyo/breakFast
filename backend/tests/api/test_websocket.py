@@ -139,3 +139,29 @@ async def test_websocket_build_system_prompt_no_mock(ws_setup):
             msg = ws.receive_json()
             assert msg["type"] == "done"
             assert "aklım başımda değil" in msg["content"]
+
+
+@pytest.mark.asyncio
+async def test_websocket_suggest_type_uses_suggestion_prompt(ws_setup):
+    """WebSocket with type=suggest should use build_suggestion_prompt."""
+    app, token, _ = ws_setup
+    from starlette.testclient import TestClient
+    from unittest.mock import patch, MagicMock
+    from services.llm import LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE
+
+    client = TestClient(app)
+
+    async def mock_stream(*args, **kwargs):
+        raise LLMUnavailableError(LLM_UNAVAILABLE_MESSAGE)
+        yield
+
+    mock_suggestion = MagicMock(return_value="suggestion prompt")
+
+    with patch("routers.chat.build_suggestion_prompt", mock_suggestion), \
+         patch("routers.chat.stream_response", mock_stream):
+        with client.websocket_connect(f"/chat?token={token}") as ws:
+            ws.send_text(json.dumps({"message": "Bana kahvaltı öner", "type": "suggest"}))
+
+            msg = ws.receive_json()
+            assert msg["type"] == "done"
+            mock_suggestion.assert_called_once()

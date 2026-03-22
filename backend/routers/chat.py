@@ -13,7 +13,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from database import get_db
 from auth import get_user_id_from_token
 from services.llm import LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE
-from services.suggestion import build_chat_prompt, stream_response
+from services.suggestion import build_chat_prompt, build_suggestion_prompt, stream_response
 from utils import extract_json_block
 
 router = APIRouter()
@@ -189,6 +189,9 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
             if not user_message:
                 continue
 
+            # Determine prompt type: "suggest" uses suggestion persona, default uses chat
+            prompt_type = payload.get("type", "chat")
+
             # Use session_id from payload if provided, otherwise keep current
             if "session_id" in payload:
                 session_id = payload["session_id"]
@@ -215,15 +218,31 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                 async with get_db() as db:
                     cached_context = await _load_context(db, user_id)
 
-            system_prompt = build_chat_prompt(
-                ingredient_inventory=cached_context["ingredients"],
-                recent_meal_history=cached_context["history"],
-                user_preferences=cached_context["preferences"],
-                stated_habits=cached_context["stated_habits"],
-                inferred_habits=cached_context["inferred_habits"],
-                health_rules=cached_context["health_rules"],
-                avoid_list=cached_context["avoid_list"],
-            )
+            if prompt_type == "suggest":
+                # Force fresh context for suggestion requests
+                async with get_db() as db:
+                    cached_context = await _load_context(db, user_id)
+                system_prompt = build_suggestion_prompt(
+                    ingredient_inventory=cached_context["ingredients"],
+                    recent_meal_history=cached_context["history"],
+                    user_preferences=cached_context["preferences"],
+                    stated_habits=cached_context["stated_habits"],
+                    inferred_habits=cached_context["inferred_habits"],
+                    health_rules=cached_context["health_rules"],
+                    user_profile=cached_context["user_profile"],
+                    supplements=cached_context["supplements"],
+                    avoid_list=cached_context["avoid_list"],
+                )
+            else:
+                system_prompt = build_chat_prompt(
+                    ingredient_inventory=cached_context["ingredients"],
+                    recent_meal_history=cached_context["history"],
+                    user_preferences=cached_context["preferences"],
+                    stated_habits=cached_context["stated_habits"],
+                    inferred_habits=cached_context["inferred_habits"],
+                    health_rules=cached_context["health_rules"],
+                    avoid_list=cached_context["avoid_list"],
+                )
 
             # Load persisted conversation history for LLM context
             async with get_db() as db:
