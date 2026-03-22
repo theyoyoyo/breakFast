@@ -4,7 +4,7 @@ export const blockRow = {
   display: 'flex',
   alignItems: 'center',
   gap: 8,
-  alignSelf: 'flex-start',
+  alignSelf: 'flex-end',
   maxWidth: '80%',
 }
 

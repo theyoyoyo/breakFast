@@ -456,7 +456,7 @@ export default function ChatInterface({ onMealLogged }) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="What's in your fridge?"
+          placeholder="Canın ne çekiyor?"
           rows={1}
           disabled={streamBuffer !== null}
         />
