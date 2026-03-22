@@ -296,16 +296,16 @@ export default function ChatInterface({ onMealLogged }) {
           <span style={s.connStatus}> — reconnecting…</span>
         )}
         <button style={{ ...s.newSessionBtn, visibility: hasOlder ? 'visible' : 'hidden' }} onClick={handleBack} title="Previous session">
-          Back
+          ◀
         </button>
         <button style={{ ...s.newSessionBtn, visibility: hasNewer ? 'visible' : 'hidden' }} onClick={handleNext} title="Next session">
-          Next
+          ▶
         </button>
         <button style={s.newSessionBtn} onClick={handleNewSession} title="Start a new conversation">
-          + New
+          ✚
         </button>
         <button style={{ ...s.newSessionBtn, color: 'var(--accent)' }} onClick={handleDeleteSession} title="Delete this session">
-          Del
+          🗑
         </button>
       </div>
 
@@ -375,7 +375,7 @@ export default function ChatInterface({ onMealLogged }) {
           disabled={streamBuffer !== null}
           title="Karar Verdim"
         >
-          🍽️
+          ✅
         </button>
 
         <SuggestButton onSuggest={handleSuggest} disabled={streamBuffer !== null || decideOpen} />
