@@ -159,6 +159,21 @@ export const actionRow = {
   background: 'var(--surface)',
 }
 
+export const decideBtn = (active) => ({
+  background: active ? 'var(--accent)' : 'var(--surface2)',
+  color: active ? '#fff' : 'var(--text)',
+  border: '1px solid var(--border)',
+  borderRadius: 20,
+  padding: '8px 16px',
+  fontSize: 48,
+  lineHeight: 1,
+  cursor: 'pointer',
+  transition: 'background 0.15s, color 0.15s',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+})
+
 export const stopBtn = {
   background: 'var(--accent)',
   color: '#fff',
