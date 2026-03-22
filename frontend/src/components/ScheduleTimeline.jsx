@@ -14,65 +14,7 @@ const RESOURCE_LABELS = {
   none: '',
 }
 
-const s = {
-  container: {
-    background: 'var(--surface2)',
-    borderRadius: 'var(--radius)',
-    padding: 20,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 12,
-  },
-  header: {
-    fontSize: 13,
-    fontWeight: 700,
-    textTransform: 'uppercase',
-    letterSpacing: '0.08em',
-    color: 'var(--text-muted)',
-  },
-  entry: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
-  time: {
-    minWidth: 38,
-    fontSize: 12,
-    color: 'var(--text-muted)',
-    fontVariantNumeric: 'tabular-nums',
-    paddingTop: 2,
-  },
-  dot: (resource) => ({
-    width: 10,
-    height: 10,
-    borderRadius: '50%',
-    background: RESOURCE_COLORS[resource] || '#aaa',
-    marginTop: 4,
-    flexShrink: 0,
-  }),
-  label: {
-    fontSize: 13,
-    color: 'var(--text)',
-  },
-  resource: (resource) => ({
-    fontSize: 11,
-    color: RESOURCE_COLORS[resource] || '#aaa',
-    fontWeight: 600,
-  }),
-  note: {
-    fontSize: 11,
-    color: 'var(--text-muted)',
-    fontStyle: 'italic',
-  },
-  makespan: {
-    fontSize: 13,
-    fontWeight: 700,
-    color: 'var(--accent)',
-    borderTop: '1px solid var(--border)',
-    paddingTop: 10,
-    marginTop: 4,
-  },
-}
+import * as s from './ScheduleTimeline.styles'
 
 function formatTime(minutes) {
   const m = Math.floor(minutes)
@@ -90,11 +32,11 @@ export default function ScheduleTimeline({ schedule }) {
       {schedule.timeline.map((entry) => (
         <div key={`${entry.time}-${entry.label}`} style={s.entry}>
           <div style={s.time}>{formatTime(entry.time)}</div>
-          <div style={s.dot(entry.resource)} />
+          <div style={s.dot(entry.resource, RESOURCE_COLORS)} />
           <div>
             <div style={s.label}>{entry.label}</div>
             {entry.resource && entry.resource !== 'none' && (
-              <div style={s.resource(entry.resource)}>
+              <div style={s.resource(entry.resource, RESOURCE_COLORS)}>
                 {RESOURCE_LABELS[entry.resource] || entry.resource}
               </div>
             )}

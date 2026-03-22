@@ -1,0 +1,51 @@
+export const container = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  height: '100vh',
+  background: 'var(--bg)',
+  gap: 24,
+}
+
+export const title = {
+  fontSize: 32,
+  fontWeight: 700,
+  color: 'var(--accent)',
+  letterSpacing: '0.02em',
+}
+
+export const form = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 12,
+  width: 280,
+}
+
+export const input = {
+  background: 'var(--surface2)',
+  border: '1px solid var(--border)',
+  borderRadius: 12,
+  padding: '12px 16px',
+  color: 'var(--text)',
+  fontSize: 16,
+  outline: 'none',
+}
+
+export const btn = {
+  background: 'var(--accent)',
+  color: '#fff',
+  border: 'none',
+  borderRadius: 12,
+  padding: '12px 18px',
+  fontWeight: 600,
+  fontSize: 16,
+  cursor: 'pointer',
+  transition: 'opacity 0.15s',
+}
+
+export const error = {
+  color: '#e74c3c',
+  fontSize: 14,
+  textAlign: 'center',
+}

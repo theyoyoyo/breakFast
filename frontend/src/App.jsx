@@ -7,74 +7,9 @@ import PreferencesPanel from './components/PreferencesPanel'
 import SettingsPanel from './components/SettingsPanel'
 import LoginScreen from './components/LoginScreen'
 import { logout, checkAuth } from './services/api'
+import * as s from './App.styles'
 
 const TABS = ['Chat', 'Ingredients', 'Preferences', 'Settings']
-
-const s = {
-  app: {
-    display: 'grid',
-    height: '100vh',
-    gridTemplateRows: 'auto 1fr',
-    maxWidth: 1200,
-    margin: '0 auto',
-    padding: 0,
-  },
-  nav: {
-    display: 'flex',
-    gap: 4,
-    padding: '12px 16px 0',
-    borderBottom: '1px solid var(--border)',
-    background: 'var(--surface)',
-    alignItems: 'center',
-  },
-  tab: (active) => ({
-    padding: '8px 18px',
-    background: active ? 'var(--surface2)' : 'none',
-    border: 'none',
-    borderRadius: '8px 8px 0 0',
-    color: active ? 'var(--accent)' : 'var(--text-muted)',
-    fontWeight: active ? 700 : 400,
-    fontSize: 14,
-    cursor: 'pointer',
-    transition: 'color 0.15s',
-  }),
-  main: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 320px',
-    gap: 12,
-    padding: 12,
-    overflow: 'hidden',
-    height: '100%',
-  },
-  mainFull: {
-    padding: 12,
-    height: '100%',
-    overflow: 'hidden',
-  },
-  sidebar: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 12,
-    overflowY: 'auto',
-  },
-  userInfo: {
-    marginLeft: 'auto',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    fontSize: 13,
-    color: 'var(--text-muted)',
-  },
-  logoutBtn: {
-    background: 'none',
-    border: '1px solid var(--border)',
-    borderRadius: 8,
-    padding: '4px 10px',
-    color: 'var(--text-muted)',
-    fontSize: 12,
-    cursor: 'pointer',
-  },
-}
 
 function getStoredAuth() {
   const token = localStorage.getItem('bf_token')
