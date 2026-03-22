@@ -59,7 +59,7 @@ export const addRow = {
 }
 
 export const addBtn = {
-  background: '#c4533e',
+  background: 'var(--accent)',
   border: 'none',
   borderRadius: 8,
   color: '#fff',

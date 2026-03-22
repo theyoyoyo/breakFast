@@ -80,7 +80,7 @@ export const suppFreq = {
 export const ratingsBtn = {
   width: '100%',
   padding: '12px 16px',
-  background: '#c4533e',
+  background: 'var(--accent)',
   border: 'none',
   borderRadius: 8,
   color: '#fff',
@@ -136,7 +136,7 @@ export const priorityRow = {
 const priorityColors = {
   low: { bg: 'var(--surface)', color: 'var(--text-muted)', activeBg: 'var(--text-muted)', activeColor: '#fff' },
   high: { bg: 'var(--surface)', color: 'var(--accent)', activeBg: 'var(--accent)', activeColor: '#fff' },
-  critical: { bg: 'var(--surface)', color: '#c4533e', activeBg: '#c4533e', activeColor: '#fff' },
+  critical: { bg: 'var(--surface)', color: 'var(--accent2)', activeBg: 'var(--accent2)', activeColor: '#fff' },
 }
 
 export const priorityBtn = (active, level) => {
@@ -159,9 +159,9 @@ export const dangerBtn = {
   width: '100%',
   padding: '10px 16px',
   background: 'var(--surface2)',
-  border: '1px solid #c4533e',
+  border: '1px solid var(--accent)',
   borderRadius: 8,
-  color: '#c4533e',
+  color: 'var(--accent)',
   fontWeight: 600,
   fontSize: 13,
   cursor: 'pointer',
