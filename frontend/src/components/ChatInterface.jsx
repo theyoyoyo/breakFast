@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react'
 import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, getTodaySupplements, toggleSupplement } from '../services/api'
 import { useVoice } from '../hooks/useVoice'
 import SuggestButton from './SuggestButton'
@@ -21,7 +21,22 @@ function parseJsonBlock(text) {
   try { return JSON.parse(match[1]) } catch { return null }
 }
 
-export default function ChatInterface({ onMealLogged }) {
+// Template meal for demo/preview without LLM
+const DEMO_MEAL = {
+  meal_name: 'Serpme Kahvaltı',
+  description: 'Klasik Türk kahvaltısı — zengin, dengeli ve doyurucu.',
+  ingredients: ['Beyaz peynir', 'Zeytin', 'Domates', 'Salatalık', 'Yumurta', 'Bal', 'Tereyağı', 'Ekmek'],
+  steps: [
+    'Yumurtayı kaynar suda 7 dakika haşla.',
+    'Peynir, zeytin, domates ve salatalığı tabağa yerleştir.',
+    'Bal ve tereyağını küçük kaselere koy.',
+    'Ekmeği dilimle ve servis et.',
+  ],
+  prep_time_min: 12,
+  nutrition_note: 'Protein, kalsiyum ve sağlıklı yağlar açısından zengin bir öğün.',
+}
+
+export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
   const [messages, setMessages] = useState([WELCOME_MSG])
   const [input, setInput] = useState('')
   // null = idle, '' = thinking (no tokens yet), string = streaming content
@@ -45,6 +60,22 @@ export default function ChatInterface({ onMealLogged }) {
   const abortedRef = useRef(false)
   const { isListening, startListening, stopListening, speak, supported: voiceSupported } = useVoice()
   const speakRef = useRef(speak)
+
+  // Expose injectDemoMeal to parent via ref
+  useImperativeHandle(ref, () => ({
+    injectDemoMeal: () => {
+      const demoText = 'İşte sana güzel bir serpme kahvaltı önerisi! 🍳\n\nTaze ve dengeli malzemelerle hazırlanan klasik bir Türk kahvaltısı.'
+      const jsonBlock = '\n\n```json\n' + JSON.stringify(DEMO_MEAL) + '\n```'
+      const fullContent = demoText + jsonBlock
+      setMessages(prev => {
+        const newIdx = prev.length
+        const newMsgs = [...prev, { role: 'assistant', content: fullContent }]
+        setMealBlocks(blocks => ({ ...blocks, [newIdx]: DEMO_MEAL }))
+        setCheckedMealIdx(newIdx)
+        return newMsgs
+      })
+    }
+  }))
 
   // Keep refs in sync so socket callbacks always see the latest props/functions
   useEffect(() => { onMealLoggedRef.current = onMealLogged }, [onMealLogged])
@@ -475,4 +506,4 @@ export default function ChatInterface({ onMealLogged }) {
       </div>
     </div>
   )
-}
+})
