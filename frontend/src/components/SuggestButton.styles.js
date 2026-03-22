@@ -12,7 +12,7 @@ export const button = (disabled) => ({
 })
 
 export const logo = {
-  height: 84,
+  height: 168,
   width: 'auto',
   display: 'block',
 }

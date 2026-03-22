@@ -315,7 +315,6 @@ export default function ChatInterface({ onMealLogged }) {
       </div>
 
       <div style={s.actionRow}>
-        <SuggestButton onClick={handleSuggest} disabled={streamBuffer !== null} />
         {todaySupps.length > 0 && (
           <div style={s.suppMenuWrapper}>
             {suppMenuOpen && (
@@ -342,6 +341,7 @@ export default function ChatInterface({ onMealLogged }) {
             </button>
           </div>
         )}
+        <SuggestButton onClick={handleSuggest} disabled={streamBuffer !== null} />
       </div>
 
       <div style={s.inputRow}>

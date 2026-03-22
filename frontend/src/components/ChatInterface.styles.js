@@ -95,7 +95,7 @@ export const connStatus = {
 
 export const suppMenuWrapper = {
   position: 'relative',
-  marginLeft: 'auto',
+  alignSelf: 'flex-end',
 }
 
 export const suppToggleBtn = (active) => ({
@@ -113,7 +113,7 @@ export const suppToggleBtn = (active) => ({
 export const suppMenu = {
   position: 'absolute',
   bottom: '100%',
-  right: 0,
+  left: 0,
   marginBottom: 6,
   background: 'var(--surface)',
   border: '1px solid var(--border)',
@@ -152,6 +152,8 @@ export const suppPill = (taken) => ({
 
 export const actionRow = {
   display: 'flex',
+  alignItems: 'flex-end',
+  justifyContent: 'space-between',
   gap: 8,
   padding: '6px 16px 0',
   background: 'var(--surface)',
