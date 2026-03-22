@@ -58,7 +58,7 @@ const s = {
     gap: 6,
   },
   addBtn: {
-    background: 'var(--accent)',
+    background: '#c4533e',
     border: 'none',
     borderRadius: 8,
     color: '#fff',
@@ -158,7 +158,7 @@ const s = {
   ratingsBtn: {
     width: '100%',
     padding: '12px 16px',
-    background: 'var(--accent2)',
+    background: '#c4533e',
     border: 'none',
     borderRadius: 8,
     color: '#fff',
