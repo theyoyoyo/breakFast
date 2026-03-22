@@ -441,6 +441,21 @@ class TestAnalystPrompt:
         assert '"daily_coverage"' in prompt
         assert '"macros"' in prompt
         assert '"micros"' in prompt
+        assert '"supplement_warnings"' in prompt
+
+    # Daily coverage has all 4 fixed categories
+    def test_daily_coverage_fixed_categories(self):
+        prompt = build_analyst_prompt([], None, None, None)
+        assert "Kalori" in prompt
+        assert "Protein" in prompt
+        assert "Lif" in prompt
+        assert "Vitamin & Mineral" in prompt
+
+    # Supplement excess check instruction is present
+    def test_supplement_excess_check(self):
+        prompt = build_analyst_prompt([], None, None, None)
+        assert "EXCESS CHECK" in prompt
+        assert "upper limit" in prompt.lower() or "UL" in prompt
 
     # Analyst prompt mentions Mifflin-St Jeor for calorie calculation
     def test_mentions_calorie_formula(self):
