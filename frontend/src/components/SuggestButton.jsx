@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react'
 import u2Logo from '../assets/u2.png'
 import * as s from './SuggestButton.styles'
 
-const LONG_PRESS_MS = 2000
+const LONG_PRESS_MS = 1000
 
 export default function SuggestButton({ onSuggest, disabled }) {
   const [panelOpen, setPanelOpen] = useState(false)
@@ -47,15 +47,17 @@ export default function SuggestButton({ onSuggest, disabled }) {
             style={s.modeBtn}
             onClick={() => handleMode('favorites')}
             disabled={disabled}
+            title="Sevdiklerimden öner"
           >
-            Sevdiklerimden
+            ❤️
           </button>
           <button
             style={s.modeBtn}
             onClick={() => handleMode('explore')}
             disabled={disabled}
+            title="Dünya mutfağından keşfet"
           >
-            Kesfet
+            ⭐
           </button>
         </div>
       )}
