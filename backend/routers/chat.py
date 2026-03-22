@@ -12,7 +12,7 @@ from datetime import date as date_type
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from database import get_db
 from auth import get_user_id_from_token
-from services.llm import LLMUnavailableError, FallbackLyricCycler
+from services.llm import LLMUnavailableError, lyric_cycler
 from services.suggestion import build_chat_prompt, build_suggestion_prompt, stream_response
 from utils import extract_json_block
 
@@ -171,7 +171,6 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
     await websocket.accept()
     cached_context: dict | None = None
     session_id: str | None = None
-    lyric_cycler = FallbackLyricCycler()
 
     try:
         while True:

@@ -45,6 +45,10 @@ class FallbackLyricCycler:
         return line
 
 
+## Global singleton — all callers share the same counter so lyrics continue seamlessly
+lyric_cycler = FallbackLyricCycler()
+
+
 class LLMUnavailableError(Exception):
     """Raised when no LLM backend is reachable."""
     pass

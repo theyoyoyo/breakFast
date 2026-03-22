@@ -204,6 +204,13 @@ export const deleteHealthRule = (id) =>
   apiFetch(`${BASE_URL}/health-rules/${id}`, { method: 'DELETE' })
 
 // ---------------------------------------------------------------------------
+// Analyst
+// ---------------------------------------------------------------------------
+
+export const analyzeMeal = (meal_name, ingredients) =>
+  apiFetch(`${BASE_URL}/analyst/analyze`, json('POST', { meal_name, ingredients }))
+
+// ---------------------------------------------------------------------------
 // WebSocket chat
 // ---------------------------------------------------------------------------
 

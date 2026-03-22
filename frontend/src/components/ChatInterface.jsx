@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react'
-import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, getTodaySupplements, toggleSupplement } from '../services/api'
+import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, getTodaySupplements, toggleSupplement, analyzeMeal } from '../services/api'
 import { useVoice } from '../hooks/useVoice'
 import SuggestButton from './SuggestButton'
 import DecidePanel from './DecidePanel'
@@ -51,6 +51,8 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
   const [mealBlocks, setMealBlocks] = useState({})
   // checkedMealIdx: the message index of the currently checked meal block (only one at a time)
   const [checkedMealIdx, setCheckedMealIdx] = useState(null)
+  // analyzingIdx: the message index of a meal block currently being analyzed (null = idle)
+  const [analyzingIdx, setAnalyzingIdx] = useState(null)
   const wsRef = useRef(null)
   const messagesEndRef = useRef(null)
   const reconnectTimer = useRef(null)
@@ -58,6 +60,7 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
   const onMealLoggedRef = useRef(onMealLogged)
   const sessionIdRef = useRef(null)
   const abortedRef = useRef(false)
+  const analyzeAbortRef = useRef(null)
   const { isListening, startListening, stopListening, speak, supported: voiceSupported } = useVoice()
   const speakRef = useRef(speak)
 
@@ -149,7 +152,7 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, streamBuffer])
+  }, [messages, streamBuffer, analyzingIdx])
 
   // Close socket and clear reconnect timer on unmount
   useEffect(() => () => {
@@ -215,7 +218,7 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
 
   const sendMessage = useCallback((text, type = 'chat', mode = null) => {
     const msg = text.trim()
-    if (!msg || streamBuffer !== null) return
+    if (!msg || streamBuffer !== null || analyzingIdx !== null) return
 
     setMessages((prev) => [...prev, { role: 'user', content: msg }])
     setInput('')
@@ -236,7 +239,7 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
       setStreamBuffer('')
       ws.addEventListener('open', () => ws.send(JSON.stringify(payload)), { once: true })
     }
-  }, [streamBuffer, ensureSocket])
+  }, [streamBuffer, analyzingIdx, ensureSocket])
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -340,16 +343,25 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
   }
 
   const handleStop = useCallback(() => {
-    abortedRef.current = true
-    setAborted(true)
-    // Capture partial response and finalize with "[stopped]"
-    setStreamBuffer((prev) => {
-      const partial = prev || ''
-      const stopped = partial ? partial + '\n\n[stopped]' : '[stopped]'
-      setMessages((msgs) => [...msgs, { role: 'assistant', content: stopped }])
-      return null
-    })
-  }, [])
+    // Stop streaming chat/suggestion
+    if (streamBuffer !== null) {
+      abortedRef.current = true
+      setAborted(true)
+      setStreamBuffer((prev) => {
+        const partial = prev || ''
+        const stopped = partial ? partial + '\n\n[stopped]' : '[stopped]'
+        setMessages((msgs) => [...msgs, { role: 'assistant', content: stopped }])
+        return null
+      })
+    }
+    // Cancel ongoing analysis
+    if (analyzeAbortRef.current) {
+      analyzeAbortRef.current.abort()
+      analyzeAbortRef.current = null
+      setAnalyzingIdx(null)
+      setMessages(prev => [...prev, { role: 'assistant', content: '📊 [Analiz durduruldu]' }])
+    }
+  }, [streamBuffer])
 
   const handleSuggest = useCallback((mode) => {
     const modeLabels = {
@@ -359,6 +371,33 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
     const msg = modeLabels[mode] || 'Bana kahvaltı öner'
     sendMessage(msg, 'suggest', mode || null)
   }, [sendMessage])
+
+  const handleAnalyze = useCallback(async (msgIdx) => {
+    const meal = mealBlocks[msgIdx]
+    if (!meal || streamBuffer !== null || analyzingIdx !== null) return
+    setAnalyzingIdx(msgIdx)
+    const abortCtrl = { cancelled: false }
+    analyzeAbortRef.current = { abort: () => { abortCtrl.cancelled = true } }
+    try {
+      const result = await analyzeMeal(meal.meal_name || 'Meal', meal.ingredients || [])
+      if (abortCtrl.cancelled) return
+      // Strip JSON block from analysis text for display, show as assistant message
+      const displayText = result.analysis_text
+        ? result.analysis_text.replace(/```json\s*\{.*?\}\s*```/gs, '').trim()
+        : 'Analiz sonucu alınamadı.'
+      const analysisMsg = `📊 ${meal.meal_name || 'Meal'} — Besin Analizi\n\n${displayText}`
+      setMessages(prev => [...prev, { role: 'assistant', content: analysisMsg }])
+    } catch {
+      if (abortCtrl.cancelled) return
+      setMessages(prev => [...prev, { role: 'assistant', content: '📊 Analiz yapılamadı — sunucuya ulaşılamıyor.' }])
+    } finally {
+      analyzeAbortRef.current = null
+      if (!abortCtrl.cancelled) setAnalyzingIdx(null)
+    }
+  }, [mealBlocks, analyzingIdx, streamBuffer])
+
+  // True when anything is busy (streaming or analyzing)
+  const isBusy = streamBuffer !== null || analyzingIdx !== null
 
   // Get the checked meal for DecidePanel (priority: checked block > null)
   const checkedMeal = checkedMealIdx !== null ? mealBlocks[checkedMealIdx] : null
@@ -405,6 +444,8 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
                   checked={checkedMealIdx === i}
                   onCheck={() => setCheckedMealIdx(prev => prev === i ? null : i)}
                   onSave={(updated) => setMealBlocks(prev => ({ ...prev, [i]: updated }))}
+                  onAnalyze={() => handleAnalyze(i)}
+                  analyzing={analyzingIdx === i}
                 />
               )}
             </div>
@@ -416,6 +457,9 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
         )}
         {streamBuffer === '' && (
           <div style={s.thinking}>Düşünüyorum…</div>
+        )}
+        {analyzingIdx !== null && (
+          <div style={s.thinking}>Analiz ediliyor…</div>
         )}
 
         <div ref={messagesEndRef} />
@@ -467,13 +511,13 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
             setDecideOpen(prev => !prev)
             if (!decideOpen) setSuppMenuOpen(false)
           }}
-          disabled={streamBuffer !== null}
+          disabled={isBusy}
           title="Today I ate..."
         >
           ✅
         </button>
 
-        <SuggestButton onSuggest={handleSuggest} disabled={streamBuffer !== null || decideOpen} />
+        <SuggestButton onSuggest={handleSuggest} disabled={isBusy || decideOpen} />
       </div>
 
       <div style={s.inputRow}>
@@ -489,9 +533,9 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
           onKeyDown={handleKeyDown}
           placeholder="Canın ne çekiyor?"
           rows={1}
-          disabled={streamBuffer !== null}
+          disabled={isBusy}
         />
-        {streamBuffer !== null ? (
+        {isBusy ? (
           <button style={s.stopBtn} onClick={handleStop}>
             Stop
           </button>

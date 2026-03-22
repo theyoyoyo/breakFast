@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import pytest
 import pytest_asyncio
 from unittest.mock import patch, AsyncMock
-from services.llm import check_llm_availability, chat_stream, LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE, FallbackLyricCycler, FALLBACK_LYRICS
+from services.llm import check_llm_availability, chat_stream, LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE, FallbackLyricCycler, FALLBACK_LYRICS, lyric_cycler
 
 
 @pytest.mark.asyncio
@@ -77,6 +77,12 @@ def test_lyric_cycler_independent_instances():
     c1.next()  # advance c1 to index 2
     assert c1.next() == FALLBACK_LYRICS[2]
     assert c2.next() == FALLBACK_LYRICS[0]  # c2 still at start
+
+
+def test_global_lyric_cycler_is_singleton():
+    """Module-level lyric_cycler is a single shared instance for all callers."""
+    from services.llm import lyric_cycler as lc2
+    assert lc2 is lyric_cycler
 
 
 def test_fallback_lyrics_has_12_lines():

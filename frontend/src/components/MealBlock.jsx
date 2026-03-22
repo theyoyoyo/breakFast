@@ -3,10 +3,10 @@ import * as s from './MealBlock.styles'
 
 /**
  * Clickable meal summary block rendered inline in chat.
- * Shows checkbox, meal names, and prep time.
+ * Shows checkbox, meal names, prep time, and analysis button.
  * Click opens an editable overlay panel.
  */
-export default function MealBlock({ meal, checked, onCheck, onSave }) {
+export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, analyzing }) {
   const [panelOpen, setPanelOpen] = useState(false)
   const [items, setItems] = useState(meal?.ingredients || [])
   const [newItem, setNewItem] = useState('')
@@ -69,6 +69,14 @@ export default function MealBlock({ meal, checked, onCheck, onSave }) {
           <span style={s.blockText}>{displayNames}</span>
           {meal?.prep_time_min && <span style={s.prepBadge}>⏱ {meal.prep_time_min}m</span>}
         </div>
+        <button
+          style={s.analyzeBtn(analyzing)}
+          onClick={(e) => { e.stopPropagation(); onAnalyze?.() }}
+          disabled={analyzing}
+          title="Nutrition analysis"
+        >
+          {analyzing ? '⏳' : '📊'}
+        </button>
       </div>
 
       {panelOpen && (
