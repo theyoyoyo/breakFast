@@ -3,9 +3,23 @@ import { createChatSocket, getActiveSession, createSession, deleteSession, listS
 import { useVoice } from '../hooks/useVoice'
 import SuggestButton from './SuggestButton'
 import DecidePanel from './DecidePanel'
+import MealBlock from './MealBlock'
 import * as s from './ChatInterface.styles'
 
 const WELCOME_MSG = { role: 'assistant', content: "Good morning! Tell me what's in your fridge and I'll plan your breakfast." }
+
+// Strip ```json { ... } ``` blocks from message text
+const JSON_BLOCK_RE = /```json\s*\{.*?\}\s*```/gs
+function stripJsonBlock(text) {
+  return text.replace(JSON_BLOCK_RE, '').trim()
+}
+
+// Try to parse a ```json block from text
+function parseJsonBlock(text) {
+  const match = text.match(/```json\s*(\{.*?\})\s*```/s)
+  if (!match) return null
+  try { return JSON.parse(match[1]) } catch { return null }
+}
 
 export default function ChatInterface({ onMealLogged }) {
   const [messages, setMessages] = useState([WELCOME_MSG])
@@ -18,6 +32,10 @@ export default function ChatInterface({ onMealLogged }) {
   const [hasNewer, setHasNewer] = useState(false)
   const [todaySupps, setTodaySupps] = useState([])
   const [aborted, setAborted] = useState(false)
+  // mealBlocks: { [messageIndex]: mealData } — tracks which messages have meal blocks
+  const [mealBlocks, setMealBlocks] = useState({})
+  // checkedMealIdx: the message index of the currently checked meal block (only one at a time)
+  const [checkedMealIdx, setCheckedMealIdx] = useState(null)
   const wsRef = useRef(null)
   const messagesEndRef = useRef(null)
   const reconnectTimer = useRef(null)
@@ -62,6 +80,18 @@ export default function ChatInterface({ onMealLogged }) {
     }
   }, [loadTodaySupplements])
 
+  // Parse meal blocks from loaded session messages
+  const parseMealBlocksFromMessages = useCallback((msgs) => {
+    const blocks = {}
+    msgs.forEach((m, i) => {
+      if (m.role === 'assistant') {
+        const meal = parseJsonBlock(m.content)
+        if (meal) blocks[i] = meal
+      }
+    })
+    return blocks
+  }, [])
+
   // Load active session on mount
   useEffect(() => {
     let cancelled = false
@@ -73,7 +103,10 @@ export default function ChatInterface({ onMealLogged }) {
         const msgs = await getSessionMessages(session.id)
         if (cancelled) return
         const loaded = msgs.map(m => ({ role: m.role, content: m.content }))
-        setMessages([WELCOME_MSG, ...loaded])
+        const allMsgs = [WELCOME_MSG, ...loaded]
+        setMessages(allMsgs)
+        setMealBlocks(parseMealBlocksFromMessages(allMsgs))
+        setCheckedMealIdx(null)
         await refreshNavState(session.id)
       } catch {
         // Backend not available yet — will work once connected
@@ -81,7 +114,7 @@ export default function ChatInterface({ onMealLogged }) {
       loadTodaySupplements()
     })()
     return () => { cancelled = true }
-  }, [refreshNavState, loadTodaySupplements])
+  }, [refreshNavState, loadTodaySupplements, parseMealBlocksFromMessages])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -115,9 +148,14 @@ export default function ChatInterface({ onMealLogged }) {
         }
         setStreamBuffer(null)
       },
-      // onMealLogged
+      // onMealLogged — attach meal block to the last assistant message
       (meal) => {
-        setLastMeal(meal)
+        setMessages((prev) => {
+          const lastIdx = prev.length - 1
+          setMealBlocks((blocks) => ({ ...blocks, [lastIdx]: meal }))
+          setCheckedMealIdx(lastIdx)
+          return prev
+        })
         onMealLoggedRef.current?.(meal)
       },
       // onError — don't spam chat with error messages, header already shows "reconnecting…"
@@ -181,6 +219,8 @@ export default function ChatInterface({ onMealLogged }) {
       const { session_id } = await createSession()
       setSessionId(session_id)
       setMessages([WELCOME_MSG])
+      setMealBlocks({})
+      setCheckedMealIdx(null)
       setStreamBuffer(null)
       setInput('')
       if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -196,14 +236,17 @@ export default function ChatInterface({ onMealLogged }) {
     setSessionId(targetId)
     const msgs = await getSessionMessages(targetId)
     const loaded = msgs.map(m => ({ role: m.role, content: m.content }))
-    setMessages([WELCOME_MSG, ...loaded])
+    const allMsgs = [WELCOME_MSG, ...loaded]
+    setMessages(allMsgs)
+    setMealBlocks(parseMealBlocksFromMessages(allMsgs))
+    setCheckedMealIdx(null)
     setStreamBuffer(null)
     setInput('')
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ session_id: targetId }))
     }
     await refreshNavState(targetId)
-  }, [refreshNavState])
+  }, [refreshNavState, parseMealBlocksFromMessages])
 
   const handleBack = useCallback(async () => {
     if (!sessionIdRef.current) return
@@ -243,6 +286,8 @@ export default function ChatInterface({ onMealLogged }) {
         const { session_id } = await createSession()
         setSessionId(session_id)
         setMessages([WELCOME_MSG])
+        setMealBlocks({})
+        setCheckedMealIdx(null)
         setStreamBuffer(null)
         setInput('')
         if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -284,9 +329,11 @@ export default function ChatInterface({ onMealLogged }) {
     sendMessage(msg, 'suggest', mode || null)
   }, [sendMessage])
 
+  // Get the checked meal for DecidePanel (priority: checked block > null)
+  const checkedMeal = checkedMealIdx !== null ? mealBlocks[checkedMealIdx] : null
+
   const [suppMenuOpen, setSuppMenuOpen] = useState(false)
   const [decideOpen, setDecideOpen] = useState(false)
-  const [lastMeal, setLastMeal] = useState(null)
 
   return (
     <div style={s.container}>
@@ -310,11 +357,28 @@ export default function ChatInterface({ onMealLogged }) {
       </div>
 
       <div style={s.messages}>
-        {messages.map((m, i) => (
-          <div key={i} style={s.bubble(m.role)}>
-            {m.content}
-          </div>
-        ))}
+        {messages.map((m, i) => {
+          const hasMealBlock = mealBlocks[i] !== undefined
+          const displayText = hasMealBlock ? stripJsonBlock(m.content) : m.content
+
+          return (
+            <div key={i}>
+              {displayText && (
+                <div style={s.bubble(m.role)}>
+                  {displayText}
+                </div>
+              )}
+              {hasMealBlock && (
+                <MealBlock
+                  meal={mealBlocks[i]}
+                  checked={checkedMealIdx === i}
+                  onCheck={() => setCheckedMealIdx(prev => prev === i ? null : i)}
+                  onSave={(updated) => setMealBlocks(prev => ({ ...prev, [i]: updated }))}
+                />
+              )}
+            </div>
+          )
+        })}
 
         {streamBuffer !== null && streamBuffer !== '' && (
           <div style={s.bubble('assistant')}>{streamBuffer}</div>
@@ -328,11 +392,11 @@ export default function ChatInterface({ onMealLogged }) {
 
       {decideOpen && (
         <DecidePanel
-          meal={lastMeal}
+          meal={checkedMeal}
           onClose={() => setDecideOpen(false)}
           onConfirm={() => {
             setDecideOpen(false)
-            setLastMeal(null)
+            setCheckedMealIdx(null)
           }}
         />
       )}
