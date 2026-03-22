@@ -415,7 +415,7 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
           <div style={s.bubble('assistant')}>{streamBuffer}</div>
         )}
         {streamBuffer === '' && (
-          <div style={s.thinking}>thinking…</div>
+          <div style={s.thinking}>Düşünüyorum…</div>
         )}
 
         <div ref={messagesEndRef} />
