@@ -4,10 +4,11 @@ import RecipeCard from './components/RecipeCard'
 import ScheduleTimeline from './components/ScheduleTimeline'
 import IngredientPanel from './components/IngredientPanel'
 import PreferencesPanel from './components/PreferencesPanel'
+import SettingsPanel from './components/SettingsPanel'
 import LoginScreen from './components/LoginScreen'
 import { logout, checkAuth } from './services/api'
 
-const TABS = ['Chat', 'Ingredients', 'Preferences']
+const TABS = ['Chat', 'Ingredients', 'Preferences', 'Settings']
 
 const s = {
   app: {
@@ -161,6 +162,10 @@ export default function App() {
 
       <div style={{ ...s.mainFull, display: activeTab === 'Preferences' ? undefined : 'none' }}>
         <PreferencesPanel />
+      </div>
+
+      <div style={{ ...s.mainFull, display: activeTab === 'Settings' ? undefined : 'none' }}>
+        <SettingsPanel />
       </div>
     </div>
   )
