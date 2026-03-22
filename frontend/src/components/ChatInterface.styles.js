@@ -93,34 +93,57 @@ export const connStatus = {
   color: 'var(--text-muted)',
 }
 
-export const suppBar = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-  padding: '6px 16px',
-  borderTop: '1px solid var(--border)',
-  background: 'var(--surface2)',
-  overflowX: 'auto',
-  flexShrink: 0,
+export const suppMenuWrapper = {
+  position: 'relative',
+  marginLeft: 'auto',
 }
 
-export const suppBarLabel = {
+export const suppToggleBtn = (active) => ({
+  background: active ? 'var(--accent)' : 'var(--surface2)',
+  color: active ? '#fff' : 'var(--text-muted)',
+  border: '1px solid var(--border)',
+  borderRadius: 12,
+  padding: '6px 14px',
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: 'pointer',
+  transition: 'background 0.15s, color 0.15s',
+})
+
+export const suppMenu = {
+  position: 'absolute',
+  bottom: '100%',
+  right: 0,
+  marginBottom: 6,
+  background: 'var(--surface)',
+  border: '1px solid var(--border)',
+  borderRadius: 12,
+  padding: '10px 12px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 6,
+  minWidth: 180,
+  boxShadow: '0 -4px 16px rgba(0,0,0,0.2)',
+  zIndex: 10,
+}
+
+export const suppMenuLabel = {
   fontSize: 11,
   fontWeight: 700,
   textTransform: 'uppercase',
   color: 'var(--text-muted)',
-  whiteSpace: 'nowrap',
+  marginBottom: 2,
 }
 
 export const suppPill = (taken) => ({
   display: 'inline-flex',
   alignItems: 'center',
   gap: 4,
-  padding: '4px 10px',
+  padding: '6px 12px',
   borderRadius: 16,
   fontSize: 12,
   border: '1px solid var(--border)',
-  background: taken ? 'var(--accent)' : 'var(--surface)',
+  background: taken ? 'var(--accent)' : 'var(--surface2)',
   color: taken ? '#fff' : 'var(--text-muted)',
   cursor: 'pointer',
   whiteSpace: 'nowrap',

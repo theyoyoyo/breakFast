@@ -274,6 +274,8 @@ export default function ChatInterface({ onMealLogged }) {
     sendMessage('Bana kahvaltı öner', 'suggest')
   }, [sendMessage])
 
+  const [suppMenuOpen, setSuppMenuOpen] = useState(false)
+
   return (
     <div style={s.container}>
       <div style={{ ...s.header, display: 'flex', alignItems: 'center' }}>
@@ -312,24 +314,34 @@ export default function ChatInterface({ onMealLogged }) {
         <div ref={messagesEndRef} />
       </div>
 
-      {todaySupps.length > 0 && (
-        <div style={s.suppBar}>
-          <span style={s.suppBarLabel}>Supps</span>
-          {todaySupps.map(sup => (
-            <button
-              key={sup.id}
-              style={s.suppPill(!!sup.taken_today)}
-              onClick={() => handleToggleSupplement(sup.id, !!sup.taken_today)}
-              title={sup.contents || sup.name}
-            >
-              {sup.taken_today ? '✓' : '○'} {sup.name}
-            </button>
-          ))}
-        </div>
-      )}
-
       <div style={s.actionRow}>
         <SuggestButton onClick={handleSuggest} disabled={streamBuffer !== null} />
+        {todaySupps.length > 0 && (
+          <div style={s.suppMenuWrapper}>
+            {suppMenuOpen && (
+              <div style={s.suppMenu}>
+                <span style={s.suppMenuLabel}>Supplements</span>
+                {todaySupps.map(sup => (
+                  <button
+                    key={sup.id}
+                    style={s.suppPill(!!sup.taken_today)}
+                    onClick={() => handleToggleSupplement(sup.id, !!sup.taken_today)}
+                    title={sup.contents || sup.name}
+                  >
+                    {sup.taken_today ? '✓' : '○'} {sup.name}
+                  </button>
+                ))}
+              </div>
+            )}
+            <button
+              style={s.suppToggleBtn(suppMenuOpen)}
+              onClick={() => setSuppMenuOpen(prev => !prev)}
+              title="Toggle supplements"
+            >
+              Supps
+            </button>
+          </div>
+        )}
       </div>
 
       <div style={s.inputRow}>
