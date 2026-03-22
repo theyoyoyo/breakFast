@@ -48,6 +48,17 @@ export const blockText = {
   whiteSpace: 'nowrap',
 }
 
+export const analyzeBtn = (analyzing) => ({
+  background: 'none',
+  border: 'none',
+  fontSize: 20,
+  cursor: analyzing ? 'default' : 'pointer',
+  opacity: analyzing ? 0.5 : 1,
+  padding: '2px 4px',
+  flexShrink: 0,
+  transition: 'opacity 0.15s',
+})
+
 export const prepBadge = {
   fontSize: 11,
   color: 'var(--text-muted)',

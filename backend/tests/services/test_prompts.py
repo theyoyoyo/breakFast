@@ -12,6 +12,7 @@ import pytest
 from services.suggestion import (
     build_chat_prompt,
     build_suggestion_prompt,
+    build_analyst_prompt,
     build_system_prompt,
     _format_ingredients,
     _format_history,
@@ -371,6 +372,87 @@ class TestSuggestionPrompt:
 # ---------------------------------------------------------------------------
 # Backward compat
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Analyst persona
+# ---------------------------------------------------------------------------
+
+class TestAnalystPrompt:
+    # Analyst prompt renders without template errors
+    def test_renders_without_error(self):
+        prompt = build_analyst_prompt([], None, None, None)
+        assert isinstance(prompt, str)
+        assert len(prompt) > 100
+
+    # Analyst identifies as analysis engine, not chat assistant
+    def test_contains_analyst_identity(self):
+        prompt = build_analyst_prompt([], None, None, None)
+        assert "analyst" in prompt.lower() or "analysis" in prompt.lower()
+
+    # Analyst must NOT be a chat assistant
+    def test_no_chat_behavior(self):
+        prompt = build_analyst_prompt([], None, None, None)
+        assert "NOT a chat assistant" in prompt
+
+    # Analyst prompt responds in Turkish
+    def test_responds_in_turkish(self):
+        prompt = build_analyst_prompt([], None, None, None)
+        assert "Turkish" in prompt
+
+    # Analyst uses low temperature (instruction embedded in prompt)
+    def test_mentions_low_temperature(self):
+        prompt = build_analyst_prompt([], None, None, None)
+        assert "0.3" in prompt
+
+    # Analyst includes user profile data
+    def test_includes_user_profile(self):
+        prompt = build_analyst_prompt(
+            [], user_profile={"age": 30, "weight_kg": 80, "height_cm": 180},
+        )
+        assert "30" in prompt
+        assert "80" in prompt
+        assert "180" in prompt
+
+    # Analyst includes supplement data
+    def test_includes_supplements(self):
+        prompt = build_analyst_prompt(
+            [], supplements=[{"name": "D3", "frequency": "daily", "contents": "1000IU"}],
+        )
+        assert "D3" in prompt
+        assert "1000IU" in prompt
+
+    # Analyst includes recent history with ingredient details
+    def test_includes_history(self):
+        meals = [{"meal_name": "Menemen", "ingredients": '["yumurta", "domates"]'}]
+        prompt = build_analyst_prompt(meals)
+        assert "Menemen" in prompt
+        assert "yumurta" in prompt
+
+    # Analyst includes health rules
+    def test_includes_health_rules(self):
+        rules = [{"rule_text": "Limit sodium", "priority": "high"}]
+        prompt = build_analyst_prompt([], health_rules=rules)
+        assert "Limit sodium" in prompt
+
+    # JSON output block includes required fields
+    def test_json_block_has_required_fields(self):
+        prompt = build_analyst_prompt([], None, None, None)
+        assert '"narrative"' in prompt
+        assert '"daily_coverage"' in prompt
+        assert '"macros"' in prompt
+        assert '"micros"' in prompt
+
+    # Analyst prompt mentions Mifflin-St Jeor for calorie calculation
+    def test_mentions_calorie_formula(self):
+        prompt = build_analyst_prompt([], None, None, None)
+        assert "Mifflin" in prompt
+
+    # Default when no profile/supplements provided
+    def test_defaults_when_empty(self):
+        prompt = build_analyst_prompt([], None, None, None)
+        assert "Not provided" in prompt
+        assert "No supplements" in prompt
+
 
 class TestBackwardCompat:
     def test_build_system_prompt_is_chat_prompt(self):

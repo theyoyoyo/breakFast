@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react'
-import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, getTodaySupplements, toggleSupplement } from '../services/api'
+import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, getTodaySupplements, toggleSupplement, analyzeMeal } from '../services/api'
 import { useVoice } from '../hooks/useVoice'
 import SuggestButton from './SuggestButton'
 import DecidePanel from './DecidePanel'
@@ -51,6 +51,8 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
   const [mealBlocks, setMealBlocks] = useState({})
   // checkedMealIdx: the message index of the currently checked meal block (only one at a time)
   const [checkedMealIdx, setCheckedMealIdx] = useState(null)
+  // analyzingIdx: the message index of a meal block currently being analyzed (null = idle)
+  const [analyzingIdx, setAnalyzingIdx] = useState(null)
   const wsRef = useRef(null)
   const messagesEndRef = useRef(null)
   const reconnectTimer = useRef(null)
@@ -360,6 +362,25 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
     sendMessage(msg, 'suggest', mode || null)
   }, [sendMessage])
 
+  const handleAnalyze = useCallback(async (msgIdx) => {
+    const meal = mealBlocks[msgIdx]
+    if (!meal || analyzingIdx !== null) return
+    setAnalyzingIdx(msgIdx)
+    try {
+      const result = await analyzeMeal(meal.meal_name || 'Meal', meal.ingredients || [])
+      // Strip JSON block from analysis text for display, show as assistant message
+      const displayText = result.analysis_text
+        ? result.analysis_text.replace(/```json\s*\{.*?\}\s*```/gs, '').trim()
+        : 'Analiz sonucu alınamadı.'
+      const analysisMsg = `📊 **${meal.meal_name || 'Meal'}** — Besin Analizi\n\n${displayText}`
+      setMessages(prev => [...prev, { role: 'assistant', content: analysisMsg }])
+    } catch {
+      setMessages(prev => [...prev, { role: 'assistant', content: '📊 Analiz yapılamadı — sunucuya ulaşılamıyor.' }])
+    } finally {
+      setAnalyzingIdx(null)
+    }
+  }, [mealBlocks, analyzingIdx])
+
   // Get the checked meal for DecidePanel (priority: checked block > null)
   const checkedMeal = checkedMealIdx !== null ? mealBlocks[checkedMealIdx] : null
 
@@ -405,6 +426,8 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
                   checked={checkedMealIdx === i}
                   onCheck={() => setCheckedMealIdx(prev => prev === i ? null : i)}
                   onSave={(updated) => setMealBlocks(prev => ({ ...prev, [i]: updated }))}
+                  onAnalyze={() => handleAnalyze(i)}
+                  analyzing={analyzingIdx === i}
                 />
               )}
             </div>

@@ -1,10 +1,11 @@
 """
-Meal suggestion logic — two personas.
+Meal suggestion logic — three personas.
 
 Chat persona: samimi kahvaltı arkadaşı, hafif DB context.
 Suggestion persona: profesyonel diyetisyen, tam DB context.
+Analyst persona: robot/lab, pure nutrition analysis, structured JSON output.
 
-Both share a common context builder but differ in tone, depth, and instructions.
+All share common context formatters from the knowledge module.
 """
 
 import json
@@ -12,108 +13,34 @@ from typing import AsyncGenerator
 
 from services.llm import chat_stream
 
+# Import shared formatters from knowledge module — single source of truth
+from services.knowledge import (
+    format_ingredients,
+    format_history,
+    format_preferences,
+    format_habits,
+    format_health_rules,
+    format_avoid_list,
+    format_behavioral,
+    format_user_profile,
+    format_supplements,
+    format_history_detailed,
+)
+
 
 # ---------------------------------------------------------------------------
-# Shared context formatting
+# Backward-compatible private aliases (used by existing tests)
 # ---------------------------------------------------------------------------
 
-def _format_ingredients(ingredients: list[dict]) -> str:
-    if not ingredients:
-        return "none listed yet"
-    return ", ".join(
-        f"{i['name']} ({i.get('quantity', '')} {i.get('unit', '')})".strip(" ()")
-        for i in ingredients
-    )
-
-
-def _format_history(history: list[dict], limit: int = 5) -> str:
-    if not history:
-        return "no history yet"
-    return "; ".join(m["meal_name"] for m in history[-limit:])
-
-
-def _format_preferences(preferences: dict) -> str:
-    if not preferences:
-        return "none set yet"
-    return json.dumps(preferences, ensure_ascii=False)
-
-
-def _format_habits(stated: list[str]) -> str:
-    return "; ".join(stated) if stated else "none stated yet"
-
-
-def _format_health_rules(rules: list[dict] | list[str]) -> str:
-    if not rules:
-        return (
-            "No user-defined health rules. Use your own nutrition knowledge to "
-            "deprioritize unhealthy options (e.g., refined sugar, processed oils) "
-            "but NEVER fully exclude anything the user has not explicitly asked to avoid."
-        )
-    priority_labels = {"critical": "TOP PRIORITY", "high": "Important", "low": "Nice to have"}
-    lines = []
-    for r in rules:
-        if isinstance(r, dict):
-            label = priority_labels.get(r.get("priority", "high"), "Important")
-            lines.append(f"- [{label}] {r['rule_text']}")
-        else:
-            lines.append(f"- {r}")
-    return "\n".join(lines)
-
-
-def _format_avoid_list(avoid_items: list[str] | None) -> str:
-    if not avoid_items:
-        return "No items on avoid list."
-    items = ", ".join(avoid_items)
-    return (
-        f"HARD BAN — NEVER use these ingredients: {items}\n"
-        "Suggest alternatives instead. For allergies, also consider cross-contamination risk."
-    )
-
-
-def _format_behavioral(inferred_habits: list[str] | None) -> str:
-    if not inferred_habits:
-        return ""
-    patterns = "\n".join(f"- {h}" for h in inferred_habits)
-    return (
-        "BEHAVIORAL PATTERNS (inferred from meal history — use to DIVERSIFY, not repeat):\n"
-        f"{patterns}\n"
-        "Focus on what the user is MISSING, not what they already eat enough of."
-    )
-
-
-def _format_user_profile(profile: dict | None) -> str:
-    if not profile:
-        return "Not provided yet. Use general healthy adult defaults."
-    parts = []
-    if profile.get("age"):
-        parts.append(f"Age: {profile['age']}")
-    if profile.get("gender"):
-        parts.append(f"Gender: {profile['gender']}")
-    if profile.get("height_cm"):
-        parts.append(f"Height: {profile['height_cm']} cm")
-    if profile.get("weight_kg"):
-        parts.append(f"Weight: {profile['weight_kg']} kg")
-    if profile.get("activity_level"):
-        parts.append(f"Activity level: {profile['activity_level']}")
-    return "\n".join(f"- {p}" for p in parts) if parts else "Not provided yet. Use general healthy adult defaults."
-
-
-def _format_supplements(supplements: list[dict] | None) -> str:
-    if not supplements:
-        return "No supplements registered."
-    lines = []
-    for s in supplements:
-        freq = s.get("frequency", "daily")
-        name = s.get("name", "")
-        contents = s.get("contents", "")
-        taken_today = s.get("taken_today")
-        status = ""
-        if freq == "sometimes":
-            status = " [taken today]" if taken_today else " [NOT taken today]"
-        lines.append(f"- {name} ({freq}){status}")
-        if contents:
-            lines.append(f"  Contents: {contents}")
-    return "\n".join(lines)
+_format_ingredients = format_ingredients
+_format_history = format_history
+_format_preferences = format_preferences
+_format_habits = format_habits
+_format_health_rules = format_health_rules
+_format_avoid_list = format_avoid_list
+_format_behavioral = format_behavioral
+_format_user_profile = format_user_profile
+_format_supplements = format_supplements
 
 
 # ---------------------------------------------------------------------------
@@ -362,6 +289,118 @@ Append a JSON block at the end of your response:
 
 
 # ---------------------------------------------------------------------------
+# Analyst persona — nutrition lab / robot
+# ---------------------------------------------------------------------------
+
+_ANALYST_TEMPLATE = """\
+You are the break FAST Nutrition Analyst — a precise, scientific analysis engine.
+Always respond in Turkish.
+You are NOT a chat assistant. You do NOT make suggestions or recommendations.
+Your ONLY job: analyze a given meal and produce an accurate, structured nutritional report.
+
+═══════════════════════════════════════════════════════════════
+IDENTITY
+═══════════════════════════════════════════════════════════════
+- You are a lab instrument, not a person. No greetings, no small talk, no opinions.
+- Be factual, precise, and concise. Every claim must be based on nutritional science.
+- When exact data is unavailable, estimate using standard food composition databases \
+  (USDA, Open Food Facts) and mark estimates with "~" (tilde).
+- Use Turkish ingredient names and portion sizes typical for Turkish breakfast.
+- Temperature: 0.3 — prioritize accuracy and consistency over creativity.
+
+═══════════════════════════════════════════════════════════════
+USER PHYSICAL PROFILE
+═══════════════════════════════════════════════════════════════
+{user_profile}
+
+Use this data to:
+- Calculate daily caloric needs (Mifflin-St Jeor formula).
+- Calculate breakfast target (~30% of daily calories).
+- Derive daily macro and micronutrient targets based on age, gender, weight, and activity.
+
+═══════════════════════════════════════════════════════════════
+SUPPLEMENT INTAKE (today)
+═══════════════════════════════════════════════════════════════
+{supplements}
+
+Supplement logic:
+- "Daily" and "taken today" supplements: their nutrients are already covered — \
+  subtract from daily needs when calculating gaps.
+- Supplements NOT taken today: treat those nutrients as unmet — flag if the meal \
+  does not cover them.
+
+═══════════════════════════════════════════════════════════════
+RECENT MEAL HISTORY (last 5 days)
+═══════════════════════════════════════════════════════════════
+{recent_history}
+
+Use this to:
+- Detect nutrient patterns (e.g., low omega-3 intake all week, repeated protein sources).
+- Calculate approximate weekly coverage for key nutrient groups.
+- Flag deficiencies or excesses based on the broader pattern, not just this single meal.
+
+═══════════════════════════════════════════════════════════════
+HEALTH RULES
+═══════════════════════════════════════════════════════════════
+{health_rules}
+
+Evaluate the meal against these rules. For each rule, note whether the meal \
+aligns with, partially meets, or conflicts with the rule. Be factual — do not \
+editorialize or preach.
+
+═══════════════════════════════════════════════════════════════
+ANALYSIS INSTRUCTIONS
+═══════════════════════════════════════════════════════════════
+You will receive a meal (name + ingredients). Analyze it and respond with ONLY \
+the following structure — no extra text before or after.
+
+1. SHORT NARRATIVE (2-3 sentences max):
+   - What this meal covers well nutritionally.
+   - What it's missing or could be better.
+   - One notable fact (e.g., "Yumurta + domates kombinasyonu demir emilimini artırır").
+
+2. DAILY COVERAGE (max 3-4 key metrics as percentage of daily target):
+   - Pick the most relevant ones: calories, protein, fiber, a key vitamin/mineral.
+   - Format: "Kalori: ~420 kcal (%28)", "Protein: ~18g (%32)"
+
+3. NUTRITION TABLE — structured data for every reasonable nutrient:
+   - Macros: calories, protein, carbs, fat (saturated/unsaturated), fiber
+   - Key micros: B12, D, iron, calcium, zinc, magnesium, potassium, omega-3
+   - Only include micros that are meaningfully present or notably absent.
+
+4. HEALTH RULE COMPLIANCE (only if health rules exist):
+   - For each rule, one-line status: ✅ aligned, ⚠️ partial, ❌ conflicts.
+
+Your response must end with a JSON block:
+```json
+{{{{
+  "narrative": "...",
+  "daily_coverage": [
+    {{{{"label": "Kalori", "value": "~420 kcal", "percent": 28}}}},
+    {{{{"label": "Protein", "value": "~18g", "percent": 32}}}}
+  ],
+  "macros": {{{{
+    "calories_kcal": 0,
+    "protein_g": 0,
+    "carbs_g": 0,
+    "fat_g": 0,
+    "fat_saturated_g": 0,
+    "fat_unsaturated_g": 0,
+    "fiber_g": 0
+  }}}},
+  "micros": [
+    {{{{"name": "B12", "value": "~1.2mcg", "daily_percent": 50}}}},
+    {{{{"name": "Demir", "value": "~3mg", "daily_percent": 17}}}}
+  ],
+  "health_rule_compliance": [
+    {{{{"rule": "...", "status": "aligned", "note": "..."}}}},
+  ]
+}}}}
+```
+"""
+
+
+# ---------------------------------------------------------------------------
 # Prompt builders
 # ---------------------------------------------------------------------------
 
@@ -376,13 +415,13 @@ def build_chat_prompt(
 ) -> str:
     """Build the chat persona system prompt (samimi arkadaş)."""
     return _CHAT_TEMPLATE.format(
-        ingredient_inventory=_format_ingredients(ingredient_inventory),
-        recent_meal_history=_format_history(recent_meal_history, limit=3),
-        user_preferences=_format_preferences(user_preferences),
-        stated_habits=_format_habits(stated_habits),
-        behavioral_patterns=_format_behavioral(inferred_habits),
-        health_rules=_format_health_rules(health_rules or []),
-        avoid_list=_format_avoid_list(avoid_list),
+        ingredient_inventory=format_ingredients(ingredient_inventory),
+        recent_meal_history=format_history(recent_meal_history, limit=3),
+        user_preferences=format_preferences(user_preferences),
+        stated_habits=format_habits(stated_habits),
+        behavioral_patterns=format_behavioral(inferred_habits),
+        health_rules=format_health_rules(health_rules or []),
+        avoid_list=format_avoid_list(avoid_list),
     )
 
 
@@ -424,18 +463,33 @@ def build_suggestion_prompt(
 ) -> str:
     """Build the suggestion persona system prompt (profesyonel diyetisyen)."""
     base = _SUGGESTION_TEMPLATE.format(
-        ingredient_inventory=_format_ingredients(ingredient_inventory),
-        recent_meal_history=_format_history(recent_meal_history, limit=10),
-        user_preferences=_format_preferences(user_preferences),
-        stated_habits=_format_habits(stated_habits),
-        behavioral_patterns=_format_behavioral(inferred_habits),
-        health_rules=_format_health_rules(health_rules or []),
-        user_profile=_format_user_profile(user_profile),
-        supplements=_format_supplements(supplements),
-        avoid_list=_format_avoid_list(avoid_list),
+        ingredient_inventory=format_ingredients(ingredient_inventory),
+        recent_meal_history=format_history(recent_meal_history, limit=10),
+        user_preferences=format_preferences(user_preferences),
+        stated_habits=format_habits(stated_habits),
+        behavioral_patterns=format_behavioral(inferred_habits),
+        health_rules=format_health_rules(health_rules or []),
+        user_profile=format_user_profile(user_profile),
+        supplements=format_supplements(supplements),
+        avoid_list=format_avoid_list(avoid_list),
     )
     mode_instruction = _MODE_INSTRUCTIONS.get(mode, "")
     return base + mode_instruction
+
+
+def build_analyst_prompt(
+    recent_meal_history: list[dict],
+    user_profile: dict | None = None,
+    supplements: list[dict] | None = None,
+    health_rules: list[dict] | None = None,
+) -> str:
+    """Build the analyst persona system prompt (nutrition lab)."""
+    return _ANALYST_TEMPLATE.format(
+        user_profile=format_user_profile(user_profile),
+        supplements=format_supplements(supplements),
+        recent_history=format_history_detailed(recent_meal_history, limit=5),
+        health_rules=format_health_rules(health_rules or []),
+    )
 
 
 # Backward compat alias — used by existing chat.py
