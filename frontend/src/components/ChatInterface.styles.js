@@ -164,11 +164,14 @@ export const decideBtn = (active) => ({
   color: active ? '#fff' : 'var(--text)',
   border: '1px solid var(--border)',
   borderRadius: 20,
-  padding: '20px 28px',
-  fontSize: 42,
+  padding: '8px 16px',
+  fontSize: 48,
   lineHeight: 1,
   cursor: 'pointer',
   transition: 'background 0.15s, color 0.15s',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
 })
 
 export const stopBtn = {
