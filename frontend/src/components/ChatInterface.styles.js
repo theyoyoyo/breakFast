@@ -127,6 +127,24 @@ export const suppPill = (taken) => ({
   transition: 'background 0.15s, color 0.15s',
 })
 
+export const actionRow = {
+  display: 'flex',
+  gap: 8,
+  padding: '6px 16px 0',
+  background: 'var(--surface)',
+}
+
+export const stopBtn = {
+  background: 'var(--accent)',
+  color: '#fff',
+  border: 'none',
+  borderRadius: 24,
+  padding: '10px 18px',
+  fontWeight: 600,
+  fontSize: 14,
+  transition: 'opacity 0.15s',
+}
+
 export const newSessionBtn = {
   background: 'none',
   border: '1px solid var(--border)',

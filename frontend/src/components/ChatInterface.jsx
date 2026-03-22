@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, getTodaySupplements, toggleSupplement } from '../services/api'
 import { useVoice } from '../hooks/useVoice'
+import SuggestButton from './SuggestButton'
 import * as s from './ChatInterface.styles'
 
 const WELCOME_MSG = { role: 'assistant', content: "Good morning! Tell me what's in your fridge and I'll plan your breakfast." }
@@ -15,12 +16,14 @@ export default function ChatInterface({ onMealLogged }) {
   const [hasOlder, setHasOlder] = useState(false)
   const [hasNewer, setHasNewer] = useState(false)
   const [todaySupps, setTodaySupps] = useState([])
+  const [aborted, setAborted] = useState(false)
   const wsRef = useRef(null)
   const messagesEndRef = useRef(null)
   const reconnectTimer = useRef(null)
   const reconnectDelay = useRef(1000)
   const onMealLoggedRef = useRef(onMealLogged)
   const sessionIdRef = useRef(null)
+  const abortedRef = useRef(false)
   const { isListening, startListening, stopListening, speak, supported: voiceSupported } = useVoice()
   const speakRef = useRef(speak)
 
@@ -94,11 +97,21 @@ export default function ChatInterface({ onMealLogged }) {
     if (state === WebSocket.OPEN || state === WebSocket.CONNECTING) return wsRef.current
 
     const ws = createChatSocket(
-      // onToken
-      (chunk) => setStreamBuffer((prev) => (prev ?? '') + chunk),
+      // onToken — skip if aborted
+      (chunk) => {
+        if (!abortedRef.current) {
+          setStreamBuffer((prev) => (prev ?? '') + chunk)
+        }
+      },
       // onDone
       (full) => {
-        setMessages((prev) => [...prev, { role: 'assistant', content: full }])
+        if (abortedRef.current) {
+          // Already handled by handleStop
+          abortedRef.current = false
+          setAborted(false)
+        } else {
+          setMessages((prev) => [...prev, { role: 'assistant', content: full }])
+        }
         setStreamBuffer(null)
       },
       // onMealLogged
@@ -127,14 +140,17 @@ export default function ChatInterface({ onMealLogged }) {
     return ws
   }, [])
 
-  const sendMessage = useCallback((text) => {
+  const sendMessage = useCallback((text, type = 'chat') => {
     const msg = text.trim()
     if (!msg || streamBuffer !== null) return
 
     setMessages((prev) => [...prev, { role: 'user', content: msg }])
     setInput('')
+    abortedRef.current = false
+    setAborted(false)
 
     const payload = { message: msg }
+    if (type !== 'chat') payload.type = type
     if (sessionIdRef.current) payload.session_id = sessionIdRef.current
 
     const ws = ensureSocket()
@@ -242,6 +258,22 @@ export default function ChatInterface({ onMealLogged }) {
     }
   }
 
+  const handleStop = useCallback(() => {
+    abortedRef.current = true
+    setAborted(true)
+    // Capture partial response and finalize with "[durduruldu]"
+    setStreamBuffer((prev) => {
+      const partial = prev || ''
+      const stopped = partial ? partial + '\n\n[durduruldu]' : '[durduruldu]'
+      setMessages((msgs) => [...msgs, { role: 'assistant', content: stopped }])
+      return null
+    })
+  }, [])
+
+  const handleSuggest = useCallback(() => {
+    sendMessage('Bana kahvaltı öner', 'suggest')
+  }, [sendMessage])
+
   return (
     <div style={s.container}>
       <div style={{ ...s.header, display: 'flex', alignItems: 'center' }}>
@@ -296,6 +328,10 @@ export default function ChatInterface({ onMealLogged }) {
         </div>
       )}
 
+      <div style={s.actionRow}>
+        <SuggestButton onClick={handleSuggest} disabled={streamBuffer !== null} />
+      </div>
+
       <div style={s.inputRow}>
         {voiceSupported && (
           <button style={s.micBtn(isListening)} onClick={handleMic} title="Voice input">
@@ -311,13 +347,18 @@ export default function ChatInterface({ onMealLogged }) {
           rows={1}
           disabled={streamBuffer !== null}
         />
-        <button
-          style={{ ...s.sendBtn, opacity: streamBuffer !== null ? 0.5 : 1 }}
-          onClick={() => sendMessage(input)}
-          disabled={streamBuffer !== null}
-        >
-          Send
-        </button>
+        {streamBuffer !== null ? (
+          <button style={s.stopBtn} onClick={handleStop}>
+            Stop
+          </button>
+        ) : (
+          <button
+            style={s.sendBtn}
+            onClick={() => sendMessage(input)}
+          >
+            Send
+          </button>
+        )}
       </div>
     </div>
   )
