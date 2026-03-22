@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages } from '../services/api'
+import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, getTodaySupplements, toggleSupplement } from '../services/api'
 import { useVoice } from '../hooks/useVoice'
 
 const s = {
@@ -88,6 +88,37 @@ const s = {
     fontWeight: 400,
     color: 'var(--text-muted)',
   },
+  suppBar: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '6px 16px',
+    borderTop: '1px solid var(--border)',
+    background: 'var(--surface2)',
+    overflowX: 'auto',
+    flexShrink: 0,
+  },
+  suppBarLabel: {
+    fontSize: 11,
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    color: 'var(--text-muted)',
+    whiteSpace: 'nowrap',
+  },
+  suppPill: (taken) => ({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+    padding: '4px 10px',
+    borderRadius: 16,
+    fontSize: 12,
+    border: '1px solid var(--border)',
+    background: taken ? 'var(--accent)' : 'var(--surface)',
+    color: taken ? '#fff' : 'var(--text-muted)',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+    transition: 'background 0.15s, color 0.15s',
+  }),
   newSessionBtn: {
     background: 'none',
     border: '1px solid var(--border)',
@@ -111,6 +142,7 @@ export default function ChatInterface({ onMealLogged }) {
   const [sessionId, setSessionId] = useState(null)
   const [hasOlder, setHasOlder] = useState(false)
   const [hasNewer, setHasNewer] = useState(false)
+  const [todaySupps, setTodaySupps] = useState([])
   const wsRef = useRef(null)
   const messagesEndRef = useRef(null)
   const reconnectTimer = useRef(null)
@@ -137,6 +169,23 @@ export default function ChatInterface({ onMealLogged }) {
     }
   }, [])
 
+  const loadTodaySupplements = useCallback(async () => {
+    try {
+      const supps = await getTodaySupplements()
+      setTodaySupps(supps.filter(s => s.frequency === 'sometimes'))
+    } catch { /* Backend not available */ }
+  }, [])
+
+  const handleToggleSupplement = useCallback(async (id, currentTaken) => {
+    const newTaken = !currentTaken
+    setTodaySupps(prev => prev.map(s => s.id === id ? { ...s, taken_today: newTaken ? 1 : 0 } : s))
+    try {
+      await toggleSupplement(id, newTaken)
+    } catch {
+      loadTodaySupplements()
+    }
+  }, [loadTodaySupplements])
+
   // Load active session on mount
   useEffect(() => {
     let cancelled = false
@@ -153,9 +202,10 @@ export default function ChatInterface({ onMealLogged }) {
       } catch {
         // Backend not available yet — will work once connected
       }
+      loadTodaySupplements()
     })()
     return () => { cancelled = true }
-  }, [refreshNavState])
+  }, [refreshNavState, loadTodaySupplements])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -357,6 +407,22 @@ export default function ChatInterface({ onMealLogged }) {
 
         <div ref={messagesEndRef} />
       </div>
+
+      {todaySupps.length > 0 && (
+        <div style={s.suppBar}>
+          <span style={s.suppBarLabel}>Supps</span>
+          {todaySupps.map(sup => (
+            <button
+              key={sup.id}
+              style={s.suppPill(!!sup.taken_today)}
+              onClick={() => handleToggleSupplement(sup.id, !!sup.taken_today)}
+              title={sup.contents || sup.name}
+            >
+              {sup.taken_today ? '✓' : '○'} {sup.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div style={s.inputRow}>
         {voiceSupported && (

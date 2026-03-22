@@ -112,6 +112,38 @@ export const deleteHabit = (id) =>
   apiFetch(`${BASE_URL}/preferences/habits/${id}`, { method: 'DELETE' })
 
 // ---------------------------------------------------------------------------
+// Profile
+// ---------------------------------------------------------------------------
+
+export const getProfile = () =>
+  apiFetch(`${BASE_URL}/profile/`)
+
+export const upsertProfile = (profile) =>
+  apiFetch(`${BASE_URL}/profile/`, json('PUT', profile))
+
+// ---------------------------------------------------------------------------
+// Supplements
+// ---------------------------------------------------------------------------
+
+export const getSupplements = () =>
+  apiFetch(`${BASE_URL}/profile/supplements`)
+
+export const createSupplement = (name, contents = '', frequency = 'daily') =>
+  apiFetch(`${BASE_URL}/profile/supplements`, json('POST', { name, contents, frequency }))
+
+export const updateSupplement = (id, data) =>
+  apiFetch(`${BASE_URL}/profile/supplements/${id}`, json('PUT', data))
+
+export const deleteSupplement = (id) =>
+  apiFetch(`${BASE_URL}/profile/supplements/${id}`, { method: 'DELETE' })
+
+export const getTodaySupplements = () =>
+  apiFetch(`${BASE_URL}/profile/supplements/today`)
+
+export const toggleSupplement = (id, taken) =>
+  apiFetch(`${BASE_URL}/profile/supplements/${id}/toggle`, json('POST', { taken }))
+
+// ---------------------------------------------------------------------------
 // Ratings
 // ---------------------------------------------------------------------------
 
