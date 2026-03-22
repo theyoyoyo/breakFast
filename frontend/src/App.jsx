@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import ChatInterface from './components/ChatInterface'
 import RecipeCard from './components/RecipeCard'
 import ScheduleTimeline from './components/ScheduleTimeline'
@@ -40,6 +40,7 @@ export default function App() {
         setAuthChecked(true)
       })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const chatRef = useRef(null)
   const [latestMeal, setLatestMeal] = useState(null)
   const [latestMealId, setLatestMealId] = useState(null)
   const [ingredientRefresh, setIngredientRefresh] = useState(0)
@@ -73,13 +74,17 @@ export default function App() {
           </button>
         ))}
         <div style={s.userInfo}>
-          <span>{auth.user.name}</span>
+          <span
+            style={{ cursor: 'pointer' }}
+            onClick={() => chatRef.current?.injectDemoMeal()}
+            title="Inject demo meal"
+          >{auth.user.name}</span>
           <button style={s.logoutBtn} onClick={handleLogout}>Logout</button>
         </div>
       </nav>
 
       <div style={{ ...s.main, display: activeTab === 'Chat' ? undefined : 'none' }}>
-        <ChatInterface onMealLogged={handleMealLogged} />
+        <ChatInterface ref={chatRef} onMealLogged={handleMealLogged} />
 
         <div style={s.sidebar}>
           {latestMeal && (
