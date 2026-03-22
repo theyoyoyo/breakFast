@@ -191,6 +191,7 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
 
             # Determine prompt type: "suggest" uses suggestion persona, default uses chat
             prompt_type = payload.get("type", "chat")
+            suggest_mode = payload.get("mode")  # "favorites" or "explore"
 
             # Use session_id from payload if provided, otherwise keep current
             if "session_id" in payload:
@@ -218,6 +219,13 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                 async with get_db() as db:
                     cached_context = await _load_context(db, user_id)
 
+            # Temperature per suggestion mode
+            SUGGEST_TEMPERATURES = {
+                "favorites": 0.6,
+                "explore": 0.9,
+            }
+            temperature = SUGGEST_TEMPERATURES.get(suggest_mode) if prompt_type == "suggest" else None
+
             if prompt_type == "suggest":
                 # Force fresh context for suggestion requests
                 async with get_db() as db:
@@ -232,6 +240,7 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                     user_profile=cached_context["user_profile"],
                     supplements=cached_context["supplements"],
                     avoid_list=cached_context["avoid_list"],
+                    mode=suggest_mode,
                 )
             else:
                 system_prompt = build_chat_prompt(
@@ -251,7 +260,7 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
             # Stream response token by token
             full_response = []
             try:
-                async for chunk in stream_response(system_prompt, conversation_history, user_message):
+                async for chunk in stream_response(system_prompt, conversation_history, user_message, temperature=temperature):
                     full_response.append(chunk)
                     await websocket.send_json({"type": "token", "content": chunk})
 

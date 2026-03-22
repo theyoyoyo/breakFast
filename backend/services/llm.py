@@ -37,6 +37,7 @@ async def check_llm_availability() -> bool:
 async def chat_stream(
     system_prompt: str,
     messages: list[dict],
+    temperature: float | None = None,
 ) -> AsyncGenerator[str, None]:
     """
     Stream response tokens. Raises LLMUnavailableError if Ollama is down.
@@ -44,7 +45,7 @@ async def chat_stream(
     if not await check_llm_availability():
         raise LLMUnavailableError(LLM_UNAVAILABLE_MESSAGE)
 
-    async for chunk in _ollama_stream(system_prompt, messages):
+    async for chunk in _ollama_stream(system_prompt, messages, temperature=temperature):
         yield chunk
 
 
@@ -66,12 +67,15 @@ async def chat_complete(
 async def _ollama_stream(
     system_prompt: str,
     messages: list[dict],
+    temperature: float | None = None,
 ) -> AsyncGenerator[str, None]:
     payload = {
         "model": OLLAMA_MODEL,
         "messages": [{"role": "system", "content": system_prompt}] + messages,
         "stream": True,
     }
+    if temperature is not None:
+        payload["options"] = {"temperature": temperature}
     async with httpx.AsyncClient(timeout=120.0) as client:
         async with client.stream(
             "POST",

@@ -140,7 +140,7 @@ export default function ChatInterface({ onMealLogged }) {
     return ws
   }, [])
 
-  const sendMessage = useCallback((text, type = 'chat') => {
+  const sendMessage = useCallback((text, type = 'chat', mode = null) => {
     const msg = text.trim()
     if (!msg || streamBuffer !== null) return
 
@@ -151,6 +151,7 @@ export default function ChatInterface({ onMealLogged }) {
 
     const payload = { message: msg }
     if (type !== 'chat') payload.type = type
+    if (mode) payload.mode = mode
     if (sessionIdRef.current) payload.session_id = sessionIdRef.current
 
     const ws = ensureSocket()
@@ -270,8 +271,13 @@ export default function ChatInterface({ onMealLogged }) {
     })
   }, [])
 
-  const handleSuggest = useCallback(() => {
-    sendMessage('Bana kahvaltı öner', 'suggest')
+  const handleSuggest = useCallback((mode) => {
+    const modeLabels = {
+      favorites: 'Sevdiğim yemeklerden kahvaltı öner',
+      explore: 'Dünya mutfağından farklı bir kahvaltı öner',
+    }
+    const msg = modeLabels[mode] || 'Bana kahvaltı öner'
+    sendMessage(msg, 'suggest', mode || null)
   }, [sendMessage])
 
   const [suppMenuOpen, setSuppMenuOpen] = useState(false)
@@ -341,7 +347,7 @@ export default function ChatInterface({ onMealLogged }) {
             </button>
           </div>
         )}
-        <SuggestButton onClick={handleSuggest} disabled={streamBuffer !== null} />
+        <SuggestButton onSuggest={handleSuggest} disabled={streamBuffer !== null} />
       </div>
 
       <div style={s.inputRow}>

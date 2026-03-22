@@ -332,6 +332,28 @@ class TestSuggestionPrompt:
         prompt = build_suggestion_prompt([], [], {}, [])
         assert "experienced cook" in prompt.lower()
 
+    def test_mode_none_has_no_mode_instruction(self):
+        """No mode = no extra mode block appended."""
+        prompt = build_suggestion_prompt([], [], {}, [])
+        assert "MODE:" not in prompt
+
+    def test_mode_favorites_appends_comfort_instructions(self):
+        """Favorites mode should add comfort/favorites instructions."""
+        prompt = build_suggestion_prompt([], [], {}, [], mode="favorites")
+        assert "FAVORITES" in prompt
+        assert "comfort" in prompt.lower()
+
+    def test_mode_explore_appends_discovery_instructions(self):
+        """Explore mode should add world cuisine/discovery instructions."""
+        prompt = build_suggestion_prompt([], [], {}, [], mode="explore")
+        assert "EXPLORE" in prompt
+        assert "world" in prompt.lower() or "global" in prompt.lower()
+
+    def test_unknown_mode_has_no_extra_instruction(self):
+        """Unknown mode should not crash — just no extra block."""
+        prompt = build_suggestion_prompt([], [], {}, [], mode="unknown")
+        assert "MODE:" not in prompt
+
 
 # ---------------------------------------------------------------------------
 # Backward compat

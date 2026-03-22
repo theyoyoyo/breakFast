@@ -370,6 +370,30 @@ def build_chat_prompt(
     )
 
 
+_MODE_INSTRUCTIONS = {
+    "favorites": (
+        "\n\n═══════════════════════════════════════════════════════════════\n"
+        "MODE: FAVORITES (comfort)\n"
+        "═══════════════════════════════════════════════════════════════\n"
+        "The user asked for a suggestion based on their FAVORITE ingredients and meals.\n"
+        "Prioritize ingredients and meal patterns from their favorites list.\n"
+        "Stay within the user's comfort zone — familiar flavors, proven combinations.\n"
+        "If the favorites list is empty, use their meal history to infer what they enjoy most."
+    ),
+    "explore": (
+        "\n\n═══════════════════════════════════════════════════════════════\n"
+        "MODE: EXPLORE (discovery)\n"
+        "═══════════════════════════════════════════════════════════════\n"
+        "The user wants something NEW and DIFFERENT from world cuisines.\n"
+        "Step deliberately outside their meal history. Suggest breakfasts from global cuisines "
+        "(Japanese, Mexican, Middle Eastern, Scandinavian, etc.).\n"
+        "Stay aligned with their palate and available ingredients, but push boundaries.\n"
+        "Ingredients must still be available in Turkey (chia seeds, quinoa, avocado are fine).\n"
+        "Be creative and surprising — this is the user's adventure mode."
+    ),
+}
+
+
 def build_suggestion_prompt(
     ingredient_inventory: list[dict],
     recent_meal_history: list[dict],
@@ -380,9 +404,10 @@ def build_suggestion_prompt(
     user_profile: dict | None = None,
     supplements: list[dict] | None = None,
     avoid_list: list[str] | None = None,
+    mode: str | None = None,
 ) -> str:
     """Build the suggestion persona system prompt (profesyonel diyetisyen)."""
-    return _SUGGESTION_TEMPLATE.format(
+    base = _SUGGESTION_TEMPLATE.format(
         ingredient_inventory=_format_ingredients(ingredient_inventory),
         recent_meal_history=_format_history(recent_meal_history, limit=10),
         user_preferences=_format_preferences(user_preferences),
@@ -393,6 +418,8 @@ def build_suggestion_prompt(
         supplements=_format_supplements(supplements),
         avoid_list=_format_avoid_list(avoid_list),
     )
+    mode_instruction = _MODE_INSTRUCTIONS.get(mode, "")
+    return base + mode_instruction
 
 
 # Backward compat alias — used by existing chat.py
@@ -403,7 +430,8 @@ async def stream_response(
     system_prompt: str,
     conversation_history: list[dict],
     user_message: str,
+    temperature: float | None = None,
 ) -> AsyncGenerator[str, None]:
     messages = conversation_history + [{"role": "user", "content": user_message}]
-    async for chunk in chat_stream(system_prompt, messages):
+    async for chunk in chat_stream(system_prompt, messages, temperature=temperature):
         yield chunk
