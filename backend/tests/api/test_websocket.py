@@ -142,49 +142,52 @@ async def test_websocket_build_system_prompt_no_mock(ws_setup):
 
 
 @pytest.mark.asyncio
-async def test_websocket_suggest_type_uses_suggestion_prompt(ws_setup):
-    """WebSocket with type=suggest should use build_suggestion_prompt."""
+async def test_websocket_suggest_type_uses_pipeline(ws_setup):
+    """WebSocket with type=suggest should route through the suggestion pipeline."""
     app, token, _ = ws_setup
     from starlette.testclient import TestClient
     from unittest.mock import patch, MagicMock
-    from services.llm import LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE
 
     client = TestClient(app)
 
-    async def mock_stream(*args, **kwargs):
-        raise LLMUnavailableError(LLM_UNAVAILABLE_MESSAGE)
-        yield
+    async def mock_pipeline(context, user_message, mode=None, temperature=None):
+        yield {"type": "progress", "step": "drafting"}
+        yield {"type": "token", "content": "Merhaba"}
+        yield {"type": "done", "content": "Merhaba"}
 
-    mock_suggestion = MagicMock(return_value="suggestion prompt")
+    mock_fn = MagicMock(side_effect=mock_pipeline)
 
-    with patch("routers.chat.build_suggestion_prompt", mock_suggestion), \
-         patch("routers.chat.stream_response", mock_stream):
+    with patch("routers.chat.run_suggestion_pipeline", mock_fn):
         with client.websocket_connect(f"/chat?token={token}") as ws:
             ws.send_text(json.dumps({"message": "Bana kahvaltı öner", "type": "suggest"}))
 
-            msg = ws.receive_json()
-            assert msg["type"] == "done"
-            mock_suggestion.assert_called_once()
+            messages = []
+            while True:
+                msg = ws.receive_json()
+                messages.append(msg)
+                if msg["type"] == "done":
+                    break
+
+            mock_fn.assert_called_once()
+            progress_msgs = [m for m in messages if m["type"] == "progress"]
+            assert len(progress_msgs) >= 1
 
 
 @pytest.mark.asyncio
 async def test_websocket_suggest_with_mode_passes_mode(ws_setup):
-    """WebSocket with type=suggest and mode=favorites should pass mode to prompt builder."""
+    """WebSocket with type=suggest and mode=favorites should pass mode to pipeline."""
     app, token, _ = ws_setup
     from starlette.testclient import TestClient
     from unittest.mock import patch, MagicMock
-    from services.llm import LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE
 
     client = TestClient(app)
 
-    async def mock_stream(*args, **kwargs):
-        raise LLMUnavailableError(LLM_UNAVAILABLE_MESSAGE)
-        yield
+    async def mock_pipeline(context, user_message, mode=None, temperature=None):
+        yield {"type": "done", "content": "OK"}
 
-    mock_suggestion = MagicMock(return_value="suggestion prompt")
+    mock_fn = MagicMock(side_effect=mock_pipeline)
 
-    with patch("routers.chat.build_suggestion_prompt", mock_suggestion), \
-         patch("routers.chat.stream_response", mock_stream):
+    with patch("routers.chat.run_suggestion_pipeline", mock_fn):
         with client.websocket_connect(f"/chat?token={token}") as ws:
             ws.send_text(json.dumps({
                 "message": "Sevdiğim yemeklerden öner",
@@ -194,7 +197,6 @@ async def test_websocket_suggest_with_mode_passes_mode(ws_setup):
 
             msg = ws.receive_json()
             assert msg["type"] == "done"
-            mock_suggestion.assert_called_once()
-            call_kwargs = mock_suggestion.call_args
-            assert call_kwargs.kwargs.get("mode") == "favorites" or \
-                   (call_kwargs[1].get("mode") == "favorites" if len(call_kwargs) > 1 else False)
+            mock_fn.assert_called_once()
+            call_kwargs = mock_fn.call_args
+            assert call_kwargs.kwargs.get("mode") == "favorites"

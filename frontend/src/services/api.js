@@ -217,7 +217,7 @@ export const analyzeMeal = (meal_name, ingredients) =>
 /**
  * Open a WebSocket to /chat with auth token as query param.
  */
-export function createChatSocket(onToken, onDone, onMealLogged, onError, onClose) {
+export function createChatSocket(onToken, onDone, onMealLogged, onError, onClose, onProgress) {
   const token = getToken()
   const ws = new WebSocket(`${WS_URL}/chat?token=${token}`)
 
@@ -227,6 +227,7 @@ export function createChatSocket(onToken, onDone, onMealLogged, onError, onClose
       if (msg.type === 'token') onToken(msg.content)
       else if (msg.type === 'done') onDone(msg.content)
       else if (msg.type === 'meal_logged') onMealLogged(msg.meal)
+      else if (msg.type === 'progress') onProgress?.(msg.step)
     } catch {
       // ignore unparseable frames
     }

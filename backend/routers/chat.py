@@ -13,7 +13,8 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from database import get_db
 from auth import get_user_id_from_token
 from services.llm import LLMUnavailableError, lyric_cycler
-from services.suggestion import build_chat_prompt, build_suggestion_prompt, stream_response
+from services.suggestion import build_chat_prompt, stream_response
+from services.pipeline import run_suggestion_pipeline
 from utils import extract_json_block
 
 router = APIRouter()
@@ -230,18 +231,26 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                 # Force fresh context for suggestion requests
                 async with get_db() as db:
                     cached_context = await _load_context(db, user_id)
-                system_prompt = build_suggestion_prompt(
-                    ingredient_inventory=cached_context["ingredients"],
-                    recent_meal_history=cached_context["history"],
-                    user_preferences=cached_context["preferences"],
-                    stated_habits=cached_context["stated_habits"],
-                    inferred_habits=cached_context["inferred_habits"],
-                    health_rules=cached_context["health_rules"],
-                    user_profile=cached_context["user_profile"],
-                    supplements=cached_context["supplements"],
-                    avoid_list=cached_context["avoid_list"],
-                    mode=suggest_mode,
-                )
+
+                # Run 3-step pipeline: draft → analyst review → refine
+                response_text = ""
+                try:
+                    async for event in run_suggestion_pipeline(
+                        context=cached_context,
+                        user_message=user_message,
+                        mode=suggest_mode,
+                        temperature=temperature,
+                    ):
+                        if event["type"] == "progress":
+                            await websocket.send_json(event)
+                        elif event["type"] == "token":
+                            await websocket.send_json(event)
+                        elif event["type"] == "done":
+                            response_text = event["content"]
+                except LLMUnavailableError:
+                    response_text = lyric_cycler.next()
+                except Exception:
+                    response_text = lyric_cycler.next()
             else:
                 system_prompt = build_chat_prompt(
                     ingredient_inventory=cached_context["ingredients"],
@@ -253,22 +262,22 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                     avoid_list=cached_context["avoid_list"],
                 )
 
-            # Load persisted conversation history for LLM context
-            async with get_db() as db:
-                conversation_history = await _load_session_history(db, session_id, user_id)
+                # Load persisted conversation history for LLM context
+                async with get_db() as db:
+                    conversation_history = await _load_session_history(db, session_id, user_id)
 
-            # Stream response token by token
-            full_response = []
-            try:
-                async for chunk in stream_response(system_prompt, conversation_history, user_message, temperature=temperature):
-                    full_response.append(chunk)
-                    await websocket.send_json({"type": "token", "content": chunk})
+                # Stream response token by token
+                full_response = []
+                try:
+                    async for chunk in stream_response(system_prompt, conversation_history, user_message, temperature=temperature):
+                        full_response.append(chunk)
+                        await websocket.send_json({"type": "token", "content": chunk})
 
-                response_text = "".join(full_response)
-            except LLMUnavailableError:
-                response_text = lyric_cycler.next()
-            except Exception:
-                response_text = lyric_cycler.next()
+                    response_text = "".join(full_response)
+                except LLMUnavailableError:
+                    response_text = lyric_cycler.next()
+                except Exception:
+                    response_text = lyric_cycler.next()
 
             # Persist both messages to DB before signaling done
             async with get_db() as db:
