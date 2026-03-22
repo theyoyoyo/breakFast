@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, getTodaySupplements, toggleSupplement } from '../services/api'
 import { useVoice } from '../hooks/useVoice'
 import SuggestButton from './SuggestButton'
+import DecidePanel from './DecidePanel'
 import * as s from './ChatInterface.styles'
 
 const WELCOME_MSG = { role: 'assistant', content: "Good morning! Tell me what's in your fridge and I'll plan your breakfast." }
@@ -115,7 +116,10 @@ export default function ChatInterface({ onMealLogged }) {
         setStreamBuffer(null)
       },
       // onMealLogged
-      (meal) => onMealLoggedRef.current?.(meal),
+      (meal) => {
+        setLastMeal(meal)
+        onMealLoggedRef.current?.(meal)
+      },
       // onError — don't spam chat with error messages, header already shows "reconnecting…"
       () => {
         setStreamBuffer(null)
@@ -281,6 +285,8 @@ export default function ChatInterface({ onMealLogged }) {
   }, [sendMessage])
 
   const [suppMenuOpen, setSuppMenuOpen] = useState(false)
+  const [decideOpen, setDecideOpen] = useState(false)
+  const [lastMeal, setLastMeal] = useState(null)
 
   return (
     <div style={s.container}>
@@ -323,7 +329,7 @@ export default function ChatInterface({ onMealLogged }) {
       <div style={s.actionRow}>
         {todaySupps.length > 0 && (
           <div style={s.suppMenuWrapper}>
-            {suppMenuOpen && (
+            {suppMenuOpen && !decideOpen && (
               <div style={s.suppMenu}>
                 <span style={s.suppMenuLabel}>Supplements</span>
                 {todaySupps.map(sup => (
@@ -339,15 +345,41 @@ export default function ChatInterface({ onMealLogged }) {
               </div>
             )}
             <button
-              style={s.suppToggleBtn(suppMenuOpen)}
-              onClick={() => setSuppMenuOpen(prev => !prev)}
+              style={s.suppToggleBtn(suppMenuOpen && !decideOpen)}
+              onClick={() => !decideOpen && setSuppMenuOpen(prev => !prev)}
+              disabled={decideOpen}
               title="Toggle supplements"
             >
               Supps
             </button>
           </div>
         )}
-        <SuggestButton onSuggest={handleSuggest} disabled={streamBuffer !== null} />
+
+        <div style={s.decideWrapper}>
+          {decideOpen && (
+            <DecidePanel
+              meal={lastMeal}
+              onClose={() => setDecideOpen(false)}
+              onConfirm={() => {
+                setDecideOpen(false)
+                setLastMeal(null)
+              }}
+            />
+          )}
+          <button
+            style={s.decideBtn(decideOpen)}
+            onClick={() => {
+              setDecideOpen(prev => !prev)
+              if (!decideOpen) setSuppMenuOpen(false)
+            }}
+            disabled={streamBuffer !== null}
+            title="Karar Verdim"
+          >
+            Karar Verdim
+          </button>
+        </div>
+
+        <SuggestButton onSuggest={handleSuggest} disabled={streamBuffer !== null || decideOpen} />
       </div>
 
       <div style={s.inputRow}>
