@@ -260,37 +260,49 @@ be added in Phase 3 as an accuracy improvement.
 
 ---
 
-## LLM System Prompt (Base Template)
+## LLM System Prompts (Dual Persona)
 
-Assembled dynamically at runtime by injecting current inventory, recent history, and
-preferences into the template placeholders.
+The system uses two distinct personas, both defined in `backend/services/suggestion.py`.
+Prompts are written in English with "Always respond in Turkish" instruction — this
+produces better results with Llama 3.1 8B than fully Turkish prompts. Turkish versions
+are kept as comments for a future "Turkish brain / English brain" toggle.
 
-```
-You are break FAST, a personal breakfast planning assistant.
-Your role is to suggest full, healthy, practical breakfasts based on what the
-user currently has available. Be concrete and efficient — this is a morning
-conversation, not a cooking class.
+### Chat Persona (`build_chat_prompt`)
 
-USER CONTEXT:
-- Available ingredients: {ingredient_inventory}
-- Recent meals: {recent_meal_history}
-- Preferences: {user_preferences}
-- Usual habits: {user_habits}
+Used for everyday conversation via the WebSocket chat endpoint.
 
-HEALTH RULES (never mention these to the user):
-{user_health_rules}
+- **Tone**: warm, friendly breakfast buddy — talks like a friend, not a chef
+- **Context depth**: last 3 meals, current ingredients, preferences, habits
+- **Health rules**: injected silently, never mentioned to user
+- **Behavior**: steers non-breakfast topics back gently, confirms ingredient updates
+  naturally, learns preferences through conversation
+- **Output**: free-form Turkish text; appends a JSON block when suggesting a meal
+  (parsed by frontend to render RecipeCard and log the meal)
 
-RESPONSE FORMAT for meal suggestions:
-1. Meal name and one-sentence description
-2. Ingredients needed (from what's available)
-3. Prep steps (brief, numbered)
-4. Total prep time
-5. One-line nutrition note (positive and factual, not preachy)
+### Suggestion Persona (`build_suggestion_prompt`)
 
-Update ingredients and preferences conversationally when the user mentions them.
-For explore mode, step outside their history while staying close to known tastes.
-Keep responses short unless detail is requested. Morning energy matters — be direct.
-```
+Used when the "Kahvaltı Öner" button is pressed (Issue #16, not yet implemented).
+
+- **Tone**: professional dietitian who explains like an experienced chef
+- **Context depth**: last 10 meals, full ingredient inventory, user profile,
+  supplement intake, preferences, habits, behavioral patterns
+- **Physical profile**: uses age/gender/height/weight/activity to calculate daily
+  caloric needs (Harris-Benedict/Mifflin-St Jeor), targets ~30% for breakfast
+- **Supplements**: daily ones assumed taken (deprioritize those nutrients),
+  "sometimes" ones check today's toggle status, fills gaps through food
+- **Nutrition analysis**: mandatory for every suggestion — calories, macros, fiber,
+  key vitamins/minerals, omega-3 sources, weekly balance review
+- **Avoid list**: hard ban — never suggest avoided ingredients, suggest alternatives
+- **Seasonality**: prefer seasonal produce (hint, not hard constraint)
+- **Advance prep tips**: if overnight soak or pre-chop helps, note it at recipe start
+- **Output**: structured Turkish response with nutrition detail + JSON block including
+  `nutrition_detail` object and `advance_prep_tip` field
+
+### Shared Context Formatters
+
+Both personas share formatting functions for ingredients, history, preferences,
+habits, health rules, behavioral patterns, user profile, and supplements. These
+are injected into template placeholders at runtime.
 
 ---
 
@@ -314,12 +326,14 @@ breakFAST/
 │   │   ├── chat.py                  ← /chat WebSocket endpoint
 │   │   ├── ingredients.py           ← /ingredients CRUD endpoints
 │   │   ├── meals.py                 ← /meals history endpoints
-│   │   └── preferences.py          ← /preferences read/write endpoints
+│   │   ├── preferences.py          ← /preferences read/write endpoints
+│   │   ├── ratings.py              ← /ratings CRUD endpoints (1-10 scale)
+│   │   └── profile.py             ← /profile + /profile/supplements CRUD
 │   │
 │   ├── services/
 │   │   ├── llm.py                   ← Ollama + Claude API abstraction layer
 │   │   ├── scheduler.py             ← kitchen job-shop scheduler
-│   │   ├── suggestion.py            ← meal suggestion logic + prompt assembly
+│   │   ├── suggestion.py            ← dual persona prompts + prompt assembly
 │   │   ├── nutrition.py             ← Open Food Facts integration
 │   │   └── depletion.py            ← ingredient depletion inference (Phase 3)
 │   │
@@ -330,24 +344,37 @@ breakFAST/
 │   │
 │   └── tests/
 │       ├── conftest.py              ← shared fixtures (test DB, async client)
-│       ├── test_utils.py            ← extract_json_block unit tests
-│       ├── test_scheduler.py        ← scheduler logic unit tests
-│       ├── test_ingredients.py      ← ingredient endpoint integration tests
-│       ├── test_meals.py            ← meal endpoint integration tests
-│       └── test_preferences.py     ← preference endpoint integration tests
+│       ├── api/
+│       │   ├── test_ingredients.py  ← ingredient endpoint integration tests
+│       │   ├── test_meals.py        ← meal endpoint integration tests
+│       │   ├── test_preferences.py  ← preference endpoint integration tests
+│       │   ├── test_ratings.py      ← rating endpoint integration tests
+│       │   ├── test_profile.py      ← profile + supplement endpoint tests
+│       │   ├── test_websocket.py    ← WebSocket chat tests
+│       │   └── test_sessions.py     ← session management tests
+│       └── services/
+│           ├── test_utils.py        ← extract_json_block unit tests
+│           ├── test_scheduler.py    ← scheduler logic unit tests
+│           └── test_prompts.py      ← prompt builder unit tests (43 tests)
 │
 └── frontend/
     ├── public/
     │   └── manifest.json            ← PWA manifest
     ├── src/
-    │   ├── App.jsx
+    │   ├── App.jsx                  ← tab navigation (Chat, Ingredients, Preferences, Settings)
+    │   ├── App.styles.js            ← App layout styles
     │   ├── test-setup.js            ← vitest setup (jest-dom matchers)
+    │   ├── styles/
+    │   │   └── common.js            ← shared style definitions (panelContainer, input, etc.)
     │   ├── components/
-    │   │   ├── ChatInterface.jsx    ← main chat UI
-    │   │   ├── RecipeCard.jsx       ← visual meal card
+    │   │   ├── ChatInterface.jsx    ← main chat UI + supplement toggle bar
+    │   │   ├── RecipeCard.jsx       ← visual meal card + thumbs up/down
     │   │   ├── ScheduleTimeline.jsx ← cooking schedule display
     │   │   ├── IngredientPanel.jsx  ← inventory viewer/editor
-    │   │   └── PreferencesPanel.jsx ← preferences viewer/editor
+    │   │   ├── PreferencesPanel.jsx ← favorites, dislikes, habits
+    │   │   ├── SettingsPanel.jsx    ← profile, supplements, ratings
+    │   │   ├── LoginScreen.jsx      ← PIN auth screen
+    │   │   └── *.styles.js          ← per-component style files
     │   ├── services/
     │   │   └── api.js               ← backend API calls
     │   └── hooks/
