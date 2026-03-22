@@ -155,28 +155,41 @@ export const confirmBtn = {
 
 export const rateRow = {
   display: 'flex',
-  alignItems: 'center',
-  gap: 10,
+  flexDirection: 'column',
+  gap: 6,
   padding: '10px 12px',
   background: 'var(--surface2)',
   borderRadius: 10,
 }
 
 export const rateLabel = {
-  flex: 1,
   fontSize: 15,
+  fontWeight: 600,
   color: 'var(--text)',
 }
 
-export const slider = {
-  width: 120,
-  accentColor: 'var(--accent)',
+export const starsRow = {
+  display: 'flex',
+  justifyContent: 'space-between',
 }
 
-export const rateValue = {
-  fontSize: 15,
-  fontWeight: 600,
-  color: 'var(--accent)',
-  minWidth: 24,
-  textAlign: 'center',
+export const starCell = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  cursor: 'pointer',
+  flex: 1,
+  userSelect: 'none',
 }
+
+export const starNum = {
+  fontSize: 10,
+  color: 'var(--text-muted)',
+  marginBottom: 2,
+}
+
+export const star = (lit) => ({
+  fontSize: 22,
+  color: lit ? '#f5a623' : 'var(--border)',
+  transition: 'color 0.1s',
+})

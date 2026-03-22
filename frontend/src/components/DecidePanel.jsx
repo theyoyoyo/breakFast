@@ -109,15 +109,18 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
             {unratedItems.map(item => (
               <div key={item} style={s.rateRow}>
                 <span style={s.rateLabel}>{item}</span>
-                <input
-                  type="range"
-                  min={1}
-                  max={10}
-                  value={ratings[item]}
-                  onChange={(e) => setRatings(prev => ({ ...prev, [item]: Number(e.target.value) }))}
-                  style={s.slider}
-                />
-                <span style={s.rateValue}>{ratings[item]}</span>
+                <div style={s.starsRow}>
+                  {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
+                    <div
+                      key={n}
+                      style={s.starCell}
+                      onClick={() => setRatings(prev => ({ ...prev, [item]: n }))}
+                    >
+                      <span style={s.starNum}>{n}</span>
+                      <span style={s.star(n <= ratings[item])}>★</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
