@@ -57,7 +57,7 @@ async def test_chat_stream_raises_when_llm_unavailable():
 @pytest.mark.asyncio
 async def test_fallback_message_content():
     """Fallback message is the expected Turkish string (first lyric line)."""
-    assert LLM_UNAVAILABLE_MESSAGE == "Benim aklım başımda değil"
+    assert LLM_UNAVAILABLE_MESSAGE == "Benim aklım başımda değil~"
 
 
 def test_lyric_cycler_cycles_through_all_lines():
