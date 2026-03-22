@@ -21,7 +21,7 @@ export default function LoginScreen({ onLogin }) {
       localStorage.setItem('bf_user', JSON.stringify(data.user))
       onLogin(data)
     } catch {
-      setError('Geçersiz isim veya PIN')
+      setError('Invalid name or PIN')
     } finally {
       setLoading(false)
     }
@@ -34,7 +34,7 @@ export default function LoginScreen({ onLogin }) {
         <input
           style={s.input}
           type="text"
-          placeholder="İsim"
+          placeholder="Name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           autoFocus
@@ -52,7 +52,7 @@ export default function LoginScreen({ onLogin }) {
           type="submit"
           disabled={loading}
         >
-          {loading ? 'Giriş yapılıyor...' : 'Giriş'}
+          {loading ? 'Logging in...' : 'Login'}
         </button>
         {error && <div style={s.error}>{error}</div>}
       </form>

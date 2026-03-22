@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS health_rules (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id     INTEGER NOT NULL REFERENCES users(id),
     rule_text   TEXT    NOT NULL,
+    priority    TEXT    NOT NULL DEFAULT 'high' CHECK (priority IN ('low', 'high', 'critical')),
     created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
     updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
@@ -165,6 +166,15 @@ async def init_db() -> None:
             """,
             ("demo", hash_pin("")),
         )
+
+        # Migrate: add priority column to health_rules if missing
+        try:
+            await db.execute(
+                "ALTER TABLE health_rules ADD COLUMN priority TEXT NOT NULL DEFAULT 'high' "
+                "CHECK (priority IN ('low', 'high', 'critical'))"
+            )
+        except Exception:
+            pass  # Column already exists
 
         # Clean up chat sessions older than 48 hours
         await db.execute(

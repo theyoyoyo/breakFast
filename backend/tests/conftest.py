@@ -52,3 +52,13 @@ async def client(tmp_path, monkeypatch):
         headers={"Authorization": f"Bearer {token}"},
     ) as ac:
         yield ac
+
+
+@pytest_asyncio.fixture
+async def db(client, tmp_path):
+    """Direct database connection for tests that need to manipulate data beyond the API."""
+    import database
+
+    async with aiosqlite.connect(database.DATABASE_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+        yield conn

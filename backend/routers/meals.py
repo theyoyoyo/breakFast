@@ -81,6 +81,18 @@ async def log_meal(body: MealLog, user_id: int = Depends(require_user)):
             return _row_to_meal(await cur.fetchone())
 
 
+@router.delete("/old", status_code=200)
+async def delete_old_meals(user_id: int = Depends(require_user)):
+    """Delete meal history entries older than 1 year for the current user."""
+    async with get_db() as db:
+        cursor = await db.execute(
+            "DELETE FROM meal_history WHERE user_id = ? AND logged_at < datetime('now', '-1 year')",
+            (user_id,),
+        )
+        await db.commit()
+        return {"deleted": cursor.rowcount}
+
+
 @router.patch("/{meal_id}/rating", response_model=Meal)
 async def rate_meal(meal_id: int, body: MealRating, user_id: int = Depends(require_user)):
     """Rate a meal thumbs-up (5) or thumbs-down (1)."""

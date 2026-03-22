@@ -266,10 +266,10 @@ export default function ChatInterface({ onMealLogged }) {
   const handleStop = useCallback(() => {
     abortedRef.current = true
     setAborted(true)
-    // Capture partial response and finalize with "[durduruldu]"
+    // Capture partial response and finalize with "[stopped]"
     setStreamBuffer((prev) => {
       const partial = prev || ''
-      const stopped = partial ? partial + '\n\n[durduruldu]' : '[durduruldu]'
+      const stopped = partial ? partial + '\n\n[stopped]' : '[stopped]'
       setMessages((msgs) => [...msgs, { role: 'assistant', content: stopped }])
       return null
     })
@@ -373,7 +373,7 @@ export default function ChatInterface({ onMealLogged }) {
             if (!decideOpen) setSuppMenuOpen(false)
           }}
           disabled={streamBuffer !== null}
-          title="Karar Verdim"
+          title="Today I ate..."
         >
           ✅
         </button>

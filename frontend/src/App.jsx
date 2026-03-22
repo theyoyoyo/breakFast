@@ -74,7 +74,7 @@ export default function App() {
         ))}
         <div style={s.userInfo}>
           <span>{auth.user.name}</span>
-          <button style={s.logoutBtn} onClick={handleLogout}>Çıkış</button>
+          <button style={s.logoutBtn} onClick={handleLogout}>Logout</button>
         </div>
       </nav>
 

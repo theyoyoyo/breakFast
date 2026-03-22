@@ -47,7 +47,7 @@ export default function SuggestButton({ onSuggest, disabled }) {
             style={s.modeBtn}
             onClick={() => handleMode('favorites')}
             disabled={disabled}
-            title="Sevdiklerimden öner"
+            title="Suggest from favorites"
           >
             ❤️
           </button>
@@ -55,7 +55,7 @@ export default function SuggestButton({ onSuggest, disabled }) {
             style={s.modeBtn}
             onClick={() => handleMode('explore')}
             disabled={disabled}
-            title="Dünya mutfağından keşfet"
+            title="Explore world cuisines"
           >
             ⭐
           </button>
@@ -67,11 +67,11 @@ export default function SuggestButton({ onSuggest, disabled }) {
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerLeave}
         disabled={disabled}
-        title="Kahvaltı Öner (basılı tut: modlar)"
+        title="Suggest breakfast (hold: modes)"
       >
         <img
           src={u2Logo}
-          alt="Kahvaltı Öner"
+          alt="Suggest"
           style={s.logo}
           draggable={false}
         />

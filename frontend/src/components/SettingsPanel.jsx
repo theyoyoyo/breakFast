@@ -3,8 +3,16 @@ import {
   getRatings, createRating, updateRating, deleteRating,
   getProfile, upsertProfile,
   getSupplements, createSupplement, updateSupplement, deleteSupplement,
+  deleteOldMeals,
+  getHealthRules, createHealthRule, updateHealthRule, deleteHealthRule,
 } from '../services/api'
 import * as s from './SettingsPanel.styles'
+
+const PRIORITY_OPTIONS = [
+  { value: 'low', label: "Don't really care" },
+  { value: 'high', label: 'Care a lot' },
+  { value: 'critical', label: 'Top priority' },
+]
 
 export default function SettingsPanel() {
   const [ratings, setRatings] = useState([])
@@ -22,11 +30,15 @@ export default function SettingsPanel() {
   const [newSuppContents, setNewSuppContents] = useState('')
   const [newSuppFreq, setNewSuppFreq] = useState('daily')
 
+  // Health rules state
+  const [healthRules, setHealthRules] = useState([])
+  const [newRuleText, setNewRuleText] = useState('')
+
   const load = async () => {
     try {
       setError(null)
-      const [r, prof, supps] = await Promise.all([
-        getRatings(), getProfile(), getSupplements(),
+      const [r, prof, supps, rules] = await Promise.all([
+        getRatings(), getProfile(), getSupplements(), getHealthRules(),
       ])
       setRatings(r)
       if (prof) {
@@ -39,6 +51,7 @@ export default function SettingsPanel() {
         })
       }
       setSupplements(supps)
+      setHealthRules(rules)
       setProfileDirty(false)
     } catch {
       setError('Failed to load settings')
@@ -142,6 +155,86 @@ export default function SettingsPanel() {
     }
   }
 
+  // Health rule handlers
+  const handleAddRule = async () => {
+    const text = newRuleText.trim()
+    if (!text) return
+    try {
+      setError(null)
+      await createHealthRule(text, 'high')
+      setNewRuleText('')
+      load()
+    } catch {
+      setError('Failed to add health rule')
+    }
+  }
+
+  const handleUpdateRulePriority = async (id, priority) => {
+    setHealthRules((prev) => prev.map((r) => r.id === id ? { ...r, priority } : r))
+    try {
+      await updateHealthRule(id, { priority })
+    } catch {
+      setError('Failed to update health rule')
+      load()
+    }
+  }
+
+  const handleDeleteRule = async (id) => {
+    setHealthRules((prev) => prev.filter((r) => r.id !== id))
+    try {
+      await deleteHealthRule(id)
+    } catch {
+      setError('Failed to delete health rule')
+      load()
+    }
+  }
+
+  // --- Health Rules sub-page ---
+  if (view === 'health-rules') {
+    return (
+      <div style={s.container}>
+        <div style={{ ...s.header, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button style={s.backBtn} onClick={() => setView('settings')}>←</button>
+          <span>Health Rules ({healthRules.length})</span>
+        </div>
+        <div style={s.body}>
+          {error && <div style={s.error}>{error}</div>}
+          {healthRules.length === 0 && <span style={s.empty}>No health rules yet</span>}
+          {healthRules.map((rule) => (
+            <div key={rule.id} style={s.ruleRow}>
+              <div style={s.ruleTop}>
+                <span style={s.ruleName}>{rule.rule_text}</span>
+                <button style={s.tagX} onClick={() => handleDeleteRule(rule.id)}>×</button>
+              </div>
+              <div style={s.priorityRow}>
+                {PRIORITY_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    style={s.priorityBtn(rule.priority === opt.value, opt.value)}
+                    onClick={() => handleUpdateRulePriority(rule.id, opt.value)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          <div style={s.addRow}>
+            <input
+              style={s.input}
+              value={newRuleText}
+              onChange={(e) => setNewRuleText(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddRule()}
+              placeholder="e.g. Avoid refined sugars, Favor omega-3 sources…"
+            />
+            <button style={s.addBtn} onClick={handleAddRule}>+</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // --- Ratings sub-page ---
   if (view === 'ratings') {
     return (
       <div style={s.container}>
@@ -187,6 +280,7 @@ export default function SettingsPanel() {
     )
   }
 
+  // --- Main settings view ---
   return (
     <div style={s.container}>
       <div style={s.header}>Settings</div>
@@ -304,10 +398,38 @@ export default function SettingsPanel() {
           </div>
         </div>
 
+        {/* Health Rules — navigates to sub-page */}
+        <div style={s.section}>
+          <button style={s.healthRulesBtn} onClick={() => setView('health-rules')}>
+            Health Rules ({healthRules.length}) →
+          </button>
+        </div>
+
         {/* Ratings — navigates to sub-page */}
         <div style={s.section}>
           <button style={s.ratingsBtn} onClick={() => setView('ratings')}>
             Ratings ({ratings.length}) →
+          </button>
+        </div>
+
+        {/* Data management */}
+        <div style={s.section}>
+          <div style={s.sectionLabel}>Data</div>
+          <button
+            style={s.dangerBtn}
+            onClick={async () => {
+              try {
+                setError(null)
+                const result = await deleteOldMeals()
+                setError(result.deleted > 0
+                  ? `${result.deleted} old meal(s) deleted`
+                  : 'No meals older than 1 year')
+              } catch {
+                setError('Failed to delete old meals')
+              }
+            }}
+          >
+            🗑 Delete meals older than 1 year
           </button>
         </div>
       </div>

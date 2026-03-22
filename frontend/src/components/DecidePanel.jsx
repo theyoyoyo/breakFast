@@ -106,7 +106,7 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
     return (
       <div style={s.overlay} onClick={handleOverlayClick}>
         <div style={s.panel}>
-          <div style={s.panelHeader}>Puanla</div>
+          <div style={s.panelHeader}>Rate</div>
           <div style={s.itemList}>
             {unratedItems.map(item => (
               <div key={item} style={s.rateRow}>
@@ -127,9 +127,9 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
             ))}
           </div>
           <div style={s.actions}>
-            <button style={s.backBtn} onClick={() => setPhase('edit')}>Geri</button>
+            <button style={s.backBtn} onClick={() => setPhase('edit')}>Back</button>
             <button style={s.confirmBtn} onClick={handleSave} disabled={saving}>
-              {saving ? '...' : 'Kaydet'}
+              {saving ? '...' : 'Save'}
             </button>
           </div>
         </div>
@@ -140,7 +140,7 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
   return (
     <div style={s.overlay} onClick={handleOverlayClick}>
       <div style={s.panel}>
-        <div style={s.panelHeader}>Karar Verdim</div>
+        <div style={s.panelHeader}>Today I ate...</div>
         <div style={s.itemList}>
           {items.map((item, idx) => (
             <div key={idx} style={s.itemRow}>
@@ -157,8 +157,8 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
                 <span style={s.itemText}>{item}</span>
               )}
               <div style={s.itemActions}>
-                <button style={s.editBtn} onClick={() => handleStartEdit(idx)} title="Düzenle">✏️</button>
-                <button style={s.deleteBtn} onClick={() => handleDelete(idx)} title="Sil">🗑️</button>
+                <button style={s.editBtn} onClick={() => handleStartEdit(idx)} title="Edit">✏️</button>
+                <button style={s.deleteBtn} onClick={() => handleDelete(idx)} title="Delete">🗑️</button>
               </div>
             </div>
           ))}
@@ -169,18 +169,18 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
             value={newItem}
             onChange={(e) => setNewItem(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-            placeholder="Ürün ekle…"
+            placeholder="Add item…"
           />
           <button style={s.addBtn} onClick={handleAdd}>+</button>
         </div>
         <div style={s.actions}>
-          <button style={s.cancelBtn} onClick={onClose}>Kapat</button>
+          <button style={s.cancelBtn} onClick={onClose}>Close</button>
           <button
             style={s.confirmBtn}
             onClick={handleProceedToRating}
             disabled={items.length === 0}
           >
-            Onayla
+            Confirm
           </button>
         </div>
       </div>
