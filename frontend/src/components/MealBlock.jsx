@@ -106,7 +106,6 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
           <span style={s.blockIcon}>🍳</span>
           <span style={s.blockText}>{displayNames}</span>
           {meal?.prep_time_min && <span style={s.prepBadge}>⏱ {meal.prep_time_min}m</span>}
-          <span style={s.mealId}>#{meal?.id || 0}</span>
         </div>
         <button
           style={s.analyzeBtn(analyzing)}
@@ -122,7 +121,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
         <div style={s.overlay} onClick={handleOverlayClick}>
           <div style={s.panel}>
             <div style={s.panelHeader}>
-              {meal?.meal_name || 'Meal'}
+              {meal?.meal_name || 'Meal'} <span style={s.mealId}>#{meal?.id || 0}</span>
             </div>
 
             <div style={s.itemList}>
