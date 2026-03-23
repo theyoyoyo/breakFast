@@ -29,7 +29,7 @@ from services.knowledge import (
 
 
 # ---------------------------------------------------------------------------
-# Backward-compatible private aliases (used by existing tests)
+# Private aliases — re-exported from knowledge.py for test imports
 # ---------------------------------------------------------------------------
 
 _format_ingredients = format_ingredients

@@ -4,6 +4,7 @@
 
 import uuid
 from fastapi import APIRouter, Depends
+from fastapi.responses import Response
 from database import get_db
 from auth import require_user
 
@@ -77,7 +78,6 @@ async def delete_session(session_id: str, user_id: int = Depends(require_user)):
             (session_id, user_id),
         )
         await db.commit()
-    from fastapi.responses import Response
     return Response(status_code=204)
 
 

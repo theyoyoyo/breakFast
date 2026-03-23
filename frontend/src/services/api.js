@@ -66,12 +66,6 @@ export const getIngredients = () =>
 export const addIngredient = (name, quantity, unit) =>
   apiFetch(`${BASE_URL}/ingredients/`, json('POST', { name, quantity, unit }))
 
-export const bulkAddIngredients = (ingredients) =>
-  apiFetch(`${BASE_URL}/ingredients/bulk`, json('POST', ingredients))
-
-export const updateIngredient = (id, quantity, unit) =>
-  apiFetch(`${BASE_URL}/ingredients/${id}`, json('PATCH', { quantity, unit }))
-
 export const deleteIngredient = (id) =>
   apiFetch(`${BASE_URL}/ingredients/${id}`, { method: 'DELETE' })
 

@@ -133,6 +133,18 @@ CREATE TABLE IF NOT EXISTS supplement_daily_log (
     taken           INTEGER NOT NULL DEFAULT 1,
     UNIQUE(user_id, supplement_id, date)
 );
+
+-- Indices on frequently-filtered foreign key columns
+CREATE INDEX IF NOT EXISTS idx_ingredient_inventory_user ON ingredient_inventory(user_id);
+CREATE INDEX IF NOT EXISTS idx_meal_history_user ON meal_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_preferences_user ON user_preferences(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_habits_user ON user_habits(user_id);
+CREATE INDEX IF NOT EXISTS idx_health_rules_user ON health_rules(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_user ON chat_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_user ON chat_messages(user_id);
+CREATE INDEX IF NOT EXISTS idx_product_ratings_user ON product_ratings(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_supplements_user ON user_supplements(user_id);
 """
 
 

@@ -4,6 +4,7 @@ All queries are scoped to the authenticated user.
 """
 
 from datetime import date as date_type
+import aiosqlite
 from database import get_db
 from fastapi import APIRouter, Depends, HTTPException
 from auth import require_user
@@ -111,7 +112,7 @@ async def create_supplement(body: SupplementIn, user_id: int = Depends(require_u
                 (user_id, body.name, body.contents, body.frequency),
             )
             await db.commit()
-        except Exception:
+        except aiosqlite.IntegrityError:
             raise HTTPException(status_code=409, detail="Supplement already exists")
         async with db.execute(
             "SELECT * FROM user_supplements WHERE id = last_insert_rowid()"
