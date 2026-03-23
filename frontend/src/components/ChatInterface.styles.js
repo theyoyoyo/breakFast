@@ -175,6 +175,13 @@ export const actionRow = {
   background: 'var(--surface)',
 }
 
+export const actionStack = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: 6,
+}
+
 export const decideBtn = (active) => ({
   background: active ? secondaryColor : 'var(--surface2)',
   color: active ? '#fff' : 'var(--text)',

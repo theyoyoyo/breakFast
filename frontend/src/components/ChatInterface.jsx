@@ -504,50 +504,52 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
       )}
 
       <div style={s.actionRow}>
-        {todaySupps.length > 0 && (
-          <div style={s.suppMenuWrapper}>
-            {suppMenuOpen && !decideOpen && (
-              <div style={s.suppMenu}>
-                <span style={s.suppMenuLabel}>Supplements</span>
-                {todaySupps.map(sup => {
-                  const isDaily = sup.frequency === 'daily'
-                  const taken = isDaily || !!sup.taken_today
-                  return (
-                    <button
-                      key={sup.id}
-                      style={s.suppPill(taken, isDaily)}
-                      onClick={() => !isDaily && handleToggleSupplement(sup.id, !!sup.taken_today)}
-                      title={sup.contents || sup.name}
-                      disabled={isDaily}
-                    >
-                      {isDaily ? '⚡' : taken ? '✓' : '○'} {sup.name}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-            <button
-              style={s.suppToggleBtn(suppMenuOpen && !decideOpen)}
-              onClick={() => !decideOpen && setSuppMenuOpen(prev => !prev)}
-              disabled={decideOpen}
-              title="Toggle supplements"
-            >
-              💊
-            </button>
-          </div>
-        )}
+        <div style={s.actionStack}>
+          {todaySupps.length > 0 && (
+            <div style={s.suppMenuWrapper}>
+              {suppMenuOpen && !decideOpen && (
+                <div style={s.suppMenu}>
+                  <span style={s.suppMenuLabel}>Supplements</span>
+                  {todaySupps.map(sup => {
+                    const isDaily = sup.frequency === 'daily'
+                    const taken = isDaily || !!sup.taken_today
+                    return (
+                      <button
+                        key={sup.id}
+                        style={s.suppPill(taken, isDaily)}
+                        onClick={() => !isDaily && handleToggleSupplement(sup.id, !!sup.taken_today)}
+                        title={sup.contents || sup.name}
+                        disabled={isDaily}
+                      >
+                        {isDaily ? '⚡' : taken ? '✓' : '○'} {sup.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              <button
+                style={s.suppToggleBtn(suppMenuOpen && !decideOpen)}
+                onClick={() => !decideOpen && setSuppMenuOpen(prev => !prev)}
+                disabled={decideOpen}
+                title="Toggle supplements"
+              >
+                💊
+              </button>
+            </div>
+          )}
 
-        <button
-          style={s.decideBtn(decideOpen)}
-          onClick={() => {
-            setDecideOpen(prev => !prev)
-            if (!decideOpen) setSuppMenuOpen(false)
-          }}
-          disabled={isBusy}
-          title="Today I ate..."
-        >
-          ✅
-        </button>
+          <button
+            style={s.decideBtn(decideOpen)}
+            onClick={() => {
+              setDecideOpen(prev => !prev)
+              if (!decideOpen) setSuppMenuOpen(false)
+            }}
+            disabled={isBusy}
+            title="Today I ate..."
+          >
+            ✅
+          </button>
+        </div>
 
         <SuggestButton onSuggest={handleSuggest} disabled={isBusy || decideOpen} />
       </div>
