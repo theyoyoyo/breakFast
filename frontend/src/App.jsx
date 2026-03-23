@@ -90,7 +90,7 @@ export default function App() {
       </div>
 
       <div style={{ ...s.mainFull, display: activeTab === 'Settings' ? undefined : 'none' }}>
-        <SettingsPanel />
+        <SettingsPanel visible={activeTab === 'Settings'} />
       </div>
     </div>
   )
