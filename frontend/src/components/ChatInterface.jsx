@@ -411,7 +411,7 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
       if (abortCtrl.cancelled) return
       // Strip JSON block from analysis text for display, show as assistant message
       const displayText = result.analysis_text
-        ? result.analysis_text.replace(/```json\s*\{.*?\}\s*```/gs, '').trim()
+        ? result.analysis_text.replace(/```json[\s\S]*?```/g, '').trim()
         : 'Analiz sonucu alınamadı.'
       const analysisMsg = `📊 ${meal.meal_name || 'Meal'} — Besin Analizi\n\n${displayText}`
       setMessages(prev => [...prev, { role: 'assistant', content: analysisMsg }])
