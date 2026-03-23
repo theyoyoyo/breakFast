@@ -147,6 +147,7 @@ export const suppMenuLabel = {
   fontSize: 11,
   fontWeight: 700,
   textTransform: 'uppercase',
+  textAlign: 'center',
   color: 'var(--text-muted)',
   marginBottom: 2,
 }
