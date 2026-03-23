@@ -69,7 +69,7 @@ async def delete_user(name: str) -> None:
         user_id = row[0]
         for table in [
             "supplement_daily_log", "user_supplements", "user_profiles",
-            "product_ratings", "chat_messages",
+            "product_ratings", "suggested_meals", "chat_messages",
             "ingredient_inventory", "meal_history", "user_preferences",
             "user_habits", "health_rules",
         ]:
