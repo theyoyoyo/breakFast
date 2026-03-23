@@ -509,6 +509,7 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
             <div style={s.suppMenuWrapper}>
               {suppMenuOpen && !decideOpen && (
                 <div style={s.suppMenu}>
+                  <span style={s.suppMenuLabel}>Supplements</span>
                   {todaySupps.map(sup => {
                     const isDaily = sup.frequency === 'daily'
                     const taken = isDaily || !!sup.taken_today
@@ -549,12 +550,6 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
             ✅
           </button>
         </div>
-
-        {(suppMenuOpen || decideOpen) && (
-          <span style={s.actionLabel}>
-            {suppMenuOpen && !decideOpen ? 'Supplements' : decideOpen ? 'Today I ate...' : ''}
-          </span>
-        )}
 
         <SuggestButton onSuggest={handleSuggest} disabled={isBusy || decideOpen} />
       </div>

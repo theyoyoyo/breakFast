@@ -184,16 +184,6 @@ export const actionStack = {
   width: 80,
 }
 
-export const actionLabel = {
-  flex: 1,
-  textAlign: 'center',
-  fontSize: 12,
-  fontWeight: 600,
-  color: 'var(--text-muted)',
-  alignSelf: 'center',
-  letterSpacing: '0.03em',
-}
-
 export const decideBtn = (active) => ({
   background: active ? secondaryColor : 'var(--surface2)',
   color: active ? '#fff' : 'var(--text)',
