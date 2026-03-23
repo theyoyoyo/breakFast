@@ -9,6 +9,18 @@ SAMPLE_MEAL = {
     "prep_time_min": 5,
 }
 
+STRUCTURED_MEAL = {
+    "meal_name": "Menemen",
+    "description": "Classic Turkish breakfast",
+    "ingredients": [
+        {"name": "yumurta", "quantity": 2, "unit": "adet"},
+        {"name": "domates", "quantity": 1, "unit": "adet"},
+        {"name": "biber", "quantity": 0.5, "unit": "adet"},
+    ],
+    "steps": ["Chop vegetables", "Fry", "Add eggs"],
+    "prep_time_min": 10,
+}
+
 
 async def test_list_meals_empty(client):
     r = await client.get("/meals/")
@@ -27,6 +39,26 @@ async def test_log_meal(client):
     assert "id" in data
 
 
+# Logs a meal with structured ingredients (name/quantity/unit objects)
+async def test_log_meal_structured_ingredients(client):
+    r = await client.post("/meals/", json=STRUCTURED_MEAL)
+    assert r.status_code == 201
+    data = r.json()
+    assert data["meal_name"] == "Menemen"
+    assert len(data["ingredients"]) == 3
+    assert data["ingredients"][0]["name"] == "yumurta"
+    assert data["ingredients"][0]["quantity"] == 2
+    assert data["ingredients"][0]["unit"] == "adet"
+    assert data["ingredients"][2]["quantity"] == 0.5
+
+
+# Newly created meals have no cached nutrition
+async def test_new_meal_has_null_cached_nutrition(client):
+    r = await client.post("/meals/", json=STRUCTURED_MEAL)
+    assert r.status_code == 201
+    assert r.json()["cached_nutrition"] is None
+
+
 # Updates meal name and ingredients via PUT
 async def test_update_meal(client):
     meal = (await client.post("/meals/", json=SAMPLE_MEAL)).json()
@@ -36,6 +68,25 @@ async def test_update_meal(client):
     data = r.json()
     assert data["meal_name"] == "Menemen"
     assert data["ingredients"] == ["eggs", "tomato", "pepper"]
+
+
+# Updating a meal clears cached_nutrition
+async def test_update_meal_clears_cache(client, db):
+    meal = (await client.post("/meals/", json=STRUCTURED_MEAL)).json()
+    # Manually set cached_nutrition to simulate a prior analysis
+    await db.execute(
+        "UPDATE meal_history SET cached_nutrition = ? WHERE id = ?",
+        ('{"analysis_text": "test", "analysis_data": {}}', meal["id"]),
+    )
+    await db.commit()
+    # Verify it's set
+    r = await client.get(f"/meals/{meal['id']}")
+    assert r.json()["cached_nutrition"] is not None
+    # Update the meal — should clear cache
+    updated = {**STRUCTURED_MEAL, "meal_name": "Updated Menemen"}
+    r = await client.put(f"/meals/{meal['id']}", json=updated)
+    assert r.status_code == 200
+    assert r.json()["cached_nutrition"] is None
 
 
 # Returns 404 when updating a non-existent meal

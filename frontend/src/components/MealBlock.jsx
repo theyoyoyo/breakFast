@@ -2,6 +2,19 @@ import { useState } from 'react'
 import * as s from './MealBlock.styles'
 
 /**
+ * Format a single ingredient for display — handles both string ("yumurta")
+ * and structured ({name, quantity, unit}) forms.
+ */
+function formatIngredient(item) {
+  if (typeof item === 'object' && item !== null && item.name) {
+    const qty = item.quantity != null ? item.quantity : ''
+    const unit = item.unit || ''
+    return `${qty} ${unit} ${item.name}`.trim()
+  }
+  return String(item)
+}
+
+/**
  * Clickable meal summary block rendered inline in chat.
  * Shows checkbox, meal names, prep time, and analysis button.
  * Click opens an editable overlay panel.
@@ -13,7 +26,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
   const [editIdx, setEditIdx] = useState(null)
   const [editValue, setEditValue] = useState('')
   const displayNames = items.length > 0
-    ? items.join(', ')
+    ? items.map(formatIngredient).join(', ')
     : meal?.meal_name || 'Meal'
 
   const handleOverlayClick = (e) => {
@@ -26,12 +39,19 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
 
   const handleStartEdit = (idx) => {
     setEditIdx(idx)
-    setEditValue(items[idx])
+    const item = items[idx]
+    setEditValue(typeof item === 'string' ? item : item.name || '')
   }
 
   const handleSaveEdit = () => {
     if (editValue.trim() && editIdx !== null) {
-      setItems(prev => prev.map((item, i) => i === editIdx ? editValue.trim() : item))
+      setItems(prev => prev.map((item, i) => {
+        if (i !== editIdx) return item
+        if (typeof item === 'object' && item !== null) {
+          return { ...item, name: editValue.trim() }
+        }
+        return editValue.trim()
+      }))
     }
     setEditIdx(null)
     setEditValue('')
@@ -40,7 +60,8 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
   const handleAdd = () => {
     const v = newItem.trim()
     if (!v) return
-    if (items.some(item => item.toLowerCase() === v.toLowerCase())) return
+    const getName = (item) => typeof item === 'object' ? item.name : item
+    if (items.some(item => getName(item).toLowerCase() === v.toLowerCase())) return
     setItems(prev => [...prev, v])
     setNewItem('')
   }
@@ -99,7 +120,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
                       autoFocus
                     />
                   ) : (
-                    <span style={s.itemText}>{item}</span>
+                    <span style={s.itemText}>{formatIngredient(item)}</span>
                   )}
                   <div style={s.itemActions}>
                     <button style={s.editBtn} onClick={() => handleStartEdit(idx)} title="Edit">✏️</button>
