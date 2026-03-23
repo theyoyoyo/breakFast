@@ -82,17 +82,20 @@ export const suppContents = {
   fontSize: 11,
 }
 
-export const suppFreq = {
+export const suppFreq = (freq) => ({
   fontSize: 10,
   fontWeight: 700,
   textTransform: 'uppercase',
-  padding: '2px 6px',
-  borderRadius: 4,
-  background: 'var(--surface)',
-  color: 'var(--text-muted)',
+  padding: '3px 8px',
+  borderRadius: 6,
   cursor: 'pointer',
   border: 'none',
-}
+  transition: 'background 0.15s, color 0.15s',
+  ...(freq === 'daily'
+    ? { background: '#2d4a35', color: '#8bc59a' }
+    : { background: '#4a3d20', color: '#d4a94a' }
+  ),
+})
 
 export const ratingsBtn = {
   width: '100%',

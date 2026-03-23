@@ -27,6 +27,7 @@ export const panelHeader = {
   fontSize: 18,
   fontWeight: 700,
   color: 'var(--accent)',
+  textAlign: 'center',
   marginBottom: 16,
   flexShrink: 0,
 }
