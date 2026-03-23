@@ -49,18 +49,34 @@ export const itemRow = {
   fontSize: 15,
 }
 
+export const qtyGroup = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 2,
+  flexShrink: 0,
+}
+
 export const qtyInput = {
-  width: 52,
+  width: 46,
   background: 'var(--surface)',
   border: '1px solid var(--border)',
   borderRadius: 6,
-  padding: '4px 6px',
+  padding: '4px 4px',
   color: 'var(--text)',
   fontSize: 14,
   textAlign: 'center',
   outline: 'none',
-  flexShrink: 0,
-  marginRight: 4,
+}
+
+export const arrowBtn = {
+  background: 'none',
+  border: '1px solid var(--border)',
+  borderRadius: 4,
+  cursor: 'pointer',
+  fontSize: 10,
+  padding: '2px 5px',
+  color: 'var(--text-muted)',
+  lineHeight: 1,
 }
 
 export const unitLabel = {
@@ -74,7 +90,6 @@ export const unitLabel = {
 export const itemText = {
   flex: 1,
   color: 'var(--text)',
-  cursor: 'pointer',
 }
 
 export const itemActions = {
@@ -83,31 +98,12 @@ export const itemActions = {
   flexShrink: 0,
 }
 
-export const editBtn = {
-  background: 'none',
-  border: 'none',
-  cursor: 'pointer',
-  fontSize: 18,
-  padding: '4px 6px',
-}
-
 export const deleteBtn = {
   background: 'none',
   border: 'none',
   cursor: 'pointer',
   fontSize: 18,
   padding: '4px 6px',
-}
-
-export const editInput = {
-  flex: 1,
-  background: 'var(--surface)',
-  border: '1px solid var(--accent)',
-  borderRadius: 8,
-  padding: '8px 12px',
-  color: 'var(--text)',
-  fontSize: 15,
-  outline: 'none',
 }
 
 export const addRow = {

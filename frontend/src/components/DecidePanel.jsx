@@ -16,10 +16,8 @@ function getName(item) {
  */
 function parseQuantity(val) {
   if (val === '' || val === null || val === undefined) return null
-  // Allow intermediate typing states like "1." or "0."
   const num = parseFloat(val)
   if (isNaN(num)) return null
-  // Round to max 2 decimal places
   return Math.round(num * 100) / 100
 }
 
@@ -28,8 +26,6 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
   const [phase, setPhase] = useState('edit')
   const [items, setItems] = useState([])
   const [newItem, setNewItem] = useState('')
-  const [editIdx, setEditIdx] = useState(null)
-  const [editValue, setEditValue] = useState('')
   const [ratings, setRatings] = useState({})
   const [existingRatings, setExistingRatings] = useState([])
   const [saving, setSaving] = useState(false)
@@ -62,23 +58,7 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
     setItems(prev => prev.filter((_, i) => i !== idx))
   }
 
-  const handleStartEdit = (idx) => {
-    setEditIdx(idx)
-    setEditValue(items[idx].name)
-  }
-
-  const handleSaveEdit = () => {
-    if (editValue.trim() && editIdx !== null) {
-      setItems(prev => prev.map((item, i) =>
-        i === editIdx ? { ...item, name: editValue.trim() } : item
-      ))
-    }
-    setEditIdx(null)
-    setEditValue('')
-  }
-
   const handleQuantityChange = (idx, val) => {
-    // Allow intermediate typing: digits, one dot, max 2 decimals after dot
     if (val !== '' && !/^\d*\.?\d{0,2}$/.test(val)) return
     setItems(prev => prev.map((item, i) =>
       i === idx ? { ...item, quantity: val === '' ? '' : val } : item
@@ -90,6 +70,15 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
       if (i !== idx) return item
       const parsed = parseQuantity(item.quantity)
       return { ...item, quantity: parsed !== null ? parsed : 1 }
+    }))
+  }
+
+  const handleQuantityStep = (idx, delta) => {
+    setItems(prev => prev.map((item, i) => {
+      if (i !== idx) return item
+      const current = typeof item.quantity === 'number' ? item.quantity : parseFloat(item.quantity) || 1
+      const next = Math.round((current + delta) * 100) / 100
+      return { ...item, quantity: next > 0 ? next : current }
     }))
   }
 
@@ -188,33 +177,21 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
         <div style={s.itemList}>
           {items.map((item, idx) => (
             <div key={idx} style={s.itemRow}>
-              {editIdx === idx ? (
+              <div style={s.qtyGroup}>
+                <button style={s.arrowBtn} onClick={() => handleQuantityStep(idx, -1)}>▼</button>
                 <input
-                  style={s.editInput}
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
-                  onBlur={handleSaveEdit}
-                  autoFocus
+                  style={s.qtyInput}
+                  type="text"
+                  inputMode="decimal"
+                  value={item.quantity}
+                  onChange={(e) => handleQuantityChange(idx, e.target.value)}
+                  onBlur={() => handleQuantityBlur(idx)}
                 />
-              ) : (
-                <>
-                  <input
-                    style={s.qtyInput}
-                    type="text"
-                    inputMode="decimal"
-                    value={item.quantity}
-                    onChange={(e) => handleQuantityChange(idx, e.target.value)}
-                    onBlur={() => handleQuantityBlur(idx)}
-                  />
-                  <span style={s.unitLabel}>{item.unit}</span>
-                  <span style={s.itemText} onClick={() => handleStartEdit(idx)}>{item.name}</span>
-                </>
-              )}
+                <button style={s.arrowBtn} onClick={() => handleQuantityStep(idx, 1)}>▲</button>
+              </div>
+              <span style={s.unitLabel}>{item.unit}</span>
+              <span style={s.itemText}>{item.name}</span>
               <div style={s.itemActions}>
-                {editIdx !== idx && (
-                  <button style={s.editBtn} onClick={() => handleStartEdit(idx)} title="Edit name">✏️</button>
-                )}
                 <button style={s.deleteBtn} onClick={() => handleDelete(idx)} title="Delete">🗑️</button>
               </div>
             </div>
