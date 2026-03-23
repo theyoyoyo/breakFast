@@ -32,6 +32,7 @@ function formatIngredient(item) {
 export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, analyzing }) {
   const [panelOpen, setPanelOpen] = useState(false)
   const [items, setItems] = useState(() => (meal?.ingredients || []).map(normalizeItem))
+  const [mealName, setMealName] = useState(meal?.meal_name || 'Meal')
   const [newItem, setNewItem] = useState('')
   const [favId, setFavId] = useState(null)
   const [favLoading, setFavLoading] = useState(false)
@@ -98,7 +99,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
         setFavId(null)
       } else {
         const result = await addFavorite({
-          meal_name: meal?.meal_name || 'Meal',
+          meal_name: mealName.trim() || meal?.meal_name || 'Meal',
           description: meal?.description,
           ingredients: items,
           steps: meal?.steps || [],
@@ -121,6 +122,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
     }))
     const updated = {
       ...meal,
+      meal_name: mealName.trim() || meal?.meal_name || 'Meal',
       ingredients: finalItems,
     }
     onSave?.(updated)
@@ -143,14 +145,6 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
           {meal?.prep_time_min && <span style={s.prepBadge}>⏱ {meal.prep_time_min}m</span>}
         </div>
         <button
-          style={s.favBtnCompact(!!favId)}
-          onClick={(e) => { e.stopPropagation(); handleToggleFavorite() }}
-          disabled={favLoading}
-          title={favId ? 'Remove from favorites' : 'Add to favorites'}
-        >
-          ⭐
-        </button>
-        <button
           style={s.analyzeBtn(analyzing)}
           onClick={(e) => { e.stopPropagation(); onAnalyze?.() }}
           disabled={analyzing}
@@ -164,7 +158,14 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
         <div style={s.overlay} onClick={handleOverlayClick}>
           <div style={s.panel}>
             <div style={s.panelHeader}>
-              {meal?.meal_name || 'Meal'} <span style={s.mealId}>#{meal?.id || 0}</span>
+              <input
+                style={s.nameInput}
+                value={mealName}
+                onChange={(e) => { if (e.target.value.length <= 100) setMealName(e.target.value) }}
+                onBlur={() => { if (!mealName.trim()) setMealName(meal?.meal_name || 'Meal') }}
+                placeholder="Meal name"
+              />
+              <span style={s.mealId}>#{meal?.id || 0}</span>
             </div>
 
             <div style={s.itemList}>

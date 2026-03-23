@@ -107,11 +107,23 @@ export const panel = {
 }
 
 export const panelHeader = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  marginBottom: 16,
+  flexShrink: 0,
+}
+
+export const nameInput = {
+  flex: 1,
   fontSize: 18,
   fontWeight: 700,
   color: 'var(--accent)',
-  marginBottom: 16,
-  flexShrink: 0,
+  background: 'var(--surface2)',
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  padding: '6px 10px',
+  outline: 'none',
 }
 
 export const itemList = {
@@ -240,20 +252,9 @@ export const favBtn = (isFav) => ({
   background: isFav ? '#4a3a10' : 'var(--surface2)',
   border: isFav ? '1px solid #b8922a' : '1px solid var(--border)',
   borderRadius: 10,
-  padding: '10px 16px',
+  padding: '12px 24px',
   fontSize: 20,
   cursor: 'pointer',
-  transition: 'background 0.15s, border-color 0.15s',
-})
-
-export const favBtnCompact = (isFav) => ({
-  background: isFav ? '#4a3a10' : 'var(--surface2)',
-  border: isFav ? '1px solid #b8922a' : '1px solid var(--border)',
-  borderRadius: 8,
-  fontSize: 16,
-  cursor: 'pointer',
-  padding: '4px 6px',
-  flexShrink: 0,
   transition: 'background 0.15s, border-color 0.15s',
 })
 
