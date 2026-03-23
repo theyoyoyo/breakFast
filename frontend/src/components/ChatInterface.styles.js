@@ -178,7 +178,7 @@ export const actionRow = {
 export const actionStack = {
   display: 'flex',
   flexDirection: 'column',
-  alignItems: 'center',
+  alignItems: 'stretch',
   gap: 6,
 }
 
