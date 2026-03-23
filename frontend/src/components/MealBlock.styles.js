@@ -43,9 +43,7 @@ export const blockText = {
   fontSize: 13,
   color: 'var(--text)',
   flex: 1,
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
+  wordBreak: 'break-word',
 }
 
 export const analyzeBtn = (analyzing) => ({

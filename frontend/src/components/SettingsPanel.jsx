@@ -111,6 +111,11 @@ export default function SettingsPanel() {
     setProfileDirty(true)
   }
 
+  const handleClearProfileField = (field) => {
+    setProfile((prev) => ({ ...prev, [field]: '' }))
+    setProfileDirty(true)
+  }
+
   const handleSaveProfile = async () => {
     try {
       setError(null)
@@ -477,13 +482,17 @@ export default function SettingsPanel() {
           <div style={s.profileGrid}>
             <div style={s.profileField}>
               <label style={s.profileLabel}>Age</label>
-              <input
-                type="number"
-                style={s.input}
-                value={profile.age}
-                onChange={(e) => handleProfileChange('age', e.target.value)}
-                placeholder="—"
-              />
+              <div style={s.profileInputRow}>
+                <input
+                  type="number"
+                  min="1"
+                  style={s.input}
+                  value={profile.age}
+                  onChange={(e) => handleProfileChange('age', e.target.value)}
+                  placeholder="—"
+                />
+                {profile.age !== '' && <button style={s.clearFieldBtn} onClick={() => handleClearProfileField('age')}>×</button>}
+              </div>
             </div>
             <div style={s.profileField}>
               <label style={s.profileLabel}>Gender</label>
@@ -499,24 +508,32 @@ export default function SettingsPanel() {
             </div>
             <div style={s.profileField}>
               <label style={s.profileLabel}>Height (cm)</label>
-              <input
-                type="number"
-                style={s.input}
-                value={profile.height_cm}
-                onChange={(e) => handleProfileChange('height_cm', e.target.value)}
-                placeholder="—"
-              />
+              <div style={s.profileInputRow}>
+                <input
+                  type="number"
+                  min="1"
+                  style={s.input}
+                  value={profile.height_cm}
+                  onChange={(e) => handleProfileChange('height_cm', e.target.value)}
+                  placeholder="—"
+                />
+                {profile.height_cm !== '' && <button style={s.clearFieldBtn} onClick={() => handleClearProfileField('height_cm')}>×</button>}
+              </div>
             </div>
             <div style={s.profileField}>
               <label style={s.profileLabel}>Weight (kg)</label>
-              <input
-                type="number"
-                step="0.1"
-                style={s.input}
-                value={profile.weight_kg}
-                onChange={(e) => handleProfileChange('weight_kg', e.target.value)}
-                placeholder="—"
-              />
+              <div style={s.profileInputRow}>
+                <input
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  style={s.input}
+                  value={profile.weight_kg}
+                  onChange={(e) => handleProfileChange('weight_kg', e.target.value)}
+                  placeholder="—"
+                />
+                {profile.weight_kg !== '' && <button style={s.clearFieldBtn} onClick={() => handleClearProfileField('weight_kg')}>×</button>}
+              </div>
             </div>
           </div>
           <div style={s.profileField}>

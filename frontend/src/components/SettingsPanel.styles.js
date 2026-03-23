@@ -31,6 +31,23 @@ export const profileLabel = {
   color: 'var(--text-muted)',
 }
 
+export const profileInputRow = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 4,
+}
+
+export const clearFieldBtn = {
+  background: 'none',
+  border: 'none',
+  fontSize: 16,
+  color: 'var(--text-muted)',
+  cursor: 'pointer',
+  padding: '0 2px',
+  lineHeight: 1,
+  flexShrink: 0,
+}
+
 export const saveBtn = {
   background: secondaryColor,
   border: 'none',
