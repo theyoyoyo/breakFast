@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
-import { MessageCircle, Refrigerator, SlidersHorizontal, Settings, LogOut } from 'lucide-react'
+import { MessageCircle, Refrigerator, SlidersHorizontal, Star, Settings, LogOut } from 'lucide-react'
 import ChatInterface from './components/ChatInterface'
 import IngredientPanel from './components/IngredientPanel'
 import PreferencesPanel from './components/PreferencesPanel'
+import FavoritesPanel from './components/FavoritesPanel'
 import SettingsPanel from './components/SettingsPanel'
 import LoginScreen from './components/LoginScreen'
 import { logout, checkAuth } from './services/api'
@@ -12,6 +13,7 @@ const TABS = [
   { key: 'Chat', label: 'Chat', Icon: MessageCircle },
   { key: 'Ingredients', label: 'Ingredients', Icon: Refrigerator },
   { key: 'Preferences', label: 'Preferences', Icon: SlidersHorizontal },
+  { key: 'Favorites', label: 'Favorites', Icon: Star },
   { key: 'Settings', label: 'Settings', Icon: Settings },
 ]
 
@@ -95,6 +97,15 @@ export default function App() {
       </div>
       <div style={{ ...s.mainFull, display: activeTab === 'Preferences' ? undefined : 'none' }}>
         <PreferencesPanel />
+      </div>
+      <div style={{ ...s.mainFull, display: activeTab === 'Favorites' ? undefined : 'none' }}>
+        <FavoritesPanel
+          visible={activeTab === 'Favorites'}
+          onSendToChat={(meal) => {
+            chatRef.current?.injectFavoriteMeal(meal)
+            setActiveTab('Chat')
+          }}
+        />
       </div>
       <div style={{ ...s.mainFull, display: activeTab === 'Settings' ? undefined : 'none' }}>
         <SettingsPanel visible={activeTab === 'Settings'} />

@@ -236,6 +236,17 @@ export const cancelBtn = {
   cursor: 'pointer',
 }
 
+export const favBtn = (isFav) => ({
+  background: 'none',
+  border: '1px solid var(--border)',
+  borderRadius: 10,
+  padding: '10px 16px',
+  fontSize: 20,
+  cursor: 'pointer',
+  opacity: isFav ? 1 : 0.4,
+  transition: 'opacity 0.15s',
+})
+
 export const saveBtn = {
   background: secondaryColor,
   border: 'none',

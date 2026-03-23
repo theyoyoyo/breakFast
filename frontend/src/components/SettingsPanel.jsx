@@ -5,6 +5,7 @@ import {
   getSupplements, createSupplement, updateSupplement, deleteSupplement,
   getMeals, updateMeal, deleteMeal, deleteOldMeals,
   getHealthRules, createHealthRule, updateHealthRule, deleteHealthRule,
+  getFavorites, addFavorite, deleteFavorite,
 } from '../services/api'
 import WeeklySummary from './WeeklySummary'
 import * as s from './SettingsPanel.styles'
@@ -37,6 +38,7 @@ export default function SettingsPanel({ visible }) {
   const [mealItems, setMealItems] = useState([])
   const [mealName, setMealName] = useState('')
   const [newMealItem, setNewMealItem] = useState('')
+  const [favIds, setFavIds] = useState({}) // { mealName: favId } for quick lookup
 
   // Health rules state
   const [healthRules, setHealthRules] = useState([])
@@ -49,11 +51,15 @@ export default function SettingsPanel({ visible }) {
   const load = async () => {
     try {
       setError(null)
-      const [r, prof, supps, rules, m] = await Promise.all([
-        getRatings(), getProfile(), getSupplements(), getHealthRules(), getMeals(),
+      const [r, prof, supps, rules, m, favs] = await Promise.all([
+        getRatings(), getProfile(), getSupplements(), getHealthRules(), getMeals(), getFavorites(),
       ])
       setRatings(r)
       setMeals(m)
+      // Build a lookup: meal_name -> fav id (for the star toggle in meal history)
+      const favLookup = {}
+      for (const f of favs) { favLookup[f.meal_name] = f.id }
+      setFavIds(favLookup)
       if (prof) {
         setProfile({
           age: prof.age ?? '',
@@ -327,6 +333,27 @@ export default function SettingsPanel({ visible }) {
     }
   }
 
+  const handleToggleMealFavorite = async (meal) => {
+    const existing = favIds[meal.meal_name]
+    try {
+      if (existing) {
+        await deleteFavorite(existing)
+        setFavIds(prev => { const next = { ...prev }; delete next[meal.meal_name]; return next })
+      } else {
+        const ingredients = Array.isArray(meal.ingredients) ? meal.ingredients : []
+        const result = await addFavorite({
+          meal_name: meal.meal_name,
+          description: meal.description,
+          ingredients,
+          steps: Array.isArray(meal.steps) ? meal.steps : [],
+          prep_time_min: meal.prep_time_min,
+          nutrition_note: meal.nutrition_note,
+        })
+        setFavIds(prev => ({ ...prev, [meal.meal_name]: result.id }))
+      }
+    } catch { /* ignore */ }
+  }
+
   // --- Weekly Summary sub-page ---
   if (view === 'weekly') {
     return <WeeklySummary onBack={() => setView('settings')} />
@@ -407,8 +434,15 @@ export default function SettingsPanel({ visible }) {
                       <button style={s.addBtn} onClick={handleAddMealItem}>+</button>
                     </div>
 
-                    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                    <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center' }}>
                       <button style={s.saveBtn} onClick={() => handleSaveMeal(meal)}>Save</button>
+                      <button
+                        style={s.favToggle(!!favIds[meal.meal_name])}
+                        onClick={() => handleToggleMealFavorite(meal)}
+                        title={favIds[meal.meal_name] ? 'Remove from favorites' : 'Add to favorites'}
+                      >
+                        {favIds[meal.meal_name] ? '⭐' : '☆'}
+                      </button>
                       <button style={s.cancelEditBtn} onClick={() => setExpandedMealId(null)}>Cancel</button>
                     </div>
                   </div>

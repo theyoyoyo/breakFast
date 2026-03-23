@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { getFavorites, addFavorite, deleteFavorite } from '../services/api'
 import * as s from './MealBlock.styles'
 
 /**
@@ -32,6 +33,20 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
   const [panelOpen, setPanelOpen] = useState(false)
   const [items, setItems] = useState(() => (meal?.ingredients || []).map(normalizeItem))
   const [newItem, setNewItem] = useState('')
+  const [favId, setFavId] = useState(null)
+  const [favLoading, setFavLoading] = useState(false)
+
+  // Check if this meal is already favorited (match by meal_name + ingredients count)
+  useEffect(() => {
+    if (!panelOpen) return
+    let cancelled = false
+    getFavorites().then(favs => {
+      if (cancelled) return
+      const match = favs.find(f => f.meal_name === meal?.meal_name)
+      setFavId(match ? match.id : null)
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [panelOpen, meal?.meal_name])
   const displayNames = items.length > 0
     ? items.map(formatIngredient).join(', ')
     : meal?.meal_name || 'Meal'
@@ -74,6 +89,27 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
     if (items.some(item => item.name.toLowerCase() === v.toLowerCase())) return
     setItems(prev => [...prev, { name: v, quantity: 1, unit: 'adet' }])
     setNewItem('')
+  }
+
+  const handleToggleFavorite = async () => {
+    setFavLoading(true)
+    try {
+      if (favId) {
+        await deleteFavorite(favId)
+        setFavId(null)
+      } else {
+        const result = await addFavorite({
+          meal_name: meal?.meal_name || 'Meal',
+          description: meal?.description,
+          ingredients: items,
+          steps: meal?.steps || [],
+          prep_time_min: meal?.prep_time_min,
+          nutrition_note: meal?.nutrition_note,
+        })
+        setFavId(result.id)
+      }
+    } catch { /* ignore */ }
+    setFavLoading(false)
   }
 
   const handleSave = () => {
@@ -161,6 +197,14 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
 
             <div style={s.actions}>
               <button style={s.cancelBtn} onClick={() => setPanelOpen(false)}>Close</button>
+              <button
+                style={s.favBtn(!!favId)}
+                onClick={handleToggleFavorite}
+                disabled={favLoading}
+                title={favId ? 'Remove from favorites' : 'Add to favorites'}
+              >
+                {favId ? '⭐' : '☆'}
+              </button>
               <button style={s.saveBtn} onClick={handleSave}>Save</button>
             </div>
           </div>
