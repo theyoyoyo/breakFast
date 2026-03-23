@@ -118,6 +118,7 @@ export const suppToggleBtn = (active) => ({
   padding: '8px 16px',
   fontSize: 28,
   lineHeight: 1,
+  width: '100%',
   cursor: 'pointer',
   transition: 'background 0.15s, color 0.15s',
   display: 'flex',
