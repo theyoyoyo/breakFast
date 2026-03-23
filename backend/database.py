@@ -212,12 +212,12 @@ async def init_db() -> None:
         except Exception:
             pass  # Column already exists
 
-        # Clean up chat sessions older than 48 hours
+        # Clean up chat sessions older than 8 days
         await db.execute(
             """
             DELETE FROM suggested_meals WHERE session_id IN (
                 SELECT id FROM chat_sessions
-                WHERE updated_at < datetime('now', '-48 hours')
+                WHERE updated_at < datetime('now', '-8 days')
             )
             """
         )
@@ -225,12 +225,12 @@ async def init_db() -> None:
             """
             DELETE FROM chat_messages WHERE session_id IN (
                 SELECT id FROM chat_sessions
-                WHERE updated_at < datetime('now', '-48 hours')
+                WHERE updated_at < datetime('now', '-8 days')
             )
             """
         )
         await db.execute(
-            "DELETE FROM chat_sessions WHERE updated_at < datetime('now', '-48 hours')"
+            "DELETE FROM chat_sessions WHERE updated_at < datetime('now', '-8 days')"
         )
 
         await db.commit()
