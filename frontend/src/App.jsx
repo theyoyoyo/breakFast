@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { MessageCircle, Refrigerator, SlidersHorizontal, Settings, LogOut } from 'lucide-react'
 import ChatInterface from './components/ChatInterface'
 import IngredientPanel from './components/IngredientPanel'
 import PreferencesPanel from './components/PreferencesPanel'
@@ -7,7 +8,12 @@ import LoginScreen from './components/LoginScreen'
 import { logout, checkAuth } from './services/api'
 import * as s from './App.styles'
 
-const TABS = ['Chat', 'Ingredients', 'Preferences', 'Settings']
+const TABS = [
+  { key: 'Chat', label: 'Chat', Icon: MessageCircle },
+  { key: 'Ingredients', label: 'Ingredients', Icon: Refrigerator },
+  { key: 'Preferences', label: 'Preferences', Icon: SlidersHorizontal },
+  { key: 'Settings', label: 'Settings', Icon: Settings },
+]
 
 function getStoredAuth() {
   const token = localStorage.getItem('bf_token')
@@ -58,13 +64,14 @@ export default function App() {
   return (
     <div style={s.app}>
       <nav style={s.nav}>
-        {TABS.map((tab) => (
+        {TABS.map(({ key, label, Icon }) => (
           <button
-            key={tab}
-            style={s.tab(activeTab === tab)}
-            onClick={() => setActiveTab(tab)}
+            key={key}
+            style={s.tab(activeTab === key)}
+            onClick={() => setActiveTab(key)}
           >
-            {tab}
+            <Icon size={14} style={{ marginRight: 4, verticalAlign: -2 }} />
+            {label}
           </button>
         ))}
         <div style={s.userInfo}>
@@ -73,22 +80,22 @@ export default function App() {
             onClick={() => chatRef.current?.injectDemoMeal()}
             title="Inject demo meal"
           >{auth.user.name}</span>
-          <button style={s.logoutBtn} onClick={handleLogout}>Logout</button>
+          <button style={s.logoutBtn} onClick={handleLogout}>
+            <LogOut size={12} style={{ marginRight: 4, verticalAlign: -1 }} />
+            Logout
+          </button>
         </div>
       </nav>
 
       <div style={{ ...s.mainFull, display: activeTab === 'Chat' ? undefined : 'none' }}>
         <ChatInterface ref={chatRef} onMealLogged={handleMealLogged} />
       </div>
-
       <div style={{ ...s.mainFull, display: activeTab === 'Ingredients' ? undefined : 'none' }}>
         <IngredientPanel refreshTrigger={ingredientRefresh} />
       </div>
-
       <div style={{ ...s.mainFull, display: activeTab === 'Preferences' ? undefined : 'none' }}>
         <PreferencesPanel />
       </div>
-
       <div style={{ ...s.mainFull, display: activeTab === 'Settings' ? undefined : 'none' }}>
         <SettingsPanel visible={activeTab === 'Settings'} />
       </div>
