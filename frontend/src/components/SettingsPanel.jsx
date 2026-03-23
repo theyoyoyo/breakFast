@@ -623,7 +623,7 @@ export default function SettingsPanel({ visible }) {
             <div key={sup.id} style={s.suppRow}>
               <span style={s.suppName}>{sup.name}</span>
               {sup.contents && <span style={s.suppContents}>{sup.contents}</span>}
-              <button style={s.suppFreq} onClick={() => handleToggleFrequency(sup)} title="Click to toggle">{sup.frequency}</button>
+              <button style={s.suppFreq(sup.frequency)} onClick={() => handleToggleFrequency(sup)} title="Click to toggle">{sup.frequency}</button>
               <button style={s.tagX} onClick={() => handleDeleteSupplement(sup.id)}>×</button>
             </div>
           ))}

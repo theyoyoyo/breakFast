@@ -112,14 +112,17 @@ export const suppMenuWrapper = {
 
 export const suppToggleBtn = (active) => ({
   background: active ? secondaryColor : 'var(--surface2)',
-  color: active ? '#fff' : 'var(--text-muted)',
+  color: active ? '#fff' : 'var(--text)',
   border: '1px solid var(--border)',
-  borderRadius: 12,
-  padding: '6px 14px',
-  fontSize: 12,
-  fontWeight: 600,
+  borderRadius: 20,
+  padding: '8px 16px',
+  fontSize: 28,
+  lineHeight: 1,
   cursor: 'pointer',
   transition: 'background 0.15s, color 0.15s',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
 })
 
 export const suppMenu = {
@@ -147,17 +150,18 @@ export const suppMenuLabel = {
   marginBottom: 2,
 }
 
-export const suppPill = (taken) => ({
+export const suppPill = (taken, isDaily) => ({
   display: 'inline-flex',
   alignItems: 'center',
   gap: 4,
   padding: '6px 12px',
   borderRadius: 16,
   fontSize: 12,
-  border: '1px solid var(--border)',
-  background: taken ? secondaryColor : 'var(--surface2)',
-  color: taken ? '#fff' : 'var(--text-muted)',
-  cursor: 'pointer',
+  border: isDaily ? '1px solid #4a7c59' : '1px solid var(--border)',
+  background: isDaily ? '#2d4a35' : taken ? secondaryColor : 'var(--surface2)',
+  color: isDaily ? '#8bc59a' : taken ? '#fff' : 'var(--text-muted)',
+  cursor: isDaily ? 'default' : 'pointer',
+  opacity: isDaily ? 0.85 : 1,
   whiteSpace: 'nowrap',
   transition: 'background 0.15s, color 0.15s',
 })
