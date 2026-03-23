@@ -70,6 +70,10 @@ async def delete_session(session_id: str, user_id: int = Depends(require_user)):
     """Delete a session and its messages. Returns 204."""
     async with get_db() as db:
         await db.execute(
+            "DELETE FROM suggested_meals WHERE session_id = ? AND user_id = ?",
+            (session_id, user_id),
+        )
+        await db.execute(
             "DELETE FROM chat_messages WHERE session_id = ? AND user_id = ?",
             (session_id, user_id),
         )

@@ -112,16 +112,17 @@ async def _load_context(db, user_id: int) -> dict:
     }
 
 
-async def _log_meal(db, user_id: int, meal_data: dict) -> int:
-    """Insert a suggested meal into history. Returns the new meal's id."""
+async def _save_suggestion(db, user_id: int, session_id: str, meal_data: dict) -> int:
+    """Insert a suggested meal into suggested_meals. Returns the new suggestion's id."""
     await db.execute(
         """
-        INSERT INTO meal_history
-            (user_id, meal_name, description, ingredients, steps, prep_time_min, nutrition_note)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO suggested_meals
+            (user_id, session_id, meal_name, description, ingredients, steps, prep_time_min, nutrition_note)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             user_id,
+            session_id,
             meal_data.get("meal_name", "Unknown"),
             meal_data.get("description"),
             json.dumps(meal_data.get("ingredients", []), ensure_ascii=False),
@@ -282,16 +283,16 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                 except Exception:
                     response_text = lyric_cycler.next()
 
-            # Auto-log meal if the response contains a ```json meal block.
-            # Log BEFORE saving the message so we can embed the meal_id in the
-            # persisted text — this lets the frontend restore meal blocks with
-            # their DB id after page reload.
+            # Save suggestion if the response contains a ```json meal block.
+            # Save BEFORE persisting the message so we can embed the suggestion
+            # id in the stored text — the frontend uses this to restore meal
+            # blocks after page reload.
             meal_data = extract_json_block(response_text)
             saved_text = response_text
             if meal_data:
                 async with get_db() as db:
-                    meal_id = await _log_meal(db, user_id, meal_data)
-                meal_data["id"] = meal_id
+                    suggestion_id = await _save_suggestion(db, user_id, session_id, meal_data)
+                meal_data["id"] = suggestion_id
                 # Re-serialize JSON block with id so it persists in the message
                 enriched = {**meal_data}
                 enriched_json = json.dumps(enriched, ensure_ascii=False)

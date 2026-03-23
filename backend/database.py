@@ -134,6 +134,19 @@ CREATE TABLE IF NOT EXISTS supplement_daily_log (
     UNIQUE(user_id, supplement_id, date)
 );
 
+CREATE TABLE IF NOT EXISTS suggested_meals (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL REFERENCES users(id),
+    session_id      TEXT    NOT NULL REFERENCES chat_sessions(id),
+    meal_name       TEXT    NOT NULL,
+    description     TEXT,
+    ingredients     TEXT,           -- JSON list
+    steps           TEXT,           -- JSON list
+    prep_time_min   INTEGER,
+    nutrition_note  TEXT,
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Indices on frequently-filtered foreign key columns
 CREATE INDEX IF NOT EXISTS idx_ingredient_inventory_user ON ingredient_inventory(user_id);
 CREATE INDEX IF NOT EXISTS idx_meal_history_user ON meal_history(user_id);
@@ -145,6 +158,8 @@ CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id
 CREATE INDEX IF NOT EXISTS idx_chat_messages_user ON chat_messages(user_id);
 CREATE INDEX IF NOT EXISTS idx_product_ratings_user ON product_ratings(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_supplements_user ON user_supplements(user_id);
+CREATE INDEX IF NOT EXISTS idx_suggested_meals_session ON suggested_meals(session_id);
+CREATE INDEX IF NOT EXISTS idx_suggested_meals_user ON suggested_meals(user_id);
 """
 
 
@@ -198,6 +213,14 @@ async def init_db() -> None:
             pass  # Column already exists
 
         # Clean up chat sessions older than 48 hours
+        await db.execute(
+            """
+            DELETE FROM suggested_meals WHERE session_id IN (
+                SELECT id FROM chat_sessions
+                WHERE updated_at < datetime('now', '-48 hours')
+            )
+            """
+        )
         await db.execute(
             """
             DELETE FROM chat_messages WHERE session_id IN (
