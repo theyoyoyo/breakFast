@@ -41,7 +41,7 @@ ollama pull llama3.1:8b
 
 ```bash
 cp .env.example .env
-# Edit .env — set ANTHROPIC_API_KEY if you want the Claude fallback
+# Edit .env — adjust OLLAMA_BASE_URL if needed
 ```
 
 ### 3. Install backend dependencies
@@ -92,7 +92,7 @@ Install Tailscale on the third PC and on your phone/laptop. Once connected, the 
  [FastAPI Backend — third PC]
    |               |
    v               v
-[Ollama]    [Claude API fallback]
+[Ollama]    [Song lyric fallback]
    |
    v
 [SQLite — breakFAST.db]
@@ -107,7 +107,7 @@ Install Tailscale on the third PC and on your phone/laptop. Once connected, the 
 | Frontend | React PWA (Vite) |
 | Backend | Python / FastAPI |
 | Local LLM | Ollama + Llama 3.1 8B |
-| LLM Fallback | Anthropic Claude API |
+| LLM Fallback | Song lyric cycling (when Ollama is unreachable) |
 | Database | SQLite |
 | Voice | Web Speech API |
 | Nutrition | Open Food Facts API |

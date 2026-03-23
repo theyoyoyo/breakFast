@@ -43,9 +43,8 @@ time by running things in parallel wherever possible. This is formally a job-sho
 scheduling problem.
 
 **Local-first, free forever.** The primary AI brain runs on the user's own hardware
-via Ollama. The Claude API is a fallback only — for when the local server is down or
-for tasks that genuinely require stronger reasoning. The system is designed so that
-95% of daily usage costs nothing.
+via Ollama. When the LLM is unreachable, a song lyric cycling fallback keeps the UI
+responsive. The system is designed so that 100% of daily usage costs nothing.
 
 **The system learns.** It starts with whatever the user tells it at onboarding and gets
 smarter with every meal logged. Stated habits are treated as a warm prior, not hard
@@ -60,7 +59,7 @@ rules. Actual behavior over time gradually updates what the system recommends.
 | Frontend | React PWA |
 | Backend | Python / FastAPI |
 | Local LLM | Ollama + Llama 3.1 8B |
-| LLM Fallback | Anthropic Claude API (commented out, to be re-enabled later) |
+| LLM Fallback | Song lyric cycling (when Ollama is unreachable) |
 | Database | SQLite (local on third PC) |
 | Voice | Web Speech API (browser-native) |
 | Nutrition Data | Open Food Facts API + LLM estimation fallback |
@@ -79,14 +78,15 @@ rules. Actual behavior over time gradually updates what the system recommends.
         [FastAPI Backend — third PC]
           |                    |
           v                    v
-   [Ollama + Llama 3.1]   [Claude API fallback]
+   [Ollama + Llama 3.1]   [Song lyric fallback]
           |
           v
    [SQLite Database]
-   - ingredient_inventory
-   - meal_history
-   - user_preferences
-   - user_habits
+   - users, chat_sessions, chat_messages
+   - ingredient_inventory, meal_history
+   - user_preferences, user_habits, health_rules
+   - user_profiles, user_supplements, supplement_daily_log
+   - product_ratings
 ```
 
 On home WiFi, the phone and desktop connect to the FastAPI backend directly over the
@@ -115,49 +115,36 @@ into the system prompt at runtime — never referenced or explained to the user.
 
 ## Features
 
-Features are in implementation priority order. Nothing in Phase 2 or later should be
-built before Phase 1 is solid and tested.
+Phase 1 and Phase 2 are complete. Phase 3 is next.
 
-### Phase 1 — MVP
+### Phase 1 — MVP (COMPLETE)
 
-**Chat interface with FastAPI + Ollama backend.** Text-based conversation, streaming
-responses via WebSocket. The user describes what they have and what they want. The app
-responds with a full meal suggestion including ingredients, steps, rough prep time,
-and a one-line nutrition note.
+- Chat interface with FastAPI + Ollama backend (WebSocket streaming)
+- Ingredient input via natural language (parsed and stored)
+- Meal suggestion engine (LLM with health rules in system prompt)
+- Meal history logging (SQLite with timestamps)
+- Multi-user authentication (PIN/name, admin CLI)
+- Chat session persistence (messages survive refresh)
 
-**Ingredient input via natural language.** The user says things like "I have eggs,
-some leftover rice, a tomato, and Greek yogurt" and the system parses and stores this.
-"I used the eggs" or "I bought oats and kefir" update the inventory accordingly.
+### Phase 2 — Core Experience (COMPLETE)
 
-**Meal suggestion engine (basic).** Using the ingredient inventory and health profile,
-suggest a complete breakfast. Suggestions come from the LLM with health rules baked
-into the system prompt.
+- Voice input and output (Web Speech API, browser-native)
+- Meal blocks in chat (inline clickable blocks with checkboxes, prep time, editable overlay)
+- Kitchen scheduler (greedy parallel prep planner — see spec below)
+- Preference learning (thumbs up/down, product ratings 1-10)
+- Preferences management (favorites, dislikes, habits, avoid list)
+- "Kahvaltı Öner" button (suggest with comfort/explore/quick modes via long-press)
+- "Karar Verdim" flow (confirm meal, rate ingredients, log to history)
+- Analyst persona + meal nutrition analysis (score /100, macro breakdown)
+- 3-step suggestion pipeline (draft → analyze → refine, max 2 rounds)
+- User profiles (age, gender, height, weight, activity level)
+- Supplements tracking (daily/sometimes frequency, today toggle)
+- Health rules (free-text, priority levels: low/high/critical)
+- Weekly summary (last 7 consecutive-day meals with cached nutrition)
+- Song lyric fallback when Ollama is unreachable
+- Settings page (profile, supplements, health rules, ratings, data management)
 
-**Meal history logging.** Every accepted/prepared meal is saved to SQLite with a
-timestamp. This is the data foundation everything in Phase 2 builds on.
-
-### Phase 2 — Core Experience
-
-**Voice input and output.** Hands-free use in the kitchen via Web Speech API. Voice
-is a frontend layer only — speech to text before sending, text to speech after
-receiving. The backend does not change.
-
-**Visual recipe card UI.** A structured recipe card renders alongside the chat showing
-the meal name, ingredients, timed steps, and nutrition note.
-
-**Kitchen scheduler (parallel prep planner).** Given a multi-component meal, the
-system produces a step-by-step cooking schedule that minimizes total wall-clock time
-by parallelizing tasks across appliances. Full specification in the Kitchen Scheduler
-section below.
-
-**Preference learning.** Thumbs up/down feedback and repeat meal requests update the
-preference profile in SQLite and influence future suggestions.
-
-**Preferences management.** A dedicated panel where the user can view and edit
-favorites, dislikes, and habits — editable both through chat ("add avocado to my
-favorites") and through the UI directly.
-
-### Phase 3 — Smart Layer
+### Phase 3 — Smart Layer (NEXT)
 
 **Habit import and onboarding.** A one-time onboarding conversation where the user
 introduces their habits as a warm starting prior. Always editable afterward through
@@ -179,8 +166,9 @@ profile, and nutrition data. Not just "you're out of eggs" but "you haven't had 
 good omega-3 source in several days and you're low on walnuts — consider picking
 those up."
 
-**Weekly nutrition summary.** A simple view of what nutritional bases the user has
-covered this week and what's missing. Factual, not preachy.
+**Weekly nutrition summary.** Extend the existing weekly summary view with deeper
+nutritional analysis — what bases the user has covered this week and what's missing.
+Factual, not preachy.
 
 ---
 
@@ -260,12 +248,18 @@ be added in Phase 3 as an accuracy improvement.
 
 ---
 
-## LLM System Prompts (Dual Persona)
+## LLM System Prompts (Three Personas)
 
-The system uses two distinct personas, both defined in `backend/services/suggestion.py`.
+The system uses three distinct personas defined in `backend/services/suggestion.py`.
 Prompts are written in English with "Always respond in Turkish" instruction — this
 produces better results with Llama 3.1 8B than fully Turkish prompts. Turkish versions
 are kept as comments for a future "Turkish brain / English brain" toggle.
+
+| Persona | Job | Temperature | Defined in |
+|---|---|---|---|
+| Chat | Casual breakfast buddy | 0.7 | `build_chat_prompt` |
+| Suggestion | Creative meal designer | 0.8 | `build_suggestion_prompt` |
+| Analyst | Nutrition calculator + food expert | 0.3 | `build_analyst_prompt` |
 
 ### Chat Persona (`build_chat_prompt`)
 
@@ -277,11 +271,12 @@ Used for everyday conversation via the WebSocket chat endpoint.
 - **Behavior**: steers non-breakfast topics back gently, confirms ingredient updates
   naturally, learns preferences through conversation
 - **Output**: free-form Turkish text; appends a JSON block when suggesting a meal
-  (parsed by frontend to render RecipeCard and log the meal)
+  (parsed by frontend to render MealBlock and log the meal)
 
 ### Suggestion Persona (`build_suggestion_prompt`)
 
-Used when the "Kahvaltı Öner" button is pressed (Issue #16, not yet implemented).
+Used when the "Kahvaltı Öner" button is pressed. Supports three modes:
+comfort (default short press), explore, and quick (long-press selection).
 
 - **Tone**: professional dietitian who explains like an experienced chef
 - **Context depth**: last 10 meals, full ingredient inventory, user profile,
@@ -298,11 +293,31 @@ Used when the "Kahvaltı Öner" button is pressed (Issue #16, not yet implemente
 - **Output**: structured Turkish response with nutrition detail + JSON block including
   `nutrition_detail` object and `advance_prep_tip` field
 
+### Analyst Persona (`build_analyst_prompt`)
+
+Used by the analyst endpoint and the 3-step suggestion pipeline.
+
+- **Tone**: precise, data-driven nutrition expert
+- **Role**: evaluates meals for nutritional completeness, scores them, identifies gaps
+- **Food knowledge**: shares `backend/services/knowledge.py` module with Suggestion
+- **Output**: structured analysis with score /100, macro/micro breakdown, suggestions
+
+### 3-Step Suggestion Pipeline
+
+Defined in `backend/services/pipeline.py`. When a suggestion is requested:
+
+1. **Draft** — Suggestion persona generates a meal proposal
+2. **Analyze** — Analyst persona evaluates the draft (nutrition, balance, health rules)
+3. **Refine** — Suggestion persona revises based on analyst feedback (max 2 rounds)
+
+Progress updates are streamed to the frontend via WebSocket `{type: 'progress'}` messages.
+
 ### Shared Context Formatters
 
-Both personas share formatting functions for ingredients, history, preferences,
+All three personas share formatting functions for ingredients, history, preferences,
 habits, health rules, behavioral patterns, user profile, and supplements. These
-are injected into template placeholders at runtime.
+are injected into template placeholders at runtime. Food knowledge data lives in
+`backend/services/knowledge.py` and is shared by Suggestion and Analyst.
 
 ---
 
@@ -313,54 +328,76 @@ breakFAST/
 ├── CLAUDE.md                        ← this file, always read first
 ├── README.md                        ← setup instructions for the third PC
 ├── .env.example                     ← environment variable template
+├── .gitattributes                   ← line ending normalization (LF in repo)
+├── start.bat                        ← Windows convenience launcher
 │
 ├── backend/
-│   ├── main.py                      ← FastAPI app entry point
+│   ├── main.py                      ← FastAPI app entry point, lifespan init_db
 │   ├── requirements.txt
 │   ├── requirements-dev.txt         ← test dependencies (pytest, pytest-asyncio)
 │   ├── config.py                    ← LLM endpoints, model names, env config
-│   ├── database.py                  ← SQLite connection and schema setup
+│   ├── database.py                  ← SQLite connection, schema, indices
+│   ├── auth.py                      ← JWT auth (require_user dependency)
+│   ├── manage.py                    ← admin CLI (add/remove/list users)
 │   ├── utils.py                     ← shared utilities (JSON block extraction)
 │   │
 │   ├── routers/
+│   │   ├── auth.py                  ← /auth/login endpoint
 │   │   ├── chat.py                  ← /chat WebSocket endpoint
 │   │   ├── ingredients.py           ← /ingredients CRUD endpoints
-│   │   ├── meals.py                 ← /meals history endpoints
-│   │   ├── preferences.py          ← /preferences read/write endpoints
+│   │   ├── meals.py                 ← /meals history + /meals/weekly
+│   │   ├── preferences.py          ← /preferences + /preferences/habits
 │   │   ├── ratings.py              ← /ratings CRUD endpoints (1-10 scale)
-│   │   └── profile.py             ← /profile + /profile/supplements CRUD
+│   │   ├── profile.py             ← /profile + /profile/supplements CRUD
+│   │   ├── sessions.py            ← /sessions chat session management
+│   │   ├── health_rules.py        ← /health-rules CRUD with priority
+│   │   └── analyst.py             ← /analyst/analyze meal analysis endpoint
 │   │
 │   ├── services/
-│   │   ├── llm.py                   ← Ollama + Claude API abstraction layer
+│   │   ├── llm.py                   ← Ollama streaming + FallbackLyricCycler
 │   │   ├── scheduler.py             ← kitchen job-shop scheduler
-│   │   ├── suggestion.py            ← dual persona prompts + prompt assembly
+│   │   ├── suggestion.py            ← three persona prompts + prompt assembly
+│   │   ├── knowledge.py            ← shared food knowledge module
+│   │   ├── pipeline.py             ← 3-step suggestion pipeline
+│   │   ├── insights.py             ← behavioral pattern extraction
 │   │   ├── nutrition.py             ← Open Food Facts integration
 │   │   └── depletion.py            ← ingredient depletion inference (Phase 3)
 │   │
 │   ├── models/
 │   │   ├── ingredient.py            ← Pydantic models for ingredients
 │   │   ├── meal.py                  ← Pydantic models for meals
+│   │   ├── user.py                 ← Pydantic models for auth/users
 │   │   └── preferences.py          ← Pydantic models for user preferences
 │   │
 │   └── tests/
 │       ├── conftest.py              ← shared fixtures (test DB, async client)
+│       ├── test_utils.py            ← extract_json_block unit tests
 │       ├── api/
-│       │   ├── test_ingredients.py  ← ingredient endpoint integration tests
-│       │   ├── test_meals.py        ← meal endpoint integration tests
-│       │   ├── test_preferences.py  ← preference endpoint integration tests
-│       │   ├── test_ratings.py      ← rating endpoint integration tests
-│       │   ├── test_profile.py      ← profile + supplement endpoint tests
+│       │   ├── test_auth.py         ← auth endpoint tests
+│       │   ├── test_ingredients.py  ← ingredient endpoint tests
+│       │   ├── test_meals.py        ← meal endpoint tests
+│       │   ├── test_weekly.py       ← weekly meals endpoint tests
+│       │   ├── test_preferences.py  ← preference endpoint tests
+│       │   ├── test_ratings.py      ← rating endpoint tests
+│       │   ├── test_profile.py      ← profile + supplement tests
+│       │   ├── test_health_rules.py ← health rules endpoint tests
+│       │   ├── test_analyst.py      ← analyst endpoint tests
 │       │   ├── test_websocket.py    ← WebSocket chat tests
 │       │   └── test_sessions.py     ← session management tests
 │       └── services/
-│           ├── test_utils.py        ← extract_json_block unit tests
+│           ├── test_prompts.py      ← prompt builder unit tests
 │           ├── test_scheduler.py    ← scheduler logic unit tests
-│           └── test_prompts.py      ← prompt builder unit tests (43 tests)
+│           ├── test_knowledge.py    ← food knowledge module tests
+│           ├── test_pipeline.py     ← suggestion pipeline tests
+│           ├── test_insights.py     ← behavioral insights tests
+│           ├── test_llm_fallback.py ← lyric cycler fallback tests
+│           └── test_cleanup.py      ← cleanup utility tests
 │
 └── frontend/
     ├── public/
     │   └── manifest.json            ← PWA manifest
     ├── src/
+    │   ├── main.jsx                 ← React entry point
     │   ├── App.jsx                  ← tab navigation (Chat, Ingredients, Preferences, Settings)
     │   ├── App.styles.js            ← App layout styles
     │   ├── test-setup.js            ← vitest setup (jest-dom matchers)
@@ -368,15 +405,18 @@ breakFAST/
     │   │   └── common.js            ← shared style definitions (panelContainer, input, etc.)
     │   ├── components/
     │   │   ├── ChatInterface.jsx    ← main chat UI + supplement toggle bar
-    │   │   ├── RecipeCard.jsx       ← visual meal card + thumbs up/down
-    │   │   ├── ScheduleTimeline.jsx ← cooking schedule display
+    │   │   ├── MealBlock.jsx        ← inline meal suggestion block in chat
+    │   │   ├── DecidePanel.jsx      ← "Today I ate..." confirm + rate flow
+    │   │   ├── SuggestButton.jsx    ← suggest button + long-press mode panel
+    │   │   ├── WeeklySummary.jsx    ← weekly meals summary view
     │   │   ├── IngredientPanel.jsx  ← inventory viewer/editor
-    │   │   ├── PreferencesPanel.jsx ← favorites, dislikes, habits
-    │   │   ├── SettingsPanel.jsx    ← profile, supplements, ratings
+    │   │   ├── PreferencesPanel.jsx ← favorites, dislikes, habits, avoid list
+    │   │   ├── SettingsPanel.jsx    ← profile, supplements, ratings, health rules
     │   │   ├── LoginScreen.jsx      ← PIN auth screen
     │   │   └── *.styles.js          ← per-component style files
     │   ├── services/
-    │   │   └── api.js               ← backend API calls
+    │   │   ├── api.js               ← backend API calls (REST + WebSocket)
+    │   │   └── api.test.js          ← API service tests
     │   └── hooks/
     │       └── useVoice.js          ← Web Speech API hook
     └── package.json
