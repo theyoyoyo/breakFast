@@ -15,17 +15,18 @@ const PIPELINE_STEPS = {
   finalizing: 'Son dokunuşlar…',
 }
 
-// Strip ```json { ... } ``` blocks from message text
-const JSON_BLOCK_RE = /```json\s*\{.*?\}\s*```/gs
+// Strip ```json ... ``` blocks from message text
+const JSON_BLOCK_RE = /```json[\s\S]*?```/g
 function stripJsonBlock(text) {
   return text.replace(JSON_BLOCK_RE, '').trim()
 }
 
-// Try to parse a ```json block from text
+// Try to parse a ```json block from text — captures everything between
+// the fences so nested objects/arrays are included
 function parseJsonBlock(text) {
-  const match = text.match(/```json\s*(\{.*?\})\s*```/s)
+  const match = text.match(/```json\s*([\s\S]*?)\s*```/)
   if (!match) return null
-  try { return JSON.parse(match[1]) } catch { return null }
+  try { return JSON.parse(match[1].trim()) } catch { return null }
 }
 
 // Template meal for demo/preview without LLM
