@@ -6,6 +6,7 @@ import {
   getMeals, updateMeal, deleteMeal, deleteOldMeals,
   getHealthRules, createHealthRule, updateHealthRule, deleteHealthRule,
 } from '../services/api'
+import WeeklySummary from './WeeklySummary'
 import * as s from './SettingsPanel.styles'
 
 const PRIORITY_OPTIONS = [
@@ -280,6 +281,11 @@ export default function SettingsPanel() {
       setError('Failed to delete meal')
       load()
     }
+  }
+
+  // --- Weekly Summary sub-page ---
+  if (view === 'weekly') {
+    return <WeeklySummary onBack={() => setView('settings')} />
   }
 
   // --- Meal History sub-page ---
@@ -573,6 +579,13 @@ export default function SettingsPanel() {
               <button style={s.addBtn} onClick={handleAddSupplement}>+</button>
             </div>
           </div>
+        </div>
+
+        {/* Weekly Summary — navigates to sub-page */}
+        <div style={s.section}>
+          <button style={s.healthRulesBtn} onClick={() => setView('weekly')}>
+            Weekly Summary →
+          </button>
         </div>
 
         {/* Meal History — navigates to sub-page */}
