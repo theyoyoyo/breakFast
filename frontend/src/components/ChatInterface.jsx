@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react'
-import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, getTodaySupplements, toggleSupplement, analyzeMeal } from '../services/api'
+import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, saveSessionMessage, getTodaySupplements, toggleSupplement, analyzeMeal } from '../services/api'
 import { useVoice } from '../hooks/useVoice'
 import SuggestButton from './SuggestButton'
 import DecidePanel from './DecidePanel'
@@ -15,17 +15,18 @@ const PIPELINE_STEPS = {
   finalizing: 'Son dokunuşlar…',
 }
 
-// Strip ```json { ... } ``` blocks from message text
-const JSON_BLOCK_RE = /```json\s*\{.*?\}\s*```/gs
+// Strip ```json ... ``` blocks from message text
+const JSON_BLOCK_RE = /```json[\s\S]*?```/g
 function stripJsonBlock(text) {
   return text.replace(JSON_BLOCK_RE, '').trim()
 }
 
-// Try to parse a ```json block from text
+// Try to parse a ```json block from text — captures everything between
+// the fences so nested objects/arrays are included
 function parseJsonBlock(text) {
-  const match = text.match(/```json\s*(\{.*?\})\s*```/s)
+  const match = text.match(/```json\s*([\s\S]*?)\s*```/)
   if (!match) return null
-  try { return JSON.parse(match[1]) } catch { return null }
+  try { return JSON.parse(match[1].trim()) } catch { return null }
 }
 
 // Template meal for demo/preview without LLM
@@ -95,6 +96,10 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
         setCheckedMealIdx(newIdx)
         return newMsgs
       })
+      // Persist to DB so it survives page refresh
+      if (sessionIdRef.current) {
+        saveSessionMessage(sessionIdRef.current, 'assistant', fullContent).catch(() => {})
+      }
     }
   }))
 
@@ -410,7 +415,7 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
       if (abortCtrl.cancelled) return
       // Strip JSON block from analysis text for display, show as assistant message
       const displayText = result.analysis_text
-        ? result.analysis_text.replace(/```json\s*\{.*?\}\s*```/gs, '').trim()
+        ? result.analysis_text.replace(/```json[\s\S]*?```/g, '').trim()
         : 'Analiz sonucu alınamadı.'
       const analysisMsg = `📊 ${meal.meal_name || 'Meal'} — Besin Analizi\n\n${displayText}`
       setMessages(prev => [...prev, { role: 'assistant', content: analysisMsg }])

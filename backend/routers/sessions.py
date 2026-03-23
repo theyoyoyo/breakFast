@@ -95,3 +95,21 @@ async def get_messages(session_id: str, user_id: int = Depends(require_user)):
         ) as cur:
             rows = await cur.fetchall()
     return [dict(r) for r in rows]
+
+
+@router.post("/{session_id}/messages")
+async def save_message(session_id: str, body: dict, user_id: int = Depends(require_user)):
+    """Save a message to a session (used by demo meal injection)."""
+    role = body.get("role", "assistant")
+    content = body.get("content", "")
+    async with get_db() as db:
+        await db.execute(
+            "INSERT INTO chat_messages (session_id, user_id, role, content) VALUES (?, ?, ?, ?)",
+            (session_id, user_id, role, content),
+        )
+        await db.execute(
+            "UPDATE chat_sessions SET updated_at = datetime('now') WHERE id = ?",
+            (session_id,),
+        )
+        await db.commit()
+    return {"status": "ok"}

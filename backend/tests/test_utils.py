@@ -25,3 +25,12 @@ def test_handles_multiline_json():
 def test_ignores_text_outside_block():
     text = "Some intro.\n```json\n{\"key\": \"value\"}\n```\nSome outro."
     assert extract_json_block(text) == {"key": "value"}
+
+
+def test_handles_nested_objects_and_arrays():
+    """Meal JSON with nested ingredients array should parse correctly."""
+    text = '```json\n{"meal_name": "Serpme", "ingredients": [{"name": "Peynir", "quantity": 50, "unit": "g"}, {"name": "Zeytin", "quantity": 6, "unit": "adet"}]}\n```'
+    result = extract_json_block(text)
+    assert result["meal_name"] == "Serpme"
+    assert len(result["ingredients"]) == 2
+    assert result["ingredients"][0]["name"] == "Peynir"
