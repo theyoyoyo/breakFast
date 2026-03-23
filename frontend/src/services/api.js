@@ -97,6 +97,9 @@ export const deleteMeal = (id) =>
 export const deleteOldMeals = () =>
   apiFetch(`${BASE_URL}/meals/old`, { method: 'DELETE' })
 
+export const getWeeklyMeals = () =>
+  apiFetch(`${BASE_URL}/meals/weekly`)
+
 // ---------------------------------------------------------------------------
 // Preferences
 // ---------------------------------------------------------------------------
