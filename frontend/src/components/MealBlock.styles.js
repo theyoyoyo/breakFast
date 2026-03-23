@@ -237,14 +237,25 @@ export const cancelBtn = {
 }
 
 export const favBtn = (isFav) => ({
-  background: 'none',
-  border: '1px solid var(--border)',
+  background: isFav ? '#3d3520' : '#2a2420',
+  border: isFav ? '1px solid #8a7030' : '1px solid var(--border)',
   borderRadius: 10,
   padding: '10px 16px',
   fontSize: 20,
   cursor: 'pointer',
-  opacity: isFav ? 1 : 0.4,
-  transition: 'opacity 0.15s',
+  filter: isFav ? 'none' : 'grayscale(0.8) opacity(0.5)',
+  transition: 'filter 0.15s, background 0.15s, border-color 0.15s',
+})
+
+export const favBtnCompact = (isFav) => ({
+  background: 'none',
+  border: 'none',
+  fontSize: 18,
+  cursor: 'pointer',
+  padding: '2px 4px',
+  flexShrink: 0,
+  filter: isFav ? 'none' : 'grayscale(0.8) opacity(0.4)',
+  transition: 'filter 0.15s',
 })
 
 export const saveBtn = {

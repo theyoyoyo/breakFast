@@ -441,7 +441,7 @@ export default function SettingsPanel({ visible }) {
                         onClick={() => handleToggleMealFavorite(meal)}
                         title={favIds[meal.meal_name] ? 'Remove from favorites' : 'Add to favorites'}
                       >
-                        {favIds[meal.meal_name] ? '⭐' : '☆'}
+                        ⭐
                       </button>
                       <button style={s.cancelEditBtn} onClick={() => setExpandedMealId(null)}>Cancel</button>
                     </div>

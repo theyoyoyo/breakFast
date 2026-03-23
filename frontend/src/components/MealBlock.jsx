@@ -36,9 +36,8 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
   const [favId, setFavId] = useState(null)
   const [favLoading, setFavLoading] = useState(false)
 
-  // Check if this meal is already favorited (match by meal_name + ingredients count)
+  // Check if this meal is already favorited on mount
   useEffect(() => {
-    if (!panelOpen) return
     let cancelled = false
     getFavorites().then(favs => {
       if (cancelled) return
@@ -46,7 +45,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
       setFavId(match ? match.id : null)
     }).catch(() => {})
     return () => { cancelled = true }
-  }, [panelOpen, meal?.meal_name])
+  }, [meal?.meal_name])
   const displayNames = items.length > 0
     ? items.map(formatIngredient).join(', ')
     : meal?.meal_name || 'Meal'
@@ -144,6 +143,14 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
           {meal?.prep_time_min && <span style={s.prepBadge}>⏱ {meal.prep_time_min}m</span>}
         </div>
         <button
+          style={s.favBtnCompact(!!favId)}
+          onClick={(e) => { e.stopPropagation(); handleToggleFavorite() }}
+          disabled={favLoading}
+          title={favId ? 'Remove from favorites' : 'Add to favorites'}
+        >
+          ⭐
+        </button>
+        <button
           style={s.analyzeBtn(analyzing)}
           onClick={(e) => { e.stopPropagation(); onAnalyze?.() }}
           disabled={analyzing}
@@ -203,7 +210,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
                 disabled={favLoading}
                 title={favId ? 'Remove from favorites' : 'Add to favorites'}
               >
-                {favId ? '⭐' : '☆'}
+                ⭐
               </button>
               <button style={s.saveBtn} onClick={handleSave}>Save</button>
             </div>
