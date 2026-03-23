@@ -68,10 +68,13 @@ async def delete_user(name: str) -> None:
 
         user_id = row[0]
         for table in [
+            "supplement_daily_log", "user_supplements", "user_profiles",
+            "product_ratings", "chat_messages",
             "ingredient_inventory", "meal_history", "user_preferences",
             "user_habits", "health_rules",
         ]:
             await db.execute(f"DELETE FROM {table} WHERE user_id = ?", (user_id,))
+        await db.execute("DELETE FROM chat_sessions WHERE user_id = ?", (user_id,))
 
         await db.execute("DELETE FROM users WHERE id = ?", (user_id,))
         await db.commit()

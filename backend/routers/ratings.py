@@ -3,6 +3,7 @@
 All queries are scoped to the authenticated user.
 """
 
+import aiosqlite
 from database import get_db
 from fastapi import APIRouter, Depends, HTTPException
 from auth import require_user
@@ -52,7 +53,7 @@ async def create_rating(body: RatingIn, user_id: int = Depends(require_user)):
                 (user_id, body.product_name, body.rating),
             )
             await db.commit()
-        except Exception:
+        except aiosqlite.IntegrityError:
             raise HTTPException(status_code=409, detail="Product already rated")
         async with db.execute(
             "SELECT * FROM product_ratings WHERE id = last_insert_rowid()"

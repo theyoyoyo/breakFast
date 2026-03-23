@@ -248,8 +248,8 @@ export default function SettingsPanel() {
   const handleAddMealItem = () => {
     const v = newMealItem.trim()
     if (!v) return
-    const getName = (item) => typeof item === 'object' ? item.name : item
-    if (mealItems.some(item => getName(item).toLowerCase() === v.toLowerCase())) return
+    const itemName = (item) => typeof item === 'object' ? item.name : item
+    if (mealItems.some(item => itemName(item).toLowerCase() === v.toLowerCase())) return
     setMealItems(prev => [...prev, { name: v, quantity: 1, unit: 'adet' }])
     setNewMealItem('')
   }
