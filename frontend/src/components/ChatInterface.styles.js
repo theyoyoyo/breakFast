@@ -167,6 +167,16 @@ export const suppPill = (taken, isDaily) => ({
   transition: 'background 0.15s, color 0.15s',
 })
 
+export const actionLabelRow = {
+  textAlign: 'center',
+  fontSize: 12,
+  fontWeight: 600,
+  color: 'var(--text-muted)',
+  padding: '4px 0 2px',
+  letterSpacing: '0.03em',
+  background: 'var(--surface)',
+}
+
 export const actionRow = {
   display: 'flex',
   alignItems: 'flex-end',

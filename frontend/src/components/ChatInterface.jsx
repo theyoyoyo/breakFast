@@ -503,13 +503,15 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
         />
       )}
 
+      {(suppMenuOpen && !decideOpen) && <div style={s.actionLabelRow}>Supplements</div>}
+      {decideOpen && <div style={s.actionLabelRow}>Today I ate...</div>}
+
       <div style={s.actionRow}>
         <div style={s.actionStack}>
           {todaySupps.length > 0 && (
             <div style={s.suppMenuWrapper}>
               {suppMenuOpen && !decideOpen && (
                 <div style={s.suppMenu}>
-                  <span style={s.suppMenuLabel}>Supplements</span>
                   {todaySupps.map(sup => {
                     const isDaily = sup.frequency === 'daily'
                     const taken = isDaily || !!sup.taken_today
