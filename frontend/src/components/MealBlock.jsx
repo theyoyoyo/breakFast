@@ -106,7 +106,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
           <span style={s.blockIcon}>🍳</span>
           <span style={s.blockText}>{displayNames}</span>
           {meal?.prep_time_min && <span style={s.prepBadge}>⏱ {meal.prep_time_min}m</span>}
-          {meal?.id && <span style={s.mealId}>#{meal.id}</span>}
+          <span style={s.mealId}>#{meal?.id || 0}</span>
         </div>
         <button
           style={s.analyzeBtn(analyzing)}
