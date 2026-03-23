@@ -273,14 +273,6 @@ export const expandIcon = {
   padding: '2px 4px',
 }
 
-export const editMealBtn = {
-  background: 'none',
-  border: 'none',
-  cursor: 'pointer',
-  fontSize: 16,
-  padding: '2px 4px',
-}
-
 export const deleteMealBtn = {
   background: 'none',
   border: 'none',
@@ -327,20 +319,47 @@ export const mealItemRow = {
   fontSize: 13,
 }
 
+export const mealQtyGroup = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 2,
+  flexShrink: 0,
+}
+
+export const mealQtyInput = {
+  width: 40,
+  background: 'var(--surface2)',
+  border: '1px solid var(--border)',
+  borderRadius: 4,
+  padding: '3px 3px',
+  color: 'var(--text)',
+  fontSize: 12,
+  textAlign: 'center',
+  outline: 'none',
+}
+
+export const mealArrowBtn = {
+  background: 'none',
+  border: '1px solid var(--border)',
+  borderRadius: 3,
+  cursor: 'pointer',
+  fontSize: 9,
+  padding: '1px 4px',
+  color: 'var(--text-muted)',
+  lineHeight: 1,
+}
+
+export const mealUnitLabel = {
+  fontSize: 11,
+  color: 'var(--text-muted)',
+  flexShrink: 0,
+  minWidth: 24,
+  marginRight: 6,
+}
+
 export const mealItemText = {
   flex: 1,
   color: 'var(--text)',
-}
-
-export const mealItemInput = {
-  flex: 1,
-  background: 'var(--surface2)',
-  border: '1px solid var(--accent)',
-  borderRadius: 6,
-  padding: '4px 8px',
-  color: 'var(--text)',
-  fontSize: 13,
-  outline: 'none',
 }
 
 export const mealItemActions = {

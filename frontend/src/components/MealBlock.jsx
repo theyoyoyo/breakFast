@@ -2,8 +2,17 @@ import { useState } from 'react'
 import * as s from './MealBlock.styles'
 
 /**
- * Format a single ingredient for display — handles both string ("yumurta")
- * and structured ({name, quantity, unit}) forms.
+ * Normalize an ingredient to structured form {name, quantity, unit}.
+ */
+function normalizeItem(item) {
+  if (typeof item === 'object' && item !== null && item.name) {
+    return { name: item.name, quantity: item.quantity ?? 1, unit: item.unit || 'adet' }
+  }
+  return { name: String(item), quantity: 1, unit: 'adet' }
+}
+
+/**
+ * Format a single ingredient for display.
  */
 function formatIngredient(item) {
   if (typeof item === 'object' && item !== null && item.name) {
@@ -21,10 +30,8 @@ function formatIngredient(item) {
  */
 export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, analyzing }) {
   const [panelOpen, setPanelOpen] = useState(false)
-  const [items, setItems] = useState(meal?.ingredients || [])
+  const [items, setItems] = useState(() => (meal?.ingredients || []).map(normalizeItem))
   const [newItem, setNewItem] = useState('')
-  const [editIdx, setEditIdx] = useState(null)
-  const [editValue, setEditValue] = useState('')
   const displayNames = items.length > 0
     ? items.map(formatIngredient).join(', ')
     : meal?.meal_name || 'Meal'
@@ -37,39 +44,49 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
     setItems(prev => prev.filter((_, i) => i !== idx))
   }
 
-  const handleStartEdit = (idx) => {
-    setEditIdx(idx)
-    const item = items[idx]
-    setEditValue(typeof item === 'string' ? item : item.name || '')
+  const handleQuantityChange = (idx, val) => {
+    if (val !== '' && !/^\d*\.?\d{0,2}$/.test(val)) return
+    setItems(prev => prev.map((item, i) =>
+      i === idx ? { ...item, quantity: val === '' ? '' : val } : item
+    ))
   }
 
-  const handleSaveEdit = () => {
-    if (editValue.trim() && editIdx !== null) {
-      setItems(prev => prev.map((item, i) => {
-        if (i !== editIdx) return item
-        if (typeof item === 'object' && item !== null) {
-          return { ...item, name: editValue.trim() }
-        }
-        return editValue.trim()
-      }))
-    }
-    setEditIdx(null)
-    setEditValue('')
+  const handleQuantityBlur = (idx) => {
+    setItems(prev => prev.map((item, i) => {
+      if (i !== idx) return item
+      const num = parseFloat(item.quantity)
+      return { ...item, quantity: (!isNaN(num) && num > 0) ? Math.round(num * 100) / 100 : 1 }
+    }))
+  }
+
+  const handleQuantityStep = (idx, delta) => {
+    setItems(prev => prev.map((item, i) => {
+      if (i !== idx) return item
+      const current = typeof item.quantity === 'number' ? item.quantity : parseFloat(item.quantity) || 1
+      const next = Math.round((current + delta) * 100) / 100
+      return { ...item, quantity: next > 0 ? next : current }
+    }))
   }
 
   const handleAdd = () => {
     const v = newItem.trim()
     if (!v) return
-    const getName = (item) => typeof item === 'object' ? item.name : item
-    if (items.some(item => getName(item).toLowerCase() === v.toLowerCase())) return
-    setItems(prev => [...prev, v])
+    if (items.some(item => item.name.toLowerCase() === v.toLowerCase())) return
+    setItems(prev => [...prev, { name: v, quantity: 1, unit: 'adet' }])
     setNewItem('')
   }
 
   const handleSave = () => {
+    const finalItems = items.map(item => ({
+      ...item,
+      quantity: (() => {
+        const num = parseFloat(item.quantity)
+        return (!isNaN(num) && num > 0) ? Math.round(num * 100) / 100 : 1
+      })(),
+    }))
     const updated = {
       ...meal,
-      ingredients: items,
+      ingredients: finalItems,
     }
     onSave?.(updated)
     setPanelOpen(false)
@@ -110,20 +127,21 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
             <div style={s.itemList}>
               {items.map((item, idx) => (
                 <div key={idx} style={s.itemRow}>
-                  {editIdx === idx ? (
+                  <div style={s.qtyGroup}>
+                    <button style={s.arrowBtn} onClick={() => handleQuantityStep(idx, -1)}>▼</button>
                     <input
-                      style={s.editInput}
-                      value={editValue}
-                      onChange={(e) => setEditValue(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
-                      onBlur={handleSaveEdit}
-                      autoFocus
+                      style={s.qtyInput}
+                      type="text"
+                      inputMode="decimal"
+                      value={item.quantity}
+                      onChange={(e) => handleQuantityChange(idx, e.target.value)}
+                      onBlur={() => handleQuantityBlur(idx)}
                     />
-                  ) : (
-                    <span style={s.itemText}>{formatIngredient(item)}</span>
-                  )}
+                    <button style={s.arrowBtn} onClick={() => handleQuantityStep(idx, 1)}>▲</button>
+                  </div>
+                  <span style={s.unitLabel}>{item.unit}</span>
+                  <span style={s.itemText}>{item.name}</span>
                   <div style={s.itemActions}>
-                    <button style={s.editBtn} onClick={() => handleStartEdit(idx)} title="Edit">✏️</button>
                     <button style={s.deleteBtn} onClick={() => handleDelete(idx)} title="Delete">🗑️</button>
                   </div>
                 </div>

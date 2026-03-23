@@ -35,8 +35,6 @@ export default function SettingsPanel() {
   const [expandedMealId, setExpandedMealId] = useState(null)
   const [mealItems, setMealItems] = useState([])
   const [mealName, setMealName] = useState('')
-  const [editItemIdx, setEditItemIdx] = useState(null)
-  const [editItemValue, setEditItemValue] = useState('')
   const [newMealItem, setNewMealItem] = useState('')
 
   // Health rules state
@@ -207,8 +205,14 @@ export default function SettingsPanel() {
     }
     setExpandedMealId(meal.id)
     setMealName(meal.meal_name)
-    setMealItems([...(meal.ingredients || [])])
-    setEditItemIdx(null)
+    // Normalize ingredients to structured form
+    const normalized = (meal.ingredients || []).map(item => {
+      if (typeof item === 'object' && item !== null && item.name) {
+        return { name: item.name, quantity: item.quantity ?? 1, unit: item.unit || 'adet' }
+      }
+      return { name: String(item), quantity: 1, unit: 'adet' }
+    })
+    setMealItems(normalized)
     setNewMealItem('')
   }
 
@@ -216,24 +220,36 @@ export default function SettingsPanel() {
     setMealItems(prev => prev.filter((_, i) => i !== idx))
   }
 
-  const handleStartEditItem = (idx) => {
-    setEditItemIdx(idx)
-    setEditItemValue(mealItems[idx])
+  const handleMealQtyChange = (idx, val) => {
+    if (val !== '' && !/^\d*\.?\d{0,2}$/.test(val)) return
+    setMealItems(prev => prev.map((item, i) =>
+      i === idx ? { ...item, quantity: val === '' ? '' : val } : item
+    ))
   }
 
-  const handleSaveEditItem = () => {
-    if (editItemValue.trim() && editItemIdx !== null) {
-      setMealItems(prev => prev.map((item, i) => i === editItemIdx ? editItemValue.trim() : item))
-    }
-    setEditItemIdx(null)
-    setEditItemValue('')
+  const handleMealQtyBlur = (idx) => {
+    setMealItems(prev => prev.map((item, i) => {
+      if (i !== idx) return item
+      const num = parseFloat(item.quantity)
+      return { ...item, quantity: (!isNaN(num) && num > 0) ? Math.round(num * 100) / 100 : 1 }
+    }))
+  }
+
+  const handleMealQtyStep = (idx, delta) => {
+    setMealItems(prev => prev.map((item, i) => {
+      if (i !== idx) return item
+      const current = typeof item.quantity === 'number' ? item.quantity : parseFloat(item.quantity) || 1
+      const next = Math.round((current + delta) * 100) / 100
+      return { ...item, quantity: next > 0 ? next : current }
+    }))
   }
 
   const handleAddMealItem = () => {
     const v = newMealItem.trim()
     if (!v) return
-    if (mealItems.some(item => item.toLowerCase() === v.toLowerCase())) return
-    setMealItems(prev => [...prev, v])
+    const getName = (item) => typeof item === 'object' ? item.name : item
+    if (mealItems.some(item => getName(item).toLowerCase() === v.toLowerCase())) return
+    setMealItems(prev => [...prev, { name: v, quantity: 1, unit: 'adet' }])
     setNewMealItem('')
   }
 
@@ -305,20 +321,21 @@ export default function SettingsPanel() {
                   <div style={s.mealItemList}>
                     {mealItems.map((item, idx) => (
                       <div key={idx} style={s.mealItemRow}>
-                        {editItemIdx === idx ? (
+                        <div style={s.mealQtyGroup}>
+                          <button style={s.mealArrowBtn} onClick={() => handleMealQtyStep(idx, -1)}>▼</button>
                           <input
-                            style={s.mealItemInput}
-                            value={editItemValue}
-                            onChange={(e) => setEditItemValue(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleSaveEditItem()}
-                            onBlur={handleSaveEditItem}
-                            autoFocus
+                            style={s.mealQtyInput}
+                            type="text"
+                            inputMode="decimal"
+                            value={item.quantity}
+                            onChange={(e) => handleMealQtyChange(idx, e.target.value)}
+                            onBlur={() => handleMealQtyBlur(idx)}
                           />
-                        ) : (
-                          <span style={s.mealItemText}>{item}</span>
-                        )}
+                          <button style={s.mealArrowBtn} onClick={() => handleMealQtyStep(idx, 1)}>▲</button>
+                        </div>
+                        <span style={s.mealUnitLabel}>{item.unit}</span>
+                        <span style={s.mealItemText}>{item.name}</span>
                         <div style={s.mealItemActions}>
-                          <button style={s.editMealBtn} onClick={() => handleStartEditItem(idx)} title="Edit">✏️</button>
                           <button style={s.deleteMealBtn} onClick={() => handleDeleteMealItem(idx)} title="Delete">🗑️</button>
                         </div>
                       </div>

@@ -120,6 +120,9 @@ backticks tagged as "json") — the app will parse it to render a recipe card an
 IMPORTANT: Every ingredient MUST include a quantity and unit so the user knows exactly \
 how much to use. Use natural units: "adet" for countable items (eggs, olives), "g" for \
 grams, "dilim" for slices, "kase" for bowls, "yemek kaşığı" for tablespoons, etc.
+If the meal is a multi-ingredient recipe (tarifli yemek) like menemen, omlet, or smoothie, \
+use "porsiyon" as the unit for the overall dish in the meal name context. Individual \
+ingredients inside a recipe still use their own natural units.
 
 ```json
 {{{{
@@ -275,6 +278,9 @@ IMPORTANT: Every ingredient MUST include a quantity and unit so the user knows e
 how much to use and the analyst can calculate accurate nutrition. Use natural units: \
 "adet" for countable items, "g" for grams, "dilim" for slices, "kase" for bowls, \
 "yemek kaşığı" for tablespoons, etc.
+If the meal is a multi-ingredient recipe (tarifli yemek) like menemen, omlet, or smoothie, \
+use "porsiyon" as the unit for the overall dish in the meal name context. Individual \
+ingredients inside a recipe still use their own natural units.
 
 Append a JSON block at the end of your response:
 ```json
