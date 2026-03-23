@@ -28,26 +28,10 @@ export const tab = (active) => ({
   transition: 'color 0.15s',
 })
 
-export const main = {
-  display: 'grid',
-  gridTemplateColumns: '1fr 320px',
-  gap: 12,
-  padding: 12,
-  overflow: 'hidden',
-  height: '100%',
-}
-
 export const mainFull = {
   padding: 12,
   height: '100%',
   overflow: 'hidden',
-}
-
-export const sidebar = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 12,
-  overflowY: 'auto',
 }
 
 export const userInfo = {

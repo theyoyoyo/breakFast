@@ -282,19 +282,29 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                 except Exception:
                     response_text = lyric_cycler.next()
 
-            # Persist both messages to DB before signaling done
-            async with get_db() as db:
-                await _save_message(db, session_id, user_id, "user", user_message)
-                await _save_message(db, session_id, user_id, "assistant", response_text)
-
-            await websocket.send_json({"type": "done", "content": response_text})
-
-            # Auto-log meal if the response contains a ```json meal block
+            # Auto-log meal if the response contains a ```json meal block.
+            # Log BEFORE saving the message so we can embed the meal_id in the
+            # persisted text — this lets the frontend restore meal blocks with
+            # their DB id after page reload.
             meal_data = extract_json_block(response_text)
+            saved_text = response_text
             if meal_data:
                 async with get_db() as db:
                     meal_id = await _log_meal(db, user_id, meal_data)
                 meal_data["id"] = meal_id
+                # Re-serialize JSON block with id so it persists in the message
+                enriched = {**meal_data}
+                enriched_json = json.dumps(enriched, ensure_ascii=False)
+                saved_text = response_text[:response_text.rfind("```json")] + "```json\n" + enriched_json + "\n```"
+
+            # Persist both messages to DB
+            async with get_db() as db:
+                await _save_message(db, session_id, user_id, "user", user_message)
+                await _save_message(db, session_id, user_id, "assistant", saved_text)
+
+            await websocket.send_json({"type": "done", "content": response_text})
+
+            if meal_data:
                 await websocket.send_json({"type": "meal_logged", "meal": meal_data})
                 cached_context = None
 

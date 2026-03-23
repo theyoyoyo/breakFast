@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
 import ChatInterface from './components/ChatInterface'
-import RecipeCard from './components/RecipeCard'
-import ScheduleTimeline from './components/ScheduleTimeline'
 import IngredientPanel from './components/IngredientPanel'
 import PreferencesPanel from './components/PreferencesPanel'
 import SettingsPanel from './components/SettingsPanel'
@@ -41,8 +39,6 @@ export default function App() {
       })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const chatRef = useRef(null)
-  const [latestMeal, setLatestMeal] = useState(null)
-  const [latestMealId, setLatestMealId] = useState(null)
   const [ingredientRefresh, setIngredientRefresh] = useState(0)
 
   if (!authChecked) return null // wait for token validation
@@ -50,9 +46,7 @@ export default function App() {
     return <LoginScreen onLogin={(data) => setAuth(data)} />
   }
 
-  const handleMealLogged = (meal) => {
-    setLatestMeal(meal)
-    setLatestMealId(meal?.id ?? null)
+  const handleMealLogged = () => {
     setIngredientRefresh((n) => n + 1)
   }
 
@@ -83,17 +77,8 @@ export default function App() {
         </div>
       </nav>
 
-      <div style={{ ...s.main, display: activeTab === 'Chat' ? undefined : 'none' }}>
+      <div style={{ ...s.mainFull, display: activeTab === 'Chat' ? undefined : 'none' }}>
         <ChatInterface ref={chatRef} onMealLogged={handleMealLogged} />
-
-        <div style={s.sidebar}>
-          {latestMeal && (
-            <RecipeCard meal={latestMeal} mealId={latestMealId} />
-          )}
-          {latestMeal?.schedule && (
-            <ScheduleTimeline schedule={latestMeal.schedule} />
-          )}
-        </div>
       </div>
 
       <div style={{ ...s.mainFull, display: activeTab === 'Ingredients' ? undefined : 'none' }}>
