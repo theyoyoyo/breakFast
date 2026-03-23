@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react'
-import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, getTodaySupplements, toggleSupplement, analyzeMeal } from '../services/api'
+import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, saveSessionMessage, getTodaySupplements, toggleSupplement, analyzeMeal } from '../services/api'
 import { useVoice } from '../hooks/useVoice'
 import SuggestButton from './SuggestButton'
 import DecidePanel from './DecidePanel'
@@ -96,6 +96,10 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
         setCheckedMealIdx(newIdx)
         return newMsgs
       })
+      // Persist to DB so it survives page refresh
+      if (sessionIdRef.current) {
+        saveSessionMessage(sessionIdRef.current, 'assistant', fullContent).catch(() => {})
+      }
     }
   }))
 

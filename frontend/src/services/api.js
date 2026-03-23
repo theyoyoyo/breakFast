@@ -184,6 +184,9 @@ export const listSessions = () =>
 export const getSessionMessages = (sessionId) =>
   apiFetch(`${BASE_URL}/sessions/${sessionId}/messages`)
 
+export const saveSessionMessage = (sessionId, role, content) =>
+  apiFetch(`${BASE_URL}/sessions/${sessionId}/messages`, json('POST', { role, content }))
+
 // ---------------------------------------------------------------------------
 // Health Rules
 // ---------------------------------------------------------------------------
