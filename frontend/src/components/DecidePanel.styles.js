@@ -49,9 +49,32 @@ export const itemRow = {
   fontSize: 15,
 }
 
+export const qtyInput = {
+  width: 52,
+  background: 'var(--surface)',
+  border: '1px solid var(--border)',
+  borderRadius: 6,
+  padding: '4px 6px',
+  color: 'var(--text)',
+  fontSize: 14,
+  textAlign: 'center',
+  outline: 'none',
+  flexShrink: 0,
+  marginRight: 4,
+}
+
+export const unitLabel = {
+  fontSize: 13,
+  color: 'var(--text-muted)',
+  flexShrink: 0,
+  minWidth: 30,
+  marginRight: 8,
+}
+
 export const itemText = {
   flex: 1,
   color: 'var(--text)',
+  cursor: 'pointer',
 }
 
 export const itemActions = {

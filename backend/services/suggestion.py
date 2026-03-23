@@ -115,12 +115,20 @@ Each rule has a priority level:
 {health_rules}
 
 If you suggest a meal, append a JSON block at the end of your response (inside triple \
-backticks tagged as "json") — the app will parse it to render a recipe card and log the meal:
+backticks tagged as "json") — the app will parse it to render a recipe card and log the meal.
+
+IMPORTANT: Every ingredient MUST include a quantity and unit so the user knows exactly \
+how much to use. Use natural units: "adet" for countable items (eggs, olives), "g" for \
+grams, "dilim" for slices, "kase" for bowls, "yemek kaşığı" for tablespoons, etc.
+
 ```json
 {{{{
   "meal_name": "...",
   "description": "...",
-  "ingredients": ["...", "..."],
+  "ingredients": [
+    {{{{"name": "...", "quantity": 2, "unit": "adet"}}}},
+    {{{{"name": "...", "quantity": 30, "unit": "g"}}}}
+  ],
   "steps": ["...", "..."],
   "prep_time_min": 10,
   "nutrition_note": "..."
@@ -253,7 +261,7 @@ RESPONSE FORMAT
 ═══════════════════════════════════════════════════════════════
 1. Meal name and one-sentence description
 2. Tip (optional — only if advance prep helps)
-3. Required ingredients (from available; flag missing ones)
+3. Required ingredients with EXACT quantities and units (from available; flag missing ones)
 4. Preparation steps (brief, numbered, note parallel opportunities)
 5. Total prep time
 6. Nutrition detail:
@@ -263,12 +271,20 @@ RESPONSE FORMAT
    - Supplement note: which gaps this meal covers
    - Note: one-sentence nutrition assessment (positive, factual, no preaching)
 
+IMPORTANT: Every ingredient MUST include a quantity and unit so the user knows exactly \
+how much to use and the analyst can calculate accurate nutrition. Use natural units: \
+"adet" for countable items, "g" for grams, "dilim" for slices, "kase" for bowls, \
+"yemek kaşığı" for tablespoons, etc.
+
 Append a JSON block at the end of your response:
 ```json
 {{{{
   "meal_name": "...",
   "description": "...",
-  "ingredients": ["...", "..."],
+  "ingredients": [
+    {{{{"name": "...", "quantity": 2, "unit": "adet"}}}},
+    {{{{"name": "...", "quantity": 30, "unit": "g"}}}}
+  ],
   "steps": ["...", "..."],
   "prep_time_min": 10,
   "nutrition_note": "...",

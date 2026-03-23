@@ -207,8 +207,8 @@ export const deleteHealthRule = (id) =>
 // Analyst
 // ---------------------------------------------------------------------------
 
-export const analyzeMeal = (meal_name, ingredients) =>
-  apiFetch(`${BASE_URL}/analyst/analyze`, json('POST', { meal_name, ingredients }))
+export const analyzeMeal = (meal_name, ingredients, meal_id = null) =>
+  apiFetch(`${BASE_URL}/analyst/analyze`, json('POST', { meal_name, ingredients, meal_id }))
 
 // ---------------------------------------------------------------------------
 // WebSocket chat

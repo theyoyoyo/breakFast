@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS meal_history (
     nutrition_note  TEXT,
     schedule        TEXT,           -- JSON (kitchen scheduler output)
     rating          INTEGER,        -- 1 = thumbs down, 5 = thumbs up, NULL = no feedback
+    cached_nutrition TEXT,           -- JSON (analyst output cache, NULL = not yet analyzed)
     logged_at       TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -172,6 +173,14 @@ async def init_db() -> None:
             await db.execute(
                 "ALTER TABLE health_rules ADD COLUMN priority TEXT NOT NULL DEFAULT 'high' "
                 "CHECK (priority IN ('low', 'high', 'critical'))"
+            )
+        except Exception:
+            pass  # Column already exists
+
+        # Migrate: add cached_nutrition column to meal_history if missing
+        try:
+            await db.execute(
+                "ALTER TABLE meal_history ADD COLUMN cached_nutrition TEXT"
             )
         except Exception:
             pass  # Column already exists

@@ -113,6 +113,18 @@ def format_supplements(supplements: list[dict] | None) -> str:
     return "\n".join(lines)
 
 
+def format_ingredient_item(item) -> str:
+    """Format a single ingredient — handles both string and structured {name, quantity, unit} forms."""
+    if isinstance(item, dict):
+        name = item.get("name", "")
+        qty = item.get("quantity")
+        unit = item.get("unit", "")
+        if qty is not None:
+            return f"{qty} {unit} {name}".strip()
+        return name
+    return str(item)
+
+
 def format_meal_detail(meal: dict) -> str:
     """Format a single meal with its ingredients for analyst context."""
     name = meal.get("meal_name", "Unknown")
@@ -122,7 +134,7 @@ def format_meal_detail(meal: dict) -> str:
             ingredients = json.loads(ingredients)
         except (json.JSONDecodeError, TypeError):
             ingredients = []
-    items = ", ".join(ingredients) if ingredients else "no items listed"
+    items = ", ".join(format_ingredient_item(i) for i in ingredients) if ingredients else "no items listed"
     return f"{name}: {items}"
 
 

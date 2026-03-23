@@ -32,7 +32,16 @@ function parseJsonBlock(text) {
 const DEMO_MEAL = {
   meal_name: 'Serpme Kahvaltı',
   description: 'Klasik Türk kahvaltısı — zengin, dengeli ve doyurucu.',
-  ingredients: ['Beyaz peynir', 'Zeytin', 'Domates', 'Salatalık', 'Yumurta', 'Bal', 'Tereyağı', 'Ekmek'],
+  ingredients: [
+    { name: 'Beyaz peynir', quantity: 50, unit: 'g' },
+    { name: 'Zeytin', quantity: 6, unit: 'adet' },
+    { name: 'Domates', quantity: 1, unit: 'adet' },
+    { name: 'Salatalık', quantity: 1, unit: 'adet' },
+    { name: 'Yumurta', quantity: 2, unit: 'adet' },
+    { name: 'Bal', quantity: 1, unit: 'yemek kaşığı' },
+    { name: 'Tereyağı', quantity: 10, unit: 'g' },
+    { name: 'Ekmek', quantity: 3, unit: 'dilim' },
+  ],
   steps: [
     'Yumurtayı kaynar suda 7 dakika haşla.',
     'Peynir, zeytin, domates ve salatalığı tabağa yerleştir.',
@@ -397,7 +406,7 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
     const abortCtrl = { cancelled: false }
     analyzeAbortRef.current = { abort: () => { abortCtrl.cancelled = true } }
     try {
-      const result = await analyzeMeal(meal.meal_name || 'Meal', meal.ingredients || [])
+      const result = await analyzeMeal(meal.meal_name || 'Meal', meal.ingredients || [], meal.id || null)
       if (abortCtrl.cancelled) return
       // Strip JSON block from analysis text for display, show as assistant message
       const displayText = result.analysis_text

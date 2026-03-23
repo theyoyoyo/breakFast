@@ -22,12 +22,26 @@ def _parse_json_field(value, default):
         return default
 
 
+def _serialize_ingredients(ingredients) -> str:
+    """Serialize ingredients list to JSON — handles both Pydantic models and plain dicts/strings."""
+    if not ingredients:
+        return "[]"
+    serialized = []
+    for item in ingredients:
+        if hasattr(item, "model_dump"):
+            serialized.append(item.model_dump())
+        else:
+            serialized.append(item)
+    return json.dumps(serialized, ensure_ascii=False)
+
+
 def _row_to_meal(row) -> dict:
     """Convert a raw DB row to a dict with JSON list fields decoded."""
     d = dict(row)
     d["ingredients"] = _parse_json_field(d.get("ingredients"), [])
     d["steps"] = _parse_json_field(d.get("steps"), [])
     d["schedule"] = _parse_json_field(d.get("schedule"), None)
+    d["cached_nutrition"] = _parse_json_field(d.get("cached_nutrition"), None)
     return d
 
 
@@ -67,7 +81,7 @@ async def log_meal(body: MealLog, user_id: int = Depends(require_user)):
                 user_id,
                 body.meal_name,
                 body.description,
-                json.dumps(body.ingredients or [], ensure_ascii=False),
+                _serialize_ingredients(body.ingredients),
                 json.dumps(body.steps or [], ensure_ascii=False),
                 body.prep_time_min,
                 body.nutrition_note,
@@ -95,19 +109,20 @@ async def delete_old_meals(user_id: int = Depends(require_user)):
 
 @router.put("/{meal_id}", response_model=Meal)
 async def update_meal(meal_id: int, body: MealLog, user_id: int = Depends(require_user)):
-    """Update a meal's details."""
+    """Update a meal's details. Clears cached_nutrition since ingredients may have changed."""
     async with get_db() as db:
         cursor = await db.execute(
             """
             UPDATE meal_history SET
                 meal_name = ?, description = ?, ingredients = ?,
-                steps = ?, prep_time_min = ?, nutrition_note = ?
+                steps = ?, prep_time_min = ?, nutrition_note = ?,
+                cached_nutrition = NULL
             WHERE id = ? AND user_id = ?
             """,
             (
                 body.meal_name,
                 body.description,
-                json.dumps(body.ingredients or [], ensure_ascii=False),
+                _serialize_ingredients(body.ingredients),
                 json.dumps(body.steps or [], ensure_ascii=False),
                 body.prep_time_min,
                 body.nutrition_note,

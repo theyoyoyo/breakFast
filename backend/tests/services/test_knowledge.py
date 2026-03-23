@@ -18,6 +18,7 @@ from services.knowledge import (
     format_behavioral,
     format_user_profile,
     format_supplements,
+    format_ingredient_item,
     format_meal_detail,
     format_history_detailed,
 )
@@ -73,6 +74,61 @@ class TestKnowledgeFormatters:
     # Detailed history with no meals returns fallback
     def test_format_history_detailed_empty(self):
         assert format_history_detailed([]) == "no history yet"
+
+
+class TestFormatIngredientItem:
+    # Structured ingredient with quantity and unit
+    def test_structured_ingredient(self):
+        result = format_ingredient_item({"name": "yumurta", "quantity": 2, "unit": "adet"})
+        assert result == "2 adet yumurta"
+
+    # Structured ingredient with no quantity
+    def test_structured_no_quantity(self):
+        result = format_ingredient_item({"name": "tuz"})
+        assert result == "tuz"
+
+    # Plain string ingredient
+    def test_string_ingredient(self):
+        result = format_ingredient_item("peynir")
+        assert result == "peynir"
+
+    # Structured with float quantity
+    def test_float_quantity(self):
+        result = format_ingredient_item({"name": "süt", "quantity": 0.5, "unit": "kase"})
+        assert result == "0.5 kase süt"
+
+
+class TestMealDetailStructured:
+    # Meal detail with structured ingredients includes quantities
+    def test_structured_ingredients(self):
+        meal = {
+            "meal_name": "Menemen",
+            "ingredients": [
+                {"name": "yumurta", "quantity": 2, "unit": "adet"},
+                {"name": "domates", "quantity": 1, "unit": "adet"},
+            ]
+        }
+        result = format_meal_detail(meal)
+        assert "Menemen" in result
+        assert "2 adet yumurta" in result
+        assert "1 adet domates" in result
+
+    # Meal detail with JSON-encoded structured ingredients
+    def test_structured_json_string(self):
+        import json
+        meal = {
+            "meal_name": "Toast",
+            "ingredients": json.dumps([{"name": "ekmek", "quantity": 2, "unit": "dilim"}])
+        }
+        result = format_meal_detail(meal)
+        assert "2 dilim ekmek" in result
+
+    # Meal detail still works with old string format
+    def test_backward_compat_strings(self):
+        meal = {"meal_name": "Basit", "ingredients": '["yumurta", "peynir"]'}
+        result = format_meal_detail(meal)
+        assert "yumurta" in result
+        assert "peynir" in result
 
 
 class TestKnowledgeMatchesSuggestion:

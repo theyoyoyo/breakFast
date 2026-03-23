@@ -112,8 +112,8 @@ async def _load_context(db, user_id: int) -> dict:
     }
 
 
-async def _log_meal(db, user_id: int, meal_data: dict) -> None:
-    """Insert a suggested meal into history. Called after a successful LLM suggestion."""
+async def _log_meal(db, user_id: int, meal_data: dict) -> int:
+    """Insert a suggested meal into history. Returns the new meal's id."""
     await db.execute(
         """
         INSERT INTO meal_history
@@ -131,6 +131,9 @@ async def _log_meal(db, user_id: int, meal_data: dict) -> None:
         ),
     )
     await db.commit()
+    async with db.execute("SELECT last_insert_rowid()") as cur:
+        row = await cur.fetchone()
+        return row[0]
 
 
 async def _save_message(db, session_id: str, user_id: int, role: str, content: str):
@@ -290,7 +293,8 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
             meal_data = extract_json_block(response_text)
             if meal_data:
                 async with get_db() as db:
-                    await _log_meal(db, user_id, meal_data)
+                    meal_id = await _log_meal(db, user_id, meal_data)
+                meal_data["id"] = meal_id
                 await websocket.send_json({"type": "meal_logged", "meal": meal_data})
                 cached_context = None
 

@@ -2,6 +2,27 @@ import { useState, useEffect, useCallback } from 'react'
 import { getRatings, createRating, logMeal } from '../services/api'
 import * as s from './DecidePanel.styles'
 
+/**
+ * Get the display name of an ingredient (works for both string and structured forms).
+ */
+function getName(item) {
+  if (typeof item === 'object' && item !== null) return item.name || ''
+  return String(item)
+}
+
+/**
+ * Clamp a quantity string to max 2 decimal places and return as number.
+ * Returns null if the input is empty or invalid.
+ */
+function parseQuantity(val) {
+  if (val === '' || val === null || val === undefined) return null
+  // Allow intermediate typing states like "1." or "0."
+  const num = parseFloat(val)
+  if (isNaN(num)) return null
+  // Round to max 2 decimal places
+  return Math.round(num * 100) / 100
+}
+
 export default function DecidePanel({ meal, onClose, onConfirm }) {
   // Phase: 'edit' = editing ingredients, 'rate' = rating products
   const [phase, setPhase] = useState('edit')
@@ -13,10 +34,16 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
   const [existingRatings, setExistingRatings] = useState([])
   const [saving, setSaving] = useState(false)
 
-  // Initialize items from meal ingredients
+  // Initialize items from meal ingredients — normalize to structured form
   useEffect(() => {
     if (meal?.ingredients) {
-      setItems([...meal.ingredients])
+      const normalized = meal.ingredients.map(item => {
+        if (typeof item === 'object' && item !== null && item.name) {
+          return { name: item.name, quantity: item.quantity ?? 1, unit: item.unit || 'adet' }
+        }
+        return { name: String(item), quantity: 1, unit: 'adet' }
+      })
+      setItems(normalized)
     } else {
       setItems([])
     }
@@ -37,39 +64,53 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
 
   const handleStartEdit = (idx) => {
     setEditIdx(idx)
-    setEditValue(items[idx])
+    setEditValue(items[idx].name)
   }
 
   const handleSaveEdit = () => {
     if (editValue.trim() && editIdx !== null) {
-      setItems(prev => prev.map((item, i) => i === editIdx ? editValue.trim() : item))
+      setItems(prev => prev.map((item, i) =>
+        i === editIdx ? { ...item, name: editValue.trim() } : item
+      ))
     }
     setEditIdx(null)
     setEditValue('')
   }
 
+  const handleQuantityChange = (idx, val) => {
+    // Allow intermediate typing: digits, one dot, max 2 decimals after dot
+    if (val !== '' && !/^\d*\.?\d{0,2}$/.test(val)) return
+    setItems(prev => prev.map((item, i) =>
+      i === idx ? { ...item, quantity: val === '' ? '' : val } : item
+    ))
+  }
+
+  const handleQuantityBlur = (idx) => {
+    setItems(prev => prev.map((item, i) => {
+      if (i !== idx) return item
+      const parsed = parseQuantity(item.quantity)
+      return { ...item, quantity: parsed !== null ? parsed : 1 }
+    }))
+  }
+
   const handleAdd = () => {
     const v = newItem.trim()
     if (!v) return
-    // Prevent duplicate items (case-insensitive)
-    if (items.some(item => item.toLowerCase() === v.toLowerCase())) return
-    setItems(prev => [...prev, v])
+    if (items.some(item => item.name.toLowerCase() === v.toLowerCase())) return
+    setItems(prev => [...prev, { name: v, quantity: 1, unit: 'adet' }])
     setNewItem('')
   }
 
   const handleProceedToRating = useCallback(() => {
     if (items.length === 0) return
-    // Find items not already rated
     const ratedNames = new Set(existingRatings.map(r => r.product_name.toLowerCase()))
-    const unrated = items.filter(item => !ratedNames.has(item.toLowerCase()))
+    const unrated = items.filter(item => !ratedNames.has(item.name.toLowerCase()))
     if (unrated.length === 0) {
-      // All already rated, skip to save
       handleSave()
       return
     }
-    // Pre-fill default rating of 10
     const defaultRatings = {}
-    unrated.forEach(item => { defaultRatings[item] = 10 })
+    unrated.forEach(item => { defaultRatings[item.name] = 10 })
     setRatings(defaultRatings)
     setPhase('rate')
   }, [items, existingRatings])
@@ -77,17 +118,20 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
   const handleSave = useCallback(async () => {
     setSaving(true)
     try {
-      // Save ratings for new products
       for (const [name, rating] of Object.entries(ratings)) {
         try {
           await createRating(name, rating)
         } catch { /* Already rated or error — skip */ }
       }
-      // Log meal
+      // Finalize quantities before saving
+      const finalItems = items.map(item => ({
+        ...item,
+        quantity: parseQuantity(item.quantity) ?? 1,
+      }))
       await logMeal({
         meal_name: meal?.meal_name || 'Kahvaltı',
         description: meal?.description || '',
-        ingredients: items,
+        ingredients: finalItems,
         steps: meal?.steps || [],
         prep_time_min: meal?.prep_time_min || null,
         nutrition_note: meal?.nutrition_note || '',
@@ -154,10 +198,23 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
                   autoFocus
                 />
               ) : (
-                <span style={s.itemText}>{item}</span>
+                <>
+                  <input
+                    style={s.qtyInput}
+                    type="text"
+                    inputMode="decimal"
+                    value={item.quantity}
+                    onChange={(e) => handleQuantityChange(idx, e.target.value)}
+                    onBlur={() => handleQuantityBlur(idx)}
+                  />
+                  <span style={s.unitLabel}>{item.unit}</span>
+                  <span style={s.itemText} onClick={() => handleStartEdit(idx)}>{item.name}</span>
+                </>
               )}
               <div style={s.itemActions}>
-                <button style={s.editBtn} onClick={() => handleStartEdit(idx)} title="Edit">✏️</button>
+                {editIdx !== idx && (
+                  <button style={s.editBtn} onClick={() => handleStartEdit(idx)} title="Edit name">✏️</button>
+                )}
                 <button style={s.deleteBtn} onClick={() => handleDelete(idx)} title="Delete">🗑️</button>
               </div>
             </div>
