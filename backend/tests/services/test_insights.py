@@ -171,6 +171,38 @@ async def test_old_meals_pruned(tmp_path, monkeypatch):
     assert "Old 2" not in names
 
 
+async def test_structured_ingredients_handled(tmp_path, monkeypatch):
+    """Structured dict ingredients (name/quantity/unit) are parsed correctly."""
+    db_path = str(tmp_path / "test.db")
+    monkeypatch.setattr(database, "DATABASE_PATH", db_path)
+    await database.init_db()
+    user_id = await _create_test_user(db_path)
+
+    structured = [
+        {"name": "Eggs", "quantity": 2, "unit": "adet"},
+        {"name": "Bread", "quantity": 1, "unit": "dilim"},
+    ]
+    async with database.get_db() as db:
+        await _seed_meal(db, user_id, "Meal 1", structured)
+        await _seed_meal(db, user_id, "Meal 2", structured)
+        await _seed_meal(db, user_id, "Meal 3", structured)
+        await db.commit()
+
+    count = await refresh_insights_for_user(user_id)
+    assert count >= 1
+
+    async with database.get_db() as db:
+        async with db.execute(
+            "SELECT description FROM user_habits WHERE user_id = ? AND source = 'inferred'",
+            (user_id,),
+        ) as cur:
+            descriptions = [r["description"] for r in await cur.fetchall()]
+
+    frequent = next(d for d in descriptions if "Already eating enough" in d)
+    assert "eggs" in frequent.lower()
+    assert "bread" in frequent.lower()
+
+
 async def test_high_rated_patterns_extracted(tmp_path, monkeypatch):
     """Ingredients from 5-star meals appear in high-rated insight."""
     db_path = str(tmp_path / "test.db")
