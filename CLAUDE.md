@@ -257,8 +257,9 @@ are kept as comments for a future "Turkish brain / English brain" toggle.
 
 | Persona | Job | Temperature | Defined in |
 |---|---|---|---|
-| Chat | Casual breakfast buddy | 0.7 | `build_chat_prompt` |
-| Suggestion | Creative meal designer | 0.8 | `build_suggestion_prompt` |
+| Chat | Casual breakfast buddy | Ollama default | `build_chat_prompt` |
+| Suggestion (favorites) | Creative meal designer | 0.6 | `build_suggestion_prompt` |
+| Suggestion (explore) | Creative meal designer | 0.9 | `build_suggestion_prompt` |
 | Analyst | Nutrition calculator + food expert | 0.3 | `build_analyst_prompt` |
 
 ### Chat Persona (`build_chat_prompt`)

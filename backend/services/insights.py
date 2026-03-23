@@ -53,13 +53,21 @@ async def _top_ingredients(db, user_id: int, limit: int = 10) -> list[dict]:
         except (json.JSONDecodeError, TypeError):
             continue
         for item in items:
-            # Normalize: lowercase, strip quantities ("2 eggs" → "eggs")
-            name = item.strip().lower().split()[-1] if item.strip() else ""
+            name = _extract_name(item)
             if name:
                 counts[name] = counts.get(name, 0) + 1
 
     sorted_items = sorted(counts.items(), key=lambda x: x[1], reverse=True)
     return [{"name": n, "count": c} for n, c in sorted_items[:limit]]
+
+
+def _extract_name(item) -> str:
+    """Extract ingredient name from either a structured dict or a plain string."""
+    if isinstance(item, dict):
+        return (item.get("name") or "").strip().lower()
+    if isinstance(item, str):
+        return item.strip().lower().split()[-1] if item.strip() else ""
+    return ""
 
 
 async def _avg_prep_time(db, user_id: int) -> float | None:
@@ -94,7 +102,7 @@ async def _high_rated_patterns(db, user_id: int) -> list[str]:
         except (json.JSONDecodeError, TypeError):
             continue
         for item in items:
-            name = item.strip().lower().split()[-1] if item.strip() else ""
+            name = _extract_name(item)
             if name:
                 counts[name] = counts.get(name, 0) + 1
 
