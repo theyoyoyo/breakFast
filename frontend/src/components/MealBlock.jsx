@@ -121,7 +121,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
         <div style={s.overlay} onClick={handleOverlayClick}>
           <div style={s.panel}>
             <div style={s.panelHeader}>
-              {meal?.meal_name || 'Meal'}
+              {meal?.meal_name || 'Meal'} <span style={s.mealId}>#{meal?.id || 0}</span>
             </div>
 
             <div style={s.itemList}>

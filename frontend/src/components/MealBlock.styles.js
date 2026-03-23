@@ -73,6 +73,14 @@ export const prepBadge = {
   whiteSpace: 'nowrap',
 }
 
+export const mealId = {
+  fontSize: 9,
+  color: 'var(--text-muted)',
+  opacity: 0.5,
+  flexShrink: 0,
+  whiteSpace: 'nowrap',
+}
+
 // --- Overlay panel (same style as DecidePanel) ---
 
 export const overlay = {
