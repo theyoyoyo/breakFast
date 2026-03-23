@@ -181,6 +181,7 @@ export const actionStack = {
   flexDirection: 'column',
   alignItems: 'stretch',
   gap: 6,
+  width: 80,
 }
 
 export const decideBtn = (active) => ({
@@ -191,6 +192,7 @@ export const decideBtn = (active) => ({
   padding: '8px 16px',
   fontSize: 48,
   lineHeight: 1,
+  width: '100%',
   cursor: 'pointer',
   transition: 'background 0.15s, color 0.15s',
   display: 'flex',
