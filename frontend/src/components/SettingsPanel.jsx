@@ -15,7 +15,7 @@ const PRIORITY_OPTIONS = [
   { value: 'critical', label: 'Top priority' },
 ]
 
-export default function SettingsPanel() {
+export default function SettingsPanel({ visible }) {
   const [ratings, setRatings] = useState([])
   const [view, setView] = useState('settings')
   const [newProduct, setNewProduct] = useState('')
@@ -41,6 +41,10 @@ export default function SettingsPanel() {
   // Health rules state
   const [healthRules, setHealthRules] = useState([])
   const [newRuleText, setNewRuleText] = useState('')
+  const [pendingRuleDeletes, setPendingRuleDeletes] = useState(new Set())
+
+  // Meal pending deletes
+  const [pendingMealDeletes, setPendingMealDeletes] = useState(new Set())
 
   const load = async () => {
     try {
@@ -67,7 +71,10 @@ export default function SettingsPanel() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reload data when the Settings tab becomes visible
+  useEffect(() => { if (visible) load() }, [visible]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Rating handlers
   const handleAddRating = async () => {
@@ -111,14 +118,25 @@ export default function SettingsPanel() {
     setProfileDirty(true)
   }
 
+  const handleClearProfileField = (field) => {
+    setProfile((prev) => ({ ...prev, [field]: '' }))
+    setProfileDirty(true)
+  }
+
   const handleSaveProfile = async () => {
+    const age = profile.age ? parseInt(profile.age, 10) : null
+    const height_cm = profile.height_cm ? parseInt(profile.height_cm, 10) : null
+    const weight_kg = profile.weight_kg ? parseFloat(profile.weight_kg) : null
+    if (age !== null && age < 1) { setError('Age must be a positive number'); return }
+    if (height_cm !== null && height_cm < 1) { setError('Height must be a positive number'); return }
+    if (weight_kg !== null && weight_kg <= 0) { setError('Weight must be a positive number'); return }
     try {
       setError(null)
       await upsertProfile({
-        age: profile.age ? parseInt(profile.age, 10) : null,
+        age,
         gender: profile.gender || null,
-        height_cm: profile.height_cm ? parseInt(profile.height_cm, 10) : null,
-        weight_kg: profile.weight_kg ? parseFloat(profile.weight_kg) : null,
+        height_cm,
+        weight_kg,
         activity_level: profile.activity_level || null,
       })
       setProfileDirty(false)
@@ -188,12 +206,25 @@ export default function SettingsPanel() {
     }
   }
 
-  const handleDeleteRule = async (id) => {
-    setHealthRules((prev) => prev.filter((r) => r.id !== id))
+  const handleToggleRuleDelete = (id) => {
+    setPendingRuleDeletes(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  const handleSaveRules = async () => {
+    if (pendingRuleDeletes.size === 0) return
     try {
-      await deleteHealthRule(id)
+      setError(null)
+      for (const id of pendingRuleDeletes) {
+        await deleteHealthRule(id)
+      }
+      setPendingRuleDeletes(new Set())
+      load()
     } catch {
-      setError('Failed to delete health rule')
+      setError('Failed to delete health rule(s)')
       load()
     }
   }
@@ -272,13 +303,26 @@ export default function SettingsPanel() {
     }
   }
 
-  const handleDeleteMeal = async (id) => {
-    setMeals(prev => prev.filter(m => m.id !== id))
+  const handleToggleMealDelete = (id) => {
     if (expandedMealId === id) setExpandedMealId(null)
+    setPendingMealDeletes(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  const handleSaveMealDeletes = async () => {
+    if (pendingMealDeletes.size === 0) return
     try {
-      await deleteMeal(id)
+      setError(null)
+      for (const id of pendingMealDeletes) {
+        await deleteMeal(id)
+      }
+      setPendingMealDeletes(new Set())
+      load()
     } catch {
-      setError('Failed to delete meal')
+      setError('Failed to delete meal(s)')
       load()
     }
   }
@@ -293,80 +337,90 @@ export default function SettingsPanel() {
     return (
       <div style={s.container}>
         <div style={{ ...s.header, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button style={s.backBtn} onClick={() => setView('settings')}>←</button>
+          <button style={s.backBtn} onClick={() => { setPendingMealDeletes(new Set()); setView('settings') }}>←</button>
           <span>Meal History ({meals.length})</span>
         </div>
         <div style={s.body}>
           {error && <div style={s.error}>{error}</div>}
           {meals.length === 0 && <span style={s.empty}>No meals logged yet</span>}
-          {meals.map((meal) => (
-            <div key={meal.id} style={s.mealCard}>
-              <div style={s.mealHeader} onClick={() => handleExpandMeal(meal)}>
-                <div style={s.mealInfo}>
-                  <span style={s.mealName}>{meal.meal_name}</span>
-                  <span style={s.mealDate}>{new Date(meal.logged_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+          {meals.map((meal) => {
+            const markedForDelete = pendingMealDeletes.has(meal.id)
+            return (
+              <div key={meal.id} style={{ ...s.mealCard, opacity: markedForDelete ? 0.4 : 1 }}>
+                <div style={s.mealHeader} onClick={() => !markedForDelete && handleExpandMeal(meal)}>
+                  <div style={s.mealInfo}>
+                    <span style={{ ...s.mealName, textDecoration: markedForDelete ? 'line-through' : 'none' }}>{meal.meal_name}</span>
+                    <span style={s.mealDate}>{new Date(meal.logged_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                  <div style={s.mealActions}>
+                    {!markedForDelete && <span style={s.expandIcon}>{expandedMealId === meal.id ? '▼' : '▶'}</span>}
+                    <button style={s.deleteMealBtn} onClick={(e) => { e.stopPropagation(); handleToggleMealDelete(meal.id) }} title={markedForDelete ? 'Undo delete' : 'Delete meal'}>
+                      {markedForDelete ? '↩' : '🗑️'}
+                    </button>
+                  </div>
                 </div>
-                <div style={s.mealActions}>
-                  <span style={s.expandIcon}>{expandedMealId === meal.id ? '▼' : '▶'}</span>
-                  <button style={s.deleteMealBtn} onClick={(e) => { e.stopPropagation(); handleDeleteMeal(meal.id) }} title="Delete meal">🗑️</button>
-                </div>
+
+                {expandedMealId === meal.id && !markedForDelete && (
+                  <div style={s.mealExpanded}>
+                    <div style={s.mealNameEdit}>
+                      <label style={s.mealFieldLabel}>Name</label>
+                      <input
+                        style={s.input}
+                        value={mealName}
+                        onChange={(e) => setMealName(e.target.value)}
+                      />
+                    </div>
+
+                    <label style={s.mealFieldLabel}>Ingredients</label>
+                    <div style={s.mealItemList}>
+                      {mealItems.map((item, idx) => (
+                        <div key={idx} style={s.mealItemRow}>
+                          <div style={s.mealQtyGroup}>
+                            <button style={s.mealArrowBtn} onClick={() => handleMealQtyStep(idx, -1)}>▼</button>
+                            <input
+                              style={s.mealQtyInput}
+                              type="text"
+                              inputMode="decimal"
+                              value={item.quantity}
+                              onChange={(e) => handleMealQtyChange(idx, e.target.value)}
+                              onBlur={() => handleMealQtyBlur(idx)}
+                            />
+                            <button style={s.mealArrowBtn} onClick={() => handleMealQtyStep(idx, 1)}>▲</button>
+                          </div>
+                          <span style={s.mealUnitLabel}>{item.unit}</span>
+                          <span style={s.mealItemText}>{item.name}</span>
+                          <div style={s.mealItemActions}>
+                            <button style={s.deleteMealBtn} onClick={() => handleDeleteMealItem(idx)} title="Delete">🗑️</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={s.addRow}>
+                      <input
+                        style={s.input}
+                        value={newMealItem}
+                        onChange={(e) => setNewMealItem(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddMealItem()}
+                        placeholder="Add item…"
+                      />
+                      <button style={s.addBtn} onClick={handleAddMealItem}>+</button>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                      <button style={s.saveBtn} onClick={() => handleSaveMeal(meal)}>Save</button>
+                      <button style={s.cancelEditBtn} onClick={() => setExpandedMealId(null)}>Cancel</button>
+                    </div>
+                  </div>
+                )}
               </div>
-
-              {expandedMealId === meal.id && (
-                <div style={s.mealExpanded}>
-                  <div style={s.mealNameEdit}>
-                    <label style={s.mealFieldLabel}>Name</label>
-                    <input
-                      style={s.input}
-                      value={mealName}
-                      onChange={(e) => setMealName(e.target.value)}
-                    />
-                  </div>
-
-                  <label style={s.mealFieldLabel}>Ingredients</label>
-                  <div style={s.mealItemList}>
-                    {mealItems.map((item, idx) => (
-                      <div key={idx} style={s.mealItemRow}>
-                        <div style={s.mealQtyGroup}>
-                          <button style={s.mealArrowBtn} onClick={() => handleMealQtyStep(idx, -1)}>▼</button>
-                          <input
-                            style={s.mealQtyInput}
-                            type="text"
-                            inputMode="decimal"
-                            value={item.quantity}
-                            onChange={(e) => handleMealQtyChange(idx, e.target.value)}
-                            onBlur={() => handleMealQtyBlur(idx)}
-                          />
-                          <button style={s.mealArrowBtn} onClick={() => handleMealQtyStep(idx, 1)}>▲</button>
-                        </div>
-                        <span style={s.mealUnitLabel}>{item.unit}</span>
-                        <span style={s.mealItemText}>{item.name}</span>
-                        <div style={s.mealItemActions}>
-                          <button style={s.deleteMealBtn} onClick={() => handleDeleteMealItem(idx)} title="Delete">🗑️</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div style={s.addRow}>
-                    <input
-                      style={s.input}
-                      value={newMealItem}
-                      onChange={(e) => setNewMealItem(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddMealItem()}
-                      placeholder="Add item…"
-                    />
-                    <button style={s.addBtn} onClick={handleAddMealItem}>+</button>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                    <button style={s.saveBtn} onClick={() => handleSaveMeal(meal)}>Save</button>
-                    <button style={s.cancelEditBtn} onClick={() => setExpandedMealId(null)}>Cancel</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
+            )
+          })}
+          {pendingMealDeletes.size > 0 && (
+            <button style={{ ...s.saveBtn, alignSelf: 'stretch', textAlign: 'center' }} onClick={handleSaveMealDeletes}>
+              Save ({pendingMealDeletes.size} to delete)
+            </button>
+          )}
         </div>
       </div>
     )
@@ -377,31 +431,36 @@ export default function SettingsPanel() {
     return (
       <div style={s.container}>
         <div style={{ ...s.header, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button style={s.backBtn} onClick={() => setView('settings')}>←</button>
+          <button style={s.backBtn} onClick={() => { setPendingRuleDeletes(new Set()); setView('settings') }}>←</button>
           <span>Health Rules ({healthRules.length})</span>
         </div>
         <div style={s.body}>
           {error && <div style={s.error}>{error}</div>}
           {healthRules.length === 0 && <span style={s.empty}>No health rules yet</span>}
-          {healthRules.map((rule) => (
-            <div key={rule.id} style={s.ruleRow}>
-              <div style={s.ruleTop}>
-                <span style={s.ruleName}>{rule.rule_text}</span>
-                <button style={s.tagX} onClick={() => handleDeleteRule(rule.id)}>×</button>
+          {healthRules.map((rule) => {
+            const markedForDelete = pendingRuleDeletes.has(rule.id)
+            return (
+              <div key={rule.id} style={{ ...s.ruleRow, opacity: markedForDelete ? 0.4 : 1, textDecoration: markedForDelete ? 'line-through' : 'none' }}>
+                <div style={s.ruleTop}>
+                  <span style={s.ruleName}>{rule.rule_text}</span>
+                  <button style={s.tagX} onClick={() => handleToggleRuleDelete(rule.id)}>{markedForDelete ? '↩' : '×'}</button>
+                </div>
+                {!markedForDelete && (
+                  <div style={s.priorityRow}>
+                    {PRIORITY_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        style={s.priorityBtn(rule.priority === opt.value, opt.value)}
+                        onClick={() => handleUpdateRulePriority(rule.id, opt.value)}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div style={s.priorityRow}>
-                {PRIORITY_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    style={s.priorityBtn(rule.priority === opt.value, opt.value)}
-                    onClick={() => handleUpdateRulePriority(rule.id, opt.value)}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
+            )
+          })}
           <div style={s.addRow}>
             <input
               style={s.input}
@@ -412,6 +471,11 @@ export default function SettingsPanel() {
             />
             <button style={s.addBtn} onClick={handleAddRule}>+</button>
           </div>
+          {pendingRuleDeletes.size > 0 && (
+            <button style={s.saveBtn} onClick={handleSaveRules}>
+              Save ({pendingRuleDeletes.size} to delete)
+            </button>
+          )}
         </div>
       </div>
     )
@@ -477,13 +541,17 @@ export default function SettingsPanel() {
           <div style={s.profileGrid}>
             <div style={s.profileField}>
               <label style={s.profileLabel}>Age</label>
-              <input
-                type="number"
-                style={s.input}
-                value={profile.age}
-                onChange={(e) => handleProfileChange('age', e.target.value)}
-                placeholder="—"
-              />
+              <div style={s.profileInputRow}>
+                <input
+                  type="number"
+                  min="1"
+                  style={s.input}
+                  value={profile.age}
+                  onChange={(e) => handleProfileChange('age', e.target.value)}
+                  placeholder="—"
+                />
+                {profile.age !== '' && <button style={s.clearFieldBtn} onClick={() => handleClearProfileField('age')}>×</button>}
+              </div>
             </div>
             <div style={s.profileField}>
               <label style={s.profileLabel}>Gender</label>
@@ -499,24 +567,32 @@ export default function SettingsPanel() {
             </div>
             <div style={s.profileField}>
               <label style={s.profileLabel}>Height (cm)</label>
-              <input
-                type="number"
-                style={s.input}
-                value={profile.height_cm}
-                onChange={(e) => handleProfileChange('height_cm', e.target.value)}
-                placeholder="—"
-              />
+              <div style={s.profileInputRow}>
+                <input
+                  type="number"
+                  min="1"
+                  style={s.input}
+                  value={profile.height_cm}
+                  onChange={(e) => handleProfileChange('height_cm', e.target.value)}
+                  placeholder="—"
+                />
+                {profile.height_cm !== '' && <button style={s.clearFieldBtn} onClick={() => handleClearProfileField('height_cm')}>×</button>}
+              </div>
             </div>
             <div style={s.profileField}>
               <label style={s.profileLabel}>Weight (kg)</label>
-              <input
-                type="number"
-                step="0.1"
-                style={s.input}
-                value={profile.weight_kg}
-                onChange={(e) => handleProfileChange('weight_kg', e.target.value)}
-                placeholder="—"
-              />
+              <div style={s.profileInputRow}>
+                <input
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  style={s.input}
+                  value={profile.weight_kg}
+                  onChange={(e) => handleProfileChange('weight_kg', e.target.value)}
+                  placeholder="—"
+                />
+                {profile.weight_kg !== '' && <button style={s.clearFieldBtn} onClick={() => handleClearProfileField('weight_kg')}>×</button>}
+              </div>
             </div>
           </div>
           <div style={s.profileField}>

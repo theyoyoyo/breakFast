@@ -8,7 +8,7 @@ import aiosqlite
 from database import get_db
 from fastapi import APIRouter, Depends, HTTPException
 from auth import require_user
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 router = APIRouter(prefix="/profile", tags=["profile"])
@@ -24,6 +24,27 @@ class ProfileIn(BaseModel):
     height_cm: int | None = None
     weight_kg: float | None = None
     activity_level: str | None = None
+
+    @field_validator("age")
+    @classmethod
+    def age_positive(cls, v):
+        if v is not None and v < 1:
+            raise ValueError("age must be a positive integer")
+        return v
+
+    @field_validator("height_cm")
+    @classmethod
+    def height_positive(cls, v):
+        if v is not None and v < 1:
+            raise ValueError("height_cm must be a positive integer")
+        return v
+
+    @field_validator("weight_kg")
+    @classmethod
+    def weight_positive(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError("weight_kg must be positive")
+        return v
 
 
 class ProfileOut(ProfileIn):

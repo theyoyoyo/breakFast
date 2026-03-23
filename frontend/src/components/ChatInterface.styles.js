@@ -21,6 +21,7 @@ export const header = {
 export const messages = {
   flex: 1,
   overflowY: 'auto',
+  overflowX: 'hidden',
   padding: '16px',
   display: 'flex',
   flexDirection: 'column',
@@ -44,6 +45,8 @@ export const bubble = (role) => ({
   fontSize: 14,
   lineHeight: 1.6,
   whiteSpace: 'pre-wrap',
+  overflowWrap: 'break-word',
+  wordBreak: 'break-word',
 })
 
 export const inputRow = {

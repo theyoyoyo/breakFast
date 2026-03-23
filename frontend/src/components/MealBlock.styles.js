@@ -8,6 +8,8 @@ export const blockRow = {
   gap: 8,
   alignSelf: 'flex-end',
   maxWidth: '80%',
+  minWidth: 0,
+  overflow: 'hidden',
 }
 
 export const checkbox = (checked) => ({
@@ -32,6 +34,8 @@ export const block = {
   cursor: 'pointer',
   transition: 'border-color 0.15s',
   flex: 1,
+  minWidth: 0,
+  overflow: 'hidden',
 }
 
 export const blockIcon = {
@@ -43,9 +47,9 @@ export const blockText = {
   fontSize: 13,
   color: 'var(--text)',
   flex: 1,
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
+  minWidth: 0,
+  overflowWrap: 'break-word',
+  wordBreak: 'break-word',
 }
 
 export const analyzeBtn = (analyzing) => ({
