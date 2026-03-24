@@ -2,6 +2,14 @@ const BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
 const WS_URL = BASE_URL.replace(/^http/, 'ws')
 
 // ---------------------------------------------------------------------------
+// Error types
+// ---------------------------------------------------------------------------
+
+export class NetworkError extends Error {
+  constructor() { super('Cannot reach server') }
+}
+
+// ---------------------------------------------------------------------------
 // Auth helpers
 // ---------------------------------------------------------------------------
 
@@ -23,7 +31,12 @@ async function apiFetch(url, options = {}) {
     ...authHeaders(),
     ...(options.body ? { 'Content-Type': 'application/json' } : {}),
   }
-  const r = await fetch(url, { ...options, headers })
+  let r
+  try {
+    r = await fetch(url, { ...options, headers })
+  } catch {
+    throw new NetworkError()
+  }
   if (!r.ok) throw new Error(`API error ${r.status}: ${url}`)
   if (r.status === 204) return undefined
   return r.json()
@@ -39,11 +52,16 @@ function json(method, body) {
 // ---------------------------------------------------------------------------
 
 export const login = async (name, pin) => {
-  const r = await fetch(`${BASE_URL}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, pin }),
-  })
+  let r
+  try {
+    r = await fetch(`${BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, pin }),
+    })
+  } catch {
+    throw new NetworkError()
+  }
   if (!r.ok) throw new Error('Login failed')
   return r.json()
 }

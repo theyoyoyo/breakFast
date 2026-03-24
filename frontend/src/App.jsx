@@ -6,7 +6,7 @@ import PreferencesPanel from './components/PreferencesPanel'
 import FavoritesPanel from './components/FavoritesPanel'
 import SettingsPanel from './components/SettingsPanel'
 import LoginScreen from './components/LoginScreen'
-import { logout, checkAuth } from './services/api'
+import { logout, checkAuth, NetworkError } from './services/api'
 import * as s from './App.styles'
 
 const TABS = [
@@ -34,18 +34,35 @@ export default function App() {
   const [auth, setAuth] = useState(getStoredAuth)
   const [authChecked, setAuthChecked] = useState(false)
   const [activeTab, setActiveTab] = useState('Chat')
+  const [offline, setOffline] = useState(false)
 
   // Validate stored token against backend on app start
   useEffect(() => {
     if (!auth) { setAuthChecked(true); return }
     checkAuth()
-      .then(() => setAuthChecked(true))
-      .catch(() => {
-        logout()
-        setAuth(null)
-        setAuthChecked(true)
+      .then(() => { setAuthChecked(true); setOffline(false) })
+      .catch((err) => {
+        if (err instanceof NetworkError) {
+          setOffline(true)
+          setAuthChecked(true) // let user in with stale token
+        } else {
+          logout()
+          setAuth(null)
+          setAuthChecked(true)
+        }
       })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Periodically check backend connectivity when offline
+  useEffect(() => {
+    if (!offline || !auth) return
+    const id = setInterval(() => {
+      checkAuth()
+        .then(() => setOffline(false))
+        .catch(() => {})
+    }, 10_000)
+    return () => clearInterval(id)
+  }, [offline, auth])
   const chatRef = useRef(null)
   const [ingredientRefresh, setIngredientRefresh] = useState(0)
 
@@ -65,6 +82,7 @@ export default function App() {
 
   return (
     <div style={s.app}>
+      {offline && <div style={s.offlineBanner}>Backend unreachable — retrying...</div>}
       <nav style={s.nav}>
         {TABS.map(({ key, label, Icon }) => (
           <button

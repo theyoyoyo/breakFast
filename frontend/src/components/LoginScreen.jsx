@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { login } from '../services/api'
+import { login, NetworkError } from '../services/api'
 import * as s from './LoginScreen.styles'
 
 export default function LoginScreen({ onLogin }) {
@@ -20,8 +20,8 @@ export default function LoginScreen({ onLogin }) {
       localStorage.setItem('bf_token', data.token)
       localStorage.setItem('bf_user', JSON.stringify(data.user))
       onLogin(data)
-    } catch {
-      setError('Invalid name or PIN')
+    } catch (err) {
+      setError(err instanceof NetworkError ? 'Cannot reach server' : 'Invalid name or PIN')
     } finally {
       setLoading(false)
     }
