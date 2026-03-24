@@ -302,6 +302,7 @@ export default function SettingsPanel({ visible }) {
         nutrition_note: meal.nutrition_note,
       })
       setExpandedMealId(null)
+      setFavAdded(prev => { const next = { ...prev }; delete next[meal.id]; return next })
       load()
     } catch {
       setError('Failed to update meal')
@@ -386,7 +387,7 @@ export default function SettingsPanel({ visible }) {
                     <MealEditor
                       meal={meal}
                       onSave={(updated) => handleSaveMeal({ ...meal, ...updated })}
-                      onClose={() => setExpandedMealId(null)}
+                      onClose={() => { setExpandedMealId(null); setFavAdded(prev => { const next = { ...prev }; delete next[meal.id]; return next }) }}
                       showPrepTime={true}
                       editPrepTime={true}
                       extraActions={

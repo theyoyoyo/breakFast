@@ -1,8 +1,22 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { addFavorite } from '../services/api'
 import MealEditor from './MealEditor'
 import * as s from './MealBlock.styles'
 import * as es from './MealEditor.styles'
+
+const BREAKFAST_EMOJIS = ['🍳', '🥐', '🧀', '🥚', '🫕', '🥞', '🧇', '🥣', '🍞', '🥯', '🫖', '☕', '🥗', '🥑', '🍯']
+
+/**
+ * Pick a stable random emoji from the list based on a string seed.
+ */
+function pickEmoji(seed) {
+  let hash = 0
+  const str = String(seed || '')
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0
+  }
+  return BREAKFAST_EMOJIS[Math.abs(hash) % BREAKFAST_EMOJIS.length]
+}
 
 /**
  * Format a single ingredient for display.
@@ -25,6 +39,8 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
   const [panelOpen, setPanelOpen] = useState(false)
   const [favSaving, setFavSaving] = useState(false)
   const [favAdded, setFavAdded] = useState(false)
+
+  const emoji = useMemo(() => pickEmoji(meal?.meal_name || meal?.meal_id), [meal?.meal_name, meal?.meal_id])
 
   const ingredients = meal?.ingredients || []
   const displayNames = ingredients.length > 0
@@ -67,7 +83,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
           {checked ? '☑' : '☐'}
         </button>
         <div style={s.block} onClick={() => { setPanelOpen(true); setFavAdded(false) }}>
-          <span style={s.blockIcon}>🫕</span>
+          <span style={s.blockIcon}>{emoji}</span>
           <span style={s.blockText}>{displayNames}</span>
           {meal?.prep_time_min && <span style={s.prepBadge}>⏱ {meal.prep_time_min}m</span>}
         </div>
