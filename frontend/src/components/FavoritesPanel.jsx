@@ -76,7 +76,7 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
                   </div>
                   <div style={s.cardActions}>
                     <button style={s.sendBtn} onClick={() => handleSendToChat(fav)} title="Send to chat as suggestion">
-                      🫕 Hazırla
+                      🫕 Send to Chat
                     </button>
                     <button style={s.editBtn} onClick={() => setEditingId(fav.id)} title="Edit this favorite">
                       ✏️ Edit
