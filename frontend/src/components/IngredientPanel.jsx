@@ -1,19 +1,27 @@
 import { useState, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react'
-import { getIngredients, addIngredient, deleteIngredient, getExpiredIngredients, confirmExpiredThrown } from '../services/api'
+import { Trash2, Pencil, Plus, X } from 'lucide-react'
+import { getIngredients, addIngredient, updateIngredient, deleteIngredient, getExpiredIngredients, confirmExpiredThrown } from '../services/api'
 import * as s from './IngredientPanel.styles'
 
 const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger }, ref) {
   const [ingredients, setIngredients] = useState([])
-  const [newName, setNewName] = useState('')
-  const [newExpiry, setNewExpiry] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+
+  // Add panel state
+  const [addPanelOpen, setAddPanelOpen] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newExpiry, setNewExpiry] = useState('')
+
+  // Edit state
+  const [editingId, setEditingId] = useState(null)
+  const [editName, setEditName] = useState('')
+  const [editExpiry, setEditExpiry] = useState('')
 
   // Expiry state
   const [expiredItems, setExpiredItems] = useState([])
   const [expiryPanelOpen, setExpiryPanelOpen] = useState(false)
-  const [expiryEditList, setExpiryEditList] = useState([])
-  const [expiryCovered, setExpiryCovered] = useState(false)
+  const [expiryChecked, setExpiryChecked] = useState({})
 
   const load = async () => {
     try {
@@ -32,8 +40,10 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger }, 
       const expired = await getExpiredIngredients()
       if (expired.length > 0) {
         setExpiredItems(expired)
-        setExpiryEditList(expired)
-        setExpiryCovered(false)
+        // All checked by default
+        const checked = {}
+        expired.forEach(i => { checked[i.id] = true })
+        setExpiryChecked(checked)
       }
     } catch {
       // silently ignore expiry check errors
@@ -50,8 +60,9 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger }, 
         { id: -2, name: 'Milk (demo)', expiry_date: new Date().toISOString().split('T')[0], added_at: '', updated_at: '' },
       ]
       setExpiredItems(fakeExpired)
-      setExpiryEditList(fakeExpired)
-      setExpiryCovered(false)
+      const checked = {}
+      fakeExpired.forEach(i => { checked[i.id] = true })
+      setExpiryChecked(checked)
     }
   }))
 
@@ -63,6 +74,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger }, 
       await addIngredient(name, newExpiry || null)
       setNewName('')
       setNewExpiry('')
+      setAddPanelOpen(false)
       load()
     } catch (e) {
       setError('Failed to add ingredient')
@@ -79,22 +91,60 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger }, 
     }
   }
 
-  const handleThrown = async () => {
-    const realIds = expiryEditList.filter(i => i.id > 0).map(i => i.id)
+  const startEdit = (ing) => {
+    setEditingId(ing.id)
+    setEditName(ing.name)
+    setEditExpiry(ing.expiry_date || '')
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditName('')
+    setEditExpiry('')
+  }
+
+  const handleEdit = async () => {
+    if (!editName.trim()) return
+    try {
+      setError(null)
+      await updateIngredient(editingId, {
+        name: editName.trim(),
+        expiry_date: editExpiry || '',
+      })
+      cancelEdit()
+      load()
+    } catch (e) {
+      setError('Failed to update ingredient')
+    }
+  }
+
+  const handleDiscard = async () => {
+    const selectedIds = Object.entries(expiryChecked)
+      .filter(([, checked]) => checked)
+      .map(([id]) => Number(id))
+    const realIds = selectedIds.filter(id => id > 0)
     try {
       if (realIds.length > 0) {
         await confirmExpiredThrown(realIds)
       }
-      setExpiryCovered(true)
-      setExpiryPanelOpen(false)
+      // Remove discarded items from expired list
+      const remaining = expiredItems.filter(i => !selectedIds.includes(i.id))
+      setExpiredItems(remaining)
+      if (remaining.length === 0) {
+        setExpiryPanelOpen(false)
+      } else {
+        const checked = {}
+        remaining.forEach(i => { checked[i.id] = true })
+        setExpiryChecked(checked)
+      }
       load()
     } catch {
       setError('Failed to remove expired items')
     }
   }
 
-  const removeFromExpiryList = (id) => {
-    setExpiryEditList(prev => prev.filter(i => i.id !== id))
+  const toggleExpiryCheck = (id) => {
+    setExpiryChecked(prev => ({ ...prev, [id]: !prev[id] }))
   }
 
   const formatExpiry = (dateStr) => {
@@ -112,9 +162,44 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger }, 
     return dateStr <= new Date().toISOString().split('T')[0]
   }
 
+  const checkedCount = Object.values(expiryChecked).filter(Boolean).length
+
   return (
     <div style={s.container}>
-      <div style={s.header}>Ingredients</div>
+      {/* Header with add button */}
+      <div style={s.headerRow}>
+        <span style={s.headerText}>Ingredients</span>
+        <button
+          style={s.headerAddBtn}
+          onClick={() => { setAddPanelOpen(!addPanelOpen); setError(null) }}
+          title="Add ingredient"
+        >
+          {addPanelOpen ? <X size={14} /> : <Plus size={14} />}
+        </button>
+      </div>
+
+      {/* Add panel (slides open below header) */}
+      {addPanelOpen && (
+        <div style={s.addPanel}>
+          <input
+            style={s.addInput}
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+            placeholder="Ingredient name…"
+            autoFocus
+          />
+          <div style={s.addPanelRow}>
+            <input
+              type="date"
+              style={s.addDateInput}
+              value={newExpiry}
+              onChange={(e) => setNewExpiry(e.target.value)}
+            />
+            <button style={s.addPanelBtn} onClick={handleAdd}>Add</button>
+          </div>
+        </div>
+      )}
 
       {/* Ingredient list */}
       <div style={s.list}>
@@ -124,40 +209,68 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger }, 
           <div style={s.empty}>No ingredients yet. Tell me what you have!</div>
         )}
         {ingredients.map((ing) => (
-          <div
-            key={ing.id}
-            style={{ ...s.row, padding: '7px 16px' }}
-          >
-            <span style={s.name}>{ing.name}</span>
-            {ing.expiry_date && (
-              <span style={{
-                ...s.expiryBadge,
-                color: isExpired(ing.expiry_date) ? 'var(--error, #e74c3c)' : 'var(--text-muted)',
-              }}>
-                {formatExpiry(ing.expiry_date)}
-              </span>
-            )}
-            <button
-              style={s.deleteBtn}
-              onClick={() => handleDelete(ing.id)}
-              title="Remove"
-            >
-              ×
-            </button>
-          </div>
+          editingId === ing.id ? (
+            /* Edit mode row */
+            <div key={ing.id} style={s.editRow}>
+              <input
+                style={s.editInput}
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleEdit()
+                  if (e.key === 'Escape') cancelEdit()
+                }}
+                autoFocus
+              />
+              <input
+                type="date"
+                style={s.editDateInput}
+                value={editExpiry}
+                onChange={(e) => setEditExpiry(e.target.value)}
+              />
+              <button style={s.editSaveBtn} onClick={handleEdit}>Save</button>
+              <button style={s.editCancelBtn} onClick={cancelEdit}>
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            /* Normal row */
+            <div key={ing.id} style={{ ...s.row, padding: '7px 16px' }}>
+              <span style={s.name}>{ing.name}</span>
+              {ing.expiry_date && (
+                <span style={{
+                  ...s.expiryBadge,
+                  color: isExpired(ing.expiry_date) ? 'var(--error, #e74c3c)' : 'var(--text-muted)',
+                }}>
+                  {formatExpiry(ing.expiry_date)}
+                </span>
+              )}
+              <button
+                style={s.iconBtn}
+                onClick={() => startEdit(ing)}
+                title="Edit"
+              >
+                <Pencil size={12} />
+              </button>
+              <button
+                style={s.iconBtn}
+                onClick={() => handleDelete(ing.id)}
+                title="Delete"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          )
         ))}
       </div>
 
-      {/* Expiry widget */}
+      {/* Expiry notification widget */}
       {expiredItems.length > 0 && (
         <div
-          style={{
-            ...s.expiryWidget,
-            ...(expiryCovered ? s.expiryWidgetCovered : {}),
-          }}
-          onClick={() => !expiryCovered && setExpiryPanelOpen(true)}
+          style={s.expiryWidget}
+          onClick={() => setExpiryPanelOpen(true)}
         >
-          <span>{expiryCovered ? '✓ Handled' : `⚠ ${expiredItems.length} expired item${expiredItems.length > 1 ? 's' : ''}`}</span>
+          <span>{`\u26A0 ${expiredItems.length} expired item${expiredItems.length > 1 ? 's' : ''}`}</span>
         </div>
       )}
 
@@ -165,55 +278,41 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger }, 
       {expiryPanelOpen && (
         <div style={s.expiryPanel}>
           <div style={s.expiryPanelHeader}>
-            <span>Expired Items</span>
-            <button style={s.closeBtn} onClick={() => setExpiryPanelOpen(false)}>×</button>
+            <button style={s.closeBtn} onClick={() => setExpiryPanelOpen(false)}>
+              <X size={16} />
+            </button>
+            <span style={s.expiryPanelTitle}>Expired Items</span>
+            <div style={{ width: 24 }} />
           </div>
           <div style={s.expiryPanelList}>
-            {expiryEditList.map(item => (
-              <div key={item.id} style={s.expiryRow}>
-                <span style={{ flex: 1, fontSize: 13 }}>{item.name}</span>
+            {expiredItems.map(item => (
+              <label key={item.id} style={s.expiryRow}>
+                <input
+                  type="checkbox"
+                  checked={!!expiryChecked[item.id]}
+                  onChange={() => toggleExpiryCheck(item.id)}
+                  style={s.checkbox}
+                />
+                <span style={{ flex: 1, fontSize: 13, color: 'var(--text)' }}>{item.name}</span>
                 {item.expiry_date && (
                   <span style={s.expiryBadge}>{formatExpiry(item.expiry_date)}</span>
                 )}
-                <button
-                  style={s.deleteBtn}
-                  onClick={() => removeFromExpiryList(item.id)}
-                  title="Remove from list"
-                >×</button>
-              </div>
+              </label>
             ))}
-            {expiryEditList.length === 0 && (
-              <div style={s.empty}>All items removed from list</div>
-            )}
           </div>
           <button
-            style={s.thrownBtn}
-            onClick={handleThrown}
-            disabled={expiryEditList.length === 0}
+            style={{
+              ...s.discardBtn,
+              opacity: checkedCount === 0 ? 0.4 : 1,
+              cursor: checkedCount === 0 ? 'default' : 'pointer',
+            }}
+            onClick={handleDiscard}
+            disabled={checkedCount === 0}
           >
-            Thrown
+            Discard{checkedCount > 0 ? ` (${checkedCount})` : ''}
           </button>
         </div>
       )}
-
-      {/* Add ingredient row */}
-      <div style={s.addRow}>
-        <input
-          style={s.input}
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-          placeholder="Add ingredient…"
-        />
-        <input
-          type="date"
-          style={s.dateInput}
-          value={newExpiry}
-          onChange={(e) => setNewExpiry(e.target.value)}
-          title="Expiry date (optional)"
-        />
-        <button style={s.addBtn} onClick={handleAdd} title="Add">+</button>
-      </div>
     </div>
   )
 })

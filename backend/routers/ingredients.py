@@ -9,7 +9,8 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from database import get_db
 from auth import require_user
-from models.ingredient import Ingredient, IngredientCreate
+from fastapi import HTTPException
+from models.ingredient import Ingredient, IngredientCreate, IngredientUpdate
 
 router = APIRouter(prefix="/ingredients", tags=["ingredients"])
 
@@ -27,7 +28,11 @@ _UPSERT_SQL = """
 async def list_ingredients(user_id: int = Depends(require_user)):
     async with get_db() as db:
         async with db.execute(
-            "SELECT * FROM ingredient_inventory WHERE user_id = ? ORDER BY name",
+            """SELECT * FROM ingredient_inventory WHERE user_id = ?
+               ORDER BY
+                 CASE WHEN expiry_date IS NULL THEN 1 ELSE 0 END,
+                 expiry_date ASC,
+                 name ASC""",
             (user_id,),
         ) as cur:
             return [dict(r) for r in await cur.fetchall()]
@@ -43,6 +48,38 @@ async def add_ingredient(body: IngredientCreate, user_id: int = Depends(require_
             (user_id, body.name),
         ) as cur:
             return dict(await cur.fetchone())
+
+
+@router.patch("/{ingredient_id}", response_model=Ingredient)
+async def update_ingredient(ingredient_id: int, body: IngredientUpdate, user_id: int = Depends(require_user)):
+    """Update an ingredient's name and/or expiry date."""
+    updates = {}
+    if body.name is not None:
+        updates["name"] = body.name
+    if body.expiry_date is not None:
+        # Allow clearing expiry with empty string
+        updates["expiry_date"] = body.expiry_date if body.expiry_date != "" else None
+
+    async with get_db() as db:
+        if updates:
+            set_clause = ", ".join(f"{k} = ?" for k in updates)
+            cursor = await db.execute(
+                f"UPDATE ingredient_inventory SET {set_clause}, updated_at = datetime('now') WHERE id = ? AND user_id = ?",
+                [*updates.values(), ingredient_id, user_id],
+            )
+            await db.commit()
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Ingredient not found")
+
+        async with db.execute(
+            "SELECT * FROM ingredient_inventory WHERE id = ? AND user_id = ?",
+            (ingredient_id, user_id),
+        ) as cur:
+            row = await cur.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+    return dict(row)
 
 
 @router.delete("/{ingredient_id}", status_code=204)

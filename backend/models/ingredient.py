@@ -7,6 +7,11 @@ class IngredientCreate(BaseModel):
     expiry_date: Optional[str] = None
 
 
+class IngredientUpdate(BaseModel):
+    name: Optional[str] = None
+    expiry_date: Optional[str] = None
+
+
 class Ingredient(BaseModel):
     id: int
     name: str
