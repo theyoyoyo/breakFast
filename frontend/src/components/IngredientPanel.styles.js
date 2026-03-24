@@ -28,19 +28,31 @@ export const headerBtns = {
   alignItems: 'center',
 }
 
-export const headerExpiredBtn = {
-  background: 'rgba(230, 126, 34, 0.15)',
-  border: '1px solid rgba(230, 126, 34, 0.3)',
+const _headerExpiredBase = {
   borderRadius: 6,
-  color: '#e67e22',
   height: 28,
   padding: '0 8px',
   display: 'flex',
   alignItems: 'center',
   gap: 4,
-  cursor: 'pointer',
   fontSize: 12,
   fontWeight: 600,
+}
+
+export const headerExpiredBtn = {
+  ..._headerExpiredBase,
+  background: 'rgba(230, 126, 34, 0.15)',
+  border: '1px solid rgba(230, 126, 34, 0.3)',
+  color: '#e67e22',
+  cursor: 'pointer',
+}
+
+export const headerExpiredBtnSafe = {
+  ..._headerExpiredBase,
+  background: 'rgba(46, 204, 113, 0.1)',
+  border: '1px solid rgba(46, 204, 113, 0.25)',
+  color: '#2ecc71',
+  cursor: 'default',
 }
 
 export const headerAddBtn = {

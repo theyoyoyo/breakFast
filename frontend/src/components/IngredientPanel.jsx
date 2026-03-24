@@ -170,16 +170,14 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger }, 
       <div style={s.headerRow}>
         <span style={s.headerText}>Ingredients</span>
         <div style={s.headerBtns}>
-          {expiredItems.length > 0 && (
-            <button
-              style={s.headerExpiredBtn}
-              onClick={() => setExpiryPanelOpen(!expiryPanelOpen)}
-              title="Expired items"
-            >
-              <AlertTriangle size={13} />
-              <span>{expiredItems.length}</span>
-            </button>
-          )}
+          <button
+            style={expiredItems.length > 0 ? s.headerExpiredBtn : s.headerExpiredBtnSafe}
+            onClick={() => expiredItems.length > 0 && setExpiryPanelOpen(!expiryPanelOpen)}
+            title={expiredItems.length > 0 ? 'Expired items' : 'No expired items'}
+          >
+            <AlertTriangle size={13} />
+            <span>{expiredItems.length}</span>
+          </button>
           <button
             style={s.headerAddBtn}
             onClick={() => { setAddPanelOpen(!addPanelOpen); setError(null) }}
