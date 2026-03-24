@@ -1,21 +1,21 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { addFavorite } from '../services/api'
 import MealEditor from './MealEditor'
 import * as s from './MealBlock.styles'
 import * as es from './MealEditor.styles'
 
-const BREAKFAST_EMOJIS = ['🍳', '🥐', '🧀', '🥚', '🫕', '🥞', '🧇', '🥣', '🍞', '🥯', '🫖', '☕', '🥗', '🥑', '🍯']
+const BREAKFAST_EMOJIS = [
+  '🍳', '🥐', '🧀', '🥚', '🫕', '🥞', '🧇', '🥣', '🍞', '🥯', '🫖', '☕',
+  '🥗', '🥑', '🍯', '🫒', '🧈', '🥛', '🍵', '🫐', '🍓', '🍌', '🍊', '🍇',
+  '🥜', '🌰', '🥒', '🍅', '🫑', '🌿', '🌶️', '🧄', '🫘', '🥕', '🌽', '🥦',
+  '🍋', '🥝', '🍑', '🫚', '🥥', '🧆', '🥙', '🫓', '🥖', '🥨', '🥮', '🍠',
+]
 
 /**
- * Pick a stable random emoji from the list based on a string seed.
+ * Pick a purely random emoji from the pool.
  */
-function pickEmoji(seed) {
-  let hash = 0
-  const str = String(seed || '')
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0
-  }
-  return BREAKFAST_EMOJIS[Math.abs(hash) % BREAKFAST_EMOJIS.length]
+function pickEmoji() {
+  return BREAKFAST_EMOJIS[Math.floor(Math.random() * BREAKFAST_EMOJIS.length)]
 }
 
 /**
@@ -40,7 +40,8 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
   const [favSaving, setFavSaving] = useState(false)
   const [favAdded, setFavAdded] = useState(false)
 
-  const emoji = useMemo(() => pickEmoji(meal?.meal_name || meal?.meal_id), [meal?.meal_name, meal?.meal_id])
+  // Pick once on mount — stays the same for the lifetime of this block
+  const [emoji] = useState(pickEmoji)
 
   const ingredients = meal?.ingredients || []
   const displayNames = ingredients.length > 0
