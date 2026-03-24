@@ -157,14 +157,22 @@ technique graph from history and suggests adjacent-but-novel meals — not rando
 leaps. If the user frequently eats eggs and tomatoes and rates savory meals highly,
 shakshuka is a good novel suggestion even if they've never made it.
 
-**Ingredient depletion inference.** The system tracks which ingredients go into logged
-meals and estimates remaining quantities automatically. Manual correction only needed
-when something is off. Soft inference layer on top of the hard inventory.
+**Ingredient expiry tracking.** Ingredients can have an optional expiry date. The
+system checks for expired items since the last check and notifies the user via a
+compact widget on the Ingredients page. Users confirm removal with a "Thrown" action.
+No automatic depletion tracking — users manage their own inventory manually.
 
-**Smart shopping suggestions.** Cross-references inventory, meal history, health
-profile, and nutrition data. Not just "you're out of eggs" but "you haven't had a
-good omega-3 source in several days and you're low on walnuts — consider picking
-those up."
+**Ingredient groups.** Users can organize ingredients into custom-named groups (e.g.,
+"Dairy", "Spreads"). All items are always visible — no collapse. Group memory ensures
+re-added ingredients return to their previous group automatically.
+
+**Shopping assistant.** A new LLM persona — a professional shopping advisor that
+cross-references inventory, meal history, preferences, favorites, habits, health
+rules, supplements, and behavioral patterns. Over-suggests intentionally to expand
+and enrich the user's breakfast experience. Shopping suggestions appear in a compact
+widget on the Ingredients page; users pick what they want and send it to a persistent
+shopping list. The shopping list has a "Bought" flow that adds checked items back as
+ingredients.
 
 **Weekly nutrition summary.** Extend the existing weekly summary view with deeper
 nutritional analysis — what bases the user has covered this week and what's missing.
@@ -364,8 +372,7 @@ breakFAST/
 │   │   ├── knowledge.py            ← shared food knowledge module
 │   │   ├── pipeline.py             ← 3-step suggestion pipeline
 │   │   ├── insights.py             ← behavioral pattern extraction
-│   │   ├── nutrition.py             ← Open Food Facts integration
-│   │   └── depletion.py            ← ingredient depletion inference (Phase 3)
+│   │   └── nutrition.py             ← Open Food Facts integration
 │   │
 │   ├── models/
 │   │   ├── ingredient.py            ← Pydantic models for ingredients

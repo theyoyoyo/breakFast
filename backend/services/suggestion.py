@@ -117,21 +117,15 @@ Each rule has a priority level:
 If you suggest a meal, append a JSON block at the end of your response (inside triple \
 backticks tagged as "json") — the app will parse it to render a recipe card and log the meal.
 
-IMPORTANT: Every ingredient MUST include a quantity and unit so the user knows exactly \
-how much to use. Use natural units: "adet" for countable items (eggs, olives), "g" for \
-grams, "dilim" for slices, "kase" for bowls, "yemek kaşığı" for tablespoons, etc.
-If the meal is a multi-ingredient recipe (tarifli yemek) like menemen, omlet, or smoothie, \
-use "porsiyon" as the unit for the overall dish in the meal name context. Individual \
-ingredients inside a recipe still use their own natural units.
+IMPORTANT: The ingredient inventory only lists names — no quantities are tracked. \
+Assume the user has enough of each ingredient. Decide healthy, balanced portions yourself \
+based on standard Turkish breakfast servings and the user's profile.
 
 ```json
 {{{{
   "meal_name": "...",
   "description": "...",
-  "ingredients": [
-    {{{{"name": "...", "quantity": 2, "unit": "adet"}}}},
-    {{{{"name": "...", "quantity": 30, "unit": "g"}}}}
-  ],
+  "ingredients": ["yumurta", "beyaz peynir", "domates"],
   "steps": ["...", "..."],
   "prep_time_min": 10,
   "nutrition_note": "..."
@@ -264,7 +258,7 @@ RESPONSE FORMAT
 ═══════════════════════════════════════════════════════════════
 1. Meal name and one-sentence description
 2. Tip (optional — only if advance prep helps)
-3. Required ingredients with EXACT quantities and units (from available; flag missing ones)
+3. Required ingredients (from available; flag missing ones)
 4. Preparation steps (brief, numbered, note parallel opportunities)
 5. Total prep time
 6. Nutrition detail:
@@ -274,23 +268,17 @@ RESPONSE FORMAT
    - Supplement note: which gaps this meal covers
    - Note: one-sentence nutrition assessment (positive, factual, no preaching)
 
-IMPORTANT: Every ingredient MUST include a quantity and unit so the user knows exactly \
-how much to use and the analyst can calculate accurate nutrition. Use natural units: \
-"adet" for countable items, "g" for grams, "dilim" for slices, "kase" for bowls, \
-"yemek kaşığı" for tablespoons, etc.
-If the meal is a multi-ingredient recipe (tarifli yemek) like menemen, omlet, or smoothie, \
-use "porsiyon" as the unit for the overall dish in the meal name context. Individual \
-ingredients inside a recipe still use their own natural units.
+IMPORTANT: The ingredient inventory only lists names — no quantities are tracked. \
+Assume the user has enough of each ingredient. Decide healthy, balanced portions yourself \
+based on standard Turkish breakfast servings and the user's profile. Mention portion sizes \
+naturally in the steps or description, not in the ingredients list.
 
 Append a JSON block at the end of your response:
 ```json
 {{{{
   "meal_name": "...",
   "description": "...",
-  "ingredients": [
-    {{{{"name": "...", "quantity": 2, "unit": "adet"}}}},
-    {{{{"name": "...", "quantity": 30, "unit": "g"}}}}
-  ],
+  "ingredients": ["yumurta", "beyaz peynir", "domates"],
   "steps": ["...", "..."],
   "prep_time_min": 10,
   "nutrition_note": "...",
@@ -519,7 +507,8 @@ MICRONUTRIENTS:
 INGREDIENT QUALITY:
 - Are there healthier alternatives for any ingredient?
 - Any ingredient that conflicts with health rules?
-- Portion sizes appropriate?
+- Portion sizes appropriate? (The inventory tracks only ingredient names, not quantities. \
+  Assume standard healthy Turkish breakfast portions when evaluating.)
 - Seasonal availability consideration?
 
 MEAL BALANCE & VARIETY:

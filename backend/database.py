@@ -30,8 +30,6 @@ CREATE TABLE IF NOT EXISTS ingredient_inventory (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id     INTEGER NOT NULL REFERENCES users(id),
     name        TEXT    NOT NULL,
-    quantity    TEXT,
-    unit        TEXT,
     added_at    TEXT    NOT NULL DEFAULT (datetime('now')),
     updated_at  TEXT    NOT NULL DEFAULT (datetime('now')),
     UNIQUE(user_id, name)
@@ -224,6 +222,28 @@ async def init_db() -> None:
             )
         except Exception:
             pass  # Column already exists
+
+        # Migrate: drop quantity/unit columns from ingredient_inventory
+        async with db.execute("PRAGMA table_info(ingredient_inventory)") as cur:
+            cols = {r[1] for r in await cur.fetchall()}
+        if "quantity" in cols:
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS _ingredient_inventory_new (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id     INTEGER NOT NULL REFERENCES users(id),
+                    name        TEXT    NOT NULL,
+                    added_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+                    updated_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+                    UNIQUE(user_id, name)
+                )
+            """)
+            await db.execute("""
+                INSERT OR IGNORE INTO _ingredient_inventory_new (id, user_id, name, added_at, updated_at)
+                SELECT id, user_id, name, added_at, updated_at FROM ingredient_inventory
+            """)
+            await db.execute("DROP TABLE ingredient_inventory")
+            await db.execute("ALTER TABLE _ingredient_inventory_new RENAME TO ingredient_inventory")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_ingredient_inventory_user ON ingredient_inventory(user_id)")
 
         # Clean up chat sessions older than 8 days
         await db.execute(

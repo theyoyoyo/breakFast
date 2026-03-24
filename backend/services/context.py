@@ -12,7 +12,7 @@ from datetime import date as date_type
 
 async def fetch_ingredients(db, user_id: int) -> list[dict]:
     async with db.execute(
-        "SELECT name, quantity, unit FROM ingredient_inventory WHERE user_id = ? ORDER BY name",
+        "SELECT name FROM ingredient_inventory WHERE user_id = ? ORDER BY name",
         (user_id,),
     ) as cur:
         return [dict(r) for r in await cur.fetchall()]

@@ -29,12 +29,12 @@ class TestKnowledgeFormatters:
     def test_format_ingredients_empty(self):
         assert format_ingredients([]) == "none listed yet"
 
-    # Ingredients with quantities render correctly
+    # Ingredients render as name-only list
     def test_format_ingredients_with_data(self):
-        items = [{"name": "eggs", "quantity": "6", "unit": "pcs"}]
+        items = [{"name": "eggs"}, {"name": "milk"}]
         result = format_ingredients(items)
         assert "eggs" in result
-        assert "6" in result
+        assert "milk" in result
 
     # Empty history returns fallback
     def test_format_history_empty(self):
@@ -77,51 +77,41 @@ class TestKnowledgeFormatters:
 
 
 class TestFormatIngredientItem:
-    # Structured ingredient with quantity and unit
+    # Structured ingredient extracts name
     def test_structured_ingredient(self):
-        result = format_ingredient_item({"name": "yumurta", "quantity": 2, "unit": "adet"})
-        assert result == "2 adet yumurta"
-
-    # Structured ingredient with no quantity
-    def test_structured_no_quantity(self):
-        result = format_ingredient_item({"name": "tuz"})
-        assert result == "tuz"
+        result = format_ingredient_item({"name": "yumurta"})
+        assert result == "yumurta"
 
     # Plain string ingredient
     def test_string_ingredient(self):
         result = format_ingredient_item("peynir")
         assert result == "peynir"
 
-    # Structured with float quantity
-    def test_float_quantity(self):
-        result = format_ingredient_item({"name": "süt", "quantity": 0.5, "unit": "kase"})
-        assert result == "0.5 kase süt"
-
 
 class TestMealDetailStructured:
-    # Meal detail with structured ingredients includes quantities
+    # Meal detail with structured ingredients extracts names
     def test_structured_ingredients(self):
         meal = {
             "meal_name": "Menemen",
             "ingredients": [
-                {"name": "yumurta", "quantity": 2, "unit": "adet"},
-                {"name": "domates", "quantity": 1, "unit": "adet"},
+                {"name": "yumurta"},
+                {"name": "domates"},
             ]
         }
         result = format_meal_detail(meal)
         assert "Menemen" in result
-        assert "2 adet yumurta" in result
-        assert "1 adet domates" in result
+        assert "yumurta" in result
+        assert "domates" in result
 
     # Meal detail with JSON-encoded structured ingredients
     def test_structured_json_string(self):
         import json
         meal = {
             "meal_name": "Toast",
-            "ingredients": json.dumps([{"name": "ekmek", "quantity": 2, "unit": "dilim"}])
+            "ingredients": json.dumps([{"name": "ekmek"}])
         }
         result = format_meal_detail(meal)
-        assert "2 dilim ekmek" in result
+        assert "ekmek" in result
 
     # Meal detail still works with old string format
     def test_backward_compat_strings(self):
