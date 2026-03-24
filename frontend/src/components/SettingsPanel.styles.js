@@ -388,6 +388,16 @@ export const mealItemActions = {
   flexShrink: 0,
 }
 
+export const favToggle = (isFav) => ({
+  background: isFav ? '#4a3a10' : 'var(--surface2)',
+  border: isFav ? '1px solid #b8922a' : '1px solid var(--border)',
+  borderRadius: 8,
+  padding: '6px 10px',
+  fontSize: 18,
+  cursor: 'pointer',
+  transition: 'background 0.15s, border-color 0.15s',
+})
+
 export const cancelEditBtn = {
   background: 'var(--surface2)',
   border: '1px solid var(--border)',

@@ -204,6 +204,22 @@ export const deleteHealthRule = (id) =>
   apiFetch(`${BASE_URL}/health-rules/${id}`, { method: 'DELETE' })
 
 // ---------------------------------------------------------------------------
+// Favorites
+// ---------------------------------------------------------------------------
+
+export const getFavorites = () =>
+  apiFetch(`${BASE_URL}/favorites/`)
+
+export const addFavorite = (meal) =>
+  apiFetch(`${BASE_URL}/favorites/`, json('POST', meal))
+
+export const updateFavorite = (id, meal) =>
+  apiFetch(`${BASE_URL}/favorites/${id}`, json('PUT', meal))
+
+export const deleteFavorite = (id) =>
+  apiFetch(`${BASE_URL}/favorites/${id}`, { method: 'DELETE' })
+
+// ---------------------------------------------------------------------------
 // Analyst
 // ---------------------------------------------------------------------------
 

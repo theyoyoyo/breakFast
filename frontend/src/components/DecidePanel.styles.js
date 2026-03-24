@@ -32,6 +32,35 @@ export const panelHeader = {
   flexShrink: 0,
 }
 
+export const prepTimeRow = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 4,
+  marginBottom: 10,
+  flexShrink: 0,
+}
+
+export const prepTimeLabel = {
+  fontSize: 14,
+}
+
+export const prepTimeInput = {
+  width: 40,
+  background: 'var(--surface2)',
+  border: '1px solid var(--border)',
+  borderRadius: 6,
+  padding: '4px 4px',
+  color: 'var(--text)',
+  fontSize: 13,
+  textAlign: 'center',
+  outline: 'none',
+}
+
+export const prepTimeUnit = {
+  fontSize: 12,
+  color: 'var(--text-muted)',
+}
+
 export const itemList = {
   display: 'flex',
   flexDirection: 'column',

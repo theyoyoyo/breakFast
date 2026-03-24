@@ -83,24 +83,32 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
   const { isListening, startListening, stopListening, speak, supported: voiceSupported } = useVoice()
   const speakRef = useRef(speak)
 
-  // Expose injectDemoMeal to parent via ref
+  // Inject a meal into chat (used by demo and favorites send-to-chat)
+  const injectMealToChat = useCallback((meal, introText) => {
+    const jsonBlock = '\n\n```json\n' + JSON.stringify(meal) + '\n```'
+    const fullContent = introText + jsonBlock
+    setMessages(prev => {
+      const newIdx = prev.length
+      const newMsgs = [...prev, { role: 'assistant', content: fullContent }]
+      setMealBlocks(blocks => ({ ...blocks, [newIdx]: meal }))
+      setCheckedMealIdx(newIdx)
+      return newMsgs
+    })
+    if (sessionIdRef.current) {
+      saveSessionMessage(sessionIdRef.current, 'assistant', fullContent).catch(() => {})
+    }
+  }, [])
+
+  // Expose methods to parent via ref
   useImperativeHandle(ref, () => ({
     injectDemoMeal: () => {
-      const demoText = 'İşte sana güzel bir serpme kahvaltı önerisi! 🍳\n\nTaze ve dengeli malzemelerle hazırlanan klasik bir Türk kahvaltısı.'
-      const jsonBlock = '\n\n```json\n' + JSON.stringify(DEMO_MEAL) + '\n```'
-      const fullContent = demoText + jsonBlock
-      setMessages(prev => {
-        const newIdx = prev.length
-        const newMsgs = [...prev, { role: 'assistant', content: fullContent }]
-        setMealBlocks(blocks => ({ ...blocks, [newIdx]: DEMO_MEAL }))
-        setCheckedMealIdx(newIdx)
-        return newMsgs
-      })
-      // Persist to DB so it survives page refresh
-      if (sessionIdRef.current) {
-        saveSessionMessage(sessionIdRef.current, 'assistant', fullContent).catch(() => {})
-      }
-    }
+      const introText = 'İşte sana güzel bir serpme kahvaltı önerisi! 🫕\n\nTaze ve dengeli malzemelerle hazırlanan klasik bir Türk kahvaltısı.'
+      injectMealToChat(DEMO_MEAL, introText)
+    },
+    injectFavoriteMeal: (meal) => {
+      const introText = `⭐ Favorilerden: ${meal.meal_name}\n\n${meal.description || 'Afiyet olsun!'}`
+      injectMealToChat(meal, introText)
+    },
   }))
 
   // Keep refs in sync so socket callbacks always see the latest props/functions

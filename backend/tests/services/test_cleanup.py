@@ -1,5 +1,5 @@
 """
-Tests for 48-hour chat session cleanup during init_db.
+Tests for 8-day chat session cleanup during init_db.
 """
 
 import sys
@@ -16,14 +16,14 @@ from auth import hash_pin
 
 @pytest.mark.asyncio
 async def test_cleanup_removes_old_sessions(tmp_path, monkeypatch):
-    """Sessions older than 48h should be deleted on init_db."""
+    """Sessions older than 8 days should be deleted on init_db."""
     db_path = str(tmp_path / "test.db")
     monkeypatch.setattr(database, "DATABASE_PATH", db_path)
 
     # First init to create schema
     await database.init_db()
 
-    # Insert an old session and message (72 hours ago)
+    # Insert an old session and message (10 days ago)
     async with aiosqlite.connect(db_path) as db:
         await db.execute(
             "INSERT INTO users (name, pin_hash) VALUES (?, ?)",
@@ -33,7 +33,7 @@ async def test_cleanup_removes_old_sessions(tmp_path, monkeypatch):
         async with db.execute("SELECT id FROM users WHERE name = 'cleanupuser'") as cur:
             user_id = (await cur.fetchone())[0]
 
-        old_time = "datetime('now', '-72 hours')"
+        old_time = "datetime('now', '-10 days')"
         await db.execute(
             f"INSERT INTO chat_sessions (id, user_id, created_at, updated_at) VALUES ('old-session', ?, {old_time}, {old_time})",
             (user_id,),
@@ -72,7 +72,7 @@ async def test_cleanup_removes_old_sessions(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_cleanup_preserves_recent_sessions(tmp_path, monkeypatch):
-    """Sessions younger than 48h should NOT be deleted."""
+    """Sessions younger than 8 days should NOT be deleted."""
     db_path = str(tmp_path / "test.db")
     monkeypatch.setattr(database, "DATABASE_PATH", db_path)
 
@@ -87,8 +87,8 @@ async def test_cleanup_preserves_recent_sessions(tmp_path, monkeypatch):
         async with db.execute("SELECT id FROM users WHERE name = 'keepuser'") as cur:
             user_id = (await cur.fetchone())[0]
 
-        # 24 hours ago — within the 48h window
-        recent_time = "datetime('now', '-24 hours')"
+        # 3 days ago — within the 8-day window
+        recent_time = "datetime('now', '-3 days')"
         await db.execute(
             f"INSERT INTO chat_sessions (id, user_id, created_at, updated_at) VALUES ('recent-sess', ?, {recent_time}, {recent_time})",
             (user_id,),

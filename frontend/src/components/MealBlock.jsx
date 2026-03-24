@@ -1,14 +1,21 @@
 import { useState } from 'react'
+import { addFavorite } from '../services/api'
+import MealEditor from './MealEditor'
 import * as s from './MealBlock.styles'
+import * as es from './MealEditor.styles'
+
+const BREAKFAST_EMOJIS = [
+  '🍳', '🥐', '🧀', '🥚', '🫕', '🥞', '🧇', '🥣', '🍞', '🥯', '🫖', '☕',
+  '🥗', '🥑', '🍯', '🫒', '🧈', '🥛', '🍵', '🫐', '🍓', '🍌', '🍊', '🍇',
+  '🥜', '🌰', '🥒', '🍅', '🫑', '🌿', '🌶️', '🧄', '🫘', '🥕', '🌽', '🥦',
+  '🍋', '🥝', '🍑', '🫚', '🥥', '🧆', '🥙', '🫓', '🥖', '🥨', '🥮', '🍠',
+]
 
 /**
- * Normalize an ingredient to structured form {name, quantity, unit}.
+ * Pick a purely random emoji from the pool.
  */
-function normalizeItem(item) {
-  if (typeof item === 'object' && item !== null && item.name) {
-    return { name: item.name, quantity: item.quantity ?? 1, unit: item.unit || 'adet' }
-  }
-  return { name: String(item), quantity: 1, unit: 'adet' }
+function pickEmoji() {
+  return BREAKFAST_EMOJIS[Math.floor(Math.random() * BREAKFAST_EMOJIS.length)]
 }
 
 /**
@@ -26,70 +33,44 @@ function formatIngredient(item) {
 /**
  * Clickable meal summary block rendered inline in chat.
  * Shows checkbox, meal names, prep time, and analysis button.
- * Click opens an editable overlay panel.
+ * Click opens the shared MealEditor in an overlay.
  */
 export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, analyzing }) {
   const [panelOpen, setPanelOpen] = useState(false)
-  const [items, setItems] = useState(() => (meal?.ingredients || []).map(normalizeItem))
-  const [newItem, setNewItem] = useState('')
-  const displayNames = items.length > 0
-    ? items.map(formatIngredient).join(', ')
+  const [favSaving, setFavSaving] = useState(false)
+  const [favAdded, setFavAdded] = useState(false)
+
+  // Pick once on mount — stays the same for the lifetime of this block
+  const [emoji] = useState(pickEmoji)
+
+  const ingredients = meal?.ingredients || []
+  const displayNames = ingredients.length > 0
+    ? ingredients.map(formatIngredient).join(', ')
     : meal?.meal_name || 'Meal'
 
   const handleOverlayClick = (e) => {
     if (e.target === e.currentTarget) setPanelOpen(false)
   }
 
-  const handleDelete = (idx) => {
-    setItems(prev => prev.filter((_, i) => i !== idx))
-  }
-
-  const handleQuantityChange = (idx, val) => {
-    if (val !== '' && !/^\d*\.?\d{0,2}$/.test(val)) return
-    setItems(prev => prev.map((item, i) =>
-      i === idx ? { ...item, quantity: val === '' ? '' : val } : item
-    ))
-  }
-
-  const handleQuantityBlur = (idx) => {
-    setItems(prev => prev.map((item, i) => {
-      if (i !== idx) return item
-      const num = parseFloat(item.quantity)
-      return { ...item, quantity: (!isNaN(num) && num > 0) ? Math.round(num * 100) / 100 : 1 }
-    }))
-  }
-
-  const handleQuantityStep = (idx, delta) => {
-    setItems(prev => prev.map((item, i) => {
-      if (i !== idx) return item
-      const current = typeof item.quantity === 'number' ? item.quantity : parseFloat(item.quantity) || 1
-      const next = Math.round((current + delta) * 100) / 100
-      return { ...item, quantity: next > 0 ? next : current }
-    }))
-  }
-
-  const handleAdd = () => {
-    const v = newItem.trim()
-    if (!v) return
-    if (items.some(item => item.name.toLowerCase() === v.toLowerCase())) return
-    setItems(prev => [...prev, { name: v, quantity: 1, unit: 'adet' }])
-    setNewItem('')
-  }
-
-  const handleSave = () => {
-    const finalItems = items.map(item => ({
-      ...item,
-      quantity: (() => {
-        const num = parseFloat(item.quantity)
-        return (!isNaN(num) && num > 0) ? Math.round(num * 100) / 100 : 1
-      })(),
-    }))
-    const updated = {
-      ...meal,
-      ingredients: finalItems,
-    }
+  const handleEditorSave = (updated) => {
     onSave?.(updated)
     setPanelOpen(false)
+  }
+
+  const handleCopyToFavorites = async () => {
+    setFavSaving(true)
+    try {
+      await addFavorite({
+        meal_name: meal?.meal_name || 'Meal',
+        description: meal?.description,
+        ingredients: meal?.ingredients || [],
+        steps: meal?.steps || [],
+        prep_time_min: meal?.prep_time_min,
+        nutrition_note: meal?.nutrition_note,
+      })
+      setFavAdded(true)
+    } catch { /* ignore */ }
+    setFavSaving(false)
   }
 
   return (
@@ -102,8 +83,8 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
         >
           {checked ? '☑' : '☐'}
         </button>
-        <div style={s.block} onClick={() => setPanelOpen(true)}>
-          <span style={s.blockIcon}>🍳</span>
+        <div style={s.block} onClick={() => { setPanelOpen(true); setFavAdded(false) }}>
+          <span style={s.blockIcon}>{emoji}</span>
           <span style={s.blockText}>{displayNames}</span>
           {meal?.prep_time_min && <span style={s.prepBadge}>⏱ {meal.prep_time_min}m</span>}
         </div>
@@ -120,49 +101,24 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
       {panelOpen && (
         <div style={s.overlay} onClick={handleOverlayClick}>
           <div style={s.panel}>
-            <div style={s.panelHeader}>
-              {meal?.meal_name || 'Meal'} <span style={s.mealId}>#{meal?.id || 0}</span>
-            </div>
-
-            <div style={s.itemList}>
-              {items.map((item, idx) => (
-                <div key={idx} style={s.itemRow}>
-                  <div style={s.qtyGroup}>
-                    <button style={s.arrowBtn} onClick={() => handleQuantityStep(idx, -1)}>▼</button>
-                    <input
-                      style={s.qtyInput}
-                      type="text"
-                      inputMode="decimal"
-                      value={item.quantity}
-                      onChange={(e) => handleQuantityChange(idx, e.target.value)}
-                      onBlur={() => handleQuantityBlur(idx)}
-                    />
-                    <button style={s.arrowBtn} onClick={() => handleQuantityStep(idx, 1)}>▲</button>
-                  </div>
-                  <span style={s.unitLabel}>{item.unit}</span>
-                  <span style={s.itemText}>{item.name}</span>
-                  <div style={s.itemActions}>
-                    <button style={s.deleteBtn} onClick={() => handleDelete(idx)} title="Delete">🗑️</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div style={s.addRow}>
-              <input
-                style={s.addInput}
-                value={newItem}
-                onChange={(e) => setNewItem(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-                placeholder="Add item…"
-              />
-              <button style={s.addBtn} onClick={handleAdd}>+</button>
-            </div>
-
-            <div style={s.actions}>
-              <button style={s.cancelBtn} onClick={() => setPanelOpen(false)}>Close</button>
-              <button style={s.saveBtn} onClick={handleSave}>Save</button>
-            </div>
+            <MealEditor
+              meal={meal}
+              onSave={handleEditorSave}
+              onClose={() => setPanelOpen(false)}
+              showPrepTime={true}
+              editPrepTime={true}
+              showId={true}
+              extraActions={
+                <button
+                  style={favAdded ? es.copyToFavBtnDone : es.copyToFavBtn}
+                  onClick={handleCopyToFavorites}
+                  disabled={favSaving || favAdded}
+                  title={favAdded ? 'Added to favorites' : 'Copy to favorites'}
+                >
+                  {favSaving ? '...' : favAdded ? '✓ Saved' : '⭐ Save'}
+                </button>
+              }
+            />
           </div>
         </div>
       )}

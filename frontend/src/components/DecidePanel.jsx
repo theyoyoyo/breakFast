@@ -25,6 +25,7 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
   // Phase: 'edit' = editing ingredients, 'rate' = rating products
   const [phase, setPhase] = useState('edit')
   const [items, setItems] = useState([])
+  const [prepTime, setPrepTime] = useState('')
   const [newItem, setNewItem] = useState('')
   const [ratings, setRatings] = useState({})
   const [existingRatings, setExistingRatings] = useState([])
@@ -43,6 +44,7 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
     } else {
       setItems([])
     }
+    setPrepTime(meal?.prep_time_min ?? '')
     setPhase('edit')
     setRatings({})
   }, [meal])
@@ -117,12 +119,13 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
         ...item,
         quantity: parseQuantity(item.quantity) ?? 1,
       }))
+      const finalPrepTime = typeof prepTime === 'number' ? prepTime : (parseInt(prepTime, 10) || null)
       await logMeal({
         meal_name: meal?.meal_name || 'Kahvaltı',
         description: meal?.description || '',
         ingredients: finalItems,
         steps: meal?.steps || [],
-        prep_time_min: meal?.prep_time_min || null,
+        prep_time_min: finalPrepTime,
         nutrition_note: meal?.nutrition_note || '',
       })
       onConfirm?.()
@@ -174,6 +177,23 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
     <div style={s.overlay} onClick={handleOverlayClick}>
       <div style={s.panel}>
         <div style={s.panelHeader}>Today I ate...</div>
+        <div style={s.prepTimeRow}>
+          <span style={s.prepTimeLabel}>⏱</span>
+          <input
+            style={s.prepTimeInput}
+            type="text"
+            inputMode="numeric"
+            value={prepTime}
+            onChange={(e) => {
+              const v = e.target.value
+              if (v === '') { setPrepTime(''); return }
+              const n = parseInt(v, 10)
+              if (!isNaN(n) && n >= 0 && n <= 999) setPrepTime(n)
+            }}
+            placeholder="—"
+          />
+          <span style={s.prepTimeUnit}>min</span>
+        </div>
         <div style={s.itemList}>
           {items.map((item, idx) => (
             <div key={idx} style={s.itemRow}>

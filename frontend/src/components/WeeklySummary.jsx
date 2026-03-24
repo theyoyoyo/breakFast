@@ -71,6 +71,7 @@ export default function WeeklySummary({ onBack }) {
                 <div style={s.mealInfo}>
                   <span style={s.mealDate}>{formatDate(meal.logged_at)}</span>
                   <span style={s.mealName}>{meal.meal_name}</span>
+                  {meal.prep_time_min && <span style={s.prepBadge}>⏱ {meal.prep_time_min}m</span>}
                 </div>
                 <div style={s.mealBadges}>
                   {nutrition ? (

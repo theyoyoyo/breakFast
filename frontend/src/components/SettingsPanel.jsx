@@ -5,9 +5,12 @@ import {
   getSupplements, createSupplement, updateSupplement, deleteSupplement,
   getMeals, updateMeal, deleteMeal, deleteOldMeals,
   getHealthRules, createHealthRule, updateHealthRule, deleteHealthRule,
+  addFavorite,
 } from '../services/api'
 import WeeklySummary from './WeeklySummary'
+import MealEditor from './MealEditor'
 import * as s from './SettingsPanel.styles'
+import * as es from './MealEditor.styles'
 
 const PRIORITY_OPTIONS = [
   { value: 'low', label: "Don't really care" },
@@ -37,6 +40,8 @@ export default function SettingsPanel({ visible }) {
   const [mealItems, setMealItems] = useState([])
   const [mealName, setMealName] = useState('')
   const [newMealItem, setNewMealItem] = useState('')
+  const [favSaving, setFavSaving] = useState(false)
+  const [favAdded, setFavAdded] = useState({})
 
   // Health rules state
   const [healthRules, setHealthRules] = useState([])
@@ -289,14 +294,15 @@ export default function SettingsPanel({ visible }) {
     try {
       setError(null)
       await updateMeal(meal.id, {
-        meal_name: mealName,
-        ingredients: mealItems,
+        meal_name: meal.meal_name,
+        ingredients: meal.ingredients,
         description: meal.description,
         steps: meal.steps,
         prep_time_min: meal.prep_time_min,
         nutrition_note: meal.nutrition_note,
       })
       setExpandedMealId(null)
+      setFavAdded(prev => { const next = { ...prev }; delete next[meal.id]; return next })
       load()
     } catch {
       setError('Failed to update meal')
@@ -325,6 +331,22 @@ export default function SettingsPanel({ visible }) {
       setError('Failed to delete meal(s)')
       load()
     }
+  }
+
+  const handleCopyToFavorites = async (meal) => {
+    setFavSaving(true)
+    try {
+      await addFavorite({
+        meal_name: meal.meal_name,
+        description: meal.description,
+        ingredients: Array.isArray(meal.ingredients) ? meal.ingredients : [],
+        steps: Array.isArray(meal.steps) ? meal.steps : [],
+        prep_time_min: meal.prep_time_min,
+        nutrition_note: meal.nutrition_note,
+      })
+      setFavAdded(prev => ({ ...prev, [meal.id]: true }))
+    } catch { /* ignore */ }
+    setFavSaving(false)
   }
 
   // --- Weekly Summary sub-page ---
@@ -362,55 +384,23 @@ export default function SettingsPanel({ visible }) {
 
                 {expandedMealId === meal.id && !markedForDelete && (
                   <div style={s.mealExpanded}>
-                    <div style={s.mealNameEdit}>
-                      <label style={s.mealFieldLabel}>Name</label>
-                      <input
-                        style={s.input}
-                        value={mealName}
-                        onChange={(e) => setMealName(e.target.value)}
-                      />
-                    </div>
-
-                    <label style={s.mealFieldLabel}>Ingredients</label>
-                    <div style={s.mealItemList}>
-                      {mealItems.map((item, idx) => (
-                        <div key={idx} style={s.mealItemRow}>
-                          <div style={s.mealQtyGroup}>
-                            <button style={s.mealArrowBtn} onClick={() => handleMealQtyStep(idx, -1)}>▼</button>
-                            <input
-                              style={s.mealQtyInput}
-                              type="text"
-                              inputMode="decimal"
-                              value={item.quantity}
-                              onChange={(e) => handleMealQtyChange(idx, e.target.value)}
-                              onBlur={() => handleMealQtyBlur(idx)}
-                            />
-                            <button style={s.mealArrowBtn} onClick={() => handleMealQtyStep(idx, 1)}>▲</button>
-                          </div>
-                          <span style={s.mealUnitLabel}>{item.unit}</span>
-                          <span style={s.mealItemText}>{item.name}</span>
-                          <div style={s.mealItemActions}>
-                            <button style={s.deleteMealBtn} onClick={() => handleDeleteMealItem(idx)} title="Delete">🗑️</button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div style={s.addRow}>
-                      <input
-                        style={s.input}
-                        value={newMealItem}
-                        onChange={(e) => setNewMealItem(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleAddMealItem()}
-                        placeholder="Add item…"
-                      />
-                      <button style={s.addBtn} onClick={handleAddMealItem}>+</button>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                      <button style={s.saveBtn} onClick={() => handleSaveMeal(meal)}>Save</button>
-                      <button style={s.cancelEditBtn} onClick={() => setExpandedMealId(null)}>Cancel</button>
-                    </div>
+                    <MealEditor
+                      meal={meal}
+                      onSave={(updated) => handleSaveMeal({ ...meal, ...updated })}
+                      onClose={() => { setExpandedMealId(null); setFavAdded(prev => { const next = { ...prev }; delete next[meal.id]; return next }) }}
+                      showPrepTime={true}
+                      editPrepTime={true}
+                      extraActions={
+                        <button
+                          style={favAdded[meal.id] ? es.copyToFavBtnDone : es.copyToFavBtn}
+                          onClick={() => handleCopyToFavorites(meal)}
+                          disabled={favSaving || favAdded[meal.id]}
+                          title={favAdded[meal.id] ? 'Added to favorites' : 'Copy to favorites'}
+                        >
+                          {favSaving ? '...' : favAdded[meal.id] ? '✓ Saved' : '⭐ Save'}
+                        </button>
+                      }
+                    />
                   </div>
                 )}
               </div>

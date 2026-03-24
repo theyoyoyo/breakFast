@@ -134,6 +134,18 @@ CREATE TABLE IF NOT EXISTS supplement_daily_log (
     UNIQUE(user_id, supplement_id, date)
 );
 
+CREATE TABLE IF NOT EXISTS favorite_meals (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL REFERENCES users(id),
+    meal_name       TEXT    NOT NULL,
+    description     TEXT,
+    ingredients     TEXT,           -- JSON list
+    steps           TEXT,           -- JSON list
+    prep_time_min   INTEGER,
+    nutrition_note  TEXT,
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS suggested_meals (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id         INTEGER NOT NULL REFERENCES users(id),
@@ -158,6 +170,7 @@ CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id
 CREATE INDEX IF NOT EXISTS idx_chat_messages_user ON chat_messages(user_id);
 CREATE INDEX IF NOT EXISTS idx_product_ratings_user ON product_ratings(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_supplements_user ON user_supplements(user_id);
+CREATE INDEX IF NOT EXISTS idx_favorite_meals_user ON favorite_meals(user_id);
 CREATE INDEX IF NOT EXISTS idx_suggested_meals_session ON suggested_meals(session_id);
 CREATE INDEX IF NOT EXISTS idx_suggested_meals_user ON suggested_meals(user_id);
 """
