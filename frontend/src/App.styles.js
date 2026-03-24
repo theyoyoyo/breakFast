@@ -43,6 +43,15 @@ export const userInfo = {
   color: 'var(--text-muted)',
 }
 
+export const offlineBanner = {
+  background: '#e74c3c',
+  color: '#fff',
+  textAlign: 'center',
+  padding: '6px 12px',
+  fontSize: 13,
+  fontWeight: 600,
+}
+
 export const logoutBtn = {
   background: 'none',
   border: '1px solid var(--border)',
