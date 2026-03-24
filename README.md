@@ -8,7 +8,7 @@ A personal AI-powered breakfast planner. Knows your ingredients, your kitchen, a
 
 ### Prerequisites
 
-- Python 3.11+ (tested with 3.14)
+- Python 3.11+ (tested up to 3.14)
 - Node.js 18+ (for frontend)
 - [Ollama](https://ollama.ai) — optional, only needed for local LLM
 

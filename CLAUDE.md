@@ -341,20 +341,23 @@ breakFAST/
 │   ├── auth.py                      ← JWT auth (require_user dependency)
 │   ├── manage.py                    ← admin CLI (add/remove/list users)
 │   ├── utils.py                     ← shared utilities (JSON block extraction)
+│   ├── db_helpers.py                ← reusable DB query helpers
 │   │
 │   ├── routers/
+│   │   ├── analyst.py             ← /analyst/analyze meal analysis endpoint
 │   │   ├── auth.py                  ← /auth/login endpoint
 │   │   ├── chat.py                  ← /chat WebSocket endpoint
+│   │   ├── favorites.py            ← /favorites CRUD endpoints
+│   │   ├── health_rules.py        ← /health-rules CRUD with priority
 │   │   ├── ingredients.py           ← /ingredients CRUD endpoints
 │   │   ├── meals.py                 ← /meals history + /meals/weekly
 │   │   ├── preferences.py          ← /preferences + /preferences/habits
-│   │   ├── ratings.py              ← /ratings CRUD endpoints (1-10 scale)
 │   │   ├── profile.py             ← /profile + /profile/supplements CRUD
-│   │   ├── sessions.py            ← /sessions chat session management
-│   │   ├── health_rules.py        ← /health-rules CRUD with priority
-│   │   └── analyst.py             ← /analyst/analyze meal analysis endpoint
+│   │   ├── ratings.py              ← /ratings CRUD endpoints (1-10 scale)
+│   │   └── sessions.py            ← /sessions chat session management
 │   │
 │   ├── services/
+│   │   ├── context.py               ← shared context loaders for LLM prompts
 │   │   ├── llm.py                   ← Ollama streaming + FallbackLyricCycler
 │   │   ├── scheduler.py             ← kitchen job-shop scheduler
 │   │   ├── suggestion.py            ← three persona prompts + prompt assembly
