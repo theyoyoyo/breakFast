@@ -27,7 +27,7 @@ export default function IngredientPanel({ refreshTrigger }) {
     if (!name) return
     try {
       setError(null)
-      await addIngredient(name, null, null)
+      await addIngredient(name)
       setNewName('')
       load()
     } catch (e) {
@@ -61,11 +61,6 @@ export default function IngredientPanel({ refreshTrigger }) {
             style={{ ...s.row, padding: '7px 16px' }}
           >
             <span style={s.name}>{ing.name}</span>
-            {(ing.quantity || ing.unit) && (
-              <span style={s.qty}>
-                {[ing.quantity, ing.unit].filter(Boolean).join(' ')}
-              </span>
-            )}
             <button
               style={s.deleteBtn}
               onClick={() => handleDelete(ing.id)}

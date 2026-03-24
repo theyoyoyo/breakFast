@@ -17,10 +17,7 @@ import json
 def format_ingredients(ingredients: list[dict]) -> str:
     if not ingredients:
         return "none listed yet"
-    return ", ".join(
-        f"{i['name']} ({i.get('quantity', '')} {i.get('unit', '')})".strip(" ()")
-        for i in ingredients
-    )
+    return ", ".join(i["name"] for i in ingredients)
 
 
 def format_history(history: list[dict], limit: int = 5) -> str:
@@ -114,14 +111,9 @@ def format_supplements(supplements: list[dict] | None) -> str:
 
 
 def format_ingredient_item(item) -> str:
-    """Format a single ingredient — handles both string and structured {name, quantity, unit} forms."""
+    """Format a single ingredient — handles both string and dict forms."""
     if isinstance(item, dict):
-        name = item.get("name", "")
-        qty = item.get("quantity")
-        unit = item.get("unit", "")
-        if qty is not None:
-            return f"{qty} {unit} {name}".strip()
-        return name
+        return item.get("name", "")
     return str(item)
 
 

@@ -81,8 +81,8 @@ export const checkAuth = () =>
 export const getIngredients = () =>
   apiFetch(`${BASE_URL}/ingredients/`)
 
-export const addIngredient = (name, quantity, unit) =>
-  apiFetch(`${BASE_URL}/ingredients/`, json('POST', { name, quantity, unit }))
+export const addIngredient = (name) =>
+  apiFetch(`${BASE_URL}/ingredients/`, json('POST', { name }))
 
 export const deleteIngredient = (id) =>
   apiFetch(`${BASE_URL}/ingredients/${id}`, { method: 'DELETE' })

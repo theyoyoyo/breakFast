@@ -3,20 +3,18 @@
 All queries are scoped to the authenticated user.
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends
 from database import get_db
 from auth import require_user
-from models.ingredient import Ingredient, IngredientCreate, IngredientUpdate
+from models.ingredient import Ingredient, IngredientCreate
 
 router = APIRouter(prefix="/ingredients", tags=["ingredients"])
 
 # Shared upsert SQL used by both single-add and bulk-add
 _UPSERT_SQL = """
-    INSERT INTO ingredient_inventory (user_id, name, quantity, unit)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO ingredient_inventory (user_id, name)
+    VALUES (?, ?)
     ON CONFLICT(user_id, name) DO UPDATE SET
-        quantity = excluded.quantity,
-        unit = excluded.unit,
         updated_at = datetime('now')
 """
 
@@ -34,40 +32,13 @@ async def list_ingredients(user_id: int = Depends(require_user)):
 @router.post("/", response_model=Ingredient, status_code=201)
 async def add_ingredient(body: IngredientCreate, user_id: int = Depends(require_user)):
     async with get_db() as db:
-        await db.execute(_UPSERT_SQL, (user_id, body.name, body.quantity, body.unit))
+        await db.execute(_UPSERT_SQL, (user_id, body.name))
         await db.commit()
         async with db.execute(
             "SELECT * FROM ingredient_inventory WHERE user_id = ? AND name = ?",
             (user_id, body.name),
         ) as cur:
             return dict(await cur.fetchone())
-
-
-@router.patch("/{ingredient_id}", response_model=Ingredient)
-async def update_ingredient(ingredient_id: int, body: IngredientUpdate, user_id: int = Depends(require_user)):
-    """Partial update of quantity and/or unit. Returns 404 if the id doesn't exist."""
-    updates = {k: v for k, v in {"quantity": body.quantity, "unit": body.unit}.items() if v is not None}
-
-    async with get_db() as db:
-        if updates:
-            set_clause = ", ".join(f"{k} = ?" for k in updates)
-            cursor = await db.execute(
-                f"UPDATE ingredient_inventory SET {set_clause}, updated_at = datetime('now') WHERE id = ? AND user_id = ?",
-                [*updates.values(), ingredient_id, user_id],
-            )
-            await db.commit()
-            if cursor.rowcount == 0:
-                raise HTTPException(status_code=404, detail="Ingredient not found")
-
-        async with db.execute(
-            "SELECT * FROM ingredient_inventory WHERE id = ? AND user_id = ?",
-            (ingredient_id, user_id),
-        ) as cur:
-            row = await cur.fetchone()
-
-    if not row:
-        raise HTTPException(status_code=404, detail="Ingredient not found")
-    return dict(row)
 
 
 @router.delete("/{ingredient_id}", status_code=204)
@@ -86,7 +57,7 @@ async def bulk_add_ingredients(ingredients: list[IngredientCreate], user_id: int
     async with get_db() as db:
         await db.executemany(
             _UPSERT_SQL,
-            [(user_id, item.name, item.quantity, item.unit) for item in ingredients],
+            [(user_id, item.name) for item in ingredients],
         )
         await db.commit()
     return {"added": len(ingredients)}
