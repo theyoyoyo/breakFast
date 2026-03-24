@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { addFavorite } from '../services/api'
+import { formatIngredient } from '../utils/ingredients'
 import MealEditor from './MealEditor'
 import * as s from './MealBlock.styles'
 import * as es from './MealEditor.styles'
@@ -16,18 +17,6 @@ const BREAKFAST_EMOJIS = [
  */
 function pickEmoji() {
   return BREAKFAST_EMOJIS[Math.floor(Math.random() * BREAKFAST_EMOJIS.length)]
-}
-
-/**
- * Format a single ingredient for display.
- */
-function formatIngredient(item) {
-  if (typeof item === 'object' && item !== null && item.name) {
-    const qty = item.quantity != null ? item.quantity : ''
-    const unit = item.unit || ''
-    return `${qty} ${unit} ${item.name}`.trim()
-  }
-  return String(item)
 }
 
 /**

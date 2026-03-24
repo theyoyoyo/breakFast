@@ -1,7 +1,7 @@
 import {
   panelContainer, panelHeader, panelBody,
   section, sectionLabel, input, addRow, addBtn,
-  tagX, empty, error, select, secondaryColor,
+  tagX, empty, error, select, secondaryColor, colors,
 } from '../styles/common'
 
 export { section, sectionLabel, tagX, empty, error, select }
@@ -92,12 +92,13 @@ export const suppFreq = (freq) => ({
   border: 'none',
   transition: 'background 0.15s, color 0.15s',
   ...(freq === 'daily'
-    ? { background: '#2d4a35', color: '#8bc59a' }
-    : { background: '#4a3d20', color: '#d4a94a' }
+    ? { background: colors.daily, color: colors.dailyText }
+    : { background: colors.sometimes, color: colors.sometimesText }
   ),
 })
 
-export const ratingsBtn = {
+// Generic sub-page navigation button
+export const navBtn = {
   width: '100%',
   padding: '12px 16px',
   background: secondaryColor,
@@ -111,19 +112,9 @@ export const ratingsBtn = {
   letterSpacing: '0.05em',
 }
 
-export const healthRulesBtn = {
-  width: '100%',
-  padding: '12px 16px',
-  background: secondaryColor,
-  border: 'none',
-  borderRadius: 8,
-  color: '#fff',
-  fontWeight: 700,
-  fontSize: 14,
-  cursor: 'pointer',
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
-}
+// Aliases for backward compatibility (same as navBtn)
+export const ratingsBtn = navBtn
+export const healthRulesBtn = navBtn
 
 export const ruleRow = {
   display: 'flex',
@@ -218,32 +209,6 @@ export const ratingName = {
   color: 'var(--text)',
 }
 
-export const starsRow = {
-  display: 'flex',
-  justifyContent: 'space-between',
-}
-
-export const starCell = {
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  cursor: 'pointer',
-  flex: 1,
-  userSelect: 'none',
-}
-
-export const starNum = {
-  fontSize: 9,
-  color: 'var(--text-muted)',
-  marginBottom: 1,
-}
-
-export const star = (lit) => ({
-  fontSize: 18,
-  color: lit ? '#f5a623' : 'var(--border)',
-  transition: 'color 0.1s',
-})
-
 // --- Meal History styles ---
 
 export const mealCard = {
@@ -310,101 +275,3 @@ export const mealExpanded = {
   paddingTop: 10,
 }
 
-export const mealNameEdit = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 3,
-}
-
-export const mealFieldLabel = {
-  fontSize: 10,
-  fontWeight: 700,
-  textTransform: 'uppercase',
-  color: 'var(--text-muted)',
-}
-
-export const mealItemList = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 4,
-}
-
-export const mealItemRow = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  padding: '6px 8px',
-  background: 'var(--surface)',
-  borderRadius: 6,
-  fontSize: 13,
-}
-
-export const mealQtyGroup = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 2,
-  flexShrink: 0,
-}
-
-export const mealQtyInput = {
-  width: 40,
-  background: 'var(--surface2)',
-  border: '1px solid var(--border)',
-  borderRadius: 4,
-  padding: '3px 3px',
-  color: 'var(--text)',
-  fontSize: 12,
-  textAlign: 'center',
-  outline: 'none',
-}
-
-export const mealArrowBtn = {
-  background: 'none',
-  border: '1px solid var(--border)',
-  borderRadius: 3,
-  cursor: 'pointer',
-  fontSize: 9,
-  padding: '1px 4px',
-  color: 'var(--text-muted)',
-  lineHeight: 1,
-}
-
-export const mealUnitLabel = {
-  fontSize: 11,
-  color: 'var(--text-muted)',
-  flexShrink: 0,
-  minWidth: 24,
-  marginRight: 6,
-}
-
-export const mealItemText = {
-  flex: 1,
-  color: 'var(--text)',
-}
-
-export const mealItemActions = {
-  display: 'flex',
-  gap: 2,
-  flexShrink: 0,
-}
-
-export const favToggle = (isFav) => ({
-  background: isFav ? '#4a3a10' : 'var(--surface2)',
-  border: isFav ? '1px solid #b8922a' : '1px solid var(--border)',
-  borderRadius: 8,
-  padding: '6px 10px',
-  fontSize: 18,
-  cursor: 'pointer',
-  transition: 'background 0.15s, border-color 0.15s',
-})
-
-export const cancelEditBtn = {
-  background: 'var(--surface2)',
-  border: '1px solid var(--border)',
-  borderRadius: 8,
-  color: 'var(--text-muted)',
-  fontWeight: 600,
-  fontSize: 12,
-  padding: '8px 16px',
-  cursor: 'pointer',
-}

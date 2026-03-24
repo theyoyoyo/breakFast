@@ -85,8 +85,10 @@ async def update_rating(rating_id: int, body: RatingUpdate, user_id: int = Depen
 @router.delete("/{rating_id}", status_code=204)
 async def delete_rating(rating_id: int, user_id: int = Depends(require_user)):
     async with get_db() as db:
-        await db.execute(
+        cursor = await db.execute(
             "DELETE FROM product_ratings WHERE id = ? AND user_id = ?",
             (rating_id, user_id),
         )
         await db.commit()
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Rating not found")

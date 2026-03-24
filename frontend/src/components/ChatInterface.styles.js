@@ -1,4 +1,4 @@
-import { secondaryColor } from '../styles/common'
+import { secondaryColor, colors } from '../styles/common'
 
 export const container = {
   display: 'flex',
@@ -159,9 +159,9 @@ export const suppPill = (taken, isDaily) => ({
   padding: '6px 12px',
   borderRadius: 16,
   fontSize: 12,
-  border: isDaily ? '1px solid #4a7c59' : '1px solid var(--border)',
-  background: isDaily ? '#2d4a35' : taken ? secondaryColor : 'var(--surface2)',
-  color: isDaily ? '#8bc59a' : taken ? '#fff' : 'var(--text-muted)',
+  border: isDaily ? `1px solid ${colors.successBorder}` : '1px solid var(--border)',
+  background: isDaily ? colors.success : taken ? secondaryColor : 'var(--surface2)',
+  color: isDaily ? colors.successText : taken ? '#fff' : 'var(--text-muted)',
   cursor: isDaily ? 'default' : 'pointer',
   opacity: isDaily ? 0.85 : 1,
   whiteSpace: 'nowrap',

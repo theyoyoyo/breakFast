@@ -1,25 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getRatings, createRating, logMeal } from '../services/api'
+import { normalizeItem, parseQuantity } from '../utils/ingredients'
+import StarRating from './StarRating'
 import * as s from './DecidePanel.styles'
-
-/**
- * Get the display name of an ingredient (works for both string and structured forms).
- */
-function getName(item) {
-  if (typeof item === 'object' && item !== null) return item.name || ''
-  return String(item)
-}
-
-/**
- * Clamp a quantity string to max 2 decimal places and return as number.
- * Returns null if the input is empty or invalid.
- */
-function parseQuantity(val) {
-  if (val === '' || val === null || val === undefined) return null
-  const num = parseFloat(val)
-  if (isNaN(num)) return null
-  return Math.round(num * 100) / 100
-}
 
 export default function DecidePanel({ meal, onClose, onConfirm }) {
   // Phase: 'edit' = editing ingredients, 'rate' = rating products
@@ -34,13 +17,7 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
   // Initialize items from meal ingredients — normalize to structured form
   useEffect(() => {
     if (meal?.ingredients) {
-      const normalized = meal.ingredients.map(item => {
-        if (typeof item === 'object' && item !== null && item.name) {
-          return { name: item.name, quantity: item.quantity ?? 1, unit: item.unit || 'adet' }
-        }
-        return { name: String(item), quantity: 1, unit: 'adet' }
-      })
-      setItems(normalized)
+      setItems(meal.ingredients.map(normalizeItem))
     } else {
       setItems([])
     }
@@ -147,18 +124,10 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
             {unratedItems.map(item => (
               <div key={item} style={s.rateRow}>
                 <span style={s.rateLabel}>{item}</span>
-                <div style={s.starsRow}>
-                  {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
-                    <div
-                      key={n}
-                      style={s.starCell}
-                      onClick={() => setRatings(prev => ({ ...prev, [item]: n }))}
-                    >
-                      <span style={s.starNum}>{n}</span>
-                      <span style={s.star(n <= ratings[item])}>★</span>
-                    </div>
-                  ))}
-                </div>
+                <StarRating
+                  value={ratings[item]}
+                  onChange={(n) => setRatings(prev => ({ ...prev, [item]: n }))}
+                />
               </div>
             ))}
           </div>

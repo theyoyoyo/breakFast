@@ -1,18 +1,7 @@
 import { useState, useEffect } from 'react'
 import { getWeeklyMeals, analyzeMeal } from '../services/api'
+import { formatIngredient } from '../utils/ingredients'
 import * as s from './WeeklySummary.styles'
-
-/**
- * Format ingredient for display — handles both string and structured forms.
- */
-function formatIngredient(item) {
-  if (typeof item === 'object' && item !== null && item.name) {
-    const qty = item.quantity != null ? item.quantity : ''
-    const unit = item.unit || ''
-    return `${qty} ${unit} ${item.name}`.trim()
-  }
-  return String(item)
-}
 
 /**
  * Format a date string to Turkish locale short format.

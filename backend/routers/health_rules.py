@@ -88,8 +88,10 @@ async def update_health_rule(rule_id: int, body: HealthRuleUpdate, user_id: int 
 @router.delete("/{rule_id}", status_code=204)
 async def delete_health_rule(rule_id: int, user_id: int = Depends(require_user)):
     async with get_db() as db:
-        await db.execute(
+        cursor = await db.execute(
             "DELETE FROM health_rules WHERE id = ? AND user_id = ?",
             (rule_id, user_id),
         )
         await db.commit()
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Health rule not found")
