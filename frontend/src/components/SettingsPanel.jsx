@@ -620,26 +620,25 @@ export default function SettingsPanel({ visible }) {
           </button>
         </div>
 
-        {/* Data management */}
-        <div style={s.section}>
-          <div style={s.sectionLabel}>Data</div>
-          <button
-            style={s.dangerBtn}
-            onClick={async () => {
-              try {
-                setError(null)
-                const result = await deleteOldMeals()
-                setError(result.deleted > 0
-                  ? `${result.deleted} old meal(s) deleted`
-                  : 'No meals older than 1 year')
-              } catch {
-                setError('Failed to delete old meals')
-              }
-            }}
-          >
-            🗑 Delete meals older than 1 year
-          </button>
-        </div>
+        {/* Spacer to push delete button to bottom */}
+        <div style={{ flex: 1 }} />
+
+        <button
+          style={s.dangerBtn}
+          onClick={async () => {
+            try {
+              setError(null)
+              const result = await deleteOldMeals()
+              setError(result.deleted > 0
+                ? `${result.deleted} old meal(s) deleted`
+                : 'No meals older than 1 year')
+            } catch {
+              setError('Failed to delete old meals')
+            }
+          }}
+        >
+          🗑 Delete meals older than 1 year
+        </button>
       </div>
     </div>
   )
