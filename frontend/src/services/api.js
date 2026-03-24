@@ -96,6 +96,28 @@ export const getExpiredIngredients = () =>
 export const confirmExpiredThrown = (ids) =>
   apiFetch(`${BASE_URL}/ingredients/expired/thrown`, json('POST', { ids }))
 
+export const getShoppingSuggestions = () =>
+  apiFetch(`${BASE_URL}/ingredients/shopping-suggestions`, { method: 'POST' })
+
+// ---------------------------------------------------------------------------
+// Shopping List
+// ---------------------------------------------------------------------------
+
+export const getShoppingList = () =>
+  apiFetch(`${BASE_URL}/shopping/`)
+
+export const addShoppingItem = (item_name) =>
+  apiFetch(`${BASE_URL}/shopping/`, json('POST', { item_name }))
+
+export const addShoppingItemsBulk = (items) =>
+  apiFetch(`${BASE_URL}/shopping/bulk`, json('POST', items.map(item_name => ({ item_name }))))
+
+export const deleteShoppingItem = (id) =>
+  apiFetch(`${BASE_URL}/shopping/${id}`, { method: 'DELETE' })
+
+export const buyShoppingItems = (ids, expiry_dates = null) =>
+  apiFetch(`${BASE_URL}/shopping/bought`, json('POST', { ids, expiry_dates }))
+
 // ---------------------------------------------------------------------------
 // Meals
 // ---------------------------------------------------------------------------

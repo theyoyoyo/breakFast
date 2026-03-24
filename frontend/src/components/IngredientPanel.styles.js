@@ -310,3 +310,110 @@ export const discardBtn = {
   fontWeight: 600,
   textAlign: 'center',
 }
+
+// ---------------------------------------------------------------------------
+// Shopping button in header
+// ---------------------------------------------------------------------------
+
+export const headerShoppingBtn = {
+  borderRadius: 6,
+  height: 28,
+  width: 28,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  background: 'rgba(142, 68, 173, 0.15)',
+  border: '1px solid rgba(142, 68, 173, 0.3)',
+  color: '#a970c9',
+  cursor: 'pointer',
+}
+
+// ---------------------------------------------------------------------------
+// Shopping suggestions
+// ---------------------------------------------------------------------------
+
+export const suggestSection = {
+  padding: '8px 16px',
+  borderTop: '1px solid var(--border)',
+}
+
+export const suggestBtn = {
+  width: '100%',
+  padding: '9px 16px',
+  background: 'linear-gradient(135deg, #8e44ad 0%, #9b59b6 100%)',
+  color: '#fff',
+  border: 'none',
+  borderRadius: 8,
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 6,
+}
+
+export const suggestionsPanel = {
+  borderTop: '1px solid var(--border)',
+  background: 'var(--surface)',
+  display: 'flex',
+  flexDirection: 'column',
+  maxHeight: '45%',
+}
+
+export const suggestionsPanelHeader = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  padding: '8px 12px 4px',
+}
+
+export const suggestionsPanelTitle = {
+  fontSize: 12,
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+  color: 'var(--text-muted)',
+}
+
+export const suggestionsList = {
+  flex: 1,
+  overflowY: 'auto',
+  padding: '0 8px',
+}
+
+export const suggestionRow = {
+  display: 'flex',
+  alignItems: 'flex-start',
+  padding: '6px 8px',
+  gap: 10,
+  cursor: 'pointer',
+}
+
+export const suggestionName = {
+  fontSize: 13,
+  color: 'var(--text)',
+  fontWeight: 500,
+}
+
+export const suggestionReason = {
+  fontSize: 11,
+  color: 'var(--text-muted)',
+  marginTop: 2,
+  lineHeight: 1.3,
+}
+
+export const sendToListBtn = {
+  margin: '6px 12px 10px',
+  padding: '8px 16px',
+  background: '#8e44ad',
+  color: '#fff',
+  border: 'none',
+  borderRadius: 8,
+  fontSize: 13,
+  fontWeight: 600,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 6,
+}

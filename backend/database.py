@@ -158,7 +158,16 @@ CREATE TABLE IF NOT EXISTS suggested_meals (
     created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS shopping_list (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES users(id),
+    item_name   TEXT    NOT NULL,
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(user_id, item_name)
+);
+
 -- Indices on frequently-filtered foreign key columns
+CREATE INDEX IF NOT EXISTS idx_shopping_list_user ON shopping_list(user_id);
 CREATE INDEX IF NOT EXISTS idx_ingredient_inventory_user ON ingredient_inventory(user_id);
 CREATE INDEX IF NOT EXISTS idx_meal_history_user ON meal_history(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_preferences_user ON user_preferences(user_id);

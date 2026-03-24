@@ -110,6 +110,37 @@ async def load_chat_context(db, user_id: int) -> dict:
     }
 
 
+async def load_shopping_context(db, user_id: int) -> dict:
+    """Load full context for the shopping persona."""
+    (
+        ingredients, history, prefs,
+        (stated_habits, inferred_habits),
+        health_rules, user_profile, supplements,
+    ) = await asyncio.gather(
+        fetch_ingredients(db, user_id),
+        fetch_history(db, user_id, limit=10, include_ingredients=True),
+        fetch_preferences(db, user_id),
+        fetch_habits(db, user_id),
+        fetch_health_rules(db, user_id),
+        fetch_profile(db, user_id),
+        fetch_supplements(db, user_id),
+    )
+    avoid_list = [v for k, v in prefs.items() if k.startswith("avoid:")]
+    filtered_prefs = {k: v for k, v in prefs.items() if not k.startswith("avoid:")}
+
+    return {
+        "ingredients": ingredients,
+        "history": history,
+        "preferences": filtered_prefs,
+        "stated_habits": stated_habits,
+        "inferred_habits": inferred_habits,
+        "health_rules": health_rules,
+        "user_profile": user_profile,
+        "supplements": supplements,
+        "avoid_list": avoid_list,
+    }
+
+
 async def load_analyst_context(db, user_id: int) -> dict:
     """Load lighter context for the analyst persona."""
     history, profile, supplements, health_rules = await asyncio.gather(

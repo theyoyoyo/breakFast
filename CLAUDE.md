@@ -362,7 +362,8 @@ breakFAST/
 │   │   ├── preferences.py          ← /preferences + /preferences/habits
 │   │   ├── profile.py             ← /profile + /profile/supplements CRUD
 │   │   ├── ratings.py              ← /ratings CRUD endpoints (1-10 scale)
-│   │   └── sessions.py            ← /sessions chat session management
+│   │   ├── sessions.py            ← /sessions chat session management
+│   │   └── shopping.py            ← /shopping list CRUD + bought flow
 │   │
 │   ├── services/
 │   │   ├── context.py               ← shared context loaders for LLM prompts
@@ -394,7 +395,8 @@ breakFAST/
 │       │   ├── test_health_rules.py ← health rules endpoint tests
 │       │   ├── test_analyst.py      ← analyst endpoint tests
 │       │   ├── test_websocket.py    ← WebSocket chat tests
-│       │   └── test_sessions.py     ← session management tests
+│       │   ├── test_sessions.py     ← session management tests
+│       │   └── test_shopping.py    ← shopping list endpoint tests
 │       └── services/
 │           ├── test_prompts.py      ← prompt builder unit tests
 │           ├── test_scheduler.py    ← scheduler logic unit tests
@@ -420,7 +422,8 @@ breakFAST/
     │   │   ├── DecidePanel.jsx      ← "Today I ate..." confirm + rate flow
     │   │   ├── SuggestButton.jsx    ← suggest button + long-press mode panel
     │   │   ├── WeeklySummary.jsx    ← weekly meals summary view
-    │   │   ├── IngredientPanel.jsx  ← inventory viewer/editor
+    │   │   ├── IngredientPanel.jsx  ← inventory viewer/editor + shopping integration
+    │   │   ├── ShoppingListPanel.jsx ← persistent shopping list overlay
     │   │   ├── PreferencesPanel.jsx ← favorites, dislikes, habits, avoid list
     │   │   ├── SettingsPanel.jsx    ← profile, supplements, ratings, health rules
     │   │   ├── LoginScreen.jsx      ← PIN auth screen

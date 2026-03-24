@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react'
-import { Trash2, Pencil, Plus, X, AlertTriangle } from 'lucide-react'
-import { getIngredients, addIngredient, updateIngredient, deleteIngredient, getExpiredIngredients, confirmExpiredThrown } from '../services/api'
+import { Trash2, Pencil, Plus, X, AlertTriangle, ShoppingCart, Sparkles, Check, Loader } from 'lucide-react'
+import { getIngredients, addIngredient, updateIngredient, deleteIngredient, getExpiredIngredients, confirmExpiredThrown, getShoppingSuggestions, addShoppingItemsBulk } from '../services/api'
+import ShoppingListPanel from './ShoppingListPanel'
 import * as s from './IngredientPanel.styles'
 
 const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger }, ref) {
@@ -22,6 +23,12 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger }, 
   const [expiredItems, setExpiredItems] = useState([])
   const [expiryPanelOpen, setExpiryPanelOpen] = useState(false)
   const [expiryChecked, setExpiryChecked] = useState({})
+
+  // Shopping state
+  const [suggestions, setSuggestions] = useState([])
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false)
+  const [selectedSuggestions, setSelectedSuggestions] = useState({})
+  const [shoppingListOpen, setShoppingListOpen] = useState(false)
 
   const load = async () => {
     try {
@@ -147,6 +154,46 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger }, 
     setExpiryChecked(prev => ({ ...prev, [id]: !prev[id] }))
   }
 
+  // Shopping handlers
+  const handleSuggest = async () => {
+    try {
+      setError(null)
+      setSuggestionsLoading(true)
+      setSuggestions([])
+      setSelectedSuggestions({})
+      const data = await getShoppingSuggestions()
+      setSuggestions(data)
+      // Select all by default
+      const sel = {}
+      data.forEach((_, i) => { sel[i] = true })
+      setSelectedSuggestions(sel)
+    } catch {
+      setError('Failed to get suggestions')
+    } finally {
+      setSuggestionsLoading(false)
+    }
+  }
+
+  const toggleSuggestion = (idx) => {
+    setSelectedSuggestions(prev => ({ ...prev, [idx]: !prev[idx] }))
+  }
+
+  const handleSendToList = async () => {
+    const selected = suggestions.filter((_, i) => selectedSuggestions[i])
+    if (selected.length === 0) return
+    try {
+      setError(null)
+      await addShoppingItemsBulk(selected.map(s => s.name))
+      // Remove sent items from suggestions
+      setSuggestions(prev => prev.filter((_, i) => !selectedSuggestions[i]))
+      setSelectedSuggestions({})
+    } catch {
+      setError('Failed to add items to shopping list')
+    }
+  }
+
+  const selectedSuggestionCount = Object.values(selectedSuggestions).filter(Boolean).length
+
   const formatExpiry = (dateStr) => {
     if (!dateStr) return null
     try {
@@ -177,6 +224,13 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger }, 
           >
             <AlertTriangle size={13} />
             <span>{expiredItems.length}</span>
+          </button>
+          <button
+            style={s.headerShoppingBtn}
+            onClick={() => setShoppingListOpen(true)}
+            title="Shopping list"
+          >
+            <ShoppingCart size={13} />
           </button>
           <button
             style={s.headerAddBtn}
@@ -313,6 +367,70 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger }, 
           </button>
         </div>
       )}
+
+      {/* Shopping suggestions section */}
+      <div style={s.suggestSection}>
+        <button
+          style={{
+            ...s.suggestBtn,
+            opacity: suggestionsLoading ? 0.6 : 1,
+            cursor: suggestionsLoading ? 'default' : 'pointer',
+          }}
+          onClick={handleSuggest}
+          disabled={suggestionsLoading}
+        >
+          {suggestionsLoading
+            ? <><Loader size={13} style={{ animation: 'spin 1s linear infinite' }} /> Thinking…</>
+            : <><Sparkles size={13} /> Suggest Shopping</>}
+        </button>
+      </div>
+
+      {/* Suggestions list (ephemeral) */}
+      {suggestions.length > 0 && (
+        <div style={s.suggestionsPanel}>
+          <div style={s.suggestionsPanelHeader}>
+            <span style={s.suggestionsPanelTitle}>Suggestions</span>
+            <button style={s.closeBtn} onClick={() => setSuggestions([])}>
+              <X size={14} />
+            </button>
+          </div>
+          <div style={s.suggestionsList}>
+            {suggestions.map((item, idx) => (
+              <label key={idx} style={s.suggestionRow}>
+                <input
+                  type="checkbox"
+                  checked={!!selectedSuggestions[idx]}
+                  onChange={() => toggleSuggestion(idx)}
+                  style={s.checkbox}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={s.suggestionName}>{item.name}</div>
+                  {item.reason && <div style={s.suggestionReason}>{item.reason}</div>}
+                </div>
+              </label>
+            ))}
+          </div>
+          <button
+            style={{
+              ...s.sendToListBtn,
+              opacity: selectedSuggestionCount === 0 ? 0.4 : 1,
+              cursor: selectedSuggestionCount === 0 ? 'default' : 'pointer',
+            }}
+            onClick={handleSendToList}
+            disabled={selectedSuggestionCount === 0}
+          >
+            <ShoppingCart size={13} />
+            Send to List{selectedSuggestionCount > 0 ? ` (${selectedSuggestionCount})` : ''}
+          </button>
+        </div>
+      )}
+
+      {/* Shopping list overlay */}
+      <ShoppingListPanel
+        open={shoppingListOpen}
+        onClose={() => setShoppingListOpen(false)}
+        onBought={load}
+      />
     </div>
   )
 })

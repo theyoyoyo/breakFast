@@ -177,3 +177,62 @@ async def confirm_thrown(body: ThrownRequest, user_id: int = Depends(require_use
             )
         await db.commit()
     return {"removed": len(body.ids)}
+
+
+# ---------------------------------------------------------------------------
+# Shopping suggestions (LLM-powered)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/shopping-suggestions")
+async def get_shopping_suggestions(user_id: int = Depends(require_user)):
+    """Generate AI-powered shopping suggestions based on full user context."""
+    import json as _json
+    from services.context import load_shopping_context
+    from services.suggestion import build_shopping_prompt
+    from services.llm import chat_complete, LLMUnavailableError
+
+    async with get_db() as db:
+        ctx = await load_shopping_context(db, user_id)
+
+    prompt = build_shopping_prompt(
+        ingredient_inventory=ctx["ingredients"],
+        recent_meal_history=ctx["history"],
+        user_preferences=ctx["preferences"],
+        stated_habits=ctx["stated_habits"],
+        inferred_habits=ctx["inferred_habits"],
+        health_rules=ctx["health_rules"],
+        user_profile=ctx["user_profile"],
+        supplements=ctx["supplements"],
+        avoid_list=ctx["avoid_list"],
+    )
+
+    try:
+        response = await chat_complete(
+            system_prompt=prompt,
+            messages=[{"role": "user", "content": "Benim için alışveriş önerileri hazırla."}],
+        )
+    except LLMUnavailableError:
+        raise HTTPException(status_code=503, detail="LLM unavailable")
+
+    # Parse the JSON array from the response
+    from utils import extract_json_block
+    json_str = extract_json_block(response)
+    if json_str:
+        try:
+            suggestions = _json.loads(json_str)
+            if isinstance(suggestions, list):
+                return suggestions
+        except _json.JSONDecodeError:
+            pass
+
+    # Fallback: try parsing the entire response as JSON
+    try:
+        suggestions = _json.loads(response)
+        if isinstance(suggestions, list):
+            return suggestions
+    except _json.JSONDecodeError:
+        pass
+
+    # If all parsing fails, return raw text wrapped
+    return [{"name": "error", "reason": "Could not parse suggestions. Raw: " + response[:500]}]
