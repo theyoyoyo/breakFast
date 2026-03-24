@@ -64,6 +64,7 @@ export default function App() {
     return () => clearInterval(id)
   }, [offline, auth])
   const chatRef = useRef(null)
+  const ingredientRef = useRef(null)
   const [ingredientRefresh, setIngredientRefresh] = useState(0)
 
   if (!authChecked) return null // wait for token validation
@@ -97,8 +98,14 @@ export default function App() {
         <div style={s.userInfo}>
           <span
             style={{ cursor: 'pointer' }}
-            onClick={() => chatRef.current?.injectDemoMeal()}
-            title="Inject demo meal"
+            onClick={() => {
+              if (activeTab === 'Ingredients') {
+                ingredientRef.current?.injectDemoExpiry()
+              } else {
+                chatRef.current?.injectDemoMeal()
+              }
+            }}
+            title="Demo action"
           >{auth.user.name}</span>
           <button style={s.logoutBtn} onClick={handleLogout}>
             <LogOut size={12} style={{ marginRight: 4, verticalAlign: -1 }} />
@@ -111,7 +118,7 @@ export default function App() {
         <ChatInterface ref={chatRef} onMealLogged={handleMealLogged} />
       </div>
       <div style={{ ...s.mainFull, display: activeTab === 'Ingredients' ? undefined : 'none' }}>
-        <IngredientPanel refreshTrigger={ingredientRefresh} />
+        <IngredientPanel ref={ingredientRef} refreshTrigger={ingredientRefresh} />
       </div>
       <div style={{ ...s.mainFull, display: activeTab === 'Preferences' ? undefined : 'none' }}>
         <PreferencesPanel />

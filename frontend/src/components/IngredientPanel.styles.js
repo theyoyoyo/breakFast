@@ -23,9 +23,10 @@ export const name = {
   color: 'var(--text)',
 }
 
-export const qty = {
-  fontSize: 12,
+export const expiryBadge = {
+  fontSize: 11,
   color: 'var(--text-muted)',
+  whiteSpace: 'nowrap',
 }
 
 export const deleteBtn = {
@@ -37,6 +38,7 @@ export const deleteBtn = {
   borderRadius: 4,
   opacity: 0.5,
   transition: 'opacity 0.1s',
+  cursor: 'pointer',
 }
 
 export const addRow = {
@@ -57,6 +59,17 @@ export const input = {
   outline: 'none',
 }
 
+export const dateInput = {
+  width: 110,
+  background: 'var(--surface2)',
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  padding: '6px 6px',
+  color: 'var(--text)',
+  fontSize: 11,
+  outline: 'none',
+}
+
 export const addBtn = {
   background: secondaryColor,
   border: 'none',
@@ -69,6 +82,7 @@ export const addBtn = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
+  cursor: 'pointer',
 }
 
 export const empty = {
@@ -82,4 +96,81 @@ export const error = {
   padding: '8px 16px',
   fontSize: 12,
   color: colors.error,
+}
+
+// ---------------------------------------------------------------------------
+// Expiry widget + panel
+// ---------------------------------------------------------------------------
+
+export const expiryWidget = {
+  padding: '8px 16px',
+  fontSize: 13,
+  color: '#e67e22',
+  background: 'rgba(230, 126, 34, 0.08)',
+  borderTop: '1px solid var(--border)',
+  cursor: 'pointer',
+  textAlign: 'center',
+  fontWeight: 600,
+  transition: 'all 0.2s',
+}
+
+export const expiryWidgetCovered = {
+  color: 'var(--text-muted)',
+  background: 'rgba(46, 204, 113, 0.08)',
+  cursor: 'default',
+  fontWeight: 400,
+}
+
+export const expiryPanel = {
+  borderTop: '1px solid var(--border)',
+  background: 'var(--surface)',
+  padding: '8px 0',
+  maxHeight: '40%',
+  display: 'flex',
+  flexDirection: 'column',
+}
+
+export const expiryPanelHeader = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  padding: '4px 16px 8px',
+  fontSize: 14,
+  fontWeight: 600,
+  color: 'var(--text)',
+}
+
+export const closeBtn = {
+  background: 'none',
+  border: 'none',
+  fontSize: 18,
+  color: 'var(--text-muted)',
+  cursor: 'pointer',
+  padding: '0 4px',
+}
+
+export const expiryPanelList = {
+  flex: 1,
+  overflowY: 'auto',
+  padding: '0 8px',
+}
+
+export const expiryRow = {
+  display: 'flex',
+  alignItems: 'center',
+  padding: '6px 8px',
+  gap: 8,
+}
+
+export const thrownBtn = {
+  margin: '8px 16px',
+  padding: '8px 16px',
+  background: '#e74c3c',
+  color: '#fff',
+  border: 'none',
+  borderRadius: 8,
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: 'pointer',
+  textAlign: 'center',
 }
