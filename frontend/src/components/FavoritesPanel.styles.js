@@ -106,6 +106,17 @@ export const sendBtn = {
   cursor: 'pointer',
 }
 
+export const editBtn = {
+  background: 'var(--surface2)',
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  padding: '8px 14px',
+  fontSize: 12,
+  fontWeight: 600,
+  color: 'var(--text)',
+  cursor: 'pointer',
+}
+
 export const removeBtn = {
   background: 'none',
   border: '1px solid var(--border)',

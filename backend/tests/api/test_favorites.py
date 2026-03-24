@@ -62,6 +62,29 @@ async def test_delete_not_found(client):
 
 
 @pytest.mark.asyncio
+async def test_update(client):
+    """Updating a favorite changes its data."""
+    r = await client.post("/favorites/", json=SAMPLE_MEAL)
+    fav_id = r.json()["id"]
+
+    updated = {**SAMPLE_MEAL, "meal_name": "Updated Kahvaltı", "prep_time_min": 20}
+    r = await client.put(f"/favorites/{fav_id}", json=updated)
+    assert r.status_code == 200
+
+    r = await client.get("/favorites/")
+    fav = r.json()[0]
+    assert fav["meal_name"] == "Updated Kahvaltı"
+    assert fav["prep_time_min"] == 20
+
+
+@pytest.mark.asyncio
+async def test_update_not_found(client):
+    """Updating a non-existent favorite returns 404."""
+    r = await client.put("/favorites/9999", json=SAMPLE_MEAL)
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_multiple_same_name(client):
     """Same meal name can be favorited multiple times with different ingredients."""
     meal2 = {**SAMPLE_MEAL, "ingredients": [{"name": "Yumurta", "quantity": 2, "unit": "adet"}]}

@@ -68,6 +68,12 @@ export const mealName = {
   whiteSpace: 'nowrap',
 }
 
+export const prepBadge = {
+  fontSize: 11,
+  color: 'var(--text-muted)',
+  flexShrink: 0,
+}
+
 export const mealBadges = {
   display: 'flex',
   alignItems: 'center',

@@ -5,10 +5,12 @@ import {
   getSupplements, createSupplement, updateSupplement, deleteSupplement,
   getMeals, updateMeal, deleteMeal, deleteOldMeals,
   getHealthRules, createHealthRule, updateHealthRule, deleteHealthRule,
-  getFavorites, addFavorite, deleteFavorite,
+  addFavorite,
 } from '../services/api'
 import WeeklySummary from './WeeklySummary'
+import MealEditor from './MealEditor'
 import * as s from './SettingsPanel.styles'
+import * as es from './MealEditor.styles'
 
 const PRIORITY_OPTIONS = [
   { value: 'low', label: "Don't really care" },
@@ -38,7 +40,7 @@ export default function SettingsPanel({ visible }) {
   const [mealItems, setMealItems] = useState([])
   const [mealName, setMealName] = useState('')
   const [newMealItem, setNewMealItem] = useState('')
-  const [favIds, setFavIds] = useState({}) // { mealName: favId } for quick lookup
+  const [favSaving, setFavSaving] = useState(false)
 
   // Health rules state
   const [healthRules, setHealthRules] = useState([])
@@ -51,15 +53,11 @@ export default function SettingsPanel({ visible }) {
   const load = async () => {
     try {
       setError(null)
-      const [r, prof, supps, rules, m, favs] = await Promise.all([
-        getRatings(), getProfile(), getSupplements(), getHealthRules(), getMeals(), getFavorites(),
+      const [r, prof, supps, rules, m] = await Promise.all([
+        getRatings(), getProfile(), getSupplements(), getHealthRules(), getMeals(),
       ])
       setRatings(r)
       setMeals(m)
-      // Build a lookup: meal_name -> fav id (for the star toggle in meal history)
-      const favLookup = {}
-      for (const f of favs) { favLookup[f.meal_name] = f.id }
-      setFavIds(favLookup)
       if (prof) {
         setProfile({
           age: prof.age ?? '',
@@ -295,8 +293,8 @@ export default function SettingsPanel({ visible }) {
     try {
       setError(null)
       await updateMeal(meal.id, {
-        meal_name: mealName,
-        ingredients: mealItems,
+        meal_name: meal.meal_name,
+        ingredients: meal.ingredients,
         description: meal.description,
         steps: meal.steps,
         prep_time_min: meal.prep_time_min,
@@ -333,25 +331,19 @@ export default function SettingsPanel({ visible }) {
     }
   }
 
-  const handleToggleMealFavorite = async (meal) => {
-    const existing = favIds[meal.meal_name]
+  const handleCopyToFavorites = async (meal) => {
+    setFavSaving(true)
     try {
-      if (existing) {
-        await deleteFavorite(existing)
-        setFavIds(prev => { const next = { ...prev }; delete next[meal.meal_name]; return next })
-      } else {
-        const ingredients = Array.isArray(meal.ingredients) ? meal.ingredients : []
-        const result = await addFavorite({
-          meal_name: meal.meal_name,
-          description: meal.description,
-          ingredients,
-          steps: Array.isArray(meal.steps) ? meal.steps : [],
-          prep_time_min: meal.prep_time_min,
-          nutrition_note: meal.nutrition_note,
-        })
-        setFavIds(prev => ({ ...prev, [meal.meal_name]: result.id }))
-      }
+      await addFavorite({
+        meal_name: meal.meal_name,
+        description: meal.description,
+        ingredients: Array.isArray(meal.ingredients) ? meal.ingredients : [],
+        steps: Array.isArray(meal.steps) ? meal.steps : [],
+        prep_time_min: meal.prep_time_min,
+        nutrition_note: meal.nutrition_note,
+      })
     } catch { /* ignore */ }
+    setFavSaving(false)
   }
 
   // --- Weekly Summary sub-page ---
@@ -389,62 +381,23 @@ export default function SettingsPanel({ visible }) {
 
                 {expandedMealId === meal.id && !markedForDelete && (
                   <div style={s.mealExpanded}>
-                    <div style={s.mealNameEdit}>
-                      <label style={s.mealFieldLabel}>Name</label>
-                      <input
-                        style={s.input}
-                        value={mealName}
-                        onChange={(e) => setMealName(e.target.value)}
-                      />
-                    </div>
-
-                    <label style={s.mealFieldLabel}>Ingredients</label>
-                    <div style={s.mealItemList}>
-                      {mealItems.map((item, idx) => (
-                        <div key={idx} style={s.mealItemRow}>
-                          <div style={s.mealQtyGroup}>
-                            <button style={s.mealArrowBtn} onClick={() => handleMealQtyStep(idx, -1)}>▼</button>
-                            <input
-                              style={s.mealQtyInput}
-                              type="text"
-                              inputMode="decimal"
-                              value={item.quantity}
-                              onChange={(e) => handleMealQtyChange(idx, e.target.value)}
-                              onBlur={() => handleMealQtyBlur(idx)}
-                            />
-                            <button style={s.mealArrowBtn} onClick={() => handleMealQtyStep(idx, 1)}>▲</button>
-                          </div>
-                          <span style={s.mealUnitLabel}>{item.unit}</span>
-                          <span style={s.mealItemText}>{item.name}</span>
-                          <div style={s.mealItemActions}>
-                            <button style={s.deleteMealBtn} onClick={() => handleDeleteMealItem(idx)} title="Delete">🗑️</button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div style={s.addRow}>
-                      <input
-                        style={s.input}
-                        value={newMealItem}
-                        onChange={(e) => setNewMealItem(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleAddMealItem()}
-                        placeholder="Add item…"
-                      />
-                      <button style={s.addBtn} onClick={handleAddMealItem}>+</button>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center' }}>
-                      <button style={s.saveBtn} onClick={() => handleSaveMeal(meal)}>Save</button>
-                      <button
-                        style={s.favToggle(!!favIds[meal.meal_name])}
-                        onClick={() => handleToggleMealFavorite(meal)}
-                        title={favIds[meal.meal_name] ? 'Remove from favorites' : 'Add to favorites'}
-                      >
-                        ⭐
-                      </button>
-                      <button style={s.cancelEditBtn} onClick={() => setExpandedMealId(null)}>Cancel</button>
-                    </div>
+                    <MealEditor
+                      meal={meal}
+                      onSave={(updated) => handleSaveMeal({ ...meal, ...updated })}
+                      onClose={() => setExpandedMealId(null)}
+                      showPrepTime={true}
+                      editPrepTime={true}
+                      extraActions={
+                        <button
+                          style={es.copyToFavBtn}
+                          onClick={() => handleCopyToFavorites(meal)}
+                          disabled={favSaving}
+                          title="Copy to favorites"
+                        >
+                          {favSaving ? '...' : '⭐ Fav'}
+                        </button>
+                      }
+                    />
                   </div>
                 )}
               </div>
