@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react'
-import { Trash2, Pencil, Plus, X } from 'lucide-react'
+import { Trash2, Pencil, Plus, X, AlertTriangle } from 'lucide-react'
 import { getIngredients, addIngredient, updateIngredient, deleteIngredient, getExpiredIngredients, confirmExpiredThrown } from '../services/api'
 import * as s from './IngredientPanel.styles'
 
@@ -166,16 +166,28 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger }, 
 
   return (
     <div style={s.container}>
-      {/* Header with add button */}
+      {/* Header with expired + add buttons */}
       <div style={s.headerRow}>
         <span style={s.headerText}>Ingredients</span>
-        <button
-          style={s.headerAddBtn}
-          onClick={() => { setAddPanelOpen(!addPanelOpen); setError(null) }}
-          title="Add ingredient"
-        >
-          {addPanelOpen ? <X size={14} /> : <Plus size={14} />}
-        </button>
+        <div style={s.headerBtns}>
+          {expiredItems.length > 0 && (
+            <button
+              style={s.headerExpiredBtn}
+              onClick={() => setExpiryPanelOpen(!expiryPanelOpen)}
+              title="Expired items"
+            >
+              <AlertTriangle size={13} />
+              <span>{expiredItems.length}</span>
+            </button>
+          )}
+          <button
+            style={s.headerAddBtn}
+            onClick={() => { setAddPanelOpen(!addPanelOpen); setError(null) }}
+            title="Add ingredient"
+          >
+            {addPanelOpen ? <X size={14} /> : <><Plus size={14} /> <span>Add Item</span></>}
+          </button>
+        </div>
       </div>
 
       {/* Add panel (slides open below header) */}
@@ -263,16 +275,6 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger }, 
           )
         ))}
       </div>
-
-      {/* Expiry notification widget */}
-      {expiredItems.length > 0 && (
-        <div
-          style={s.expiryWidget}
-          onClick={() => setExpiryPanelOpen(true)}
-        >
-          <span>{`\u26A0 ${expiredItems.length} expired item${expiredItems.length > 1 ? 's' : ''}`}</span>
-        </div>
-      )}
 
       {/* Expiry detail panel */}
       {expiryPanelOpen && (

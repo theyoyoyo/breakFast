@@ -22,17 +22,40 @@ export const headerText = {
   color: 'var(--text-muted)',
 }
 
+export const headerBtns = {
+  display: 'flex',
+  gap: 6,
+  alignItems: 'center',
+}
+
+export const headerExpiredBtn = {
+  background: 'rgba(230, 126, 34, 0.15)',
+  border: '1px solid rgba(230, 126, 34, 0.3)',
+  borderRadius: 6,
+  color: '#e67e22',
+  height: 28,
+  padding: '0 8px',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 4,
+  cursor: 'pointer',
+  fontSize: 12,
+  fontWeight: 600,
+}
+
 export const headerAddBtn = {
   background: secondaryColor,
   border: 'none',
   borderRadius: 6,
   color: '#fff',
-  width: 26,
-  height: 26,
+  height: 28,
+  padding: '0 10px',
   display: 'flex',
   alignItems: 'center',
-  justifyContent: 'center',
+  gap: 4,
   cursor: 'pointer',
+  fontSize: 12,
+  fontWeight: 600,
 }
 
 // ---------------------------------------------------------------------------
@@ -209,18 +232,6 @@ export const error = {
 // ---------------------------------------------------------------------------
 // Expiry widget + panel
 // ---------------------------------------------------------------------------
-
-export const expiryWidget = {
-  padding: '8px 16px',
-  fontSize: 13,
-  color: '#e67e22',
-  background: 'rgba(230, 126, 34, 0.08)',
-  borderTop: '1px solid var(--border)',
-  cursor: 'pointer',
-  textAlign: 'center',
-  fontWeight: 600,
-  transition: 'all 0.2s',
-}
 
 export const expiryPanel = {
   borderTop: '1px solid var(--border)',
