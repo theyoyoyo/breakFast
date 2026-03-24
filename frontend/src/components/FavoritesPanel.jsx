@@ -84,26 +84,28 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
                   </div>
                   <div style={s.cardActions}>
                     <button style={s.sendBtn} onClick={() => handleSendToChat(fav)} title="Send to chat as suggestion">
-                      💬 Chat
+                      🍳 Hazırla
                     </button>
                     <button style={s.editBtn} onClick={() => setEditingId(fav.id)} title="Edit this favorite">
                       ✏️ Edit
                     </button>
                     <button style={s.removeBtn} onClick={() => handleRemove(fav.id)} title="Remove from favorites">
-                      ✕
+                      🗑️
                     </button>
                   </div>
                 </div>
               )}
-              {expanded && editing && (
-                <div style={s.cardBody}>
-                  <MealEditor
-                    meal={fav}
-                    onSave={handleEditorSave}
-                    onClose={() => setEditingId(null)}
-                    showPrepTime={true}
-                    editPrepTime={true}
-                  />
+              {editing && (
+                <div style={s.overlay} onClick={(e) => { if (e.target === e.currentTarget) setEditingId(null) }}>
+                  <div style={s.overlayPanel}>
+                    <MealEditor
+                      meal={fav}
+                      onSave={handleEditorSave}
+                      onClose={() => setEditingId(null)}
+                      showPrepTime={true}
+                      editPrepTime={true}
+                    />
+                  </div>
                 </div>
               )}
             </div>

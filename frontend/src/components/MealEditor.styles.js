@@ -214,3 +214,16 @@ export const copyToFavBtn = {
   transition: 'background 0.15s',
   whiteSpace: 'nowrap',
 }
+
+export const copyToFavBtnDone = {
+  background: '#2d4a35',
+  border: '1px solid #4a7c59',
+  borderRadius: 10,
+  padding: '12px 16px',
+  fontSize: 13,
+  fontWeight: 600,
+  color: '#8bc59a',
+  cursor: 'default',
+  opacity: 0.8,
+  whiteSpace: 'nowrap',
+}

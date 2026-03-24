@@ -117,6 +117,29 @@ export const editBtn = {
   cursor: 'pointer',
 }
 
+export const overlay = {
+  position: 'fixed',
+  inset: 0,
+  background: 'rgba(0,0,0,0.5)',
+  zIndex: 30,
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'center',
+  padding: 16,
+}
+
+export const overlayPanel = {
+  background: 'var(--surface)',
+  border: '1px solid var(--border)',
+  borderRadius: 16,
+  padding: '20px',
+  boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+  overflowY: 'auto',
+  maxHeight: '80vh',
+  display: 'flex',
+  flexDirection: 'column',
+}
+
 export const removeBtn = {
   background: 'none',
   border: '1px solid var(--border)',

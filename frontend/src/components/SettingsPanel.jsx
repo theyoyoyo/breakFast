@@ -41,6 +41,7 @@ export default function SettingsPanel({ visible }) {
   const [mealName, setMealName] = useState('')
   const [newMealItem, setNewMealItem] = useState('')
   const [favSaving, setFavSaving] = useState(false)
+  const [favAdded, setFavAdded] = useState({})
 
   // Health rules state
   const [healthRules, setHealthRules] = useState([])
@@ -342,6 +343,7 @@ export default function SettingsPanel({ visible }) {
         prep_time_min: meal.prep_time_min,
         nutrition_note: meal.nutrition_note,
       })
+      setFavAdded(prev => ({ ...prev, [meal.id]: true }))
     } catch { /* ignore */ }
     setFavSaving(false)
   }
@@ -389,12 +391,12 @@ export default function SettingsPanel({ visible }) {
                       editPrepTime={true}
                       extraActions={
                         <button
-                          style={es.copyToFavBtn}
+                          style={favAdded[meal.id] ? es.copyToFavBtnDone : es.copyToFavBtn}
                           onClick={() => handleCopyToFavorites(meal)}
-                          disabled={favSaving}
-                          title="Copy to favorites"
+                          disabled={favSaving || favAdded[meal.id]}
+                          title={favAdded[meal.id] ? 'Added to favorites' : 'Copy to favorites'}
                         >
-                          {favSaving ? '...' : '⭐ Fav'}
+                          {favSaving ? '...' : favAdded[meal.id] ? '✓ Eklendi' : '⭐ Fav'}
                         </button>
                       }
                     />

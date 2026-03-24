@@ -24,6 +24,7 @@ function formatIngredient(item) {
 export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, analyzing }) {
   const [panelOpen, setPanelOpen] = useState(false)
   const [favSaving, setFavSaving] = useState(false)
+  const [favAdded, setFavAdded] = useState(false)
 
   const ingredients = meal?.ingredients || []
   const displayNames = ingredients.length > 0
@@ -50,6 +51,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
         prep_time_min: meal?.prep_time_min,
         nutrition_note: meal?.nutrition_note,
       })
+      setFavAdded(true)
     } catch { /* ignore */ }
     setFavSaving(false)
   }
@@ -64,7 +66,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
         >
           {checked ? '☑' : '☐'}
         </button>
-        <div style={s.block} onClick={() => setPanelOpen(true)}>
+        <div style={s.block} onClick={() => { setPanelOpen(true); setFavAdded(false) }}>
           <span style={s.blockIcon}>🍳</span>
           <span style={s.blockText}>{displayNames}</span>
           {meal?.prep_time_min && <span style={s.prepBadge}>⏱ {meal.prep_time_min}m</span>}
@@ -91,12 +93,12 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
               showId={true}
               extraActions={
                 <button
-                  style={es.copyToFavBtn}
+                  style={favAdded ? es.copyToFavBtnDone : es.copyToFavBtn}
                   onClick={handleCopyToFavorites}
-                  disabled={favSaving}
-                  title="Copy to favorites"
+                  disabled={favSaving || favAdded}
+                  title={favAdded ? 'Added to favorites' : 'Copy to favorites'}
                 >
-                  {favSaving ? '...' : '⭐ Fav'}
+                  {favSaving ? '...' : favAdded ? '✓ Eklendi' : '⭐ Fav'}
                 </button>
               }
             />
