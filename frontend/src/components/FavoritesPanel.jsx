@@ -52,7 +52,7 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
     return (
       <div style={s.container}>
         <div style={s.header}>Favorites</div>
-        <div style={s.empty}>No favorites yet. Use ⭐ Fav on a meal to save it here.</div>
+        <div style={s.empty}>No favorites yet. Use ⭐ Save on a meal to save it here.</div>
       </div>
     )
   }
@@ -84,7 +84,7 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
                   </div>
                   <div style={s.cardActions}>
                     <button style={s.sendBtn} onClick={() => handleSendToChat(fav)} title="Send to chat as suggestion">
-                      🍳 Hazırla
+                      🫕 Hazırla
                     </button>
                     <button style={s.editBtn} onClick={() => setEditingId(fav.id)} title="Edit this favorite">
                       ✏️ Edit

@@ -396,7 +396,7 @@ export default function SettingsPanel({ visible }) {
                           disabled={favSaving || favAdded[meal.id]}
                           title={favAdded[meal.id] ? 'Added to favorites' : 'Copy to favorites'}
                         >
-                          {favSaving ? '...' : favAdded[meal.id] ? '✓ Eklendi' : '⭐ Fav'}
+                          {favSaving ? '...' : favAdded[meal.id] ? '✓ Saved' : '⭐ Save'}
                         </button>
                       }
                     />

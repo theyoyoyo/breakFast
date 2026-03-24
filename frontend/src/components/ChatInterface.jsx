@@ -102,7 +102,7 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
   // Expose methods to parent via ref
   useImperativeHandle(ref, () => ({
     injectDemoMeal: () => {
-      const introText = 'İşte sana güzel bir serpme kahvaltı önerisi! 🍳\n\nTaze ve dengeli malzemelerle hazırlanan klasik bir Türk kahvaltısı.'
+      const introText = 'İşte sana güzel bir serpme kahvaltı önerisi! 🫕\n\nTaze ve dengeli malzemelerle hazırlanan klasik bir Türk kahvaltısı.'
       injectMealToChat(DEMO_MEAL, introText)
     },
     injectFavoriteMeal: (meal) => {

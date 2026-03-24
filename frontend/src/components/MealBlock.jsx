@@ -67,7 +67,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
           {checked ? '☑' : '☐'}
         </button>
         <div style={s.block} onClick={() => { setPanelOpen(true); setFavAdded(false) }}>
-          <span style={s.blockIcon}>🍳</span>
+          <span style={s.blockIcon}>🫕</span>
           <span style={s.blockText}>{displayNames}</span>
           {meal?.prep_time_min && <span style={s.prepBadge}>⏱ {meal.prep_time_min}m</span>}
         </div>
@@ -98,7 +98,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
                   disabled={favSaving || favAdded}
                   title={favAdded ? 'Added to favorites' : 'Copy to favorites'}
                 >
-                  {favSaving ? '...' : favAdded ? '✓ Eklendi' : '⭐ Fav'}
+                  {favSaving ? '...' : favAdded ? '✓ Saved' : '⭐ Save'}
                 </button>
               }
             />

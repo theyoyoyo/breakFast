@@ -107,13 +107,13 @@ export const sendBtn = {
 }
 
 export const editBtn = {
-  background: 'var(--surface2)',
-  border: '1px solid var(--border)',
+  background: '#2a3a4a',
+  border: '1px solid #3d5060',
   borderRadius: 8,
   padding: '8px 14px',
   fontSize: 12,
   fontWeight: 600,
-  color: 'var(--text)',
+  color: '#c0d0e0',
   cursor: 'pointer',
 }
 
