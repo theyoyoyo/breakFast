@@ -4,7 +4,7 @@ All queries are scoped to the authenticated user.
 """
 
 from database import get_db
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from auth import require_user
 from models.preferences import Habit, HabitCreate, Preference, PreferenceSet
 
@@ -48,11 +48,13 @@ async def set_preference(key: str, body: PreferenceSet, user_id: int = Depends(r
 @router.delete("/{key}", status_code=204)
 async def delete_preference(key: str, user_id: int = Depends(require_user)):
     async with get_db() as db:
-        await db.execute(
+        cursor = await db.execute(
             "DELETE FROM user_preferences WHERE user_id = ? AND key = ?",
             (user_id, key),
         )
         await db.commit()
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Preference not found")
 
 
 # ---------------------------------------------------------------------------
@@ -86,8 +88,10 @@ async def add_habit(body: HabitCreate, user_id: int = Depends(require_user)):
 @router.delete("/habits/{habit_id}", status_code=204)
 async def delete_habit(habit_id: int, user_id: int = Depends(require_user)):
     async with get_db() as db:
-        await db.execute(
+        cursor = await db.execute(
             "DELETE FROM user_habits WHERE id = ? AND user_id = ?",
             (habit_id, user_id),
         )
         await db.commit()
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Habit not found")

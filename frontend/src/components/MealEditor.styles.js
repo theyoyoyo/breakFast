@@ -1,4 +1,4 @@
-import { secondaryColor } from '../styles/common'
+import { secondaryColor, colors } from '../styles/common'
 
 export const editorContainer = {
   display: 'flex',
@@ -203,26 +203,26 @@ export const saveBtn = {
 }
 
 export const copyToFavBtn = {
-  background: '#4a3a10',
-  border: '1px solid #b8922a',
+  background: colors.gold,
+  border: `1px solid ${colors.goldBorder}`,
   borderRadius: 10,
   padding: '12px 16px',
   fontSize: 13,
   fontWeight: 600,
-  color: '#e8c84a',
+  color: colors.goldText,
   cursor: 'pointer',
   transition: 'background 0.15s',
   whiteSpace: 'nowrap',
 }
 
 export const copyToFavBtnDone = {
-  background: '#2d4a35',
-  border: '1px solid #4a7c59',
+  background: colors.success,
+  border: `1px solid ${colors.successBorder}`,
   borderRadius: 10,
   padding: '12px 16px',
   fontSize: 13,
   fontWeight: 600,
-  color: '#8bc59a',
+  color: colors.successText,
   cursor: 'default',
   opacity: 0.8,
   whiteSpace: 'nowrap',

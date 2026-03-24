@@ -8,19 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from auth import require_user
 from database import get_db
+from db_helpers import row_to_favorite
 
 router = APIRouter(prefix="/favorites", tags=["favorites"])
-
-
-def _row_to_dict(row) -> dict:
-    d = dict(row)
-    for field in ("ingredients", "steps"):
-        if d.get(field):
-            try:
-                d[field] = _json.loads(d[field])
-            except (ValueError, TypeError):
-                pass
-    return d
 
 
 @router.get("/")
@@ -30,7 +20,7 @@ async def list_favorites(user_id: int = Depends(require_user)):
             "SELECT * FROM favorite_meals WHERE user_id = ? ORDER BY created_at DESC",
             (user_id,),
         ) as cur:
-            return [_row_to_dict(r) for r in await cur.fetchall()]
+            return [row_to_favorite(r) for r in await cur.fetchall()]
 
 
 @router.post("/", status_code=201)
@@ -84,7 +74,7 @@ async def update_favorite(fav_id: int, meal: dict, user_id: int = Depends(requir
         await db.commit()
         if cur.rowcount == 0:
             raise HTTPException(status_code=404, detail="Favorite not found")
-        return {"ok": True}
+        return {"status": "ok"}
 
 
 @router.delete("/{fav_id}")
@@ -97,4 +87,4 @@ async def delete_favorite(fav_id: int, user_id: int = Depends(require_user)):
         await db.commit()
         if cur.rowcount == 0:
             raise HTTPException(status_code=404, detail="Favorite not found")
-        return {"ok": True}
+        return {"status": "ok"}

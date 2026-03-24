@@ -9,6 +9,7 @@ import {
 } from '../services/api'
 import WeeklySummary from './WeeklySummary'
 import MealEditor from './MealEditor'
+import StarRating from './StarRating'
 import * as s from './SettingsPanel.styles'
 import * as es from './MealEditor.styles'
 
@@ -37,9 +38,6 @@ export default function SettingsPanel({ visible }) {
   // Meal history state
   const [meals, setMeals] = useState([])
   const [expandedMealId, setExpandedMealId] = useState(null)
-  const [mealItems, setMealItems] = useState([])
-  const [mealName, setMealName] = useState('')
-  const [newMealItem, setNewMealItem] = useState('')
   const [favSaving, setFavSaving] = useState(false)
   const [favAdded, setFavAdded] = useState({})
 
@@ -241,53 +239,6 @@ export default function SettingsPanel({ visible }) {
       return
     }
     setExpandedMealId(meal.id)
-    setMealName(meal.meal_name)
-    // Normalize ingredients to structured form
-    const normalized = (meal.ingredients || []).map(item => {
-      if (typeof item === 'object' && item !== null && item.name) {
-        return { name: item.name, quantity: item.quantity ?? 1, unit: item.unit || 'adet' }
-      }
-      return { name: String(item), quantity: 1, unit: 'adet' }
-    })
-    setMealItems(normalized)
-    setNewMealItem('')
-  }
-
-  const handleDeleteMealItem = (idx) => {
-    setMealItems(prev => prev.filter((_, i) => i !== idx))
-  }
-
-  const handleMealQtyChange = (idx, val) => {
-    if (val !== '' && !/^\d*\.?\d{0,2}$/.test(val)) return
-    setMealItems(prev => prev.map((item, i) =>
-      i === idx ? { ...item, quantity: val === '' ? '' : val } : item
-    ))
-  }
-
-  const handleMealQtyBlur = (idx) => {
-    setMealItems(prev => prev.map((item, i) => {
-      if (i !== idx) return item
-      const num = parseFloat(item.quantity)
-      return { ...item, quantity: (!isNaN(num) && num > 0) ? Math.round(num * 100) / 100 : 1 }
-    }))
-  }
-
-  const handleMealQtyStep = (idx, delta) => {
-    setMealItems(prev => prev.map((item, i) => {
-      if (i !== idx) return item
-      const current = typeof item.quantity === 'number' ? item.quantity : parseFloat(item.quantity) || 1
-      const next = Math.round((current + delta) * 100) / 100
-      return { ...item, quantity: next > 0 ? next : current }
-    }))
-  }
-
-  const handleAddMealItem = () => {
-    const v = newMealItem.trim()
-    if (!v) return
-    const itemName = (item) => typeof item === 'object' ? item.name : item
-    if (mealItems.some(item => itemName(item).toLowerCase() === v.toLowerCase())) return
-    setMealItems(prev => [...prev, { name: v, quantity: 1, unit: 'adet' }])
-    setNewMealItem('')
   }
 
   const handleSaveMeal = async (meal) => {
@@ -488,18 +439,12 @@ export default function SettingsPanel({ visible }) {
                 <span style={s.ratingName}>{r.product_name}</span>
                 <button style={s.tagX} onClick={() => handleDeleteRating(r.id)}>×</button>
               </div>
-              <div style={s.starsRow}>
-                {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
-                  <div
-                    key={n}
-                    style={s.starCell}
-                    onClick={() => handleUpdateRating(r.id, n)}
-                  >
-                    <span style={s.starNum}>{n}</span>
-                    <span style={s.star(n <= r.rating)}>★</span>
-                  </div>
-                ))}
-              </div>
+              <StarRating
+                value={r.rating}
+                size={18}
+                numSize={9}
+                onChange={(n) => handleUpdateRating(r.id, n)}
+              />
             </div>
           ))}
           <div style={s.addRow}>
@@ -675,26 +620,25 @@ export default function SettingsPanel({ visible }) {
           </button>
         </div>
 
-        {/* Data management */}
-        <div style={s.section}>
-          <div style={s.sectionLabel}>Data</div>
-          <button
-            style={s.dangerBtn}
-            onClick={async () => {
-              try {
-                setError(null)
-                const result = await deleteOldMeals()
-                setError(result.deleted > 0
-                  ? `${result.deleted} old meal(s) deleted`
-                  : 'No meals older than 1 year')
-              } catch {
-                setError('Failed to delete old meals')
-              }
-            }}
-          >
-            🗑 Delete meals older than 1 year
-          </button>
-        </div>
+        {/* Spacer to push delete button to bottom */}
+        <div style={{ flex: 1 }} />
+
+        <button
+          style={s.dangerBtn}
+          onClick={async () => {
+            try {
+              setError(null)
+              const result = await deleteOldMeals()
+              setError(result.deleted > 0
+                ? `${result.deleted} old meal(s) deleted`
+                : 'No meals older than 1 year')
+            } catch {
+              setError('Failed to delete old meals')
+            }
+          }}
+        >
+          🗑 Delete meals older than 1 year
+        </button>
       </div>
     </div>
   )

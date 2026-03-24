@@ -1,16 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getFavorites, deleteFavorite, updateFavorite } from '../services/api'
+import { formatIngredient } from '../utils/ingredients'
 import MealEditor from './MealEditor'
 import * as s from './FavoritesPanel.styles'
-
-function formatIngredient(item) {
-  if (typeof item === 'object' && item !== null && item.name) {
-    const qty = item.quantity != null ? item.quantity : ''
-    const unit = item.unit || ''
-    return `${qty} ${unit} ${item.name}`.trim()
-  }
-  return String(item)
-}
 
 export default function FavoritesPanel({ visible, onSendToChat }) {
   const [favorites, setFavorites] = useState([])
@@ -84,7 +76,7 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
                   </div>
                   <div style={s.cardActions}>
                     <button style={s.sendBtn} onClick={() => handleSendToChat(fav)} title="Send to chat as suggestion">
-                      🫕 Hazırla
+                      🫕 Send to Chat
                     </button>
                     <button style={s.editBtn} onClick={() => setEditingId(fav.id)} title="Edit this favorite">
                       ✏️ Edit

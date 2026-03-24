@@ -1,4 +1,4 @@
-import { secondaryColor } from '../styles/common'
+import { secondaryColor, colors } from '../styles/common'
 
 export const container = {
   display: 'flex',
@@ -38,6 +38,7 @@ export const card = {
   border: '1px solid var(--border)',
   borderRadius: 12,
   overflow: 'hidden',
+  flexShrink: 0,
 }
 
 export const cardHeader = {
@@ -107,13 +108,13 @@ export const sendBtn = {
 }
 
 export const editBtn = {
-  background: '#2a3a4a',
-  border: '1px solid #3d5060',
+  background: colors.editBg,
+  border: `1px solid ${colors.editBorder}`,
   borderRadius: 8,
   padding: '8px 14px',
   fontSize: 12,
   fontWeight: 600,
-  color: '#c0d0e0',
+  color: colors.editText,
   cursor: 'pointer',
 }
 

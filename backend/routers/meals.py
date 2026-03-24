@@ -8,41 +8,9 @@ from fastapi import APIRouter, HTTPException, Depends
 from database import get_db
 from auth import require_user
 from models.meal import Meal, MealLog, MealRating
+from db_helpers import row_to_meal, serialize_json_field
 
 router = APIRouter(prefix="/meals", tags=["meals"])
-
-
-def _parse_json_field(value, default):
-    """Safely decode a JSON-encoded DB field, returning `default` on failure."""
-    if not value:
-        return default
-    try:
-        return json.loads(value)
-    except (json.JSONDecodeError, TypeError):
-        return default
-
-
-def _serialize_ingredients(ingredients) -> str:
-    """Serialize ingredients list to JSON — handles both Pydantic models and plain dicts/strings."""
-    if not ingredients:
-        return "[]"
-    serialized = []
-    for item in ingredients:
-        if hasattr(item, "model_dump"):
-            serialized.append(item.model_dump())
-        else:
-            serialized.append(item)
-    return json.dumps(serialized, ensure_ascii=False)
-
-
-def _row_to_meal(row) -> dict:
-    """Convert a raw DB row to a dict with JSON list fields decoded."""
-    d = dict(row)
-    d["ingredients"] = _parse_json_field(d.get("ingredients"), [])
-    d["steps"] = _parse_json_field(d.get("steps"), [])
-    d["schedule"] = _parse_json_field(d.get("schedule"), None)
-    d["cached_nutrition"] = _parse_json_field(d.get("cached_nutrition"), None)
-    return d
 
 
 @router.get("/", response_model=list[Meal])
@@ -52,7 +20,7 @@ async def list_meals(limit: int = 50, user_id: int = Depends(require_user)):
             "SELECT * FROM meal_history WHERE user_id = ? ORDER BY logged_at DESC LIMIT ?",
             (user_id, limit),
         ) as cur:
-            return [_row_to_meal(r) for r in await cur.fetchall()]
+            return [row_to_meal(r) for r in await cur.fetchall()]
 
 
 @router.get("/weekly", response_model=list[Meal])
@@ -70,7 +38,7 @@ async def weekly_meals(user_id: int = Depends(require_user)):
             "SELECT * FROM meal_history WHERE user_id = ? ORDER BY logged_at DESC LIMIT 50",
             (user_id,),
         ) as cur:
-            rows = [_row_to_meal(r) for r in await cur.fetchall()]
+            rows = [row_to_meal(r) for r in await cur.fetchall()]
     if not rows:
         return []
 
@@ -104,7 +72,7 @@ async def get_meal(meal_id: int, user_id: int = Depends(require_user)):
             row = await cur.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Meal not found")
-    return _row_to_meal(row)
+    return row_to_meal(row)
 
 
 @router.post("/", response_model=Meal, status_code=201)
@@ -120,7 +88,7 @@ async def log_meal(body: MealLog, user_id: int = Depends(require_user)):
                 user_id,
                 body.meal_name,
                 body.description,
-                _serialize_ingredients(body.ingredients),
+                serialize_json_field(body.ingredients),
                 json.dumps(body.steps or [], ensure_ascii=False),
                 body.prep_time_min,
                 body.nutrition_note,
@@ -131,7 +99,7 @@ async def log_meal(body: MealLog, user_id: int = Depends(require_user)):
         async with db.execute(
             "SELECT * FROM meal_history WHERE id = last_insert_rowid()"
         ) as cur:
-            return _row_to_meal(await cur.fetchone())
+            return row_to_meal(await cur.fetchone())
 
 
 @router.delete("/old", status_code=200)
@@ -161,7 +129,7 @@ async def update_meal(meal_id: int, body: MealLog, user_id: int = Depends(requir
             (
                 body.meal_name,
                 body.description,
-                _serialize_ingredients(body.ingredients),
+                serialize_json_field(body.ingredients),
                 json.dumps(body.steps or [], ensure_ascii=False),
                 body.prep_time_min,
                 body.nutrition_note,
@@ -176,7 +144,7 @@ async def update_meal(meal_id: int, body: MealLog, user_id: int = Depends(requir
             "SELECT * FROM meal_history WHERE id = ? AND user_id = ?",
             (meal_id, user_id),
         ) as cur:
-            return _row_to_meal(await cur.fetchone())
+            return row_to_meal(await cur.fetchone())
 
 
 @router.delete("/{meal_id}", status_code=204)
@@ -209,4 +177,4 @@ async def rate_meal(meal_id: int, body: MealRating, user_id: int = Depends(requi
             "SELECT * FROM meal_history WHERE id = ? AND user_id = ?",
             (meal_id, user_id),
         ) as cur:
-            return _row_to_meal(await cur.fetchone())
+            return row_to_meal(await cur.fetchone())

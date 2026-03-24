@@ -219,28 +219,3 @@ export const rateLabel = {
   color: 'var(--text)',
 }
 
-export const starsRow = {
-  display: 'flex',
-  justifyContent: 'space-between',
-}
-
-export const starCell = {
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  cursor: 'pointer',
-  flex: 1,
-  userSelect: 'none',
-}
-
-export const starNum = {
-  fontSize: 10,
-  color: 'var(--text-muted)',
-  marginBottom: 2,
-}
-
-export const star = (lit) => ({
-  fontSize: 22,
-  color: lit ? '#f5a623' : 'var(--border)',
-  transition: 'color 0.1s',
-})

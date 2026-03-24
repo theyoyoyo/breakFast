@@ -1,4 +1,4 @@
-import { panelContainer, panelHeader, secondaryColor } from '../styles/common'
+import { panelContainer, panelHeader, secondaryColor, colors } from '../styles/common'
 
 export const container = panelContainer
 
@@ -81,5 +81,5 @@ export const empty = {
 export const error = {
   padding: '8px 16px',
   fontSize: 12,
-  color: '#e76f51',
+  color: colors.error,
 }

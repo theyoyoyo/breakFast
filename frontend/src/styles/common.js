@@ -3,6 +3,28 @@
 // Secondary button color — dark orange-red, used for all action buttons
 export const secondaryColor = '#c4533e'
 
+// Semantic color palette — use these instead of hardcoded hex values
+export const colors = {
+  // Status
+  success: '#2d4a35',
+  successBorder: '#4a7c59',
+  successText: '#8bc59a',
+  gold: '#4a3a10',
+  goldBorder: '#b8922a',
+  goldText: '#e8c84a',
+  goldStar: '#f5a623',
+  error: '#e76f51',
+  // Supplements
+  daily: '#2d4a35',
+  dailyText: '#8bc59a',
+  sometimes: '#4a3d20',
+  sometimesText: '#d4a94a',
+  // Edit button (muted blue-gray)
+  editBg: '#2a3a4a',
+  editBorder: '#3d5060',
+  editText: '#c0d0e0',
+}
+
 export const panelContainer = {
   background: 'var(--surface)',
   borderRadius: 'var(--radius)',
@@ -94,7 +116,7 @@ export const empty = {
 export const error = {
   padding: '8px 0',
   fontSize: 12,
-  color: '#e76f51',
+  color: colors.error,
 }
 
 export const select = {

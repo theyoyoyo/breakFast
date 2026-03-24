@@ -1,15 +1,6 @@
 import { useState, useEffect } from 'react'
+import { normalizeItem } from '../utils/ingredients'
 import * as s from './MealEditor.styles'
-
-/**
- * Normalize an ingredient to structured form {name, quantity, unit}.
- */
-function normalizeItem(item) {
-  if (typeof item === 'object' && item !== null && item.name) {
-    return { name: item.name, quantity: item.quantity ?? 1, unit: item.unit || 'adet' }
-  }
-  return { name: String(item), quantity: 1, unit: 'adet' }
-}
 
 /**
  * Shared meal editor component used by MealBlock, FavoritesPanel, and SettingsPanel.
