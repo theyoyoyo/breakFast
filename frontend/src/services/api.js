@@ -81,11 +81,20 @@ export const checkAuth = () =>
 export const getIngredients = () =>
   apiFetch(`${BASE_URL}/ingredients/`)
 
-export const addIngredient = (name) =>
-  apiFetch(`${BASE_URL}/ingredients/`, json('POST', { name }))
+export const addIngredient = (name, expiry_date = null) =>
+  apiFetch(`${BASE_URL}/ingredients/`, json('POST', { name, expiry_date }))
+
+export const updateIngredient = (id, data) =>
+  apiFetch(`${BASE_URL}/ingredients/${id}`, json('PATCH', data))
 
 export const deleteIngredient = (id) =>
   apiFetch(`${BASE_URL}/ingredients/${id}`, { method: 'DELETE' })
+
+export const getExpiredIngredients = () =>
+  apiFetch(`${BASE_URL}/ingredients/expired`)
+
+export const confirmExpiredThrown = (ids) =>
+  apiFetch(`${BASE_URL}/ingredients/expired/thrown`, json('POST', { ids }))
 
 // ---------------------------------------------------------------------------
 // Meals

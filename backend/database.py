@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS ingredient_inventory (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id     INTEGER NOT NULL REFERENCES users(id),
     name        TEXT    NOT NULL,
+    expiry_date TEXT,
     added_at    TEXT    NOT NULL DEFAULT (datetime('now')),
     updated_at  TEXT    NOT NULL DEFAULT (datetime('now')),
     UNIQUE(user_id, name)
@@ -244,6 +245,22 @@ async def init_db() -> None:
             await db.execute("DROP TABLE ingredient_inventory")
             await db.execute("ALTER TABLE _ingredient_inventory_new RENAME TO ingredient_inventory")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_ingredient_inventory_user ON ingredient_inventory(user_id)")
+
+        # Migrate: add expiry_date column to ingredient_inventory if missing
+        try:
+            await db.execute(
+                "ALTER TABLE ingredient_inventory ADD COLUMN expiry_date TEXT"
+            )
+        except Exception:
+            pass  # Column already exists
+
+        # Migrate: add last_expiry_check column to users if missing
+        try:
+            await db.execute(
+                "ALTER TABLE users ADD COLUMN last_expiry_check TEXT"
+            )
+        except Exception:
+            pass  # Column already exists
 
         # Clean up chat sessions older than 8 days
         await db.execute(
