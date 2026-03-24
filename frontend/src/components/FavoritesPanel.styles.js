@@ -38,6 +38,7 @@ export const card = {
   border: '1px solid var(--border)',
   borderRadius: 12,
   overflow: 'hidden',
+  flexShrink: 0,
 }
 
 export const cardHeader = {
