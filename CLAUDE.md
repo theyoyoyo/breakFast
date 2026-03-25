@@ -363,7 +363,8 @@ breakFAST/
 │   │   ├── profile.py             ← /profile + /profile/supplements CRUD
 │   │   ├── ratings.py              ← /ratings CRUD endpoints (1-10 scale)
 │   │   ├── sessions.py            ← /sessions chat session management
-│   │   └── shopping.py            ← /shopping list CRUD + bought flow
+│   │   ├── shopping.py            ← /shopping list CRUD + bought flow
+│   │   └── scheduler.py          ← /scheduler/plan prep timeline endpoint
 │   │
 │   ├── services/
 │   │   ├── context.py               ← shared context loaders for LLM prompts
@@ -379,7 +380,8 @@ breakFAST/
 │   │       ├── dietitian.py        ← profesyonel diyetisyen
 │   │       ├── analyst.py          ← nutrition lab / robot
 │   │       ├── pipeline_analyst.py ← internal reviewer for suggestion refinement
-│   │       └── shopping.py         ← professional shopping advisor
+│   │       ├── shopping.py         ← professional shopping advisor
+│   │       └── scheduler.py       ← kitchen task decomposition for prep timeline
 │   │
 │   ├── models/
 │   │   ├── ingredient.py            ← Pydantic models for ingredients
@@ -402,7 +404,8 @@ breakFAST/
 │       │   ├── test_analyst.py      ← analyst endpoint tests
 │       │   ├── test_websocket.py    ← WebSocket chat tests
 │       │   ├── test_sessions.py     ← session management tests
-│       │   └── test_shopping.py    ← shopping list endpoint tests
+│       │   ├── test_shopping.py    ← shopping list endpoint tests
+│       │   └── test_scheduler.py  ← scheduler endpoint tests
 │       └── services/
 │           ├── test_prompts.py      ← prompt builder unit tests
 │           ├── test_scheduler.py    ← scheduler logic unit tests

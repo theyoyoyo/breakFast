@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react'
-import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, saveSessionMessage, getTodaySupplements, toggleSupplement, analyzeMeal } from '../services/api'
+import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, saveSessionMessage, getTodaySupplements, toggleSupplement, analyzeMeal, getSchedule } from '../services/api'
 import { useVoice } from '../hooks/useVoice'
 import SuggestButton from './SuggestButton'
 import DecidePanel from './DecidePanel'
@@ -70,6 +70,8 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
   const [checkedMealIdx, setCheckedMealIdx] = useState(null)
   // analyzingIdx: the message index of a meal block currently being analyzed (null = idle)
   const [analyzingIdx, setAnalyzingIdx] = useState(null)
+  // schedulingIdx: the message index of a meal block getting a prep timeline (null = idle)
+  const [schedulingIdx, setSchedulingIdx] = useState(null)
   // pipelineStep: current pipeline progress step (null = not in pipeline)
   const [pipelineStep, setPipelineStep] = useState(null)
   const wsRef = useRef(null)
@@ -441,8 +443,29 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     }
   }, [mealBlocks, analyzingIdx, streamBuffer])
 
-  // True when anything is busy (streaming or analyzing)
-  const isBusy = streamBuffer !== null || analyzingIdx !== null
+  const handleSchedule = useCallback(async (msgIdx) => {
+    const meal = mealBlocks[msgIdx]
+    if (!meal || streamBuffer !== null || schedulingIdx !== null) return
+    setSchedulingIdx(msgIdx)
+    try {
+      const result = await getSchedule(
+        meal.meal_name || 'Meal',
+        meal.steps || [],
+        meal.ingredients || [],
+        meal.id || null,
+      )
+      const text = result.formatted || 'Zamanlama oluşturulamadı.'
+      const scheduleMsg = `📋 ${meal.meal_name || 'Meal'} — Hazırlık Planı\n\n${text}`
+      setMessages(prev => [...prev, { role: 'assistant', content: scheduleMsg }])
+    } catch {
+      setMessages(prev => [...prev, { role: 'assistant', content: '📋 Hazırlık planı oluşturulamadı — sunucuya ulaşılamıyor.' }])
+    } finally {
+      setSchedulingIdx(null)
+    }
+  }, [mealBlocks, schedulingIdx, streamBuffer])
+
+  // True when anything is busy (streaming, analyzing, or scheduling)
+  const isBusy = streamBuffer !== null || analyzingIdx !== null || schedulingIdx !== null
 
   // Get the checked meal for DecidePanel (priority: checked block > null)
   const checkedMeal = checkedMealIdx !== null ? mealBlocks[checkedMealIdx] : null
@@ -491,6 +514,8 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
                   onSave={(updated) => setMealBlocks(prev => ({ ...prev, [i]: updated }))}
                   onAnalyze={() => handleAnalyze(i)}
                   analyzing={analyzingIdx === i}
+                  onSchedule={() => handleSchedule(i)}
+                  scheduling={schedulingIdx === i}
                 />
               )}
             </div>

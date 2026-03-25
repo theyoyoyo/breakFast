@@ -282,6 +282,13 @@ export const analyzeMeal = (meal_name, ingredients, meal_id = null) =>
   apiFetch(`${BASE_URL}/analyst/analyze`, json('POST', { meal_name, ingredients, meal_id }))
 
 // ---------------------------------------------------------------------------
+// Scheduler
+// ---------------------------------------------------------------------------
+
+export const getSchedule = (meal_name, steps, ingredients, meal_id = null) =>
+  apiFetch(`${BASE_URL}/scheduler/plan`, json('POST', { meal_name, steps, ingredients, meal_id }))
+
+// ---------------------------------------------------------------------------
 // WebSocket chat
 // ---------------------------------------------------------------------------
 
