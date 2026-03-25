@@ -169,7 +169,7 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
         {/* Done button — always active, refreshes list if nothing checked */}
         {items.length > 0 && (
           <button
-            style={{ ...s.boughtBtn, cursor: 'pointer' }}
+            style={{ ...s.doneBtn, cursor: 'pointer' }}
             onClick={checkedCount > 0 ? handleBought : load}
           >
             Done{checkedCount > 0 ? ` (${checkedCount})` : ''} ✓
