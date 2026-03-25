@@ -121,7 +121,7 @@ export default function App() {
       </nav>
 
       <div style={{ ...s.mainFull, display: activeTab === 'Chat' ? undefined : 'none' }}>
-        <ChatInterface ref={chatRef} onMealLogged={handleMealLogged} />
+        <ChatInterface ref={chatRef} onMealLogged={handleMealLogged} visible={activeTab === 'Chat'} />
       </div>
       <div style={{ ...s.mainFull, display: activeTab === 'Ingredients' ? undefined : 'none' }}>
         <IngredientPanel ref={ingredientRef} refreshTrigger={ingredientRefresh} />

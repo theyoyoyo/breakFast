@@ -53,7 +53,7 @@ const DEMO_MEAL = {
   nutrition_note: 'Protein, kalsiyum ve sağlıklı yağlar açısından zengin bir öğün.',
 }
 
-export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
+export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref) {
   const [messages, setMessages] = useState([WELCOME_MSG])
   const [input, setInput] = useState('')
   // null = idle, '' = thinking (no tokens yet), string = streaming content
@@ -180,6 +180,11 @@ export default forwardRef(function ChatInterface({ onMealLogged }, ref) {
     })()
     return () => { cancelled = true }
   }, [refreshNavState, loadTodaySupplements, parseMealBlocksFromMessages])
+
+  // Refresh supplements when Chat tab becomes visible (picks up Settings changes)
+  useEffect(() => {
+    if (visible) loadTodaySupplements()
+  }, [visible]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })

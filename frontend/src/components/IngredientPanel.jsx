@@ -297,10 +297,11 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger }, 
     try {
       setError(null)
       await addShoppingItemsBulk(selected.map(s => s.name))
-      const remaining = suggestions.filter((_, i) => !selectedSuggestions[i])
-      setSuggestions(remaining)
-      saveSuggestions(remaining)
+      // Close suggestions panel entirely after sending
+      setSuggestions([])
+      saveSuggestions([])
       setSelectedSuggestions({})
+      setLyricBanner(null)
     } catch {
       setError('Failed to add items to shopping list')
     }

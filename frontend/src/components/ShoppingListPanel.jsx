@@ -177,7 +177,7 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
             onClick={handleBought}
             disabled={checkedCount === 0}
           >
-            Bought{checkedCount > 0 ? ` (${checkedCount})` : ''}
+            Done{checkedCount > 0 ? ` (${checkedCount})` : ''} ✓
           </button>
         )}
       </div>

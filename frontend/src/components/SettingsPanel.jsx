@@ -556,7 +556,7 @@ export default function SettingsPanel({ visible }) {
           {supplements.length === 0 && <span style={s.empty}>No supplements yet</span>}
           {supplements.map((sup) => (
             <div key={sup.id} style={s.suppRow}>
-              <span style={s.suppName}>{sup.name}</span>
+              <span style={{ ...s.suppName, flex: sup.contents ? undefined : 1 }}>{sup.name}</span>
               {sup.contents && <span style={s.suppContents}>{sup.contents}</span>}
               <button style={s.suppFreq(sup.frequency)} onClick={() => handleToggleFrequency(sup)} title="Click to toggle">{sup.frequency}</button>
               <button style={s.tagX} onClick={() => handleDeleteSupplement(sup.id)}>×</button>
