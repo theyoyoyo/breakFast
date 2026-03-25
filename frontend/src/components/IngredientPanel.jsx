@@ -113,13 +113,15 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Dismiss delete popup on any outside click
+  // Dismiss delete confirm on any outside click (serves as cancel)
   useEffect(() => {
     if (!deletePopup) return
     const dismiss = () => setDeletePopup(null)
-    const timer = setTimeout(dismiss, 5000)
-    window.addEventListener('click', dismiss, { once: true, capture: true })
-    return () => { clearTimeout(timer); window.removeEventListener('click', dismiss, { capture: true }) }
+    // Use setTimeout(0) so the current click event doesn't immediately dismiss
+    const id = setTimeout(() => {
+      window.addEventListener('click', dismiss, { once: true })
+    }, 0)
+    return () => { clearTimeout(id); window.removeEventListener('click', dismiss) }
   }, [deletePopup])
 
   // Expose demo hooks
@@ -172,29 +174,28 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
     }
   }
 
-  const handleDelete = async (id, e) => {
-    const ing = ingredients.find(i => i.id === id)
-    setIngredients((prev) => prev.filter((i) => i.id !== id))
+  const handleDelete = async (id) => {
     try {
       await deleteIngredient(id)
+      setDeletePopup(null)
+      load()
       refreshExpiredCount()
-      // Show "add to shopping list?" popup
-      if (ing) {
-        const rect = e?.currentTarget?.getBoundingClientRect()
-        setDeletePopup({ id, name: ing.name, top: rect ? rect.bottom : 0 })
-      }
     } catch (err) {
       setError('Failed to delete ingredient')
-      load()
     }
   }
 
-  const handleAddToShoppingFromDelete = async () => {
-    if (!deletePopup) return
+  const handleDeleteToShopping = async (id) => {
+    const ing = ingredients.find(i => i.id === id)
     try {
-      await addShoppingItem(deletePopup.name)
-    } catch { /* ignore */ }
-    setDeletePopup(null)
+      await deleteIngredient(id)
+      if (ing) await addShoppingItem(ing.name)
+      setDeletePopup(null)
+      load()
+      refreshExpiredCount()
+    } catch (err) {
+      setError('Failed to delete ingredient')
+    }
   }
 
   const startEdit = (ing) => {
@@ -346,6 +347,9 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
   }
 
   const selectedSuggestionCount = Object.values(selectedSuggestions).filter(Boolean).length
+
+  // Count of expired items the user previously acknowledged ("kept")
+  const keptCount = ingredients.filter(i => i.expiry_acknowledged && isExpired(i.expiry_date)).length
 
   const formatExpiry = (dateStr) => {
     if (!dateStr) return null
@@ -500,8 +504,12 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
                         <span style={{
                           ...s.expiryBadge,
                           color: isExpired(ing.expiry_date) ? 'var(--error, #e74c3c)' : 'var(--text-muted)',
+                          fontWeight: isExpired(ing.expiry_date) ? 600 : 400,
                         }}>
                           {formatExpiry(ing.expiry_date)}
+                          {ing.expiry_acknowledged && isExpired(ing.expiry_date) && (
+                            <span style={s.keptBadge}>(kept)</span>
+                          )}
                         </span>
                       )}
                       <button
@@ -511,36 +519,44 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
                       >
                         <Pencil size={12} />
                       </button>
-                      <button
-                        style={s.iconBtn}
-                        onClick={(e) => handleDelete(ing.id, e)}
-                        title="Delete"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                    {/* Delete-to-shopping popup */}
-                    {deletePopup?.id === ing.id && (
-                      <div style={s.deletePopup} onClick={(e) => e.stopPropagation()}>
-                        <span style={s.deletePopupText}>Add to shopping list?</span>
-                        <button style={s.deletePopupYes} onClick={handleAddToShoppingFromDelete}>Yes</button>
-                        <button style={s.deletePopupNo} onClick={() => setDeletePopup(null)}>No</button>
+                      <div style={{ position: 'relative' }}>
+                        <button
+                          style={s.iconBtn}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setDeletePopup(deletePopup?.id === ing.id ? null : { id: ing.id, name: ing.name })
+                          }}
+                          title="Delete"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                        {deletePopup?.id === ing.id && (
+                          <div style={s.deleteConfirm} onClick={(e) => e.stopPropagation()}>
+                            <button
+                              style={s.deleteConfirmTrash}
+                              onClick={() => handleDelete(ing.id)}
+                              title="Delete"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                            <button
+                              style={s.deleteConfirmShop}
+                              onClick={() => handleDeleteToShopping(ing.id)}
+                              title="Delete & add to shopping list"
+                            >
+                              <ShoppingCart size={12} />
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
                 )
               ))}
             </div>
           )
         })}
-        {/* Show delete popup for items already removed from list */}
-        {deletePopup && !ingredients.find(i => i.id === deletePopup.id) && (
-          <div style={s.deletePopup} onClick={(e) => e.stopPropagation()}>
-            <span style={s.deletePopupText}>Add "{deletePopup.name}" to shopping list?</span>
-            <button style={s.deletePopupYes} onClick={handleAddToShoppingFromDelete}>Yes</button>
-            <button style={s.deletePopupNo} onClick={() => setDeletePopup(null)}>No</button>
-          </div>
-        )}
+        {/* (delete confirm buttons now appear inline next to the delete icon) */}
       </div>
 
       {/* Expiry detail panel — 3-way radio buttons */}
@@ -550,7 +566,12 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
             <button style={s.closeBtn} onClick={() => setExpiryPanelOpen(false)}>
               <X size={16} />
             </button>
-            <span style={s.expiryPanelTitle}>Expired Items</span>
+            <span style={s.expiryPanelTitle}>
+              Expired Items
+              {keptCount > 0 && (
+                <span style={s.keptCountLabel}> · {keptCount} kept</span>
+              )}
+            </span>
             <div style={{ width: 24 }} />
           </div>
           <div style={s.expiryPanelList}>

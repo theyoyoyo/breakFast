@@ -205,41 +205,61 @@ export const iconBtn = {
 }
 
 // ---------------------------------------------------------------------------
-// Delete-to-shopping popup
+// "Kept" expiry badge
 // ---------------------------------------------------------------------------
 
-export const deletePopup = {
+export const keptBadge = {
+  marginLeft: 3,
+  fontSize: 10,
+  fontWeight: 500,
+  opacity: 0.7,
+  fontStyle: 'italic',
+}
+
+export const keptCountLabel = {
+  fontSize: 11,
+  fontWeight: 400,
+  color: 'var(--text-muted)',
+}
+
+// ---------------------------------------------------------------------------
+// Delete confirm (inline buttons below delete icon)
+// ---------------------------------------------------------------------------
+
+export const deleteConfirm = {
+  position: 'absolute',
+  top: '100%',
+  right: 0,
+  display: 'flex',
+  gap: 3,
+  padding: '4px 0',
+  zIndex: 10,
+}
+
+const _deleteConfirmBase = {
+  width: 26,
+  height: 24,
   display: 'flex',
   alignItems: 'center',
-  gap: 6,
-  padding: '4px 16px 6px 32px',
-  fontSize: 11,
+  justifyContent: 'center',
+  borderRadius: 5,
+  cursor: 'pointer',
+  padding: 0,
+  transition: 'all 0.1s',
 }
 
-export const deletePopupText = {
-  color: 'var(--text-muted)',
-  flex: 1,
+export const deleteConfirmTrash = {
+  ..._deleteConfirmBase,
+  background: 'rgba(231, 76, 60, 0.2)',
+  border: '1px solid rgba(231, 76, 60, 0.45)',
+  color: '#e74c3c',
 }
 
-export const deletePopupYes = {
+export const deleteConfirmShop = {
+  ..._deleteConfirmBase,
   background: 'rgba(142, 68, 173, 0.2)',
-  border: '1px solid rgba(142, 68, 173, 0.4)',
+  border: '1px solid rgba(142, 68, 173, 0.45)',
   color: '#a970c9',
-  borderRadius: 4,
-  padding: '2px 8px',
-  fontSize: 11,
-  fontWeight: 600,
-  cursor: 'pointer',
-}
-
-export const deletePopupNo = {
-  background: 'none',
-  border: '1px solid var(--border)',
-  color: 'var(--text-muted)',
-  borderRadius: 4,
-  padding: '2px 8px',
-  fontSize: 11,
-  cursor: 'pointer',
 }
 
 // ---------------------------------------------------------------------------
