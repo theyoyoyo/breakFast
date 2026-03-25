@@ -8,6 +8,24 @@ import * as s from './ChatInterface.styles'
 
 const WELCOME_MSG = { role: 'assistant', content: "Good morning! Tell me what's in your fridge and I'll plan your breakfast." }
 
+// Client-side lyric fallback for when backend is completely unreachable
+const OFFLINE_LYRICS = [
+  "Benim aklım başımda değil~",
+  "🎶 Sana söylediklerimi kafana takma ne olursun...",
+  "🎵 Onlar ipe sapa gelir şeyler değil!",
+  "💔 Seni sevmiyorum dedim; yalandı~",
+  "💐 Ellerimde çiçekler~",
+  "🌧️ Kapında sırıksıklam...",
+  "👀 Görürsen bir gün şaşırma~",
+  "🎵 Beni böyle ortalarda bırakma!",
+]
+let _lyricIdx = 0
+function nextLyric() {
+  const line = OFFLINE_LYRICS[_lyricIdx]
+  _lyricIdx = (_lyricIdx + 1) % OFFLINE_LYRICS.length
+  return line
+}
+
 // Pipeline progress step labels (Turkish)
 const PIPELINE_STEPS = {
   drafting: 'Tarif hazırlanıyor…',
@@ -456,7 +474,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       setMessages(prev => [...prev, { role: 'assistant', content: analysisMsg }])
     } catch {
       if (abortCtrl.cancelled) return
-      setMessages(prev => [...prev, { role: 'assistant', content: '📊 Analiz yapılamadı — sunucuya ulaşılamıyor.' }])
+      setMessages(prev => [...prev, { role: 'assistant', content: `📊 ${meal.meal_name || 'Meal'} — Besin Analizi\n\n${nextLyric()}` }])
     } finally {
       analyzeAbortRef.current = null
       if (!abortCtrl.cancelled) setAnalyzingIdx(null)
@@ -480,7 +498,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       setMessages(prev => [...prev, { role: 'assistant', content: scheduleMsg }])
     } catch {
       const idTag = meal.id ? ` (#${meal.id})` : ''
-      setMessages(prev => [...prev, { role: 'assistant', content: `📋 ${meal.meal_name || 'Meal'}${idTag} — Hazırlık Planı\n\n🎵 Sunucuya ulaşılamıyor — birazdan tekrar dene.` }])
+      setMessages(prev => [...prev, { role: 'assistant', content: `📋 ${meal.meal_name || 'Meal'}${idTag} — Hazırlık Planı\n\n${nextLyric()}` }])
     } finally {
       setSchedulingIdx(null)
     }
