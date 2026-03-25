@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from config import CORS_ORIGINS
 from database import init_db
 from auth import require_user
-from routers import analyst, auth, chat, favorites, favorite_ingredients, ingredients, meals, preferences, profile, ratings, sessions, health_rules, shopping, scheduler
+from routers import analyst, auth, chat, favorites, favorite_ingredients, ingredients, kitchen, meals, preferences, profile, ratings, sessions, health_rules, shopping, scheduler
 from services.insights import refresh_insights
 
 
@@ -36,6 +36,7 @@ app.include_router(chat.router)
 app.include_router(favorites.router)
 app.include_router(favorite_ingredients.router)
 app.include_router(ingredients.router)
+app.include_router(kitchen.router)
 app.include_router(meals.router)
 app.include_router(preferences.router)
 app.include_router(profile.router)

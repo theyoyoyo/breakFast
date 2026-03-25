@@ -322,6 +322,7 @@ async def get_shopping_suggestions(
         supplements=ctx["supplements"],
         avoid_list=ctx["avoid_list"],
         exclude_names=exclude,
+        kitchen_appliances=ctx.get("kitchen_appliances"),
     )
 
     try:

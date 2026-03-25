@@ -138,6 +138,16 @@ export const removeFavoriteIngredient = (ingredient_name) =>
   apiFetch(`${BASE_URL}/favorite-ingredients/${encodeURIComponent(ingredient_name)}`, { method: 'DELETE' })
 
 // ---------------------------------------------------------------------------
+// Kitchen Appliances
+// ---------------------------------------------------------------------------
+
+export const getKitchenAppliances = () =>
+  apiFetch(`${BASE_URL}/kitchen/`)
+
+export const toggleKitchenAppliance = (key, enabled) =>
+  apiFetch(`${BASE_URL}/kitchen/${key}`, json('PUT', { enabled }))
+
+// ---------------------------------------------------------------------------
 // Meals
 // ---------------------------------------------------------------------------
 

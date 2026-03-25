@@ -87,8 +87,9 @@ Review recent meals and balance:
 PREPARATION AND PRACTICALITY
 ═══════════════════════════════════════════════════════════════
 - Suggest freely regarding prep time — adapt if the user states a preference in chat.
-- Use available kitchen equipment efficiently (air fryer, toaster, stove).
-- Highlight parallel prep opportunities (e.g., "while the air fryer runs, crack the eggs").
+- The user's kitchen appliances: {kitchen_appliances}
+  Only suggest meals that can be prepared with these appliances.
+  You know how each appliance works — use that knowledge for efficient parallel cooking.
 
 ADVANCE PREP TIP:
 If the recipe benefits from advance preparation (overnight soak, pre-chop, marinate), \
@@ -207,8 +208,10 @@ def build_suggestion_prompt(
     supplements: list[dict] | None = None,
     avoid_list: list[str] | None = None,
     mode: str | None = None,
+    kitchen_appliances: list[str] | None = None,
 ) -> str:
     """Build the suggestion persona system prompt (profesyonel diyetisyen)."""
+    appliance_str = ", ".join(kitchen_appliances) if kitchen_appliances else "Bilgi yok"
     base = SUGGESTION_TEMPLATE.format(
         ingredient_inventory=format_ingredients(ingredient_inventory),
         recent_meal_history=format_history(recent_meal_history, limit=10),
@@ -219,6 +222,7 @@ def build_suggestion_prompt(
         user_profile=format_user_profile(user_profile),
         supplements=format_supplements(supplements),
         avoid_list=format_avoid_list(avoid_list),
+        kitchen_appliances=appliance_str,
     )
     mode_instruction = MODE_INSTRUCTIONS.get(mode, "")
     return base + mode_instruction

@@ -82,6 +82,12 @@ BEHAVIORAL PATTERNS
 {behavioral_patterns}
 
 ═══════════════════════════════════════════════════════════════
+KITCHEN APPLIANCES
+═══════════════════════════════════════════════════════════════
+{kitchen_appliances}
+Only suggest ingredients the user can actually prepare with these appliances.
+
+═══════════════════════════════════════════════════════════════
 RESPONSE FORMAT
 ═══════════════════════════════════════════════════════════════
 Respond with ONLY a JSON array of suggested items. Each item should have:
@@ -120,8 +126,10 @@ def build_shopping_prompt(
     supplements: list[dict] | None = None,
     avoid_list: list[str] | None = None,
     exclude_names: list[str] | None = None,
+    kitchen_appliances: list[str] | None = None,
 ) -> str:
     """Build the shopping persona system prompt."""
+    appliance_str = ", ".join(kitchen_appliances) if kitchen_appliances else "Bilgi yok"
     base = SHOPPING_TEMPLATE.format(
         ingredient_inventory=format_ingredients(ingredient_inventory),
         recent_meal_history=format_history_detailed(recent_meal_history, limit=10),
@@ -132,6 +140,7 @@ def build_shopping_prompt(
         user_profile=format_user_profile(user_profile),
         supplements=format_supplements(supplements),
         avoid_list=format_avoid_list(avoid_list),
+        kitchen_appliances=appliance_str,
     )
     if exclude_names:
         base += (
