@@ -97,41 +97,103 @@ async def test_expired_returns_expired_items(client):
     assert "fresh_eggs" not in names
 
 
-async def test_expired_second_call_same_day_returns_empty(client):
-    """Calling expired twice on the same day returns empty on second call."""
+async def test_expired_always_returns_unacknowledged(client):
+    """Calling expired multiple times still returns the same unacknowledged items."""
     await client.post("/ingredients/", json={"name": "old_milk", "expiry_date": "2020-01-01"})
     r1 = await client.get("/ingredients/expired")
     assert len(r1.json()) > 0
-    # Second call same day → empty
+    # Second call returns the same items (no longer gated per day)
     r2 = await client.get("/ingredients/expired")
-    assert r2.json() == []
+    assert len(r2.json()) > 0
+    assert r2.json()[0]["name"] == "old_milk"
 
 
-async def test_expired_new_day_returns_newly_expired(client):
-    """On a new day, only items expired after last check are returned."""
-    await client.post("/ingredients/", json={"name": "item_a", "expiry_date": "2026-03-23"})
+async def test_expired_count_endpoint(client):
+    """expired-count returns current count of expired unacknowledged items."""
+    r = await client.get("/ingredients/expired-count")
+    assert r.json() == {"count": 0}
 
-    # First check with mocked date 2026-03-23
-    with patch("routers.ingredients.date") as mock_date:
-        mock_date.today.return_value.isoformat.return_value = "2026-03-23"
-        r1 = await client.get("/ingredients/expired")
-        assert len(r1.json()) > 0
+    await client.post("/ingredients/", json={"name": "old_item", "expiry_date": "2020-01-01"})
+    r = await client.get("/ingredients/expired-count")
+    assert r.json() == {"count": 1}
 
-    # Add another item expiring 2026-03-24
-    await client.post("/ingredients/", json={"name": "item_b", "expiry_date": "2026-03-24"})
-
-    # Second check with mocked date 2026-03-24
-    with patch("routers.ingredients.date") as mock_date:
-        mock_date.today.return_value.isoformat.return_value = "2026-03-24"
-        r2 = await client.get("/ingredients/expired")
-        names = [i["name"] for i in r2.json()]
-        assert "item_b" in names
-        # item_a was already reported, should not reappear
-        assert "item_a" not in names
+    # Non-expired item doesn't affect count
+    await client.post("/ingredients/", json={"name": "fresh_item", "expiry_date": "2030-01-01"})
+    r = await client.get("/ingredients/expired-count")
+    assert r.json() == {"count": 1}
 
 
 # ---------------------------------------------------------------------------
-# Thrown confirmation tests
+# Expired action tests (3-way: delete, keep, shopping)
+# ---------------------------------------------------------------------------
+
+
+async def test_expired_action_delete(client):
+    """Delete action removes ingredients from inventory."""
+    created = (await client.post("/ingredients/", json={"name": "expired_cheese", "expiry_date": "2020-01-01"})).json()
+    r = await client.post("/ingredients/expired/action", json={"delete_ids": [created["id"]]})
+    assert r.status_code == 200
+    assert r.json()["deleted"] == 1
+    listed = (await client.get("/ingredients/")).json()
+    assert all(i["name"] != "expired_cheese" for i in listed)
+
+
+async def test_expired_action_keep(client):
+    """Keep action acknowledges expiry — item stays in inventory but disappears from expired list."""
+    created = (await client.post("/ingredients/", json={"name": "old_honey", "expiry_date": "2020-01-01"})).json()
+
+    # Should appear in expired list
+    expired = (await client.get("/ingredients/expired")).json()
+    assert any(i["name"] == "old_honey" for i in expired)
+
+    # Keep it
+    r = await client.post("/ingredients/expired/action", json={"keep_ids": [created["id"]]})
+    assert r.json()["kept"] == 1
+
+    # Should NOT appear in expired list anymore
+    expired = (await client.get("/ingredients/expired")).json()
+    assert all(i["name"] != "old_honey" for i in expired)
+
+    # But should still be in inventory
+    listed = (await client.get("/ingredients/")).json()
+    assert any(i["name"] == "old_honey" for i in listed)
+
+    # Count should also be 0
+    r = await client.get("/ingredients/expired-count")
+    assert r.json() == {"count": 0}
+
+
+async def test_expired_action_shopping(client):
+    """Shopping action removes from inventory and adds to shopping list."""
+    created = (await client.post("/ingredients/", json={"name": "expired_milk", "expiry_date": "2020-01-01"})).json()
+    r = await client.post("/ingredients/expired/action", json={"shopping_ids": [created["id"]]})
+    assert r.json()["to_shopping"] == 1
+
+    # Should be gone from inventory
+    listed = (await client.get("/ingredients/")).json()
+    assert all(i["name"] != "expired_milk" for i in listed)
+
+    # Should be in shopping list
+    shopping = (await client.get("/shopping/")).json()
+    assert any(i["item_name"] == "expired_milk" for i in shopping)
+
+
+async def test_expired_action_mixed(client):
+    """All three actions work together."""
+    a = (await client.post("/ingredients/", json={"name": "item_del", "expiry_date": "2020-01-01"})).json()
+    b = (await client.post("/ingredients/", json={"name": "item_keep", "expiry_date": "2020-01-01"})).json()
+    c = (await client.post("/ingredients/", json={"name": "item_shop", "expiry_date": "2020-01-01"})).json()
+
+    r = await client.post("/ingredients/expired/action", json={
+        "delete_ids": [a["id"]],
+        "keep_ids": [b["id"]],
+        "shopping_ids": [c["id"]],
+    })
+    assert r.json() == {"deleted": 1, "kept": 1, "to_shopping": 1}
+
+
+# ---------------------------------------------------------------------------
+# Legacy thrown confirmation tests (backward compat)
 # ---------------------------------------------------------------------------
 
 
@@ -141,7 +203,6 @@ async def test_thrown_removes_ingredients(client):
     r = await client.post("/ingredients/expired/thrown", json={"ids": [created["id"]]})
     assert r.status_code == 200
     assert r.json() == {"removed": 1}
-    # Verify it's gone
     listed = (await client.get("/ingredients/")).json()
     assert all(i["name"] != "expired_cheese" for i in listed)
 

@@ -167,6 +167,44 @@ export const iconBtn = {
 }
 
 // ---------------------------------------------------------------------------
+// Delete-to-shopping popup
+// ---------------------------------------------------------------------------
+
+export const deletePopup = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: '4px 16px 6px 32px',
+  fontSize: 11,
+}
+
+export const deletePopupText = {
+  color: 'var(--text-muted)',
+  flex: 1,
+}
+
+export const deletePopupYes = {
+  background: 'rgba(142, 68, 173, 0.2)',
+  border: '1px solid rgba(142, 68, 173, 0.4)',
+  color: '#a970c9',
+  borderRadius: 4,
+  padding: '2px 8px',
+  fontSize: 11,
+  fontWeight: 600,
+  cursor: 'pointer',
+}
+
+export const deletePopupNo = {
+  background: 'none',
+  border: '1px solid var(--border)',
+  color: 'var(--text-muted)',
+  borderRadius: 4,
+  padding: '2px 8px',
+  fontSize: 11,
+  cursor: 'pointer',
+}
+
+// ---------------------------------------------------------------------------
 // Edit row (inline)
 // ---------------------------------------------------------------------------
 
@@ -288,8 +326,7 @@ export const expiryRow = {
   display: 'flex',
   alignItems: 'center',
   padding: '6px 8px',
-  gap: 10,
-  cursor: 'pointer',
+  gap: 8,
 }
 
 export const checkbox = {
@@ -299,14 +336,187 @@ export const checkbox = {
   cursor: 'pointer',
 }
 
-export const discardBtn = {
+// 3-way action buttons for expired items
+export const expiryActionGroup = {
+  display: 'flex',
+  gap: 2,
+  flexShrink: 0,
+}
+
+const _expiryActionBase = {
+  width: 26,
+  height: 24,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  borderRadius: 4,
+  border: '1px solid var(--border)',
+  background: 'none',
+  color: 'var(--text-muted)',
+  cursor: 'pointer',
+  fontSize: 12,
+  fontWeight: 700,
+  padding: 0,
+  transition: 'all 0.1s',
+}
+
+export const expiryActionBtn = {
+  ..._expiryActionBase,
+  opacity: 0.5,
+}
+
+export const expiryActionDeleteActive = {
+  ..._expiryActionBase,
+  background: 'rgba(231, 76, 60, 0.2)',
+  border: '1px solid rgba(231, 76, 60, 0.5)',
+  color: '#e74c3c',
+  opacity: 1,
+}
+
+export const expiryActionKeepActive = {
+  ..._expiryActionBase,
+  background: 'rgba(46, 204, 113, 0.15)',
+  border: '1px solid rgba(46, 204, 113, 0.4)',
+  color: '#2ecc71',
+  opacity: 1,
+}
+
+export const expiryActionShoppingActive = {
+  ..._expiryActionBase,
+  background: 'rgba(142, 68, 173, 0.2)',
+  border: '1px solid rgba(142, 68, 173, 0.5)',
+  color: '#a970c9',
+  opacity: 1,
+}
+
+export const expiryConfirmBtn = {
   margin: '8px 16px',
   padding: '8px 16px',
-  background: '#e74c3c',
+  background: secondaryColor,
   color: '#fff',
   border: 'none',
   borderRadius: 8,
   fontSize: 13,
   fontWeight: 600,
   textAlign: 'center',
+  cursor: 'pointer',
+}
+
+// ---------------------------------------------------------------------------
+// Shopping button in header
+// ---------------------------------------------------------------------------
+
+export const headerShoppingBtn = {
+  borderRadius: 6,
+  height: 28,
+  width: 28,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  background: 'rgba(142, 68, 173, 0.15)',
+  border: '1px solid rgba(142, 68, 173, 0.3)',
+  color: '#a970c9',
+  cursor: 'pointer',
+}
+
+// ---------------------------------------------------------------------------
+// Shopping suggestions
+// ---------------------------------------------------------------------------
+
+export const suggestSection = {
+  padding: '8px 16px',
+  borderTop: '1px solid var(--border)',
+}
+
+export const suggestBtn = {
+  width: '100%',
+  padding: '9px 16px',
+  background: 'linear-gradient(135deg, #8e44ad 0%, #9b59b6 100%)',
+  color: '#fff',
+  border: 'none',
+  borderRadius: 8,
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 6,
+}
+
+export const lyricBanner = {
+  marginTop: 6,
+  padding: '6px 10px',
+  background: 'rgba(155, 89, 182, 0.1)',
+  border: '1px solid rgba(155, 89, 182, 0.2)',
+  borderRadius: 6,
+  fontSize: 12,
+  color: '#b07cc8',
+  textAlign: 'center',
+  fontStyle: 'italic',
+}
+
+export const suggestionsPanel = {
+  borderTop: '1px solid var(--border)',
+  background: 'var(--surface)',
+  display: 'flex',
+  flexDirection: 'column',
+  maxHeight: '45%',
+}
+
+export const suggestionsPanelHeader = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  padding: '8px 12px 4px',
+}
+
+export const suggestionsPanelTitle = {
+  fontSize: 12,
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+  color: 'var(--text-muted)',
+}
+
+export const suggestionsList = {
+  flex: 1,
+  overflowY: 'auto',
+  padding: '0 8px',
+}
+
+export const suggestionRow = {
+  display: 'flex',
+  alignItems: 'flex-start',
+  padding: '6px 8px',
+  gap: 10,
+  cursor: 'pointer',
+}
+
+export const suggestionName = {
+  fontSize: 13,
+  color: 'var(--text)',
+  fontWeight: 500,
+}
+
+export const suggestionReason = {
+  fontSize: 11,
+  color: 'var(--text-muted)',
+  marginTop: 2,
+  lineHeight: 1.3,
+}
+
+export const sendToListBtn = {
+  margin: '6px 12px 10px',
+  padding: '8px 16px',
+  background: '#8e44ad',
+  color: '#fff',
+  border: 'none',
+  borderRadius: 8,
+  fontSize: 13,
+  fontWeight: 600,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 6,
 }

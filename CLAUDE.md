@@ -362,17 +362,24 @@ breakFAST/
 │   │   ├── preferences.py          ← /preferences + /preferences/habits
 │   │   ├── profile.py             ← /profile + /profile/supplements CRUD
 │   │   ├── ratings.py              ← /ratings CRUD endpoints (1-10 scale)
-│   │   └── sessions.py            ← /sessions chat session management
+│   │   ├── sessions.py            ← /sessions chat session management
+│   │   └── shopping.py            ← /shopping list CRUD + bought flow
 │   │
 │   ├── services/
 │   │   ├── context.py               ← shared context loaders for LLM prompts
 │   │   ├── llm.py                   ← Ollama streaming + FallbackLyricCycler
 │   │   ├── scheduler.py             ← kitchen job-shop scheduler
-│   │   ├── suggestion.py            ← three persona prompts + prompt assembly
+│   │   ├── suggestion.py            ← backward-compat re-exports from personas/
 │   │   ├── knowledge.py            ← shared food knowledge module
 │   │   ├── pipeline.py             ← 3-step suggestion pipeline
 │   │   ├── insights.py             ← behavioral pattern extraction
-│   │   └── nutrition.py             ← Open Food Facts integration
+│   │   ├── nutrition.py             ← Open Food Facts integration
+│   │   └── personas/               ← one file per LLM persona for easy editing
+│   │       ├── chat.py             ← samimi kahvaltı arkadaşı
+│   │       ├── dietitian.py        ← profesyonel diyetisyen
+│   │       ├── analyst.py          ← nutrition lab / robot
+│   │       ├── pipeline_analyst.py ← internal reviewer for suggestion refinement
+│   │       └── shopping.py         ← professional shopping advisor
 │   │
 │   ├── models/
 │   │   ├── ingredient.py            ← Pydantic models for ingredients
@@ -394,7 +401,8 @@ breakFAST/
 │       │   ├── test_health_rules.py ← health rules endpoint tests
 │       │   ├── test_analyst.py      ← analyst endpoint tests
 │       │   ├── test_websocket.py    ← WebSocket chat tests
-│       │   └── test_sessions.py     ← session management tests
+│       │   ├── test_sessions.py     ← session management tests
+│       │   └── test_shopping.py    ← shopping list endpoint tests
 │       └── services/
 │           ├── test_prompts.py      ← prompt builder unit tests
 │           ├── test_scheduler.py    ← scheduler logic unit tests
@@ -420,7 +428,8 @@ breakFAST/
     │   │   ├── DecidePanel.jsx      ← "Today I ate..." confirm + rate flow
     │   │   ├── SuggestButton.jsx    ← suggest button + long-press mode panel
     │   │   ├── WeeklySummary.jsx    ← weekly meals summary view
-    │   │   ├── IngredientPanel.jsx  ← inventory viewer/editor
+    │   │   ├── IngredientPanel.jsx  ← inventory viewer/editor + shopping integration
+    │   │   ├── ShoppingListPanel.jsx ← persistent shopping list overlay
     │   │   ├── PreferencesPanel.jsx ← favorites, dislikes, habits, avoid list
     │   │   ├── SettingsPanel.jsx    ← profile, supplements, ratings, health rules
     │   │   ├── LoginScreen.jsx      ← PIN auth screen
@@ -453,3 +462,11 @@ likely to enjoy based on history and preferences.
 
 **Explore mode** — an alternative suggestion mode that finds novel meals adjacent to
 the user's taste profile rather than defaulting to familiar choices.
+
+---
+
+## Future Ideas (Not Yet Implemented — Discuss First)
+
+- **Ingredient icons** — visual icons next to ingredient names in the inventory list.
+  Needs discussion on icon source (emoji, icon library, Open Food Facts images, etc.),
+  storage approach, and fallback behavior before implementation.

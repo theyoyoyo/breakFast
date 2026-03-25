@@ -93,8 +93,36 @@ export const deleteIngredient = (id) =>
 export const getExpiredIngredients = () =>
   apiFetch(`${BASE_URL}/ingredients/expired`)
 
+export const getExpiredCount = () =>
+  apiFetch(`${BASE_URL}/ingredients/expired-count`)
+
 export const confirmExpiredThrown = (ids) =>
   apiFetch(`${BASE_URL}/ingredients/expired/thrown`, json('POST', { ids }))
+
+export const handleExpiredAction = (delete_ids, keep_ids, shopping_ids) =>
+  apiFetch(`${BASE_URL}/ingredients/expired/action`, json('POST', { delete_ids, keep_ids, shopping_ids }))
+
+export const getShoppingSuggestions = (exclude = []) =>
+  apiFetch(`${BASE_URL}/ingredients/shopping-suggestions`, json('POST', { exclude }))
+
+// ---------------------------------------------------------------------------
+// Shopping List
+// ---------------------------------------------------------------------------
+
+export const getShoppingList = () =>
+  apiFetch(`${BASE_URL}/shopping/`)
+
+export const addShoppingItem = (item_name) =>
+  apiFetch(`${BASE_URL}/shopping/`, json('POST', { item_name }))
+
+export const addShoppingItemsBulk = (items) =>
+  apiFetch(`${BASE_URL}/shopping/bulk`, json('POST', items.map(item_name => ({ item_name }))))
+
+export const deleteShoppingItem = (id) =>
+  apiFetch(`${BASE_URL}/shopping/${id}`, { method: 'DELETE' })
+
+export const buyShoppingItems = (ids, expiry_dates = null) =>
+  apiFetch(`${BASE_URL}/shopping/bought`, json('POST', { ids, expiry_dates }))
 
 // ---------------------------------------------------------------------------
 // Meals

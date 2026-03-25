@@ -89,7 +89,13 @@ export default function App() {
           <button
             key={key}
             style={s.tab(activeTab === key)}
-            onClick={() => setActiveTab(key)}
+            onClick={() => {
+              if (key === activeTab && key === 'Ingredients' && auth.user.name === 'demo') {
+                ingredientRef.current?.injectDemoShopping()
+              } else {
+                setActiveTab(key)
+              }
+            }}
           >
             <Icon size={14} style={{ marginRight: 4, verticalAlign: -2 }} />
             {label}
@@ -115,7 +121,7 @@ export default function App() {
       </nav>
 
       <div style={{ ...s.mainFull, display: activeTab === 'Chat' ? undefined : 'none' }}>
-        <ChatInterface ref={chatRef} onMealLogged={handleMealLogged} />
+        <ChatInterface ref={chatRef} onMealLogged={handleMealLogged} visible={activeTab === 'Chat'} />
       </div>
       <div style={{ ...s.mainFull, display: activeTab === 'Ingredients' ? undefined : 'none' }}>
         <IngredientPanel ref={ingredientRef} refreshTrigger={ingredientRefresh} />
