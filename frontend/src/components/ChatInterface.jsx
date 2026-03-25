@@ -53,6 +53,19 @@ const DEMO_MEAL = {
   nutrition_note: 'Protein, kalsiyum ve sağlıklı yağlar açısından zengin bir öğün.',
 }
 
+// Demo schedule output — shows what the scheduler produces
+const DEMO_SCHEDULE = `📋 Serpme Kahvaltı — Hazırlık Planı
+
+0:00  — Yumurta — kaynar suda haşla  [ocak]
+0:00  — Domates, salatalık — doğra  [elle]
+2:00  — Peynir, zeytin — tabağa yerleştir  [elle]
+3:00  — Ekmek — dilimle ve tost  [tost makinesi]
+4:00  — Bal, tereyağı — kaselere koy  [elle]
+5:00  — Servis — tabağı düzenle  [elle]
+Toplam süre: 7 dakika.
+
+⏱ Ocak ve tost makinesi paralel çalışarak 12 dk yerine 7 dk'da hazır!`
+
 export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref) {
   const [messages, setMessages] = useState([WELCOME_MSG])
   const [input, setInput] = useState('')
@@ -106,6 +119,9 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     injectDemoMeal: () => {
       const introText = 'İşte sana güzel bir serpme kahvaltı önerisi! 🫕\n\nTaze ve dengeli malzemelerle hazırlanan klasik bir Türk kahvaltısı.'
       injectMealToChat(DEMO_MEAL, introText)
+    },
+    injectDemoSchedule: () => {
+      setMessages(prev => [...prev, { role: 'assistant', content: DEMO_SCHEDULE }])
     },
     injectFavoriteMeal: (meal) => {
       const introText = `⭐ Favorilerden: ${meal.meal_name}\n\n${meal.description || 'Afiyet olsun!'}`
@@ -458,7 +474,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       const scheduleMsg = `📋 ${meal.meal_name || 'Meal'} — Hazırlık Planı\n\n${text}`
       setMessages(prev => [...prev, { role: 'assistant', content: scheduleMsg }])
     } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: '📋 Hazırlık planı oluşturulamadı — sunucuya ulaşılamıyor.' }])
+      setMessages(prev => [...prev, { role: 'assistant', content: `📋 ${meal.meal_name || 'Meal'} — Hazırlık Planı\n\n🎵 Sunucuya ulaşılamıyor — birazdan tekrar dene.` }])
     } finally {
       setSchedulingIdx(null)
     }

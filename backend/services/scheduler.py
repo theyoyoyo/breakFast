@@ -97,16 +97,26 @@ def schedule(tasks: list[Task]) -> dict:
     }
 
 
+_RESOURCE_LABELS = {
+    "air_fryer": "airfryer",
+    "toaster": "tost makinesi",
+    "stove": "ocak",
+    "hands": "elle",
+    "none": "bekleme",
+}
+
+
 def _format_timeline(timeline: list[ScheduleEntry], makespan: float) -> str:
     lines = []
     for entry in timeline:
         m = int(entry.time)
         s = int((entry.time - m) * 60)
-        line = f"{m}:{s:02d}  — {entry.label}"
+        res = _RESOURCE_LABELS.get(entry.resource, entry.resource)
+        line = f"{m}:{s:02d}  — {entry.label}  [{res}]"
         if entry.note:
             line += f"  ({entry.note})"
         lines.append(line)
-    lines.append(f"Total time: {int(makespan)} minutes.")
+    lines.append(f"Toplam süre: {int(makespan)} dakika.")
     return "\n".join(lines)
 
 

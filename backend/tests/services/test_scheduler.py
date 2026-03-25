@@ -76,5 +76,5 @@ def test_empty_task_list_returns_zero_makespan():
 def test_formatted_output_contains_total_time():
     tasks = [Task(name="boil", resource="stove", duration_min=7)]
     result = schedule(tasks)
-    assert "Total time: 7 minutes" in result["formatted"]
+    assert "Toplam süre: 7 dakika" in result["formatted"]
 

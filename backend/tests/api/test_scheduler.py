@@ -28,7 +28,7 @@ async def test_plan_with_cached_schedule(client, db):
     cached = {
         "timeline": [{"time": 0, "label": "boil eggs", "resource": "stove", "note": ""}],
         "makespan_min": 7,
-        "formatted": "0:00  — boil eggs\nTotal time: 7 minutes.",
+        "formatted": "0:00  — boil eggs  [ocak]\nToplam süre: 7 dakika.",
     }
     cur = await db.execute(
         """INSERT INTO meal_history (user_id, meal_name, ingredients, steps, schedule)
