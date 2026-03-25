@@ -10,10 +10,10 @@ KITCHEN_APPLIANCES = [
     {"key": "stove", "name": "Ocak"},
     {"key": "oven", "name": "Fırın"},
     {"key": "air_fryer", "name": "Airfryer"},
-    {"key": "toaster", "name": "Tost Makinesi"},
+    {"key": "toaster", "name": "Ekmek Kızartma Makinesi"},
     {"key": "microwave", "name": "Mikrodalga"},
     {"key": "blender", "name": "Blender"},
-    {"key": "sandwich_press", "name": "Tost Presi"},
+    {"key": "sandwich_press", "name": "Tost Makinesi"},
     {"key": "kettle", "name": "Su Isıtıcı"},
     {"key": "french_press", "name": "French Press"},
 ]

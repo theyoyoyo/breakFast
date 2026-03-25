@@ -99,7 +99,7 @@ def schedule(tasks: list[Task]) -> dict:
 
 _RESOURCE_LABELS = {
     "air_fryer": "airfryer",
-    "toaster": "tost makinesi",
+    "toaster": "ekmek kızartma makinesi",
     "stove": "ocak",
     "hands": "elle",
     "none": "bekleme",
