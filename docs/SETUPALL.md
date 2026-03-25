@@ -120,10 +120,17 @@ containing `backend/`, `frontend/`, `CLAUDE.md`, etc.).
    # CORS — add your local IP here (find it in Step 8)
    # For now, localhost is enough for testing on this PC
    CORS_ORIGINS=http://localhost:5173,http://localhost:3000,http://localhost:8000
+
+   # Serve built frontend from FastAPI (single-server production mode)
+   SERVE_FRONTEND=true
    ```
 
-   You don't need to change anything for local testing. We'll add your LAN IP and
-   Tailscale IP later.
+   **The key difference from dev:** Set `SERVE_FRONTEND=true`. This tells the backend
+   to serve the built React app as static files — one server, one port, no need for
+   a separate frontend dev server.
+
+   You don't need to change anything else for local testing. We'll add your LAN IP
+   and Tailscale IP later.
 
 ---
 
@@ -223,6 +230,7 @@ from the browser in Step 8.
 
 Instead of running a dev server, we'll build the frontend as static files and serve
 them from the FastAPI backend. This is the production setup — one server, one port.
+All necessary config files are already in the repo.
 
 1. **Install frontend dependencies:**
 
@@ -231,22 +239,7 @@ them from the FastAPI backend. This is the production setup — one server, one 
    npm install
    ```
 
-2. **Set the backend URL for the build:**
-
-   The frontend needs to know where the backend lives. For production, it's the same
-   origin (served by FastAPI), so we set it to empty string or the actual URL.
-
-   Create a `.env.production` file in the `frontend/` folder:
-
-   ```
-   echo VITE_BACKEND_URL=http://localhost:8000 > .env.production
-   ```
-
-   > **Important:** When you later access from your phone or via Tailscale, you'll
-   > need to rebuild with the correct URL (your PC's LAN IP or Tailscale IP). See
-   > Step 8 for details.
-
-3. **Build the frontend:**
+2. **Build the frontend:**
 
    ```
    npm run build
@@ -254,48 +247,20 @@ them from the FastAPI backend. This is the production setup — one server, one 
 
    This creates a `frontend/dist/` folder with the optimized static files.
 
-4. **Serve the frontend from FastAPI:**
+   > **How it works:** The repo includes `frontend/.env.production` which sets
+   > `VITE_BACKEND_URL=` (empty). This means the frontend uses relative URLs —
+   > it talks to whatever host served it. Works for localhost, LAN IP, Tailscale IP,
+   > all without rebuilding. And `SERVE_FRONTEND=true` in your `.env` tells the
+   > backend to serve these files via a catch-all route.
 
-   We need to tell FastAPI to serve these static files. Add a static file mount to
-   the backend. Open `backend/main.py` and add these lines:
-
-   **At the top, add the import:**
-
-   ```python
-   from fastapi.staticfiles import StaticFiles
-   from fastapi.responses import FileResponse
-   from pathlib import Path
-   ```
-
-   **At the bottom of the file (after all router includes), add:**
-
-   ```python
-   # Serve frontend static files in production
-   _frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
-   if _frontend_dist.exists():
-       app.mount("/assets", StaticFiles(directory=str(_frontend_dist / "assets")), name="static")
-
-       @app.get("/{full_path:path}")
-       async def serve_frontend(full_path: str):
-           """Serve the React SPA for any non-API route."""
-           file_path = _frontend_dist / full_path
-           if file_path.exists() and file_path.is_file():
-               return FileResponse(str(file_path))
-           return FileResponse(str(_frontend_dist / "index.html"))
-   ```
-
-   > **Why this works:** API routes (`/health`, `/auth/*`, `/chat`, etc.) are
-   > registered before the catch-all `/{full_path}`, so they take priority. Any
-   > non-API URL serves the React SPA, which handles its own routing.
-
-5. **Restart the backend** (Ctrl+C the old one, then start again):
+3. **Restart the backend** (Ctrl+C the old one, then start again):
 
    ```
    cd backend
    python -m uvicorn main:app --host 0.0.0.0 --port 8000
    ```
 
-6. **Test:** Open `http://localhost:8000` in your browser. You should see the
+4. **Test:** Open `http://localhost:8000` in your browser. You should see the
    break FAST login screen. Log in with your name and PIN.
 
 ---
@@ -357,32 +322,18 @@ Go to Settings. Verify:
 
    Look for `IPv4 Address` under your active network adapter (e.g., `192.168.1.x`).
 
-2. Update the frontend build with the correct URL:
-
-   Edit `frontend/.env.production`:
-
-   ```
-   VITE_BACKEND_URL=http://192.168.1.x:8000
-   ```
-
-   Rebuild:
-
-   ```
-   cd frontend
-   npm run build
-   ```
-
-   Restart the backend.
-
-3. Update CORS in `.env`:
+2. Update CORS in `.env` to include the LAN IP:
 
    ```
    CORS_ORIGINS=http://localhost:5173,http://localhost:3000,http://localhost:8000,http://192.168.1.x:8000
    ```
 
-   Restart the backend again.
+   Restart the backend.
 
-4. On your phone or another PC, open `http://192.168.1.x:8000` in the browser.
+   > **No frontend rebuild needed** — the production build uses relative URLs, so it
+   > automatically talks to whatever host served it.
+
+3. On your phone or another PC, open `http://192.168.1.x:8000` in the browser.
 
 ---
 
@@ -504,21 +455,14 @@ always ready when you turn on the PC.
 
 ### Option 2: Startup Batch File (simpler)
 
-1. Create a file called `start-server.bat` in the project root:
+The repo includes `start-server.bat` in the project root — it waits for Ollama,
+checks connectivity, then starts the backend.
 
-   ```bat
-   @echo off
-   echo Waiting for Ollama to start...
-   timeout /t 15 /nobreak >nul
+1. Press `Win + R`, type `shell:startup`, press Enter.
 
-   echo Starting break FAST backend...
-   cd /d C:\Users\YourName\Projects\breakFast\backend
-   python -m uvicorn main:app --host 0.0.0.0 --port 8000
-   ```
+2. Right-click in the Startup folder → New → Shortcut.
 
-2. Press `Win + R`, type `shell:startup`, press Enter.
-
-3. Create a shortcut to `start-server.bat` in the Startup folder.
+3. Browse to `C:\Users\YourName\Projects\breakFast\start-server.bat`.
 
 4. The batch file will run every time you log in.
 
@@ -562,34 +506,8 @@ devices. No port forwarding, no dynamic DNS.
 
    Replace `100.x.x.x` with your actual Tailscale IP.
 
-2. **Rebuild the frontend** with the Tailscale URL:
-
-   Edit `frontend/.env.production`:
-
-   ```
-   VITE_BACKEND_URL=http://100.x.x.x:8000
-   ```
-
-   Then rebuild:
-
-   ```
-   cd frontend
-   npm run build
-   ```
-
-   > **Caveat:** The frontend URL is baked into the build. If you want it to work
-   > from both LAN (`192.168.1.x`) and Tailscale (`100.x.x.x`), you have two
-   > options:
-   >
-   > 1. Always use the Tailscale IP (works on LAN too since Tailscale routes locally)
-   > 2. Set `VITE_BACKEND_URL=` (empty) and access via the backend URL directly —
-   >    since we serve the frontend from FastAPI, relative URLs will work.
-   >
-   > **Option 2 is recommended** — set `VITE_BACKEND_URL=` to empty string in
-   > `.env.production` and rebuild. This way the frontend always talks to whatever
-   > host served it.
-
-3. **Restart the backend.**
+2. **Restart the backend.** That's it — no frontend rebuild needed. The production
+   build uses relative URLs, so it works from any IP automatically.
 
 ### B.4 — Test from your phone
 
