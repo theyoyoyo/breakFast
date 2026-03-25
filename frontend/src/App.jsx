@@ -11,7 +11,7 @@ import * as s from './App.styles'
 
 const TABS = [
   { key: 'Chat', label: 'Chat', Icon: MessageCircle },
-  { key: 'Ingredients', label: 'Ingredients', Icon: Refrigerator },
+  { key: 'Ingredients', label: 'Fridge', Icon: Refrigerator },
   { key: 'Preferences', label: 'Preferences', Icon: SlidersHorizontal },
   { key: 'Favorites', label: 'Favorites', Icon: Star },
   { key: 'Settings', label: 'Settings', Icon: Settings },
@@ -106,13 +106,7 @@ export default function App() {
         <div style={s.userInfo}>
           <span
             style={{ cursor: 'pointer' }}
-            onClick={() => {
-              if (activeTab === 'Ingredients') {
-                ingredientRef.current?.injectDemoExpiry()
-              } else {
-                chatRef.current?.injectDemoMeal()
-              }
-            }}
+            onClick={() => chatRef.current?.injectDemoMeal()}
             title="Demo action"
           >{auth.user.name}</span>
           <button style={s.logoutBtn} onClick={handleLogout}>
@@ -126,7 +120,7 @@ export default function App() {
         <ChatInterface ref={chatRef} onMealLogged={handleMealLogged} visible={activeTab === 'Chat'} />
       </div>
       <div style={{ ...s.mainFull, display: activeTab === 'Ingredients' ? undefined : 'none' }}>
-        <IngredientPanel ref={ingredientRef} refreshTrigger={ingredientRefresh} />
+        <IngredientPanel ref={ingredientRef} refreshTrigger={ingredientRefresh} visible={activeTab === 'Ingredients'} />
       </div>
       <div style={{ ...s.mainFull, display: activeTab === 'Preferences' ? undefined : 'none' }}>
         <PreferencesPanel />

@@ -125,13 +125,50 @@ export const addPanelBtn = {
 }
 
 // ---------------------------------------------------------------------------
-// Ingredient list
+// Ingredient list + group sections
 // ---------------------------------------------------------------------------
 
 export const list = {
   flex: 1,
   overflowY: 'auto',
   padding: '4px 0',
+}
+
+export const groupSection = {
+  marginBottom: 2,
+  borderRadius: 6,
+}
+
+export const groupHeader = {
+  display: 'flex',
+  alignItems: 'center',
+  padding: '7px 16px',
+  cursor: 'pointer',
+  userSelect: 'none',
+  gap: 6,
+}
+
+export const groupHeaderText = {
+  fontWeight: 600,
+  fontSize: 11,
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+  color: 'var(--text-muted)',
+  flex: 1,
+}
+
+export const groupChevron = {
+  color: 'var(--text-muted)',
+  fontSize: 10,
+  opacity: 0.6,
+  transition: 'transform 0.15s ease',
+}
+
+export const groupCount = {
+  fontSize: 10,
+  color: 'var(--text-muted)',
+  opacity: 0.5,
+  fontWeight: 500,
 }
 
 export const row = {
@@ -166,42 +203,73 @@ export const iconBtn = {
   alignItems: 'center',
 }
 
-// ---------------------------------------------------------------------------
-// Delete-to-shopping popup
-// ---------------------------------------------------------------------------
-
-export const deletePopup = {
+export const favBtn = {
+  background: 'none',
+  border: 'none',
+  padding: '3px',
+  borderRadius: 4,
+  cursor: 'pointer',
   display: 'flex',
   alignItems: 'center',
-  gap: 6,
-  padding: '4px 16px 6px 32px',
+  transition: 'transform 0.15s',
+}
+
+// ---------------------------------------------------------------------------
+// "Kept" expiry badge
+// ---------------------------------------------------------------------------
+
+export const keptBadge = {
+  marginLeft: 3,
+  fontSize: 10,
+  fontWeight: 500,
+  opacity: 0.7,
+  fontStyle: 'italic',
+}
+
+export const keptCountLabel = {
   fontSize: 11,
-}
-
-export const deletePopupText = {
+  fontWeight: 400,
   color: 'var(--text-muted)',
-  flex: 1,
 }
 
-export const deletePopupYes = {
+// ---------------------------------------------------------------------------
+// Delete confirm (inline buttons below delete icon)
+// ---------------------------------------------------------------------------
+
+export const deleteConfirm = {
+  position: 'absolute',
+  top: '100%',
+  right: 0,
+  display: 'flex',
+  gap: 3,
+  padding: '4px 0',
+  zIndex: 10,
+}
+
+const _deleteConfirmBase = {
+  width: 26,
+  height: 24,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  borderRadius: 5,
+  cursor: 'pointer',
+  padding: 0,
+  transition: 'all 0.1s',
+}
+
+export const deleteConfirmTrash = {
+  ..._deleteConfirmBase,
+  background: 'rgba(231, 76, 60, 0.2)',
+  border: '1px solid rgba(231, 76, 60, 0.45)',
+  color: '#e74c3c',
+}
+
+export const deleteConfirmShop = {
+  ..._deleteConfirmBase,
   background: 'rgba(142, 68, 173, 0.2)',
-  border: '1px solid rgba(142, 68, 173, 0.4)',
+  border: '1px solid rgba(142, 68, 173, 0.45)',
   color: '#a970c9',
-  borderRadius: 4,
-  padding: '2px 8px',
-  fontSize: 11,
-  fontWeight: 600,
-  cursor: 'pointer',
-}
-
-export const deletePopupNo = {
-  background: 'none',
-  border: '1px solid var(--border)',
-  color: 'var(--text-muted)',
-  borderRadius: 4,
-  padding: '2px 8px',
-  fontSize: 11,
-  cursor: 'pointer',
 }
 
 // ---------------------------------------------------------------------------
@@ -250,6 +318,30 @@ export const editSaveBtn = {
   padding: '5px 12px',
   cursor: 'pointer',
   whiteSpace: 'nowrap',
+}
+
+export const editGroupSelect = {
+  background: 'var(--surface)',
+  border: '1px solid var(--border)',
+  borderRadius: 6,
+  padding: '5px 6px',
+  color: 'var(--text)',
+  fontSize: 11,
+  outline: 'none',
+  colorScheme: 'dark',
+  maxWidth: 100,
+}
+
+export const addGroupSelect = {
+  flex: 1,
+  background: 'var(--surface)',
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  padding: '7px 10px',
+  color: 'var(--text)',
+  fontSize: 12,
+  outline: 'none',
+  colorScheme: 'dark',
 }
 
 export const editCancelBtn = {
@@ -399,6 +491,23 @@ export const expiryConfirmBtn = {
   fontSize: 13,
   fontWeight: 600,
   textAlign: 'center',
+  cursor: 'pointer',
+}
+
+// ---------------------------------------------------------------------------
+// Favorites button in header
+// ---------------------------------------------------------------------------
+
+export const headerFavBtn = {
+  borderRadius: 6,
+  height: 28,
+  width: 28,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  background: 'rgba(231, 76, 60, 0.12)',
+  border: '1px solid rgba(231, 76, 60, 0.25)',
+  color: '#e74c3c',
   cursor: 'pointer',
 }
 

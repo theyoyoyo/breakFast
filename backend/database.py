@@ -32,9 +32,27 @@ CREATE TABLE IF NOT EXISTS ingredient_inventory (
     name                TEXT    NOT NULL,
     expiry_date         TEXT,
     expiry_acknowledged INTEGER NOT NULL DEFAULT 0,
+    group_name          TEXT    NOT NULL DEFAULT '🍽️ Diğer',
     added_at            TEXT    NOT NULL DEFAULT (datetime('now')),
     updated_at          TEXT    NOT NULL DEFAULT (datetime('now')),
     UNIQUE(user_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS ingredient_group_memory (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL REFERENCES users(id),
+    ingredient_name TEXT    NOT NULL,
+    group_name      TEXT    NOT NULL,
+    updated_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(user_id, ingredient_name)
+);
+
+CREATE TABLE IF NOT EXISTS favorite_ingredients (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL REFERENCES users(id),
+    ingredient_name TEXT    NOT NULL,
+    added_at        TEXT    NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(user_id, ingredient_name)
 );
 
 CREATE TABLE IF NOT EXISTS meal_history (
@@ -170,6 +188,7 @@ CREATE TABLE IF NOT EXISTS shopping_list (
 -- Indices on frequently-filtered foreign key columns
 CREATE INDEX IF NOT EXISTS idx_shopping_list_user ON shopping_list(user_id);
 CREATE INDEX IF NOT EXISTS idx_ingredient_inventory_user ON ingredient_inventory(user_id);
+CREATE INDEX IF NOT EXISTS idx_ingredient_group_memory_user ON ingredient_group_memory(user_id);
 CREATE INDEX IF NOT EXISTS idx_meal_history_user ON meal_history(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_preferences_user ON user_preferences(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_habits_user ON user_habits(user_id);
@@ -271,6 +290,31 @@ async def init_db() -> None:
             )
         except Exception:
             pass  # Column already exists
+
+        # Migrate: add group_name column to ingredient_inventory if missing
+        try:
+            await db.execute(
+                "ALTER TABLE ingredient_inventory ADD COLUMN group_name TEXT NOT NULL DEFAULT '🍽️ Diğer'"
+            )
+        except Exception:
+            pass  # Column already exists
+
+        # Migrate: rename old group names to new ones
+        _GROUP_RENAMES = {
+            "🧀 Şarküteri": "🐄 Hayvansal",
+            "🥬 Sebze/Meyve": "🥬 Sebze Meyve",
+            "🌿 Baharatlar": "🧂 Baharatlar",
+            "📦 Diğer": "🍽️ Diğer",
+        }
+        for old, new in _GROUP_RENAMES.items():
+            await db.execute(
+                "UPDATE ingredient_inventory SET group_name = ? WHERE group_name = ?",
+                (new, old),
+            )
+            await db.execute(
+                "UPDATE ingredient_group_memory SET group_name = ? WHERE group_name = ?",
+                (new, old),
+            )
 
         # Migrate: add last_expiry_check column to users if missing
         try:

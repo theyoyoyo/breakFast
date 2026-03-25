@@ -17,6 +17,18 @@ import json
 def format_ingredients(ingredients: list[dict]) -> str:
     if not ingredients:
         return "none listed yet"
+    # If ingredients have group_name, format as grouped sections for LLM context
+    if any("group_name" in i for i in ingredients):
+        from models.ingredient import INGREDIENT_GROUPS
+        grouped: dict[str, list[str]] = {}
+        for i in ingredients:
+            g = i.get("group_name", "Diğer")
+            grouped.setdefault(g, []).append(i["name"])
+        parts = []
+        for group in INGREDIENT_GROUPS:
+            if group in grouped:
+                parts.append(f"[{group}] {', '.join(grouped[group])}")
+        return "; ".join(parts) if parts else "none listed yet"
     return ", ".join(i["name"] for i in ingredients)
 
 
