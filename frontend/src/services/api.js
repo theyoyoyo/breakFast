@@ -81,8 +81,8 @@ export const checkAuth = () =>
 export const getIngredients = () =>
   apiFetch(`${BASE_URL}/ingredients/`)
 
-export const addIngredient = (name, expiry_date = null) =>
-  apiFetch(`${BASE_URL}/ingredients/`, json('POST', { name, expiry_date }))
+export const addIngredient = (name, expiry_date = null, group_name = null) =>
+  apiFetch(`${BASE_URL}/ingredients/`, json('POST', { name, expiry_date, group_name }))
 
 export const updateIngredient = (id, data) =>
   apiFetch(`${BASE_URL}/ingredients/${id}`, json('PATCH', data))

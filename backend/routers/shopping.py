@@ -94,16 +94,27 @@ async def bought_items(body: BoughtRequest, user_id: int = Depends(require_user)
         ) as cur:
             items = [dict(r) for r in await cur.fetchall()]
 
-        # Add each as an ingredient
+        # Add each as an ingredient (restore group from memory)
+        from models.ingredient import DEFAULT_GROUP
+        item_names = [item["item_name"] for item in items]
+        placeholders = ",".join("?" for _ in item_names)
+        async with db.execute(
+            f"SELECT ingredient_name, group_name FROM ingredient_group_memory WHERE user_id = ? AND ingredient_name IN ({placeholders})",
+            [user_id, *item_names],
+        ) as cur:
+            group_memory = {r["ingredient_name"]: r["group_name"] for r in await cur.fetchall()}
+
         for item in items:
             expiry = (body.expiry_dates or {}).get(item["item_name"])
+            group = group_memory.get(item["item_name"], DEFAULT_GROUP)
             await db.execute(
-                """INSERT INTO ingredient_inventory (user_id, name, expiry_date)
-                   VALUES (?, ?, ?)
+                """INSERT INTO ingredient_inventory (user_id, name, expiry_date, group_name)
+                   VALUES (?, ?, ?, ?)
                    ON CONFLICT(user_id, name) DO UPDATE SET
                        expiry_date = excluded.expiry_date,
+                       group_name = excluded.group_name,
                        updated_at = datetime('now')""",
-                (user_id, item["item_name"], expiry),
+                (user_id, item["item_name"], expiry, group),
             )
 
         # Remove bought items from shopping list

@@ -113,3 +113,19 @@ async def test_bought_upserts_existing_ingredient(client):
     eggs_list = [i for i in ingredients if i["name"] == "eggs"]
     assert len(eggs_list) == 1
     assert eggs_list[0]["expiry_date"] == "2026-05-01"
+
+
+async def test_bought_restores_group_from_memory(client):
+    """Buying an item restores its group from memory if previously assigned."""
+    # Add ingredient with explicit group, then delete it
+    created = (await client.post("/ingredients/", json={"name": "kaşar", "group_name": "Şarküteri"})).json()
+    await client.delete(f"/ingredients/{created['id']}")
+
+    # Add to shopping list and buy
+    item = (await client.post("/shopping/", json={"item_name": "kaşar"})).json()
+    await client.post("/shopping/bought", json={"ids": [item["id"]]})
+
+    # Check ingredient has restored group
+    ingredients = (await client.get("/ingredients/")).json()
+    kasar = [i for i in ingredients if i["name"] == "kaşar"][0]
+    assert kasar["group_name"] == "Şarküteri"

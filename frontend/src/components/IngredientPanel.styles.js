@@ -125,13 +125,51 @@ export const addPanelBtn = {
 }
 
 // ---------------------------------------------------------------------------
-// Ingredient list
+// Ingredient list + group sections
 // ---------------------------------------------------------------------------
 
 export const list = {
   flex: 1,
   overflowY: 'auto',
   padding: '4px 0',
+}
+
+export const groupSection = {
+  marginBottom: 2,
+  borderRadius: 6,
+  overflow: 'hidden',
+}
+
+export const groupHeader = {
+  display: 'flex',
+  alignItems: 'center',
+  padding: '7px 16px',
+  cursor: 'pointer',
+  userSelect: 'none',
+  gap: 6,
+}
+
+export const groupHeaderText = {
+  fontWeight: 600,
+  fontSize: 11,
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+  color: 'var(--text-muted)',
+  flex: 1,
+}
+
+export const groupChevron = {
+  color: 'var(--text-muted)',
+  fontSize: 10,
+  opacity: 0.6,
+  transition: 'transform 0.15s ease',
+}
+
+export const groupCount = {
+  fontSize: 10,
+  color: 'var(--text-muted)',
+  opacity: 0.5,
+  fontWeight: 500,
 }
 
 export const row = {
@@ -250,6 +288,30 @@ export const editSaveBtn = {
   padding: '5px 12px',
   cursor: 'pointer',
   whiteSpace: 'nowrap',
+}
+
+export const editGroupSelect = {
+  background: 'var(--surface)',
+  border: '1px solid var(--border)',
+  borderRadius: 6,
+  padding: '5px 6px',
+  color: 'var(--text)',
+  fontSize: 11,
+  outline: 'none',
+  colorScheme: 'dark',
+  maxWidth: 100,
+}
+
+export const addGroupSelect = {
+  flex: 1,
+  background: 'var(--surface)',
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  padding: '7px 10px',
+  color: 'var(--text)',
+  fontSize: 12,
+  outline: 'none',
+  colorScheme: 'dark',
 }
 
 export const editCancelBtn = {

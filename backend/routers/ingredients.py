@@ -10,18 +10,59 @@ from pydantic import BaseModel
 from database import get_db
 from auth import require_user
 from fastapi import HTTPException
-from models.ingredient import Ingredient, IngredientCreate, IngredientUpdate
+from models.ingredient import (
+    Ingredient, IngredientCreate, IngredientUpdate,
+    INGREDIENT_GROUPS, DEFAULT_GROUP,
+)
 
 router = APIRouter(prefix="/ingredients", tags=["ingredients"])
 
+
+def _validate_group(group_name: str | None) -> str | None:
+    """Reject unknown group names."""
+    if group_name is not None and group_name not in INGREDIENT_GROUPS:
+        raise HTTPException(status_code=400, detail=f"Invalid group: {group_name}")
+    return group_name
+
+
+async def _resolve_group(db, user_id: int, name: str, explicit: str | None) -> str:
+    """Resolve group: explicit > memory > default."""
+    if explicit:
+        return explicit
+    async with db.execute(
+        "SELECT group_name FROM ingredient_group_memory WHERE user_id = ? AND ingredient_name = ?",
+        (user_id, name),
+    ) as cur:
+        row = await cur.fetchone()
+    return row["group_name"] if row else DEFAULT_GROUP
+
+
+async def _save_group_memory(db, user_id: int, name: str, group_name: str) -> None:
+    """Upsert the group memory for an ingredient name."""
+    await db.execute(
+        """INSERT INTO ingredient_group_memory (user_id, ingredient_name, group_name)
+           VALUES (?, ?, ?)
+           ON CONFLICT(user_id, ingredient_name) DO UPDATE SET
+               group_name = excluded.group_name, updated_at = datetime('now')""",
+        (user_id, name, group_name),
+    )
+
+
 # Shared upsert SQL used by both single-add and bulk-add
 _UPSERT_SQL = """
-    INSERT INTO ingredient_inventory (user_id, name, expiry_date)
-    VALUES (?, ?, ?)
+    INSERT INTO ingredient_inventory (user_id, name, expiry_date, group_name)
+    VALUES (?, ?, ?, ?)
     ON CONFLICT(user_id, name) DO UPDATE SET
         expiry_date = excluded.expiry_date,
+        group_name = excluded.group_name,
         updated_at = datetime('now')
 """
+
+
+@router.get("/groups")
+async def list_groups():
+    """Return the fixed list of ingredient groups."""
+    return {"groups": INGREDIENT_GROUPS, "default": DEFAULT_GROUP}
 
 
 @router.get("/", response_model=list[Ingredient])
@@ -40,8 +81,11 @@ async def list_ingredients(user_id: int = Depends(require_user)):
 
 @router.post("/", response_model=Ingredient, status_code=201)
 async def add_ingredient(body: IngredientCreate, user_id: int = Depends(require_user)):
+    _validate_group(body.group_name)
     async with get_db() as db:
-        await db.execute(_UPSERT_SQL, (user_id, body.name, body.expiry_date))
+        group = await _resolve_group(db, user_id, body.name, body.group_name)
+        await db.execute(_UPSERT_SQL, (user_id, body.name, body.expiry_date, group))
+        await _save_group_memory(db, user_id, body.name, group)
         await db.commit()
         async with db.execute(
             "SELECT * FROM ingredient_inventory WHERE user_id = ? AND name = ?",
@@ -52,13 +96,17 @@ async def add_ingredient(body: IngredientCreate, user_id: int = Depends(require_
 
 @router.patch("/{ingredient_id}", response_model=Ingredient)
 async def update_ingredient(ingredient_id: int, body: IngredientUpdate, user_id: int = Depends(require_user)):
-    """Update an ingredient's name and/or expiry date."""
+    """Update an ingredient's name, expiry date, and/or group."""
+    _validate_group(body.group_name)
+
     updates = {}
     if body.name is not None:
         updates["name"] = body.name
     if body.expiry_date is not None:
         # Allow clearing expiry with empty string
         updates["expiry_date"] = body.expiry_date if body.expiry_date != "" else None
+    if body.group_name is not None:
+        updates["group_name"] = body.group_name
 
     async with get_db() as db:
         if updates:
@@ -79,6 +127,13 @@ async def update_ingredient(ingredient_id: int, body: IngredientUpdate, user_id:
 
     if not row:
         raise HTTPException(status_code=404, detail="Ingredient not found")
+
+    # Update group memory when group changes
+    if body.group_name is not None:
+        async with get_db() as db:
+            await _save_group_memory(db, user_id, row["name"], body.group_name)
+            await db.commit()
+
     return dict(row)
 
 
@@ -95,10 +150,33 @@ async def delete_ingredient(ingredient_id: int, user_id: int = Depends(require_u
 @router.post("/bulk", status_code=201)
 async def bulk_add_ingredients(ingredients: list[IngredientCreate], user_id: int = Depends(require_user)):
     """Add or update multiple ingredients at once (used after NL parsing)."""
+    for item in ingredients:
+        _validate_group(item.group_name)
+
     async with get_db() as db:
+        # Batch lookup group memory for all names
+        names = [item.name for item in ingredients]
+        placeholders = ",".join("?" for _ in names)
+        async with db.execute(
+            f"SELECT ingredient_name, group_name FROM ingredient_group_memory WHERE user_id = ? AND ingredient_name IN ({placeholders})",
+            [user_id, *names],
+        ) as cur:
+            memory = {r["ingredient_name"]: r["group_name"] for r in await cur.fetchall()}
+
+        rows = []
+        for item in ingredients:
+            group = item.group_name or memory.get(item.name, DEFAULT_GROUP)
+            rows.append((user_id, item.name, item.expiry_date, group))
+
+        await db.executemany(_UPSERT_SQL, rows)
+
+        # Update group memory for all
         await db.executemany(
-            _UPSERT_SQL,
-            [(user_id, item.name, item.expiry_date) for item in ingredients],
+            """INSERT INTO ingredient_group_memory (user_id, ingredient_name, group_name)
+               VALUES (?, ?, ?)
+               ON CONFLICT(user_id, ingredient_name) DO UPDATE SET
+                   group_name = excluded.group_name, updated_at = datetime('now')""",
+            [(user_id, item.name, row[3]) for item, row in zip(ingredients, rows)],
         )
         await db.commit()
     return {"added": len(ingredients)}
