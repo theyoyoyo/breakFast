@@ -94,8 +94,8 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
       await buyShoppingItems(selectedIds, Object.keys(dateMap).length > 0 ? dateMap : null)
       setChecked({})
       setExpiryDates({})
-      load()
       onBought?.()
+      onClose?.()
     } catch {
       setError('Failed to process bought items')
     }
