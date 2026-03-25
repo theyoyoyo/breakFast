@@ -475,10 +475,12 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
         meal.id || null,
       )
       const text = result.formatted || 'Zamanlama oluşturulamadı.'
-      const scheduleMsg = `📋 ${meal.meal_name || 'Meal'} — Hazırlık Planı\n\n${text}`
+      const idTag = meal.id ? ` (#${meal.id})` : ''
+      const scheduleMsg = `📋 ${meal.meal_name || 'Meal'}${idTag} — Hazırlık Planı\n\n${text}`
       setMessages(prev => [...prev, { role: 'assistant', content: scheduleMsg }])
     } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: `📋 ${meal.meal_name || 'Meal'} — Hazırlık Planı\n\n🎵 Sunucuya ulaşılamıyor — birazdan tekrar dene.` }])
+      const idTag = meal.id ? ` (#${meal.id})` : ''
+      setMessages(prev => [...prev, { role: 'assistant', content: `📋 ${meal.meal_name || 'Meal'}${idTag} — Hazırlık Planı\n\n🎵 Sunucuya ulaşılamıyor — birazdan tekrar dene.` }])
     } finally {
       setSchedulingIdx(null)
     }

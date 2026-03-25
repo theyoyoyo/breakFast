@@ -73,20 +73,28 @@ async def test_update_meal(client):
 # Updating a meal clears cached_nutrition
 async def test_update_meal_clears_cache(client, db):
     meal = (await client.post("/meals/", json=STRUCTURED_MEAL)).json()
-    # Manually set cached_nutrition to simulate a prior analysis
+    # Manually set cached_nutrition and schedule to simulate prior results
     await db.execute(
-        "UPDATE meal_history SET cached_nutrition = ? WHERE id = ?",
-        ('{"analysis_text": "test", "analysis_data": {}}', meal["id"]),
+        "UPDATE meal_history SET cached_nutrition = ?, schedule = ? WHERE id = ?",
+        ('{"analysis_text": "test", "analysis_data": {}}',
+         '{"timeline": [], "makespan_min": 5, "formatted": "test"}',
+         meal["id"]),
     )
     await db.commit()
-    # Verify it's set
-    r = await client.get(f"/meals/{meal['id']}")
-    assert r.json()["cached_nutrition"] is not None
-    # Update the meal — should clear cache
+    # Verify they're set
+    async with db.execute("SELECT cached_nutrition, schedule FROM meal_history WHERE id = ?", (meal["id"],)) as cur:
+        row = await cur.fetchone()
+        assert row[0] is not None
+        assert row[1] is not None
+    # Update the meal — should clear both caches
     updated = {**STRUCTURED_MEAL, "meal_name": "Updated Menemen"}
     r = await client.put(f"/meals/{meal['id']}", json=updated)
     assert r.status_code == 200
     assert r.json()["cached_nutrition"] is None
+    # Verify schedule is also cleared
+    async with db.execute("SELECT schedule FROM meal_history WHERE id = ?", (meal["id"],)) as cur:
+        row = await cur.fetchone()
+        assert row[0] is None
 
 
 # Returns 404 when updating a non-existent meal

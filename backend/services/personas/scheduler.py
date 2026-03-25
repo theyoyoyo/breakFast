@@ -8,24 +8,24 @@ The LLM focuses on producing a detailed, clear plan. It splits tasks into:
 All scheduling math (parallel execution, backward timing) is handled by our code.
 """
 
-SCHEDULER_TEMPLATE = """Sen bir mutfak organizasyon uzmanısın. Görevin bir yemeğin hazırlık adımlarını analiz edip detaylı bir plan çıkarmak.
+SCHEDULER_TEMPLATE = """You are a kitchen workflow expert. Your job is to analyze a meal's preparation steps and produce a detailed, structured cooking plan.
 
-Verilen adımları ve malzemeleri inceleyip iki gruba ayır:
+Split the steps into two groups:
 
-1. **prep** (hazırlık): Zamanlaması önemli olmayan kısa işler — doğrama, tabağa koyma, karıştırma, küçük kaselere ayırma vb. Bunlar en başta yapılır.
+1. **prep**: Quick manual tasks with no specific timing — chopping, plating, mixing, putting into small bowls, slicing, etc. These are done first, before any timed cooking starts.
 
-2. **timed** (zamanlı): Belirli bir süre boyunca bir cihaz/kaynak kullanan işler — haşlama, kızartma, fırınlama, tostlama vb. Her biri için:
-   - Süreyi dakika olarak belirt
-   - Kaynak: "ocak", "tost_makinesi", "airfryer", "tava" veya "fırın"
-   - Bitişte ne yapılması gerektiğini belirt (süz, çıkar, ters çevir vb.)
+2. **timed**: Tasks that require a specific kitchen resource for a measured duration — boiling, toasting, frying, baking, etc. For each:
+   - Estimate the duration in minutes (be realistic)
+   - Specify the resource: "ocak" (stovetop), "tost_makinesi" (toaster), "airfryer", "tava" (pan), or "fırın" (oven)
+   - Specify what to do when the task finishes (strain, remove, flip, etc.)
 
-Kurallar:
-- Tarifte yazanları genişlet — eksik ama gerekli adımları ekle (örn: tarif "haşla" diyorsa "süz ve soğuk suya al" adımını da ekle)
-- Süreleri gerçekçi tut
-- Her adımı açık ve anlaşılır yaz
-- Sadece JSON çıktı ver, başka bir şey yazma
+Rules:
+- Expand the recipe steps — add necessary but missing actions (e.g., if the recipe says "boil eggs", also add "strain and transfer to cold water" as end_action)
+- Be realistic about durations
+- All task descriptions and details must be in Turkish
+- Output ONLY the JSON object, nothing else
 
-Çıktı formatı (```json ... ``` arasında):
+Output format (inside ```json ... ``` fences):
 
 ```json
 {
@@ -52,11 +52,11 @@ def build_scheduler_prompt(meal_name: str, steps: list[str], ingredients_str: st
 def build_scheduler_user_message(meal_name: str, steps: list[str], ingredients_str: str) -> str:
     """Build the user message with meal details."""
     steps_text = "\n".join(f"{i+1}. {s}" for i, s in enumerate(steps))
-    return f"""Yemek: {meal_name}
+    return f"""Meal: {meal_name}
 
-Malzemeler: {ingredients_str}
+Ingredients: {ingredients_str}
 
-Adımlar:
+Steps:
 {steps_text}
 
-Bu yemeğin hazırlık planını çıkar:"""
+Produce the cooking plan:"""
