@@ -81,8 +81,8 @@ export const checkAuth = () =>
 export const getIngredients = () =>
   apiFetch(`${BASE_URL}/ingredients/`)
 
-export const addIngredient = (name, expiry_date = null) =>
-  apiFetch(`${BASE_URL}/ingredients/`, json('POST', { name, expiry_date }))
+export const addIngredient = (name, expiry_date = null, group_name = null) =>
+  apiFetch(`${BASE_URL}/ingredients/`, json('POST', { name, expiry_date, group_name }))
 
 export const updateIngredient = (id, data) =>
   apiFetch(`${BASE_URL}/ingredients/${id}`, json('PATCH', data))
@@ -123,6 +123,19 @@ export const deleteShoppingItem = (id) =>
 
 export const buyShoppingItems = (ids, expiry_dates = null) =>
   apiFetch(`${BASE_URL}/shopping/bought`, json('POST', { ids, expiry_dates }))
+
+// ---------------------------------------------------------------------------
+// Favorite Ingredients
+// ---------------------------------------------------------------------------
+
+export const getFavoriteIngredients = () =>
+  apiFetch(`${BASE_URL}/favorite-ingredients/`)
+
+export const addFavoriteIngredient = (ingredient_name) =>
+  apiFetch(`${BASE_URL}/favorite-ingredients/`, json('POST', { ingredient_name }))
+
+export const removeFavoriteIngredient = (ingredient_name) =>
+  apiFetch(`${BASE_URL}/favorite-ingredients/${encodeURIComponent(ingredient_name)}`, { method: 'DELETE' })
 
 // ---------------------------------------------------------------------------
 // Meals

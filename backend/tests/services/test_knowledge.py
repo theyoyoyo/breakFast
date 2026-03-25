@@ -29,12 +29,24 @@ class TestKnowledgeFormatters:
     def test_format_ingredients_empty(self):
         assert format_ingredients([]) == "none listed yet"
 
-    # Ingredients render as name-only list
+    # Ingredients render as name-only list (no group_name)
     def test_format_ingredients_with_data(self):
         items = [{"name": "eggs"}, {"name": "milk"}]
         result = format_ingredients(items)
         assert "eggs" in result
         assert "milk" in result
+
+    # Grouped ingredients render with group labels for LLM context
+    def test_format_ingredients_grouped(self):
+        items = [
+            {"name": "sucuk", "group_name": "🐄 Hayvansal"},
+            {"name": "domates", "group_name": "🥬 Sebze Meyve"},
+            {"name": "tuz", "group_name": "🍽️ Diğer"},
+        ]
+        result = format_ingredients(items)
+        assert "[🐄 Hayvansal] sucuk" in result
+        assert "[🥬 Sebze Meyve] domates" in result
+        assert "[🍽️ Diğer] tuz" in result
 
     # Empty history returns fallback
     def test_format_history_empty(self):
