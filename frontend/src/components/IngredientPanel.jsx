@@ -348,9 +348,6 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
 
   const selectedSuggestionCount = Object.values(selectedSuggestions).filter(Boolean).length
 
-  // Count of expired items the user previously acknowledged ("kept")
-  const keptCount = ingredients.filter(i => i.expiry_acknowledged && isExpired(i.expiry_date)).length
-
   const formatExpiry = (dateStr) => {
     if (!dateStr) return null
     try {
@@ -365,6 +362,9 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
     if (!dateStr) return false
     return dateStr <= new Date().toISOString().split('T')[0]
   }
+
+  // Count of expired items the user previously acknowledged ("kept")
+  const keptCount = ingredients.filter(i => i.expiry_acknowledged && isExpired(i.expiry_date)).length
 
   return (
     <div style={s.container}>
