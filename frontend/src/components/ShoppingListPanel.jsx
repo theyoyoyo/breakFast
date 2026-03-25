@@ -166,16 +166,11 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
           <button style={s.addBtn} onClick={handleAdd}><Plus size={14} /></button>
         </div>
 
-        {/* Bought button */}
+        {/* Done button — always active, refreshes list if nothing checked */}
         {items.length > 0 && (
           <button
-            style={{
-              ...s.boughtBtn,
-              opacity: checkedCount === 0 ? 0.4 : 1,
-              cursor: checkedCount === 0 ? 'default' : 'pointer',
-            }}
-            onClick={handleBought}
-            disabled={checkedCount === 0}
+            style={{ ...s.boughtBtn, cursor: 'pointer' }}
+            onClick={checkedCount > 0 ? handleBought : load}
           >
             Done{checkedCount > 0 ? ` (${checkedCount})` : ''} ✓
           </button>
