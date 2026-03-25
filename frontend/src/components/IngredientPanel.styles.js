@@ -203,6 +203,17 @@ export const iconBtn = {
   alignItems: 'center',
 }
 
+export const favBtn = {
+  background: 'none',
+  border: 'none',
+  padding: '3px',
+  borderRadius: 4,
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  transition: 'transform 0.15s',
+}
+
 // ---------------------------------------------------------------------------
 // "Kept" expiry badge
 // ---------------------------------------------------------------------------
@@ -480,6 +491,23 @@ export const expiryConfirmBtn = {
   fontSize: 13,
   fontWeight: 600,
   textAlign: 'center',
+  cursor: 'pointer',
+}
+
+// ---------------------------------------------------------------------------
+// Favorites button in header
+// ---------------------------------------------------------------------------
+
+export const headerFavBtn = {
+  borderRadius: 6,
+  height: 28,
+  width: 28,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  background: 'rgba(231, 76, 60, 0.12)',
+  border: '1px solid rgba(231, 76, 60, 0.25)',
+  color: '#e74c3c',
   cursor: 'pointer',
 }
 

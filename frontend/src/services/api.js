@@ -125,6 +125,19 @@ export const buyShoppingItems = (ids, expiry_dates = null) =>
   apiFetch(`${BASE_URL}/shopping/bought`, json('POST', { ids, expiry_dates }))
 
 // ---------------------------------------------------------------------------
+// Favorite Ingredients
+// ---------------------------------------------------------------------------
+
+export const getFavoriteIngredients = () =>
+  apiFetch(`${BASE_URL}/favorite-ingredients/`)
+
+export const addFavoriteIngredient = (ingredient_name) =>
+  apiFetch(`${BASE_URL}/favorite-ingredients/`, json('POST', { ingredient_name }))
+
+export const removeFavoriteIngredient = (ingredient_name) =>
+  apiFetch(`${BASE_URL}/favorite-ingredients/${encodeURIComponent(ingredient_name)}`, { method: 'DELETE' })
+
+// ---------------------------------------------------------------------------
 // Meals
 // ---------------------------------------------------------------------------
 

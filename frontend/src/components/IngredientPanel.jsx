@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react'
-import { Trash2, Pencil, Plus, X, AlertTriangle, ShoppingCart, Sparkles, Loader, ChevronRight } from 'lucide-react'
+import { Trash2, Pencil, Plus, X, AlertTriangle, ShoppingCart, Sparkles, Loader, ChevronRight, Heart } from 'lucide-react'
 import {
   getIngredients, addIngredient, updateIngredient, deleteIngredient,
   getExpiredIngredients, getExpiredCount, handleExpiredAction,
   getShoppingSuggestions, addShoppingItemsBulk, addShoppingItem,
+  getFavoriteIngredients, addFavoriteIngredient, removeFavoriteIngredient,
 } from '../services/api'
 import ShoppingListPanel from './ShoppingListPanel'
+import FavoriteIngredientsPanel from './FavoriteIngredientsPanel'
 import * as s from './IngredientPanel.styles'
 
 // ---------------------------------------------------------------------------
@@ -80,7 +82,37 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
   const [lyricBanner, setLyricBanner] = useState(null)
 
   // Delete-to-shopping popup
-  const [deletePopup, setDeletePopup] = useState(null) // { id, name, top }
+  const [deletePopup, setDeletePopup] = useState(null) // { id, name }
+
+  // Favorite ingredients
+  const [favoriteNames, setFavoriteNames] = useState(new Set())
+  const [favPanelOpen, setFavPanelOpen] = useState(false)
+
+  const loadFavorites = async () => {
+    try {
+      const favs = await getFavoriteIngredients()
+      setFavoriteNames(new Set(favs.map(f => f.ingredient_name.toLowerCase())))
+    } catch { /* ignore */ }
+  }
+
+  const toggleFavorite = async (name) => {
+    const key = name.toLowerCase()
+    const isFav = favoriteNames.has(key)
+    // Optimistic update
+    setFavoriteNames(prev => {
+      const next = new Set(prev)
+      if (isFav) next.delete(key)
+      else next.add(key)
+      return next
+    })
+    try {
+      if (isFav) await removeFavoriteIngredient(name)
+      else await addFavoriteIngredient(name)
+    } catch {
+      // Revert on failure
+      loadFavorites()
+    }
+  }
 
   const load = async () => {
     try {
@@ -101,11 +133,11 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
     } catch { /* ignore */ }
   }, [])
 
-  useEffect(() => { load(); refreshExpiredCount() }, [refreshTrigger]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); refreshExpiredCount(); loadFavorites() }, [refreshTrigger]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Refresh ingredients + expired count every time the tab becomes visible
+  // Refresh ingredients + expired count + favorites every time the tab becomes visible
   useEffect(() => {
-    if (visible) { load(); refreshExpiredCount() }
+    if (visible) { load(); refreshExpiredCount(); loadFavorites() }
   }, [visible]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Init selected suggestions from saved data
@@ -374,7 +406,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
     <div style={s.container}>
       {/* Header with expired + add buttons */}
       <div style={s.headerRow}>
-        <span style={s.headerText}>Ingredients</span>
+        <span style={s.headerText}>Fridge</span>
         <div style={s.headerBtns}>
           <button
             style={expiredCount > 0 ? s.headerExpiredBtn : s.headerExpiredBtnSafe}
@@ -383,6 +415,13 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
           >
             <AlertTriangle size={13} />
             <span>{expiredCount}</span>
+          </button>
+          <button
+            style={s.headerFavBtn}
+            onClick={() => setFavPanelOpen(true)}
+            title="Favorite ingredients"
+          >
+            <Heart size={13} fill="currentColor" />
           </button>
           <button
             style={s.headerShoppingBtn}
@@ -516,6 +555,17 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
                           )}
                         </span>
                       )}
+                      <button
+                        style={s.favBtn}
+                        onClick={() => toggleFavorite(ing.name)}
+                        title={favoriteNames.has(ing.name.toLowerCase()) ? 'Remove from favorites' : 'Add to favorites'}
+                      >
+                        <Heart
+                          size={12}
+                          fill={favoriteNames.has(ing.name.toLowerCase()) ? '#e74c3c' : 'none'}
+                          color={favoriteNames.has(ing.name.toLowerCase()) ? '#e74c3c' : 'var(--text-muted)'}
+                        />
+                      </button>
                       <button
                         style={s.iconBtn}
                         onClick={() => startEdit(ing)}
@@ -688,6 +738,10 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
         open={shoppingListOpen}
         onClose={() => setShoppingListOpen(false)}
         onBought={() => { load(); refreshExpiredCount() }}
+      />
+      <FavoriteIngredientsPanel
+        open={favPanelOpen}
+        onClose={() => setFavPanelOpen(false)}
       />
     </div>
   )

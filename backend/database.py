@@ -47,6 +47,14 @@ CREATE TABLE IF NOT EXISTS ingredient_group_memory (
     UNIQUE(user_id, ingredient_name)
 );
 
+CREATE TABLE IF NOT EXISTS favorite_ingredients (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL REFERENCES users(id),
+    ingredient_name TEXT    NOT NULL,
+    added_at        TEXT    NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(user_id, ingredient_name)
+);
+
 CREATE TABLE IF NOT EXISTS meal_history (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id         INTEGER NOT NULL REFERENCES users(id),
