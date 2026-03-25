@@ -117,7 +117,7 @@ export const addBtn = {
   cursor: 'pointer',
 }
 
-export const boughtBtn = {
+export const doneBtn = {
   margin: '8px 16px 12px',
   padding: '10px 16px',
   background: '#27ae60',
