@@ -188,6 +188,18 @@ dismisses without deleting — this serves as the cancel/confirm mechanism.
 **Fridge tab rename.** The Ingredients tab was renamed to "Fridge" (header text and
 tab label in App.jsx).
 
+**Kitchen appliances settings.** Configurable per-user appliance list in Settings.
+9 fixed appliances: Ocak, Fırın, Airfryer, Ekmek Kızartma Makinesi, Mikrodalga,
+Blender, Tost Makinesi, Su Isıtıcı, French Press. Only Ocak (stove) is enabled by
+default — users enable the rest from a grid of toggle tiles. Stored in
+`user_kitchen_appliances` DB table (per-user, appliance_key + enabled). Auto-populated
+on first access. Backend CRUD at `/kitchen/` (GET list, PUT toggle). Enabled appliances
+are injected into all LLM persona prompts (chat, suggestion, shopping, scheduler) as
+a dynamic context line — the LLM uses its own knowledge about each appliance's
+capabilities (batching, multi-burner, etc.) without per-appliance hardcoded notes.
+Appliance list defined in `backend/models/kitchen.py` (KITCHEN_APPLIANCES). Frontend
+component: `KitchenSettings.jsx`, accessible from Settings → Kitchen sub-page.
+
 #### Remaining
 
 **Habit import and onboarding.** A one-time onboarding conversation where the user
@@ -240,10 +252,10 @@ assigning two tasks to the same resource simultaneously.
 - Hands — can only do one active manual task at a time, but can monitor a running
   appliance simultaneously
 
-**Note:** The available resources list here is the current default set. A planned
-Kitchen Settings feature will let users configure which appliances they own (see
-`docs/kitchen_task.md`). Once implemented, the scheduler should use the user's
-configured appliances instead of this hardcoded list.
+**Note:** The available resources listed above are the legacy hardcoded defaults.
+The Kitchen Settings feature (Phase 3) lets users configure which appliances they
+own — see `docs/kitchen_task.md`. All LLM personas and the scheduler now use the
+user's configured appliances instead of this hardcoded list.
 
 ### Output Format
 
@@ -399,6 +411,7 @@ breakFAST/
 │   │   ├── preferences.py          ← /preferences + /preferences/habits
 │   │   ├── profile.py             ← /profile + /profile/supplements CRUD
 │   │   ├── ratings.py              ← /ratings CRUD endpoints (1-10 scale)
+│   │   ├── kitchen.py             ← /kitchen appliance config CRUD
 │   │   ├── sessions.py            ← /sessions chat session management
 │   │   ├── shopping.py            ← /shopping list CRUD + bought flow
 │   │   └── scheduler.py          ← /scheduler/plan prep timeline endpoint
@@ -422,6 +435,7 @@ breakFAST/
 │   │
 │   ├── models/
 │   │   ├── ingredient.py            ← Pydantic models + INGREDIENT_GROUPS list
+│   │   ├── kitchen.py              ← Pydantic models + KITCHEN_APPLIANCES list
 │   │   ├── meal.py                  ← Pydantic models for meals
 │   │   ├── user.py                 ← Pydantic models for auth/users
 │   │   └── preferences.py          ← Pydantic models for user preferences
@@ -443,6 +457,7 @@ breakFAST/
 │       │   ├── test_sessions.py     ← session management tests
 │       │   ├── test_shopping.py    ← shopping list endpoint tests
 │       │   ├── test_scheduler.py  ← scheduler endpoint tests
+│       │   ├── test_kitchen.py   ← kitchen appliance endpoint tests
 │       │   └── test_favorite_ingredients.py ← favorite ingredients tests
 │       └── services/
 │           ├── test_prompts.py      ← prompt builder unit tests
@@ -473,7 +488,8 @@ breakFAST/
     │   │   ├── FavoriteIngredientsPanel.jsx ← favorite ingredients overlay panel
     │   │   ├── ShoppingListPanel.jsx ← persistent shopping list overlay
     │   │   ├── PreferencesPanel.jsx ← favorites, dislikes, habits, avoid list
-    │   │   ├── SettingsPanel.jsx    ← profile, supplements, ratings, health rules
+    │   │   ├── KitchenSettings.jsx  ← kitchen appliance toggle grid (sub-page)
+│   │   ├── SettingsPanel.jsx    ← profile, supplements, ratings, health rules, kitchen
     │   │   ├── LoginScreen.jsx      ← PIN auth screen
     │   │   └── *.styles.js          ← per-component style files
     │   ├── services/
@@ -519,10 +535,6 @@ the user's taste profile rather than defaulting to familiar choices.
 
 - **Local nutrition dataset** — a small curated dataset for common Turkish breakfast
   ingredients to supplement Open Food Facts and reduce LLM estimation fallback usage.
-
-- **Kitchen appliances settings** — configurable appliance list per user. Users
-  enable/disable appliances they own from a fixed list. Owned appliances inform the
-  scheduler and suggestion personas. Full spec in `docs/kitchen_task.md`.
 
 - **Known ingredients/meals only** — don't allow user to add meals or ingredients that
   are not known, so user always eats known stuff. Allow users to enter custom
