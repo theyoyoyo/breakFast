@@ -12,19 +12,24 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
 
   const load = async () => {
     try {
+      setLoading(true)
       setError(null)
       const data = await getShoppingList()
       setItems(data)
     } catch {
-      setError('Failed to load shopping list')
+      setError('Could not reach server')
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    if (open) { load() }
-  }, [open])
+    if (open) {
+      setError(null)
+      setChecked({})
+      load()
+    }
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAdd = async () => {
     const name = newItem.trim()
@@ -35,7 +40,7 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
       setNewItem('')
       load()
     } catch {
-      setError('Failed to add item')
+      setError('Could not add item — check server connection')
     }
   }
 

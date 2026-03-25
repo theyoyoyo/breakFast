@@ -89,7 +89,13 @@ export default function App() {
           <button
             key={key}
             style={s.tab(activeTab === key)}
-            onClick={() => setActiveTab(key)}
+            onClick={() => {
+              if (key === activeTab && key === 'Ingredients' && auth.user.name === 'demo') {
+                ingredientRef.current?.injectDemoShopping()
+              } else {
+                setActiveTab(key)
+              }
+            }}
           >
             <Icon size={14} style={{ marginRight: 4, verticalAlign: -2 }} />
             {label}

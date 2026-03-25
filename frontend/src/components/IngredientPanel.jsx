@@ -59,7 +59,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger }, 
 
   useEffect(() => { load(); checkExpired() }, [refreshTrigger]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Expose injectDemoExpiry for the demo username click
+  // Expose demo hooks for the username click and tab double-click
   useImperativeHandle(ref, () => ({
     injectDemoExpiry: () => {
       const fakeExpired = [
@@ -70,7 +70,27 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger }, 
       const checked = {}
       fakeExpired.forEach(i => { checked[i.id] = true })
       setExpiryChecked(checked)
-    }
+    },
+    injectDemoShopping: () => {
+      const demoSuggestions = [
+        { name: 'Ceviz', reason: 'Omega-3 kaynağı, kahvaltıda beyin fonksiyonlarını destekler' },
+        { name: 'Çilek', reason: 'Mevsiminde, antioksidan açısından zengin' },
+        { name: 'Avokado', reason: 'Sağlıklı yağ kaynağı, tostu mükemmel' },
+        { name: 'Chia tohumu', reason: 'Lif ve omega-3 deposu, yoğurtla harika' },
+        { name: 'Tam buğday ekmeği', reason: 'Kompleks karbonhidrat, uzun süre tok tutar' },
+        { name: 'Lor peyniri', reason: 'Yüksek protein, düşük yağ' },
+        { name: 'Bal', reason: 'Doğal tatlandırıcı, enerji kaynağı' },
+        { name: 'Domates', reason: 'Likopen kaynağı, klasik kahvaltı malzemesi' },
+        { name: 'Salatalık', reason: 'Hidrasyon ve tazelik sağlar' },
+        { name: 'Zeytin', reason: 'Sağlıklı yağ, Akdeniz diyetinin temeli' },
+        { name: 'Tahin', reason: 'Kalsiyum ve demir kaynağı, pekmezle klasik' },
+        { name: 'Yulaf ezmesi', reason: 'Beta-glukan ile kolesterol düşürücü etki' },
+      ]
+      setSuggestions(demoSuggestions)
+      const sel = {}
+      demoSuggestions.forEach((_, i) => { sel[i] = true })
+      setSelectedSuggestions(sel)
+    },
   }))
 
   const handleAdd = async () => {

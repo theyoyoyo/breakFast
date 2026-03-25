@@ -213,7 +213,9 @@ async def get_shopping_suggestions(user_id: int = Depends(require_user)):
             messages=[{"role": "user", "content": "Benim için alışveriş önerileri hazırla."}],
         )
     except LLMUnavailableError:
-        raise HTTPException(status_code=503, detail="LLM unavailable")
+        from services.llm import lyric_cycler
+        lyric = lyric_cycler.next()
+        return [{"name": lyric, "reason": "🎵"}]
 
     # Parse the JSON array from the response
     from utils import extract_json_block

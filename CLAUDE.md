@@ -369,11 +369,17 @@ breakFAST/
 │   │   ├── context.py               ← shared context loaders for LLM prompts
 │   │   ├── llm.py                   ← Ollama streaming + FallbackLyricCycler
 │   │   ├── scheduler.py             ← kitchen job-shop scheduler
-│   │   ├── suggestion.py            ← three persona prompts + prompt assembly
+│   │   ├── suggestion.py            ← backward-compat re-exports from personas/
 │   │   ├── knowledge.py            ← shared food knowledge module
 │   │   ├── pipeline.py             ← 3-step suggestion pipeline
 │   │   ├── insights.py             ← behavioral pattern extraction
-│   │   └── nutrition.py             ← Open Food Facts integration
+│   │   ├── nutrition.py             ← Open Food Facts integration
+│   │   └── personas/               ← one file per LLM persona for easy editing
+│   │       ├── chat.py             ← samimi kahvaltı arkadaşı
+│   │       ├── suggestion.py       ← profesyonel diyetisyen
+│   │       ├── analyst.py          ← nutrition lab / robot
+│   │       ├── pipeline_analyst.py ← internal reviewer for suggestion refinement
+│   │       └── shopping.py         ← professional shopping advisor
 │   │
 │   ├── models/
 │   │   ├── ingredient.py            ← Pydantic models for ingredients
