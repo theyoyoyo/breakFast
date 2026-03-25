@@ -223,23 +223,23 @@ async def test_add_ingredient_default_group(client):
     """Adding without group_name defaults to Diğer."""
     r = await client.post("/ingredients/", json={"name": "salt"})
     assert r.status_code == 201
-    assert r.json()["group_name"] == "Diğer"
+    assert r.json()["group_name"] == "📦 Diğer"
 
 
 async def test_add_ingredient_with_group(client):
     """Adding with explicit group assigns it correctly."""
-    r = await client.post("/ingredients/", json={"name": "sucuk", "group_name": "Şarküteri"})
+    r = await client.post("/ingredients/", json={"name": "sucuk", "group_name": "🧀 Şarküteri"})
     assert r.status_code == 201
-    assert r.json()["group_name"] == "Şarküteri"
+    assert r.json()["group_name"] == "🧀 Şarküteri"
 
 
 async def test_update_ingredient_group(client):
     """PATCH can change an ingredient's group."""
     created = (await client.post("/ingredients/", json={"name": "kekik"})).json()
-    assert created["group_name"] == "Diğer"
-    r = await client.patch(f"/ingredients/{created['id']}", json={"group_name": "Baharatlar"})
+    assert created["group_name"] == "📦 Diğer"
+    r = await client.patch(f"/ingredients/{created['id']}", json={"group_name": "🌿 Baharatlar"})
     assert r.status_code == 200
-    assert r.json()["group_name"] == "Baharatlar"
+    assert r.json()["group_name"] == "🌿 Baharatlar"
 
 
 async def test_invalid_group_rejected(client):
@@ -250,18 +250,18 @@ async def test_invalid_group_rejected(client):
 
 async def test_group_memory_on_readd(client):
     """Deleting and re-adding an ingredient restores its remembered group."""
-    created = (await client.post("/ingredients/", json={"name": "domates", "group_name": "Sebze/Meyve"})).json()
+    created = (await client.post("/ingredients/", json={"name": "domates", "group_name": "🥬 Sebze/Meyve"})).json()
     await client.delete(f"/ingredients/{created['id']}")
     # Re-add without specifying group — should restore from memory
     r = await client.post("/ingredients/", json={"name": "domates"})
     assert r.status_code == 201
-    assert r.json()["group_name"] == "Sebze/Meyve"
+    assert r.json()["group_name"] == "🥬 Sebze/Meyve"
 
 
 async def test_bulk_add_with_group_memory(client):
     """Bulk add restores group from memory for previously assigned items."""
     # First, add with explicit group and delete
-    created = (await client.post("/ingredients/", json={"name": "biber", "group_name": "Sebze/Meyve"})).json()
+    created = (await client.post("/ingredients/", json={"name": "biber", "group_name": "🥬 Sebze/Meyve"})).json()
     await client.delete(f"/ingredients/{created['id']}")
     # Bulk add without group — should restore from memory
     r = await client.post("/ingredients/bulk", json=[{"name": "biber"}, {"name": "tuz"}])
@@ -269,8 +269,8 @@ async def test_bulk_add_with_group_memory(client):
     listed = (await client.get("/ingredients/")).json()
     biber = [i for i in listed if i["name"] == "biber"][0]
     tuz = [i for i in listed if i["name"] == "tuz"][0]
-    assert biber["group_name"] == "Sebze/Meyve"
-    assert tuz["group_name"] == "Diğer"
+    assert biber["group_name"] == "🥬 Sebze/Meyve"
+    assert tuz["group_name"] == "📦 Diğer"
 
 
 async def test_groups_endpoint(client):
@@ -278,5 +278,5 @@ async def test_groups_endpoint(client):
     r = await client.get("/ingredients/groups")
     assert r.status_code == 200
     data = r.json()
-    assert data["groups"] == ["Şarküteri", "Sebze/Meyve", "Baharatlar", "Diğer"]
-    assert data["default"] == "Diğer"
+    assert data["groups"] == ["🧀 Şarküteri", "🥬 Sebze/Meyve", "🌿 Baharatlar", "📦 Diğer"]
+    assert data["default"] == "📦 Diğer"

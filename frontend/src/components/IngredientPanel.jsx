@@ -11,8 +11,8 @@ import * as s from './IngredientPanel.styles'
 // ---------------------------------------------------------------------------
 // Fixed ingredient groups (mirrors backend INGREDIENT_GROUPS)
 // ---------------------------------------------------------------------------
-const INGREDIENT_GROUPS = ['Şarküteri', 'Sebze/Meyve', 'Baharatlar', 'Diğer']
-const DEFAULT_GROUP = 'Diğer'
+const INGREDIENT_GROUPS = ['🧀 Şarküteri', '🥬 Sebze/Meyve', '🌿 Baharatlar', '📦 Diğer']
+const DEFAULT_GROUP = '📦 Diğer'
 
 const COLLAPSE_KEY = 'bf_ingredient_groups_collapsed'
 
@@ -42,7 +42,7 @@ function saveSuggestions(data) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)) } catch { /* ignore */ }
 }
 
-const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger }, ref) {
+const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, visible }, ref) {
   const [ingredients, setIngredients] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -99,6 +99,11 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger }, 
 
   useEffect(() => { load(); refreshExpiredCount() }, [refreshTrigger]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Refresh ingredients + expired count every time the tab becomes visible
+  useEffect(() => {
+    if (visible) { load(); refreshExpiredCount() }
+  }, [visible]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Init selected suggestions from saved data
   useEffect(() => {
     if (suggestions.length > 0) {
@@ -119,18 +124,6 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger }, 
 
   // Expose demo hooks
   useImperativeHandle(ref, () => ({
-    injectDemoExpiry: () => {
-      const fakeExpired = [
-        { id: -1, name: 'Yogurt (demo)', expiry_date: new Date().toISOString().split('T')[0], added_at: '', updated_at: '' },
-        { id: -2, name: 'Milk (demo)', expiry_date: new Date().toISOString().split('T')[0], added_at: '', updated_at: '' },
-      ]
-      setExpiredItems(fakeExpired)
-      setExpiredCount(fakeExpired.length)
-      const actions = {}
-      fakeExpired.forEach(i => { actions[i.id] = 'delete' })
-      setExpiryAction(actions)
-      setExpiryPanelOpen(true)
-    },
     injectDemoShopping: () => {
       const demoSuggestions = [
         { name: 'Ceviz', reason: 'Omega-3 kaynağı, kahvaltıda beyin fonksiyonlarını destekler' },

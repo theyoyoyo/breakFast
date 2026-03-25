@@ -58,10 +58,10 @@ describe('ingredient API', () => {
   it('POST /ingredients/ sends the ingredient payload', async () => {
     const stub = mockFetch(201, { id: 1, name: 'eggs' })
     vi.stubGlobal('fetch', stub)
-    await addIngredient('eggs', '2026-04-01', 'Şarküteri')
+    await addIngredient('eggs', '2026-04-01', '🧀 Şarküteri')
     const [, opts] = stub.mock.calls[0]
     expect(opts.method).toBe('POST')
-    expect(JSON.parse(opts.body)).toEqual({ name: 'eggs', expiry_date: '2026-04-01', group_name: 'Şarküteri' })
+    expect(JSON.parse(opts.body)).toEqual({ name: 'eggs', expiry_date: '2026-04-01', group_name: '🧀 Şarküteri' })
   })
 })
 

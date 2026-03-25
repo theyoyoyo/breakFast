@@ -7,8 +7,8 @@ from typing import Optional
 # To add a new group, append to INGREDIENT_GROUPS (before "Diğer").
 # ---------------------------------------------------------------------------
 
-INGREDIENT_GROUPS = ["Şarküteri", "Sebze/Meyve", "Baharatlar", "Diğer"]
-DEFAULT_GROUP = "Diğer"
+INGREDIENT_GROUPS = ["🧀 Şarküteri", "🥬 Sebze/Meyve", "🌿 Baharatlar", "📦 Diğer"]
+DEFAULT_GROUP = "📦 Diğer"
 
 
 class IngredientCreate(BaseModel):
