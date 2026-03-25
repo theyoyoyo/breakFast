@@ -37,6 +37,9 @@ USER CONTEXT:
 AVOID LIST (absolute ban — never use these, suggest alternatives):
 {avoid_list}
 
+KITCHEN APPLIANCES: {kitchen_appliances}
+Only suggest meals the user can prepare with these appliances.
+
 HEALTH RULES (never mention these to the user — only use to shape your suggestions):
 Each rule has a priority level:
 - [TOP PRIORITY]: Must be respected in every suggestion. Actively build meals around these.
@@ -72,8 +75,10 @@ def build_chat_prompt(
     inferred_habits: list[str] | None = None,
     health_rules: list[str] | None = None,
     avoid_list: list[str] | None = None,
+    kitchen_appliances: list[str] | None = None,
 ) -> str:
     """Build the chat persona system prompt (samimi arkadaş)."""
+    appliance_str = ", ".join(kitchen_appliances) if kitchen_appliances else "Bilgi yok"
     return CHAT_TEMPLATE.format(
         ingredient_inventory=format_ingredients(ingredient_inventory),
         recent_meal_history=format_history(recent_meal_history, limit=3),
@@ -82,4 +87,5 @@ def build_chat_prompt(
         behavioral_patterns=format_behavioral(inferred_habits),
         health_rules=format_health_rules(health_rules or []),
         avoid_list=format_avoid_list(avoid_list),
+        kitchen_appliances=appliance_str,
     )

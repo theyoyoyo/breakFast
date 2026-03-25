@@ -16,7 +16,7 @@ Split the steps into two groups:
 
 2. **timed**: Tasks that require a specific kitchen resource for a measured duration — boiling, toasting, frying, baking, etc. For each:
    - Estimate the duration in minutes (be realistic)
-   - Specify the resource: "ocak" (stovetop), "tost_makinesi" (toaster), "airfryer", "tava" (pan), or "fırın" (oven)
+   - Specify the resource using the appliance name (e.g., "ocak", "airfryer", "tost_makinesi"). Available appliances: {kitchen_appliances}. Only use these appliances.
    - Specify what to do when the task finishes (strain, remove, flip, etc.)
 
 Rules:
@@ -28,25 +28,26 @@ Rules:
 Output format (inside ```json ... ``` fences):
 
 ```json
-{
+{{
   "prep": [
-    {"task": "Domates ve salatalığı dilimle", "detail": "ince halkalar halinde"}
+    {{"task": "Domates ve salatalığı dilimle", "detail": "ince halkalar halinde"}}
   ],
   "timed": [
-    {
+    {{
       "task": "Yumurtaları haşla",
       "duration_min": 7,
       "resource": "ocak",
       "end_action": "Süzgeçle süz, soğuk suya al"
-    }
+    }}
   ]
-}
+}}
 ```"""
 
 
-def build_scheduler_prompt(meal_name: str, steps: list[str], ingredients_str: str) -> str:
+def build_scheduler_prompt(meal_name: str, steps: list[str], ingredients_str: str, kitchen_appliances: list[str] | None = None) -> str:
     """Build the system prompt for plan extraction."""
-    return SCHEDULER_TEMPLATE
+    appliance_str = ", ".join(kitchen_appliances) if kitchen_appliances else "ocak, airfryer, tost_makinesi, fırın"
+    return SCHEDULER_TEMPLATE.format(kitchen_appliances=appliance_str)
 
 
 def build_scheduler_user_message(meal_name: str, steps: list[str], ingredients_str: str) -> str:

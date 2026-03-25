@@ -10,6 +10,25 @@ import asyncio
 from datetime import date as date_type
 
 
+async def fetch_kitchen_appliances(db, user_id: int) -> list[str]:
+    """Return display names of enabled kitchen appliances for prompt injection."""
+    from models.kitchen import KITCHEN_APPLIANCES, DEFAULT_ENABLED_KEYS, VALID_APPLIANCE_KEYS
+
+    async with db.execute(
+        "SELECT appliance_key, enabled FROM user_kitchen_appliances WHERE user_id = ?",
+        (user_id,),
+    ) as cur:
+        rows = await cur.fetchall()
+
+    if rows:
+        enabled_keys = {r["appliance_key"] for r in rows if r["enabled"]}
+    else:
+        enabled_keys = DEFAULT_ENABLED_KEYS
+
+    name_map = {a["key"]: a["name"] for a in KITCHEN_APPLIANCES}
+    return [name_map[k] for k in name_map if k in enabled_keys]
+
+
 async def fetch_ingredients(db, user_id: int) -> list[dict]:
     async with db.execute(
         "SELECT name, group_name FROM ingredient_inventory WHERE user_id = ? ORDER BY name",
@@ -85,6 +104,7 @@ async def load_chat_context(db, user_id: int) -> dict:
         ingredients, history, prefs,
         (stated_habits, inferred_habits),
         health_rules, user_profile, supplements,
+        kitchen_appliances,
     ) = await asyncio.gather(
         fetch_ingredients(db, user_id),
         fetch_history(db, user_id, limit=10),
@@ -93,6 +113,7 @@ async def load_chat_context(db, user_id: int) -> dict:
         fetch_health_rules(db, user_id),
         fetch_profile(db, user_id),
         fetch_supplements(db, user_id),
+        fetch_kitchen_appliances(db, user_id),
     )
     avoid_list = [v for k, v in prefs.items() if k.startswith("avoid:")]
     filtered_prefs = {k: v for k, v in prefs.items() if not k.startswith("avoid:")}
@@ -107,6 +128,7 @@ async def load_chat_context(db, user_id: int) -> dict:
         "user_profile": user_profile,
         "supplements": supplements,
         "avoid_list": avoid_list,
+        "kitchen_appliances": kitchen_appliances,
     }
 
 
@@ -116,6 +138,7 @@ async def load_shopping_context(db, user_id: int) -> dict:
         ingredients, history, prefs,
         (stated_habits, inferred_habits),
         health_rules, user_profile, supplements,
+        kitchen_appliances,
     ) = await asyncio.gather(
         fetch_ingredients(db, user_id),
         fetch_history(db, user_id, limit=10, include_ingredients=True),
@@ -124,6 +147,7 @@ async def load_shopping_context(db, user_id: int) -> dict:
         fetch_health_rules(db, user_id),
         fetch_profile(db, user_id),
         fetch_supplements(db, user_id),
+        fetch_kitchen_appliances(db, user_id),
     )
     avoid_list = [v for k, v in prefs.items() if k.startswith("avoid:")]
     filtered_prefs = {k: v for k, v in prefs.items() if not k.startswith("avoid:")}
@@ -138,6 +162,7 @@ async def load_shopping_context(db, user_id: int) -> dict:
         "user_profile": user_profile,
         "supplements": supplements,
         "avoid_list": avoid_list,
+        "kitchen_appliances": kitchen_appliances,
     }
 
 

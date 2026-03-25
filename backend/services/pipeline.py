@@ -52,6 +52,7 @@ async def run_suggestion_pipeline(
         supplements=context["supplements"],
         avoid_list=context["avoid_list"],
         mode=mode,
+        kitchen_appliances=context.get("kitchen_appliances"),
     )
 
     analyst_prompt = build_pipeline_analyst_prompt(

@@ -185,8 +185,17 @@ CREATE TABLE IF NOT EXISTS shopping_list (
     UNIQUE(user_id, item_name)
 );
 
+CREATE TABLE IF NOT EXISTS user_kitchen_appliances (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL REFERENCES users(id),
+    appliance_key   TEXT    NOT NULL,
+    enabled         INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(user_id, appliance_key)
+);
+
 -- Indices on frequently-filtered foreign key columns
 CREATE INDEX IF NOT EXISTS idx_shopping_list_user ON shopping_list(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_kitchen_appliances_user ON user_kitchen_appliances(user_id);
 CREATE INDEX IF NOT EXISTS idx_ingredient_inventory_user ON ingredient_inventory(user_id);
 CREATE INDEX IF NOT EXISTS idx_ingredient_group_memory_user ON ingredient_group_memory(user_id);
 CREATE INDEX IF NOT EXISTS idx_meal_history_user ON meal_history(user_id);

@@ -8,6 +8,7 @@ import {
   addFavorite,
 } from '../services/api'
 import WeeklySummary from './WeeklySummary'
+import KitchenSettings from './KitchenSettings'
 import MealEditor from './MealEditor'
 import StarRating from './StarRating'
 import * as s from './SettingsPanel.styles'
@@ -305,6 +306,11 @@ export default function SettingsPanel({ visible }) {
     return <WeeklySummary onBack={() => setView('settings')} />
   }
 
+  // --- Kitchen sub-page ---
+  if (view === 'kitchen') {
+    return <KitchenSettings onBack={() => setView('settings')} />
+  }
+
   // --- Meal History sub-page ---
   if (view === 'meals') {
     return (
@@ -590,6 +596,13 @@ export default function SettingsPanel({ visible }) {
               <button style={s.addBtn} onClick={handleAddSupplement}>+</button>
             </div>
           </div>
+        </div>
+
+        {/* Kitchen — navigates to sub-page */}
+        <div style={s.section}>
+          <button style={s.navBtn} onClick={() => setView('kitchen')}>
+            Kitchen →
+          </button>
         </div>
 
         {/* Weekly Summary — navigates to sub-page */}

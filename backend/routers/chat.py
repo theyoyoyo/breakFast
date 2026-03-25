@@ -171,6 +171,7 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                     inferred_habits=cached_context["inferred_habits"],
                     health_rules=cached_context["health_rules"],
                     avoid_list=cached_context["avoid_list"],
+                    kitchen_appliances=cached_context.get("kitchen_appliances"),
                 )
 
                 # Load persisted conversation history for LLM context

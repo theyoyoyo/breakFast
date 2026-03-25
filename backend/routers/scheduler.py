@@ -136,7 +136,12 @@ async def get_schedule(body: ScheduleRequest, user_id: int = Depends(require_use
     else:
         ingredients_str = "malzeme listesi yok"
 
-    system_prompt = build_scheduler_prompt(body.meal_name, body.steps, ingredients_str)
+    # Fetch user's kitchen appliances for the prompt
+    from services.context import fetch_kitchen_appliances
+    async with get_db() as db:
+        kitchen_appliances = await fetch_kitchen_appliances(db, user_id)
+
+    system_prompt = build_scheduler_prompt(body.meal_name, body.steps, ingredients_str, kitchen_appliances=kitchen_appliances)
     user_message = build_scheduler_user_message(body.meal_name, body.steps, ingredients_str)
 
     # Collect full LLM response
