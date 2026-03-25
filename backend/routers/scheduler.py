@@ -1,8 +1,9 @@
 """
 /scheduler endpoint — kitchen prep timeline for a specific meal.
 
-Decomposes meal steps into parallel tasks using an LLM, then runs the
-job-shop scheduler. Supports caching via meal_history.schedule column.
+LLM extracts a structured plan (prep + timed tasks). We handle the scheduling
+math: timed tasks are scheduled backwards so everything finishes together.
+Supports caching via meal_history.schedule column.
 """
 
 import json
@@ -15,7 +16,6 @@ from database import get_db
 from services.suggestion import stream_response
 from services.personas import build_scheduler_prompt, build_scheduler_user_message
 from services.llm import LLMUnavailableError, lyric_cycler
-from services.scheduler import Task, schedule
 from services.knowledge import format_ingredient_item
 from utils import extract_json_block
 
@@ -34,6 +34,76 @@ class ScheduleResponse(BaseModel):
     makespan_min: float
     formatted: str
     cached: bool = False
+
+
+def _build_plan(raw: dict) -> dict:
+    """
+    Take the LLM's {prep, timed} output and produce a formatted plan.
+
+    Timed tasks are scheduled backwards so they all finish at the same time.
+    """
+    prep = raw.get("prep", [])
+    timed = raw.get("timed", [])
+
+    if not timed:
+        makespan = 0
+    else:
+        makespan = max(t.get("duration_min", 0) for t in timed)
+
+    # Build timeline: timed tasks start at (makespan - duration) so they all end together
+    timeline = []
+    for t in timed:
+        dur = t.get("duration_min", 0)
+        start = makespan - dur
+        timeline.append({
+            "start_min": round(start, 1),
+            "task": t.get("task", "?"),
+            "duration_min": dur,
+            "resource": t.get("resource", ""),
+            "end_action": t.get("end_action", ""),
+        })
+
+    # Sort by start time (earliest first), then by duration desc for ties
+    timeline.sort(key=lambda t: (t["start_min"], -t["duration_min"]))
+
+    # Format
+    lines = []
+
+    if prep:
+        lines.append("🔪 Hazırlık")
+        for p in prep:
+            task = p.get("task", "?") if isinstance(p, dict) else str(p)
+            detail = p.get("detail", "") if isinstance(p, dict) else ""
+            line = f"  • {task}"
+            if detail:
+                line += f" — {detail}"
+            lines.append(line)
+        lines.append("")
+
+    if timeline:
+        lines.append(f"⏱ Zamanlama ({int(makespan)} dk)")
+        for entry in timeline:
+            m = int(entry["start_min"])
+            s = int((entry["start_min"] - m) * 60)
+            res = f"  [{entry['resource']}]" if entry["resource"] else ""
+            lines.append(
+                f"  {m}:{s:02d}  — {entry['task']} ({entry['duration_min']:.0f} dk){res}"
+            )
+            if entry["end_action"]:
+                lines.append(f"         ↳ {entry['end_action']}")
+
+        # Final "done" line
+        done_m = int(makespan)
+        done_s = int((makespan - done_m) * 60)
+        lines.append(f"  {done_m}:{done_s:02d}  — Hazır! ✓")
+
+    formatted = "\n".join(lines)
+
+    return {
+        "timeline": timeline,
+        "makespan_min": makespan,
+        "formatted": formatted,
+    }
 
 
 @router.post("/plan", response_model=ScheduleResponse)
@@ -58,7 +128,7 @@ async def get_schedule(body: ScheduleRequest, user_id: int = Depends(require_use
                 )
 
     if not body.steps:
-        return ScheduleResponse(timeline=[], makespan_min=0, formatted="No steps provided.")
+        return ScheduleResponse(timeline=[], makespan_min=0, formatted="Adım bulunamadı.")
 
     # Format ingredients for the prompt
     if body.ingredients:
@@ -83,37 +153,17 @@ async def get_schedule(body: ScheduleRequest, user_id: int = Depends(require_use
 
     response_text = "".join(full_response)
 
-    # Parse the JSON task array from LLM output
-    raw_tasks = extract_json_block(response_text)
-    if not raw_tasks or not isinstance(raw_tasks, list):
+    # Parse the JSON plan from LLM output
+    raw_plan = extract_json_block(response_text)
+    if not raw_plan or not isinstance(raw_plan, dict):
         return ScheduleResponse(
             timeline=[],
             makespan_min=0,
-            formatted="Could not parse schedule from LLM response.",
+            formatted="Plan ayrıştırılamadı.",
         )
 
-    # Convert to Task objects
-    tasks = []
-    for t in raw_tasks:
-        if not isinstance(t, dict):
-            continue
-        tasks.append(Task(
-            name=t.get("name", "?"),
-            resource=t.get("resource", "hands"),
-            duration_min=float(t.get("duration_min", 1)),
-            predecessors=t.get("predecessors", []),
-            item=t.get("item", ""),
-        ))
-
-    if not tasks:
-        return ScheduleResponse(
-            timeline=[],
-            makespan_min=0,
-            formatted="No tasks extracted from steps.",
-        )
-
-    # Run the scheduler
-    result = schedule(tasks)
+    # Build the schedule ourselves
+    result = _build_plan(raw_plan)
 
     # Cache if meal_id was provided
     if body.meal_id is not None:

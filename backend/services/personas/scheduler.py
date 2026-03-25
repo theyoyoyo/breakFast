@@ -1,47 +1,62 @@
 """
-Scheduler persona — decomposes meal steps into parallel kitchen tasks.
+Scheduler persona — extracts a structured cooking plan from meal steps.
 
-The LLM extracts structured Task objects from a meal's steps and ingredients,
-which are then fed to the job-shop scheduler for optimal parallel execution.
+The LLM focuses on producing a detailed, clear plan. It splits tasks into:
+- prep: quick manual tasks with no timing (chop, plate, mix)
+- timed: tasks that need a specific resource for a specific duration
+
+All scheduling math (parallel execution, backward timing) is handled by our code.
 """
 
-SCHEDULER_TEMPLATE = """You are a kitchen workflow expert. Your job is to decompose a meal's preparation steps into discrete parallel tasks for a kitchen scheduler.
+SCHEDULER_TEMPLATE = """Sen bir mutfak organizasyon uzmanısın. Görevin bir yemeğin hazırlık adımlarını analiz edip detaylı bir plan çıkarmak.
 
-Given a meal's steps and ingredients, output a JSON array of task objects. Each task has:
-- "name": short task description (e.g. "boil eggs", "toast bread")
-- "resource": exactly one of: "air_fryer", "toaster", "stove", "hands", "none"
-  - "hands" = manual work (chopping, plating, mixing)
-  - "none" = passive waiting (resting dough, cooling)
-  - "stove" = stovetop/pot/pan
-  - "toaster" = toaster or oven
-  - "air_fryer" = air fryer
-- "duration_min": estimated duration in minutes (float)
-- "predecessors": list of task names that must finish before this one starts (empty list if none)
-- "item": which ingredient/food item this task belongs to
+Verilen adımları ve malzemeleri inceleyip iki gruba ayır:
 
-Rules:
-- Break compound steps into separate tasks when they use different resources
-- Identify parallelism: tasks on different resources can run simultaneously
-- Be realistic about durations
-- Keep task names short and unique
-- Only output the JSON array, nothing else
+1. **prep** (hazırlık): Zamanlaması önemli olmayan kısa işler — doğrama, tabağa koyma, karıştırma, küçük kaselere ayırma vb. Bunlar en başta yapılır.
 
-Output ONLY a JSON array wrapped in ```json ... ``` fences."""
+2. **timed** (zamanlı): Belirli bir süre boyunca bir cihaz/kaynak kullanan işler — haşlama, kızartma, fırınlama, tostlama vb. Her biri için:
+   - Süreyi dakika olarak belirt
+   - Kaynak: "ocak", "tost_makinesi", "airfryer", "tava" veya "fırın"
+   - Bitişte ne yapılması gerektiğini belirt (süz, çıkar, ters çevir vb.)
+
+Kurallar:
+- Tarifte yazanları genişlet — eksik ama gerekli adımları ekle (örn: tarif "haşla" diyorsa "süz ve soğuk suya al" adımını da ekle)
+- Süreleri gerçekçi tut
+- Her adımı açık ve anlaşılır yaz
+- Sadece JSON çıktı ver, başka bir şey yazma
+
+Çıktı formatı (```json ... ``` arasında):
+
+```json
+{
+  "prep": [
+    {"task": "Domates ve salatalığı dilimle", "detail": "ince halkalar halinde"}
+  ],
+  "timed": [
+    {
+      "task": "Yumurtaları haşla",
+      "duration_min": 7,
+      "resource": "ocak",
+      "end_action": "Süzgeçle süz, soğuk suya al"
+    }
+  ]
+}
+```"""
 
 
 def build_scheduler_prompt(meal_name: str, steps: list[str], ingredients_str: str) -> str:
-    """Build the system prompt for task decomposition."""
+    """Build the system prompt for plan extraction."""
     return SCHEDULER_TEMPLATE
 
 
 def build_scheduler_user_message(meal_name: str, steps: list[str], ingredients_str: str) -> str:
     """Build the user message with meal details."""
     steps_text = "\n".join(f"{i+1}. {s}" for i, s in enumerate(steps))
-    return f"""Meal: {meal_name}
+    return f"""Yemek: {meal_name}
 
-Ingredients: {ingredients_str}
+Malzemeler: {ingredients_str}
 
-Steps:
+Adımlar:
 {steps_text}
 
-Decompose into parallel kitchen tasks (JSON array):"""
+Bu yemeğin hazırlık planını çıkar:"""

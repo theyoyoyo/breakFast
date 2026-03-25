@@ -56,15 +56,19 @@ const DEMO_MEAL = {
 // Demo schedule output — shows what the scheduler produces
 const DEMO_SCHEDULE = `📋 Serpme Kahvaltı — Hazırlık Planı
 
-0:00  — Yumurta — kaynar suda haşla  [ocak]
-0:00  — Domates, salatalık — doğra  [elle]
-2:00  — Peynir, zeytin — tabağa yerleştir  [elle]
-3:00  — Ekmek — dilimle ve tost  [tost makinesi]
-4:00  — Bal, tereyağı — kaselere koy  [elle]
-5:00  — Servis — tabağı düzenle  [elle]
-Toplam süre: 7 dakika.
+🔪 Hazırlık
+  • Domates ve salatalığı dilimle — ince halkalar halinde
+  • Beyaz peyniri küçük küpler halinde kes
+  • Zeytinleri süzüp tabağa yerleştir
+  • Bal ve tereyağını küçük kaselere koy
+  • Ekmeği 3 dilim kes
 
-⏱ Ocak ve tost makinesi paralel çalışarak 12 dk yerine 7 dk'da hazır!`
+⏱ Zamanlama (7 dk)
+  0:00  — Yumurtaları kaynar suya koy (7 dk)  [ocak]
+         ↳ Süzgeçle süz, soğuk suya al ve soy
+  5:00  — Ekmek dilimlerini tost makinesine koy (2 dk)  [tost makinesi]
+         ↳ Çıkar ve tabağa yerleştir
+  7:00  — Hazır! ✓`
 
 export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref) {
   const [messages, setMessages] = useState([WELCOME_MSG])
