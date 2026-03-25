@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react'
-import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, saveSessionMessage, getTodaySupplements, toggleSupplement, analyzeMeal } from '../services/api'
+import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, saveSessionMessage, getTodaySupplements, toggleSupplement, analyzeMeal, getSchedule } from '../services/api'
 import { useVoice } from '../hooks/useVoice'
 import SuggestButton from './SuggestButton'
 import DecidePanel from './DecidePanel'
@@ -7,6 +7,36 @@ import MealBlock from './MealBlock'
 import * as s from './ChatInterface.styles'
 
 const WELCOME_MSG = { role: 'assistant', content: "Good morning! Tell me what's in your fridge and I'll plan your breakfast." }
+
+// Client-side lyric fallback — mirrors backend's FALLBACK_LYRICS exactly.
+// When the server returns a lyric (LLM down), we detect which one it is
+// and advance our index so client-side fallback continues the sequence
+// if the server becomes unreachable next.
+const OFFLINE_LYRICS = [
+  "Benim aklım başımda değil~",
+  "🎶 Sana söylediklerimi kafana takma ne olursun...",
+  "🎵 Onlar ipe sapa gelir şeyler değil!",
+  "💔 Seni sevmiyorum dedim; yalandı~",
+  "🎶 İstemiyorum artık; palavra!",
+  "💐 Ellerimde çiçekler~",
+  "🌧️ Kapında sırıksıklam...",
+  "👀 Görürsen bir gün şaşırma~",
+  "🎵 Beni böyle çaresiz...",
+  "🎶 Beni böyle derbeder...",
+  "🎵 Beni böyle ortalarda bırakma!",
+  "🙈 Son zamanlar yaptıklarıma bakma ne olursun~",
+]
+let _lyricIdx = 0
+function nextLyric() {
+  const line = OFFLINE_LYRICS[_lyricIdx]
+  _lyricIdx = (_lyricIdx + 1) % OFFLINE_LYRICS.length
+  return line
+}
+/** Call when we receive a lyric from the server — syncs client index. */
+function syncLyric(serverLyric) {
+  const idx = OFFLINE_LYRICS.indexOf(serverLyric)
+  if (idx !== -1) _lyricIdx = (idx + 1) % OFFLINE_LYRICS.length
+}
 
 // Pipeline progress step labels (Turkish)
 const PIPELINE_STEPS = {
@@ -53,6 +83,23 @@ const DEMO_MEAL = {
   nutrition_note: 'Protein, kalsiyum ve sağlıklı yağlar açısından zengin bir öğün.',
 }
 
+// Demo schedule output — shows what the scheduler produces
+const DEMO_SCHEDULE = `📋 Serpme Kahvaltı — Hazırlık Planı
+
+🔪 Hazırlık
+  • Domates ve salatalığı dilimle — ince halkalar halinde
+  • Beyaz peyniri küçük küpler halinde kes
+  • Zeytinleri süzüp tabağa yerleştir
+  • Bal ve tereyağını küçük kaselere koy
+  • Ekmeği 3 dilim kes
+
+⏱ Zamanlama (7 dk)
+  0:00  — Yumurtaları kaynar suya koy (7 dk)  [ocak]
+         ↳ Süzgeçle süz, soğuk suya al ve soy
+  5:00  — Ekmek dilimlerini tost makinesine koy (2 dk)  [tost makinesi]
+         ↳ Çıkar ve tabağa yerleştir
+  7:00  — Hazır! ✓`
+
 export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref) {
   const [messages, setMessages] = useState([WELCOME_MSG])
   const [input, setInput] = useState('')
@@ -70,6 +117,8 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
   const [checkedMealIdx, setCheckedMealIdx] = useState(null)
   // analyzingIdx: the message index of a meal block currently being analyzed (null = idle)
   const [analyzingIdx, setAnalyzingIdx] = useState(null)
+  // schedulingIdx: the message index of a meal block getting a prep timeline (null = idle)
+  const [schedulingIdx, setSchedulingIdx] = useState(null)
   // pipelineStep: current pipeline progress step (null = not in pipeline)
   const [pipelineStep, setPipelineStep] = useState(null)
   const wsRef = useRef(null)
@@ -104,6 +153,9 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     injectDemoMeal: () => {
       const introText = 'İşte sana güzel bir serpme kahvaltı önerisi! 🫕\n\nTaze ve dengeli malzemelerle hazırlanan klasik bir Türk kahvaltısı.'
       injectMealToChat(DEMO_MEAL, introText)
+    },
+    injectDemoSchedule: () => {
+      setMessages(prev => [...prev, { role: 'assistant', content: DEMO_SCHEDULE }])
     },
     injectFavoriteMeal: (meal) => {
       const introText = `⭐ Favorilerden: ${meal.meal_name}\n\n${meal.description || 'Afiyet olsun!'}`
@@ -211,6 +263,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       // onDone
       (full) => {
         setPipelineStep(null)
+        syncLyric(full) // keep client lyric index in sync if this was a fallback lyric
         if (abortedRef.current) {
           // Already handled by handleStop
           abortedRef.current = false
@@ -430,19 +483,44 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       const displayText = result.analysis_text
         ? result.analysis_text.replace(/```json[\s\S]*?```/g, '').trim()
         : 'Analiz sonucu alınamadı.'
+      syncLyric(displayText) // keep client lyric index in sync if this was a fallback lyric
       const analysisMsg = `📊 ${meal.meal_name || 'Meal'} — Besin Analizi\n\n${displayText}`
       setMessages(prev => [...prev, { role: 'assistant', content: analysisMsg }])
     } catch {
       if (abortCtrl.cancelled) return
-      setMessages(prev => [...prev, { role: 'assistant', content: '📊 Analiz yapılamadı — sunucuya ulaşılamıyor.' }])
+      setMessages(prev => [...prev, { role: 'assistant', content: `📊 ${meal.meal_name || 'Meal'} — Besin Analizi\n\n${nextLyric()}` }])
     } finally {
       analyzeAbortRef.current = null
       if (!abortCtrl.cancelled) setAnalyzingIdx(null)
     }
   }, [mealBlocks, analyzingIdx, streamBuffer])
 
-  // True when anything is busy (streaming or analyzing)
-  const isBusy = streamBuffer !== null || analyzingIdx !== null
+  const handleSchedule = useCallback(async (msgIdx) => {
+    const meal = mealBlocks[msgIdx]
+    if (!meal || streamBuffer !== null || schedulingIdx !== null) return
+    setSchedulingIdx(msgIdx)
+    try {
+      const result = await getSchedule(
+        meal.meal_name || 'Meal',
+        meal.steps || [],
+        meal.ingredients || [],
+        meal.id || null,
+      )
+      const text = result.formatted || 'Zamanlama oluşturulamadı.'
+      syncLyric(text) // keep client lyric index in sync if this was a fallback lyric
+      const idTag = meal.id ? ` (#${meal.id})` : ''
+      const scheduleMsg = `📋 ${meal.meal_name || 'Meal'}${idTag} — Hazırlık Planı\n\n${text}`
+      setMessages(prev => [...prev, { role: 'assistant', content: scheduleMsg }])
+    } catch {
+      const idTag = meal.id ? ` (#${meal.id})` : ''
+      setMessages(prev => [...prev, { role: 'assistant', content: `📋 ${meal.meal_name || 'Meal'}${idTag} — Hazırlık Planı\n\n${nextLyric()}` }])
+    } finally {
+      setSchedulingIdx(null)
+    }
+  }, [mealBlocks, schedulingIdx, streamBuffer])
+
+  // True when anything is busy (streaming, analyzing, or scheduling)
+  const isBusy = streamBuffer !== null || analyzingIdx !== null || schedulingIdx !== null
 
   // Get the checked meal for DecidePanel (priority: checked block > null)
   const checkedMeal = checkedMealIdx !== null ? mealBlocks[checkedMealIdx] : null
@@ -491,6 +569,8 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
                   onSave={(updated) => setMealBlocks(prev => ({ ...prev, [i]: updated }))}
                   onAnalyze={() => handleAnalyze(i)}
                   analyzing={analyzingIdx === i}
+                  onSchedule={() => handleSchedule(i)}
+                  scheduling={schedulingIdx === i}
                 />
               )}
             </div>

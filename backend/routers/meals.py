@@ -116,14 +116,14 @@ async def delete_old_meals(user_id: int = Depends(require_user)):
 
 @router.put("/{meal_id}", response_model=Meal)
 async def update_meal(meal_id: int, body: MealLog, user_id: int = Depends(require_user)):
-    """Update a meal's details. Clears cached_nutrition since ingredients may have changed."""
+    """Update a meal's details. Clears cached analysis and schedule since content may have changed."""
     async with get_db() as db:
         cursor = await db.execute(
             """
             UPDATE meal_history SET
                 meal_name = ?, description = ?, ingredients = ?,
                 steps = ?, prep_time_min = ?, nutrition_note = ?,
-                cached_nutrition = NULL
+                cached_nutrition = NULL, schedule = NULL
             WHERE id = ? AND user_id = ?
             """,
             (

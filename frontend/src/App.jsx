@@ -90,8 +90,10 @@ export default function App() {
             key={key}
             style={s.tab(activeTab === key)}
             onClick={() => {
-              if (key === activeTab && key === 'Ingredients' && auth.user.name === 'demo') {
-                ingredientRef.current?.injectDemoShopping()
+              if (key === activeTab && auth.user.name === 'demo') {
+                if (key === 'Chat') chatRef.current?.injectDemoSchedule()
+                else if (key === 'Ingredients') ingredientRef.current?.injectDemoShopping()
+                else setActiveTab(key)
               } else {
                 setActiveTab(key)
               }

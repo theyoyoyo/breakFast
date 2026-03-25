@@ -24,7 +24,7 @@ function pickEmoji() {
  * Shows checkbox, meal names, prep time, and analysis button.
  * Click opens the shared MealEditor in an overlay.
  */
-export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, analyzing }) {
+export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, analyzing, onSchedule, scheduling }) {
   const [panelOpen, setPanelOpen] = useState(false)
   const [favSaving, setFavSaving] = useState(false)
   const [favAdded, setFavAdded] = useState(false)
@@ -77,6 +77,14 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
           <span style={s.blockText}>{displayNames}</span>
           {meal?.prep_time_min && <span style={s.prepBadge}>⏱ {meal.prep_time_min}m</span>}
         </div>
+        <button
+          style={s.analyzeBtn(scheduling)}
+          onClick={(e) => { e.stopPropagation(); onSchedule?.() }}
+          disabled={scheduling}
+          title="Prep timeline"
+        >
+          {scheduling ? '⏳' : '📋'}
+        </button>
         <button
           style={s.analyzeBtn(analyzing)}
           onClick={(e) => { e.stopPropagation(); onAnalyze?.() }}
