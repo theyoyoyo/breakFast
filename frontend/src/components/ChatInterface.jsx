@@ -8,22 +8,34 @@ import * as s from './ChatInterface.styles'
 
 const WELCOME_MSG = { role: 'assistant', content: "Good morning! Tell me what's in your fridge and I'll plan your breakfast." }
 
-// Client-side lyric fallback for when backend is completely unreachable
+// Client-side lyric fallback — mirrors backend's FALLBACK_LYRICS exactly.
+// When the server returns a lyric (LLM down), we detect which one it is
+// and advance our index so client-side fallback continues the sequence
+// if the server becomes unreachable next.
 const OFFLINE_LYRICS = [
   "Benim aklım başımda değil~",
   "🎶 Sana söylediklerimi kafana takma ne olursun...",
   "🎵 Onlar ipe sapa gelir şeyler değil!",
   "💔 Seni sevmiyorum dedim; yalandı~",
+  "🎶 İstemiyorum artık; palavra!",
   "💐 Ellerimde çiçekler~",
   "🌧️ Kapında sırıksıklam...",
   "👀 Görürsen bir gün şaşırma~",
+  "🎵 Beni böyle çaresiz...",
+  "🎶 Beni böyle derbeder...",
   "🎵 Beni böyle ortalarda bırakma!",
+  "🙈 Son zamanlar yaptıklarıma bakma ne olursun~",
 ]
 let _lyricIdx = 0
 function nextLyric() {
   const line = OFFLINE_LYRICS[_lyricIdx]
   _lyricIdx = (_lyricIdx + 1) % OFFLINE_LYRICS.length
   return line
+}
+/** Call when we receive a lyric from the server — syncs client index. */
+function syncLyric(serverLyric) {
+  const idx = OFFLINE_LYRICS.indexOf(serverLyric)
+  if (idx !== -1) _lyricIdx = (idx + 1) % OFFLINE_LYRICS.length
 }
 
 // Pipeline progress step labels (Turkish)
@@ -251,6 +263,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       // onDone
       (full) => {
         setPipelineStep(null)
+        syncLyric(full) // keep client lyric index in sync if this was a fallback lyric
         if (abortedRef.current) {
           // Already handled by handleStop
           abortedRef.current = false
@@ -470,6 +483,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       const displayText = result.analysis_text
         ? result.analysis_text.replace(/```json[\s\S]*?```/g, '').trim()
         : 'Analiz sonucu alınamadı.'
+      syncLyric(displayText) // keep client lyric index in sync if this was a fallback lyric
       const analysisMsg = `📊 ${meal.meal_name || 'Meal'} — Besin Analizi\n\n${displayText}`
       setMessages(prev => [...prev, { role: 'assistant', content: analysisMsg }])
     } catch {
@@ -493,6 +507,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
         meal.id || null,
       )
       const text = result.formatted || 'Zamanlama oluşturulamadı.'
+      syncLyric(text) // keep client lyric index in sync if this was a fallback lyric
       const idTag = meal.id ? ` (#${meal.id})` : ''
       const scheduleMsg = `📋 ${meal.meal_name || 'Meal'}${idTag} — Hazırlık Planı\n\n${text}`
       setMessages(prev => [...prev, { role: 'assistant', content: scheduleMsg }])
