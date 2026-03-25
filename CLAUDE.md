@@ -83,10 +83,11 @@ rules. Actual behavior over time gradually updates what the system recommends.
           v
    [SQLite Database]
    - users, chat_sessions, chat_messages
-   - ingredient_inventory, meal_history
+   - ingredient_inventory, ingredient_group_memory
+   - favorite_ingredients, shopping_list
+   - meal_history, product_ratings
    - user_preferences, user_habits, health_rules
    - user_profiles, user_supplements, supplement_daily_log
-   - product_ratings
 ```
 
 On home WiFi, the phone and desktop connect to the FastAPI backend directly over the
@@ -115,7 +116,7 @@ into the system prompt at runtime — never referenced or explained to the user.
 
 ## Features
 
-Phase 1 and Phase 2 are complete. Phase 3 is next.
+Phase 1 and Phase 2 are complete. Phase 3 is in progress.
 
 ### Phase 1 — MVP (COMPLETE)
 
@@ -144,11 +145,54 @@ Phase 1 and Phase 2 are complete. Phase 3 is next.
 - Song lyric fallback when Ollama is unreachable
 - Settings page (profile, supplements, health rules, ratings, data management)
 
-### Phase 3 — Smart Layer (NEXT)
+### Phase 3 — Smart Layer (IN PROGRESS)
+
+#### Completed
+
+**Ingredient expiry tracking.** Ingredients have an optional expiry date. The system
+checks for expired items and notifies the user via a compact widget on the Fridge tab.
+Users can take action per item: "Thrown" (delete), "Keep" (acknowledge but retain), or
+"Shopping" (delete and add to shopping list). Kept items show a `(kept)` indicator
+next to their bold expiry date in the main list, and the expiry panel header shows
+`· N kept` count. No automatic depletion tracking — users manage inventory manually.
+
+**Ingredient groups.** 10 fixed Turkish groups with emojis: 🐄 Hayvansal, 🥬 Sebze
+Meyve, 🍞 Ekmekler, 🍯 Tatlılar, 🫒 Kahvaltılık, 🥜 Kuruyemişler, 🌱 Bitkisel,
+☕ İçecekler, 🧂 Baharatlar, 🍽️ Diğer. No custom group creation or deletion. Groups
+are collapsible with collapse state persisted in localStorage. Empty groups are hidden.
+Deterministic background colors hashed from group name. Group dropdown in add/edit
+panels. Group memory via `ingredient_group_memory` table ensures re-added ingredients
+return to their previous group automatically. New ingredients default to 🍽️ Diğer.
+Group names are Turkish and fed to LLM personas for context. The group list is defined
+in `backend/models/ingredient.py` (INGREDIENT_GROUPS) and mirrored in
+`IngredientPanel.jsx`. The number of groups can be adjusted in the future by editing
+these two locations.
+
+**Favorite ingredients.** A "staples" list independent from the ingredient inventory —
+favorites survive when items are deleted from the fridge. Stored in the
+`favorite_ingredients` DB table with per-user isolation. Heart toggle ❤️ on each
+ingredient row (optimistic UI with revert on failure). ❤️ button in Fridge header
+opens an overlay panel listing all favorites. Each favorite can be individually added
+to the shopping list, or bulk-added via "Add All" button. Panel cross-references
+the shopping list to show "In list" / "Added" status per item. Backend CRUD at
+`/favorite-ingredients/` (GET list, POST add 201/409, DELETE by name 200/404).
+
+**Shopping list.** Persistent shopping list with CRUD endpoints. "Bought" flow adds
+checked items back as ingredients. Accessible from Fridge tab header via 🛒 button.
+
+**Delete confirm redesign.** Clicking the trash icon on an ingredient no longer
+instantly deletes. Instead, two inline buttons appear below the trash: 🗑️ (confirm
+delete) and 🛒 (delete + add to shopping list). Clicking anywhere else on the page
+dismisses without deleting — this serves as the cancel/confirm mechanism.
+
+**Fridge tab rename.** The Ingredients tab was renamed to "Fridge" (header text and
+tab label in App.jsx).
+
+#### Remaining
 
 **Habit import and onboarding.** A one-time onboarding conversation where the user
 introduces their habits as a warm starting prior. Always editable afterward through
-the preferences panel. The exact onboarding flow is to be decided when Phase 3 begins.
+the preferences panel. The exact onboarding flow is to be decided.
 
 **Explore mode — "suggest me something new."** A first-class suggestion mode alongside
 the default comfort mode. Steps deliberately outside the user's meal history while
@@ -157,22 +201,12 @@ technique graph from history and suggests adjacent-but-novel meals — not rando
 leaps. If the user frequently eats eggs and tomatoes and rates savory meals highly,
 shakshuka is a good novel suggestion even if they've never made it.
 
-**Ingredient expiry tracking.** Ingredients can have an optional expiry date. The
-system checks for expired items since the last check and notifies the user via a
-compact widget on the Ingredients page. Users confirm removal with a "Thrown" action.
-No automatic depletion tracking — users manage their own inventory manually.
-
-**Ingredient groups.** Users can organize ingredients into custom-named groups (e.g.,
-"Dairy", "Spreads"). All items are always visible — no collapse. Group memory ensures
-re-added ingredients return to their previous group automatically.
-
-**Shopping assistant.** A new LLM persona — a professional shopping advisor that
-cross-references inventory, meal history, preferences, favorites, habits, health
-rules, supplements, and behavioral patterns. Over-suggests intentionally to expand
-and enrich the user's breakfast experience. Shopping suggestions appear in a compact
-widget on the Ingredients page; users pick what they want and send it to a persistent
-shopping list. The shopping list has a "Bought" flow that adds checked items back as
-ingredients.
+**Shopping assistant (LLM persona).** A new LLM persona — a professional shopping
+advisor that cross-references inventory, meal history, preferences, favorites, habits,
+health rules, supplements, and behavioral patterns. Over-suggests intentionally to
+expand and enrich the user's breakfast experience. Shopping suggestions appear in a
+compact widget on the Fridge tab; users pick what they want and send it to the
+persistent shopping list.
 
 **Weekly nutrition summary.** Extend the existing weekly summary view with deeper
 nutritional analysis — what bases the user has covered this week and what's missing.
@@ -199,18 +233,17 @@ assigning two tasks to the same resource simultaneously.
 
 ### Available Resources
 
-- Air fryer (one)
+- Air fryer (one) — can hold multiple similar items simultaneously (e.g., onion
+  rings + potato fries + spring rolls + frozen pastries in one batch)
 - Toaster — Turkish-style, broader than a Western toaster (one)
-- Stove (one active burner assumed unless specified)
+- Stove — multiple burners can be used simultaneously
 - Hands — can only do one active manual task at a time, but can monitor a running
   appliance simultaneously
 
-### Thermal Momentum
-
-When the air fryer is used for one item and another item needs it shortly after, the
-second item benefits from residual heat and may cook faster. The scheduler prefers
-sequencing air fryer tasks back-to-back when possible and notes the thermal benefit
-in the output.
+**Note:** The available resources list here is the current default set. A planned
+Kitchen Settings feature will let users configure which appliances they own (see
+`docs/kitchen_task.md`). Once implemented, the scheduler should use the user's
+configured appliances instead of this hardcoded list.
 
 ### Output Format
 
@@ -256,19 +289,22 @@ be added in Phase 3 as an accuracy improvement.
 
 ---
 
-## LLM System Prompts (Three Personas)
+## LLM System Prompts (Six Personas)
 
-The system uses three distinct personas defined in `backend/services/suggestion.py`.
+The system uses six distinct personas defined in `backend/services/personas/`.
 Prompts are written in English with "Always respond in Turkish" instruction — this
 produces better results with Llama 3.1 8B than fully Turkish prompts. Turkish versions
 are kept as comments for a future "Turkish brain / English brain" toggle.
 
-| Persona | Job | Temperature | Defined in |
+| Persona | Job | Temperature | File |
 |---|---|---|---|
-| Chat | Casual breakfast buddy | Ollama default | `build_chat_prompt` |
-| Suggestion (favorites) | Creative meal designer | 0.6 | `build_suggestion_prompt` |
-| Suggestion (explore) | Creative meal designer | 0.9 | `build_suggestion_prompt` |
-| Analyst | Nutrition calculator + food expert | 0.3 | `build_analyst_prompt` |
+| Chat | Casual breakfast buddy | Ollama default | `personas/chat.py` |
+| Suggestion (comfort) | Creative meal designer | 0.6 | `personas/dietitian.py` |
+| Suggestion (explore) | Creative meal designer | 0.9 | `personas/dietitian.py` |
+| Analyst | Nutrition calculator + food expert | 0.3 | `personas/analyst.py` |
+| Pipeline Analyst | Internal harsh reviewer for suggestion refinement | 0.3 | `personas/pipeline_analyst.py` |
+| Shopping | Professional shopping advisor | 0.6 | `personas/shopping.py` |
+| Scheduler | Kitchen workflow expert (task decomposition) | 0.3 | `personas/scheduler.py` |
 
 ### Chat Persona (`build_chat_prompt`)
 
@@ -323,10 +359,10 @@ Progress updates are streamed to the frontend via WebSocket `{type: 'progress'}`
 
 ### Shared Context Formatters
 
-All three personas share formatting functions for ingredients, history, preferences,
+All personas share formatting functions for ingredients, history, preferences,
 habits, health rules, behavioral patterns, user profile, and supplements. These
 are injected into template placeholders at runtime. Food knowledge data lives in
-`backend/services/knowledge.py` and is shared by Suggestion and Analyst.
+`backend/services/knowledge.py` and is shared by Suggestion, Analyst, and Shopping.
 
 ---
 
@@ -355,9 +391,10 @@ breakFAST/
 │   │   ├── analyst.py             ← /analyst/analyze meal analysis endpoint
 │   │   ├── auth.py                  ← /auth/login endpoint
 │   │   ├── chat.py                  ← /chat WebSocket endpoint
+│   │   ├── favorite_ingredients.py ← /favorite-ingredients CRUD (staples list)
 │   │   ├── favorites.py            ← /favorites CRUD endpoints
 │   │   ├── health_rules.py        ← /health-rules CRUD with priority
-│   │   ├── ingredients.py           ← /ingredients CRUD endpoints
+│   │   ├── ingredients.py           ← /ingredients CRUD + /ingredients/groups
 │   │   ├── meals.py                 ← /meals history + /meals/weekly
 │   │   ├── preferences.py          ← /preferences + /preferences/habits
 │   │   ├── profile.py             ← /profile + /profile/supplements CRUD
@@ -384,7 +421,7 @@ breakFAST/
 │   │       └── scheduler.py       ← kitchen task decomposition for prep timeline
 │   │
 │   ├── models/
-│   │   ├── ingredient.py            ← Pydantic models for ingredients
+│   │   ├── ingredient.py            ← Pydantic models + INGREDIENT_GROUPS list
 │   │   ├── meal.py                  ← Pydantic models for meals
 │   │   ├── user.py                 ← Pydantic models for auth/users
 │   │   └── preferences.py          ← Pydantic models for user preferences
@@ -405,7 +442,8 @@ breakFAST/
 │       │   ├── test_websocket.py    ← WebSocket chat tests
 │       │   ├── test_sessions.py     ← session management tests
 │       │   ├── test_shopping.py    ← shopping list endpoint tests
-│       │   └── test_scheduler.py  ← scheduler endpoint tests
+│       │   ├── test_scheduler.py  ← scheduler endpoint tests
+│       │   └── test_favorite_ingredients.py ← favorite ingredients tests
 │       └── services/
 │           ├── test_prompts.py      ← prompt builder unit tests
 │           ├── test_scheduler.py    ← scheduler logic unit tests
@@ -420,7 +458,7 @@ breakFAST/
     │   └── manifest.json            ← PWA manifest
     ├── src/
     │   ├── main.jsx                 ← React entry point
-    │   ├── App.jsx                  ← tab navigation (Chat, Ingredients, Preferences, Settings)
+    │   ├── App.jsx                  ← tab navigation (Chat, Fridge, Preferences, Settings)
     │   ├── App.styles.js            ← App layout styles
     │   ├── test-setup.js            ← vitest setup (jest-dom matchers)
     │   ├── styles/
@@ -431,7 +469,8 @@ breakFAST/
     │   │   ├── DecidePanel.jsx      ← "Today I ate..." confirm + rate flow
     │   │   ├── SuggestButton.jsx    ← suggest button + long-press mode panel
     │   │   ├── WeeklySummary.jsx    ← weekly meals summary view
-    │   │   ├── IngredientPanel.jsx  ← inventory viewer/editor + shopping integration
+    │   │   ├── IngredientPanel.jsx  ← Fridge tab: groups, expiry, favorites, shopping
+    │   │   ├── FavoriteIngredientsPanel.jsx ← favorite ingredients overlay panel
     │   │   ├── ShoppingListPanel.jsx ← persistent shopping list overlay
     │   │   ├── PreferencesPanel.jsx ← favorites, dislikes, habits, avoid list
     │   │   ├── SettingsPanel.jsx    ← profile, supplements, ratings, health rules
@@ -473,3 +512,19 @@ the user's taste profile rather than defaulting to familiar choices.
 - **Ingredient icons** — visual icons next to ingredient names in the inventory list.
   Needs discussion on icon source (emoji, icon library, Open Food Facts images, etc.),
   storage approach, and fallback behavior before implementation.
+
+- **LLM drink + food combo quality** — test whether the LLM personas handle combined
+  drink and food suggestions well (e.g., çay + peynirli kahvaltı). If weak, may need
+  prompt tuning or explicit drink pairing instructions in the suggestion persona.
+
+- **Local nutrition dataset** — a small curated dataset for common Turkish breakfast
+  ingredients to supplement Open Food Facts and reduce LLM estimation fallback usage.
+
+- **Kitchen appliances settings** — configurable appliance list per user. Users
+  enable/disable appliances they own from a fixed list. Owned appliances inform the
+  scheduler and suggestion personas. Full spec in `docs/kitchen_task.md`.
+
+- **Known ingredients/meals only** — don't allow user to add meals or ingredients that
+  are not known, so user always eats known stuff. Allow users to enter custom
+  ingredients (with values and use cases depending if LLM knows the word or not) and
+  custom meals (consisting of known ingredients).
