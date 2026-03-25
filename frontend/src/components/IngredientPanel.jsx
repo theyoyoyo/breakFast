@@ -11,8 +11,12 @@ import * as s from './IngredientPanel.styles'
 // ---------------------------------------------------------------------------
 // Fixed ingredient groups (mirrors backend INGREDIENT_GROUPS)
 // ---------------------------------------------------------------------------
-const INGREDIENT_GROUPS = ['🧀 Şarküteri', '🥬 Sebze/Meyve', '🌿 Baharatlar', '📦 Diğer']
-const DEFAULT_GROUP = '📦 Diğer'
+const INGREDIENT_GROUPS = [
+  '🐄 Hayvansal', '🥬 Sebze Meyve', '🍞 Ekmekler', '🍯 Tatlılar',
+  '🫒 Kahvaltılık', '🥜 Kuruyemişler', '🌱 Bitkisel', '☕ İçecekler',
+  '🧂 Baharatlar', '🍽️ Diğer',
+]
+const DEFAULT_GROUP = '🍽️ Diğer'
 
 const COLLAPSE_KEY = 'bf_ingredient_groups_collapsed'
 

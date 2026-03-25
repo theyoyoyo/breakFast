@@ -11,7 +11,7 @@ import * as s from './App.styles'
 
 const TABS = [
   { key: 'Chat', label: 'Chat', Icon: MessageCircle },
-  { key: 'Ingredients', label: 'Ingredients', Icon: Refrigerator },
+  { key: 'Ingredients', label: 'Fridge', Icon: Refrigerator },
   { key: 'Preferences', label: 'Preferences', Icon: SlidersHorizontal },
   { key: 'Favorites', label: 'Favorites', Icon: Star },
   { key: 'Settings', label: 'Settings', Icon: Settings },

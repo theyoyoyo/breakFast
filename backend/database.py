@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS ingredient_inventory (
     name                TEXT    NOT NULL,
     expiry_date         TEXT,
     expiry_acknowledged INTEGER NOT NULL DEFAULT 0,
-    group_name          TEXT    NOT NULL DEFAULT '📦 Diğer',
+    group_name          TEXT    NOT NULL DEFAULT '🍽️ Diğer',
     added_at            TEXT    NOT NULL DEFAULT (datetime('now')),
     updated_at          TEXT    NOT NULL DEFAULT (datetime('now')),
     UNIQUE(user_id, name)
@@ -286,10 +286,27 @@ async def init_db() -> None:
         # Migrate: add group_name column to ingredient_inventory if missing
         try:
             await db.execute(
-                "ALTER TABLE ingredient_inventory ADD COLUMN group_name TEXT NOT NULL DEFAULT '📦 Diğer'"
+                "ALTER TABLE ingredient_inventory ADD COLUMN group_name TEXT NOT NULL DEFAULT '🍽️ Diğer'"
             )
         except Exception:
             pass  # Column already exists
+
+        # Migrate: rename old group names to new ones
+        _GROUP_RENAMES = {
+            "🧀 Şarküteri": "🐄 Hayvansal",
+            "🥬 Sebze/Meyve": "🥬 Sebze Meyve",
+            "🌿 Baharatlar": "🧂 Baharatlar",
+            "📦 Diğer": "🍽️ Diğer",
+        }
+        for old, new in _GROUP_RENAMES.items():
+            await db.execute(
+                "UPDATE ingredient_inventory SET group_name = ? WHERE group_name = ?",
+                (new, old),
+            )
+            await db.execute(
+                "UPDATE ingredient_group_memory SET group_name = ? WHERE group_name = ?",
+                (new, old),
+            )
 
         # Migrate: add last_expiry_check column to users if missing
         try:
