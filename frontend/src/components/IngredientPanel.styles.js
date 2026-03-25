@@ -137,7 +137,6 @@ export const list = {
 export const groupSection = {
   marginBottom: 2,
   borderRadius: 6,
-  overflow: 'hidden',
 }
 
 export const groupHeader = {
