@@ -376,7 +376,7 @@ breakFAST/
 │   │   ├── nutrition.py             ← Open Food Facts integration
 │   │   └── personas/               ← one file per LLM persona for easy editing
 │   │       ├── chat.py             ← samimi kahvaltı arkadaşı
-│   │       ├── suggestion.py       ← profesyonel diyetisyen
+│   │       ├── dietitian.py        ← profesyonel diyetisyen
 │   │       ├── analyst.py          ← nutrition lab / robot
 │   │       ├── pipeline_analyst.py ← internal reviewer for suggestion refinement
 │   │       └── shopping.py         ← professional shopping advisor
@@ -462,3 +462,11 @@ likely to enjoy based on history and preferences.
 
 **Explore mode** — an alternative suggestion mode that finds novel meals adjacent to
 the user's taste profile rather than defaulting to familiar choices.
+
+---
+
+## Future Ideas (Not Yet Implemented — Discuss First)
+
+- **Ingredient icons** — visual icons next to ingredient names in the inventory list.
+  Needs discussion on icon source (emoji, icon library, Open Food Facts images, etc.),
+  storage approach, and fallback behavior before implementation.

@@ -6,6 +6,7 @@ import * as s from './ShoppingListPanel.styles'
 export default function ShoppingListPanel({ open, onClose, onBought }) {
   const [items, setItems] = useState([])
   const [checked, setChecked] = useState({})
+  const [expiryDates, setExpiryDates] = useState({}) // { itemId: 'YYYY-MM-DD' }
   const [newItem, setNewItem] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -27,6 +28,7 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
     if (open) {
       setError(null)
       setChecked({})
+      setExpiryDates({})
       load()
     }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -55,7 +57,20 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
   }
 
   const toggleCheck = (id) => {
-    setChecked(prev => ({ ...prev, [id]: !prev[id] }))
+    const newChecked = { ...checked, [id]: !checked[id] }
+    setChecked(newChecked)
+    // Clear expiry date if unchecked
+    if (!newChecked[id]) {
+      setExpiryDates(prev => {
+        const next = { ...prev }
+        delete next[id]
+        return next
+      })
+    }
+  }
+
+  const setExpiryDate = (id, date) => {
+    setExpiryDates(prev => ({ ...prev, [id]: date }))
   }
 
   const handleBought = async () => {
@@ -63,10 +78,22 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
       .filter(([, v]) => v)
       .map(([id]) => Number(id))
     if (selectedIds.length === 0) return
+
+    // Build expiry_dates mapping: { item_name: date }
+    const dateMap = {}
+    for (const id of selectedIds) {
+      const item = items.find(i => i.id === id)
+      const date = expiryDates[id]
+      if (item && date) {
+        dateMap[item.item_name] = date
+      }
+    }
+
     try {
       setError(null)
-      await buyShoppingItems(selectedIds)
+      await buyShoppingItems(selectedIds, Object.keys(dateMap).length > 0 ? dateMap : null)
       setChecked({})
+      setExpiryDates({})
       load()
       onBought?.()
     } catch {
@@ -94,22 +121,36 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
             <div style={s.empty}>Shopping list is empty</div>
           )}
           {items.map(item => (
-            <label key={item.id} style={s.row}>
-              <input
-                type="checkbox"
-                checked={!!checked[item.id]}
-                onChange={() => toggleCheck(item.id)}
-                style={s.checkbox}
-              />
-              <span style={{
-                ...s.itemName,
-                textDecoration: checked[item.id] ? 'line-through' : 'none',
-                opacity: checked[item.id] ? 0.5 : 1,
-              }}>{item.item_name}</span>
-              <button style={s.deleteBtn} onClick={(e) => { e.preventDefault(); handleDelete(item.id) }}>
-                <Trash2 size={12} />
-              </button>
-            </label>
+            <div key={item.id}>
+              <label style={s.row}>
+                <input
+                  type="checkbox"
+                  checked={!!checked[item.id]}
+                  onChange={() => toggleCheck(item.id)}
+                  style={s.checkbox}
+                />
+                <span style={{
+                  ...s.itemName,
+                  textDecoration: checked[item.id] ? 'line-through' : 'none',
+                  opacity: checked[item.id] ? 0.5 : 1,
+                }}>{item.item_name}</span>
+                <button style={s.deleteBtn} onClick={(e) => { e.preventDefault(); handleDelete(item.id) }}>
+                  <Trash2 size={12} />
+                </button>
+              </label>
+              {checked[item.id] && (
+                <div style={s.expiryDateRow}>
+                  <span style={s.expiryDateLabel}>Expiry:</span>
+                  <input
+                    type="date"
+                    style={s.expiryDateInput}
+                    value={expiryDates[item.id] || ''}
+                    onChange={(e) => setExpiryDate(item.id, e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+              )}
+            </div>
           ))}
         </div>
 

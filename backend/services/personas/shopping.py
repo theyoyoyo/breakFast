@@ -119,9 +119,10 @@ def build_shopping_prompt(
     user_profile: dict | None = None,
     supplements: list[dict] | None = None,
     avoid_list: list[str] | None = None,
+    exclude_names: list[str] | None = None,
 ) -> str:
     """Build the shopping persona system prompt."""
-    return SHOPPING_TEMPLATE.format(
+    base = SHOPPING_TEMPLATE.format(
         ingredient_inventory=format_ingredients(ingredient_inventory),
         recent_meal_history=format_history_detailed(recent_meal_history, limit=10),
         user_preferences=format_preferences(user_preferences),
@@ -132,3 +133,9 @@ def build_shopping_prompt(
         supplements=format_supplements(supplements),
         avoid_list=format_avoid_list(avoid_list),
     )
+    if exclude_names:
+        base += (
+            "\n\nALREADY SUGGESTED (do NOT repeat these items):\n"
+            + ", ".join(exclude_names)
+        )
+    return base

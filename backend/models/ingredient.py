@@ -16,5 +16,6 @@ class Ingredient(BaseModel):
     id: int
     name: str
     expiry_date: Optional[str] = None
+    expiry_acknowledged: bool = False
     added_at: str
     updated_at: str

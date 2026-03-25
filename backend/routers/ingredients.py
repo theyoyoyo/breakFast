@@ -109,59 +109,88 @@ async def bulk_add_ingredients(ingredients: list[IngredientCreate], user_id: int
 # ---------------------------------------------------------------------------
 
 
-@router.get("/expired", response_model=list[Ingredient])
-async def get_expired_ingredients(user_id: int = Depends(require_user)):
-    """Return ingredients that expired between the last check date and today.
-
-    If already checked today, returns an empty list.
-    Updates last_expiry_check to today after returning results.
-    """
+@router.get("/expired-count")
+async def get_expired_count(user_id: int = Depends(require_user)):
+    """Return the count of currently expired, unacknowledged items. No side effects."""
     today = date.today().isoformat()
-
     async with get_db() as db:
-        # Get last check date
         async with db.execute(
-            "SELECT last_expiry_check FROM users WHERE id = ?", (user_id,)
+            """SELECT COUNT(*) as count FROM ingredient_inventory
+               WHERE user_id = ? AND expiry_date IS NOT NULL
+               AND expiry_date <= ? AND expiry_acknowledged = 0""",
+            (user_id, today),
         ) as cur:
             row = await cur.fetchone()
-            last_check = row["last_expiry_check"] if row else None
+            return {"count": row["count"]}
 
-        # If already checked today, return empty
-        if last_check == today:
-            return []
 
-        # Find expired items: expiry_date is set AND expiry_date <= today
-        # If last_check exists, only items that expired after that date
-        if last_check:
+@router.get("/expired", response_model=list[Ingredient])
+async def get_expired_ingredients(user_id: int = Depends(require_user)):
+    """Return all currently expired, unacknowledged ingredients."""
+    today = date.today().isoformat()
+    async with get_db() as db:
+        async with db.execute(
+            """SELECT * FROM ingredient_inventory
+               WHERE user_id = ? AND expiry_date IS NOT NULL
+               AND expiry_date <= ? AND expiry_acknowledged = 0
+               ORDER BY expiry_date""",
+            (user_id, today),
+        ) as cur:
+            return [dict(r) for r in await cur.fetchall()]
+
+
+class ExpiredActionRequest(BaseModel):
+    delete_ids: list[int] = []
+    keep_ids: list[int] = []
+    shopping_ids: list[int] = []
+
+
+@router.post("/expired/action", status_code=200)
+async def handle_expired_action(body: ExpiredActionRequest, user_id: int = Depends(require_user)):
+    """Handle expired items: delete, keep (acknowledge), or move to shopping list."""
+    async with get_db() as db:
+        # Delete items
+        for ingredient_id in body.delete_ids:
+            await db.execute(
+                "DELETE FROM ingredient_inventory WHERE id = ? AND user_id = ?",
+                (ingredient_id, user_id),
+            )
+
+        # Keep items (acknowledge expiry — they stay in inventory but won't show as expired)
+        for ingredient_id in body.keep_ids:
+            await db.execute(
+                "UPDATE ingredient_inventory SET expiry_acknowledged = 1, updated_at = datetime('now') WHERE id = ? AND user_id = ?",
+                (ingredient_id, user_id),
+            )
+
+        # Shopping items: look up name, add to shopping list, then delete from inventory
+        for ingredient_id in body.shopping_ids:
             async with db.execute(
-                """SELECT * FROM ingredient_inventory
-                   WHERE user_id = ? AND expiry_date IS NOT NULL
-                   AND expiry_date > ? AND expiry_date <= ?
-                   ORDER BY expiry_date""",
-                (user_id, last_check, today),
+                "SELECT name FROM ingredient_inventory WHERE id = ? AND user_id = ?",
+                (ingredient_id, user_id),
             ) as cur:
-                expired = [dict(r) for r in await cur.fetchall()]
-        else:
-            # First check ever — report everything expired up to today
-            async with db.execute(
-                """SELECT * FROM ingredient_inventory
-                   WHERE user_id = ? AND expiry_date IS NOT NULL
-                   AND expiry_date <= ?
-                   ORDER BY expiry_date""",
-                (user_id, today),
-            ) as cur:
-                expired = [dict(r) for r in await cur.fetchall()]
+                row = await cur.fetchone()
+            if row:
+                await db.execute(
+                    """INSERT INTO shopping_list (user_id, item_name) VALUES (?, ?)
+                       ON CONFLICT(user_id, item_name) DO NOTHING""",
+                    (user_id, row["name"]),
+                )
+                await db.execute(
+                    "DELETE FROM ingredient_inventory WHERE id = ? AND user_id = ?",
+                    (ingredient_id, user_id),
+                )
 
-        # Update last check date
-        await db.execute(
-            "UPDATE users SET last_expiry_check = ? WHERE id = ?",
-            (today, user_id),
-        )
         await db.commit()
 
-        return expired
+    return {
+        "deleted": len(body.delete_ids),
+        "kept": len(body.keep_ids),
+        "to_shopping": len(body.shopping_ids),
+    }
 
 
+# Keep old endpoint for backward compat with existing tests
 class ThrownRequest(BaseModel):
     ids: list[int]
 
@@ -184,13 +213,22 @@ async def confirm_thrown(body: ThrownRequest, user_id: int = Depends(require_use
 # ---------------------------------------------------------------------------
 
 
+class ShoppingSuggestionsRequest(BaseModel):
+    exclude: list[str] = []
+
+
 @router.post("/shopping-suggestions")
-async def get_shopping_suggestions(user_id: int = Depends(require_user)):
+async def get_shopping_suggestions(
+    body: ShoppingSuggestionsRequest | None = None,
+    user_id: int = Depends(require_user),
+):
     """Generate AI-powered shopping suggestions based on full user context."""
     import json as _json
     from services.context import load_shopping_context
     from services.suggestion import build_shopping_prompt
     from services.llm import chat_complete, LLMUnavailableError
+
+    exclude = body.exclude if body else []
 
     async with get_db() as db:
         ctx = await load_shopping_context(db, user_id)
@@ -205,6 +243,7 @@ async def get_shopping_suggestions(user_id: int = Depends(require_user)):
         user_profile=ctx["user_profile"],
         supplements=ctx["supplements"],
         avoid_list=ctx["avoid_list"],
+        exclude_names=exclude,
     )
 
     try:
@@ -214,8 +253,7 @@ async def get_shopping_suggestions(user_id: int = Depends(require_user)):
         )
     except LLMUnavailableError:
         from services.llm import lyric_cycler
-        lyric = lyric_cycler.next()
-        return [{"name": lyric, "reason": "🎵"}]
+        return {"suggestions": [], "lyric": lyric_cycler.next()}
 
     # Parse the JSON array from the response
     from utils import extract_json_block
@@ -224,7 +262,7 @@ async def get_shopping_suggestions(user_id: int = Depends(require_user)):
         try:
             suggestions = _json.loads(json_str)
             if isinstance(suggestions, list):
-                return suggestions
+                return {"suggestions": suggestions, "lyric": None}
         except _json.JSONDecodeError:
             pass
 
@@ -232,9 +270,9 @@ async def get_shopping_suggestions(user_id: int = Depends(require_user)):
     try:
         suggestions = _json.loads(response)
         if isinstance(suggestions, list):
-            return suggestions
+            return {"suggestions": suggestions, "lyric": None}
     except _json.JSONDecodeError:
         pass
 
     # If all parsing fails, return raw text wrapped
-    return [{"name": "error", "reason": "Could not parse suggestions. Raw: " + response[:500]}]
+    return {"suggestions": [{"name": "error", "reason": "Could not parse suggestions. Raw: " + response[:500]}], "lyric": None}

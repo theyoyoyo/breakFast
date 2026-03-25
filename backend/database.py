@@ -27,12 +27,13 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE TABLE IF NOT EXISTS ingredient_inventory (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id     INTEGER NOT NULL REFERENCES users(id),
-    name        TEXT    NOT NULL,
-    expiry_date TEXT,
-    added_at    TEXT    NOT NULL DEFAULT (datetime('now')),
-    updated_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id             INTEGER NOT NULL REFERENCES users(id),
+    name                TEXT    NOT NULL,
+    expiry_date         TEXT,
+    expiry_acknowledged INTEGER NOT NULL DEFAULT 0,
+    added_at            TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at          TEXT    NOT NULL DEFAULT (datetime('now')),
     UNIQUE(user_id, name)
 );
 
@@ -259,6 +260,14 @@ async def init_db() -> None:
         try:
             await db.execute(
                 "ALTER TABLE ingredient_inventory ADD COLUMN expiry_date TEXT"
+            )
+        except Exception:
+            pass  # Column already exists
+
+        # Migrate: add expiry_acknowledged column to ingredient_inventory if missing
+        try:
+            await db.execute(
+                "ALTER TABLE ingredient_inventory ADD COLUMN expiry_acknowledged INTEGER NOT NULL DEFAULT 0"
             )
         except Exception:
             pass  # Column already exists

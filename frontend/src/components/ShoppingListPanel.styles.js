@@ -136,6 +136,30 @@ export const empty = {
   textAlign: 'center',
 }
 
+export const expiryDateRow = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: '2px 16px 6px 42px',
+}
+
+export const expiryDateLabel = {
+  fontSize: 11,
+  color: 'var(--text-muted)',
+}
+
+export const expiryDateInput = {
+  flex: 1,
+  background: 'var(--surface2)',
+  border: '1px solid var(--border)',
+  borderRadius: 6,
+  padding: '4px 8px',
+  color: 'var(--text)',
+  fontSize: 11,
+  outline: 'none',
+  colorScheme: 'dark',
+}
+
 export const error = {
   padding: '8px 16px',
   fontSize: 12,
