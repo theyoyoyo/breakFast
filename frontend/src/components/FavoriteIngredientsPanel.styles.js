@@ -41,6 +41,18 @@ export const title = {
   fontSize: 14,
 }
 
+export const addAllBtn = {
+  background: 'rgba(142, 68, 173, 0.15)',
+  border: '1px solid rgba(142, 68, 173, 0.3)',
+  color: '#a970c9',
+  borderRadius: 6,
+  padding: '4px 10px',
+  fontSize: 11,
+  fontWeight: 600,
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+}
+
 export const closeBtn = {
   background: 'none',
   border: 'none',

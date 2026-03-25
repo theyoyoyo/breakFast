@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { ShoppingCart, X, Trash2 } from 'lucide-react'
 import {
   getFavoriteIngredients, removeFavoriteIngredient,
-  addShoppingItem, getShoppingList,
+  addShoppingItem, addShoppingItemsBulk, getShoppingList,
 } from '../services/api'
 import * as s from './FavoriteIngredientsPanel.styles'
 
@@ -60,6 +60,22 @@ export default function FavoriteIngredientsPanel({ open, onClose }) {
     }
   }
 
+  // Items not yet in the shopping list
+  const addableItems = items.filter(i => !shoppingNames.has(i.ingredient_name.toLowerCase()))
+
+  const handleAddAll = async () => {
+    if (addableItems.length === 0) return
+    try {
+      setError(null)
+      await addShoppingItemsBulk(addableItems.map(i => i.ingredient_name))
+      const allNames = new Set(items.map(i => i.ingredient_name.toLowerCase()))
+      setShoppingNames(prev => new Set([...prev, ...allNames]))
+      setAddedNames(allNames)
+    } catch {
+      setError('Could not add items to shopping list')
+    }
+  }
+
   if (!open) return null
 
   return (
@@ -68,6 +84,11 @@ export default function FavoriteIngredientsPanel({ open, onClose }) {
         <div style={s.header}>
           <span style={s.heartIcon}>❤️</span>
           <span style={s.title}>Favorite Ingredients</span>
+          {addableItems.length > 0 && (
+            <button style={s.addAllBtn} onClick={handleAddAll} title="Add all to shopping list">
+              Add All
+            </button>
+          )}
           <button style={s.closeBtn} onClick={onClose}><X size={16} /></button>
         </div>
 
