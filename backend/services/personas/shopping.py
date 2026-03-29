@@ -82,12 +82,6 @@ BEHAVIORAL PATTERNS
 {behavioral_patterns}
 
 ═══════════════════════════════════════════════════════════════
-KITCHEN APPLIANCES
-═══════════════════════════════════════════════════════════════
-{kitchen_appliances}
-Only suggest ingredients the user can actually prepare with these appliances.
-
-═══════════════════════════════════════════════════════════════
 RESPONSE FORMAT
 ═══════════════════════════════════════════════════════════════
 Respond with ONLY a JSON array of suggested items. Each item should have:
@@ -103,7 +97,7 @@ Example:
 ```
 
 Suggest 15-25 items. Include a mix of:
-- Staples that need restocking (based on meal history frequency)
+- Items the user eats frequently but doesn't currently have in inventory
 - Items that would enable new meal combinations
 - Seasonal produce
 - Items that address nutritional gaps
@@ -111,8 +105,17 @@ Suggest 15-25 items. Include a mix of:
 - Novel items adjacent to the user's taste profile
 
 Do NOT suggest items the user already has in inventory.
+Do NOT suggest items already on the shopping list.
 Do NOT suggest items on the avoid list.
+
+{shopping_list}
 """
+
+
+def _format_shopping_list(items: list[str] | None) -> str:
+    if not items:
+        return "CURRENT SHOPPING LIST: (empty)"
+    return "CURRENT SHOPPING LIST (do NOT suggest these):\n" + ", ".join(items)
 
 
 def build_shopping_prompt(
@@ -126,10 +129,9 @@ def build_shopping_prompt(
     supplements: list[dict] | None = None,
     avoid_list: list[str] | None = None,
     exclude_names: list[str] | None = None,
-    kitchen_appliances: list[str] | None = None,
+    shopping_list: list[str] | None = None,
 ) -> str:
     """Build the shopping persona system prompt."""
-    appliance_str = ", ".join(kitchen_appliances) if kitchen_appliances else "Bilgi yok"
     base = SHOPPING_TEMPLATE.format(
         ingredient_inventory=format_ingredients(ingredient_inventory),
         recent_meal_history=format_history_detailed(recent_meal_history, limit=10),
@@ -140,7 +142,7 @@ def build_shopping_prompt(
         user_profile=format_user_profile(user_profile),
         supplements=format_supplements(supplements),
         avoid_list=format_avoid_list(avoid_list),
-        kitchen_appliances=appliance_str,
+        shopping_list=_format_shopping_list(shopping_list),
     )
     if exclude_names:
         base += (
