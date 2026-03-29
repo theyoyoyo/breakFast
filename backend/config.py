@@ -17,5 +17,7 @@ BACKEND_PORT = int(os.getenv("BACKEND_PORT", "8000"))
 _cors_raw = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000")
 CORS_ORIGINS = [o.strip() for o in _cors_raw.split(",") if o.strip()]
 
+SERVE_FRONTEND = os.getenv("SERVE_FRONTEND", "").lower() in ("1", "true", "yes")
+
 NUTRITION_USER_AGENT = "breakFAST/1.0 (personal project)"
 OPEN_FOOD_FACTS_BASE_URL = "https://world.openfoodfacts.org"

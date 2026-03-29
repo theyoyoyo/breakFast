@@ -1,7 +1,11 @@
+from pathlib import Path
+
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
-from config import CORS_ORIGINS
+from config import CORS_ORIGINS, SERVE_FRONTEND
 from database import init_db
 from auth import require_user
 from routers import analyst, auth, chat, favorites, favorite_ingredients, ingredients, kitchen, meals, preferences, profile, ratings, sessions, health_rules, shopping, scheduler
@@ -55,3 +59,24 @@ async def health():
 @app.get("/health/auth")
 async def health_auth(user_id: int = Depends(require_user)):
     return {"status": "ok", "user_id": user_id}
+
+
+# ---------------------------------------------------------------------------
+# Static frontend serving (production only — SERVE_FRONTEND=true in .env)
+# ---------------------------------------------------------------------------
+
+_frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
+
+if SERVE_FRONTEND and _frontend_dist.exists():
+    # Mount /assets first so Vite's hashed bundles are served directly
+    _assets_dir = _frontend_dist / "assets"
+    if _assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(_assets_dir)), name="static-assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        """Serve the React SPA — returns index.html for any non-API route."""
+        file_path = _frontend_dist / full_path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(str(file_path))
+        return FileResponse(str(_frontend_dist / "index.html"))
