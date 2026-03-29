@@ -75,6 +75,7 @@ export const itemList = {
   gap: 6,
   flex: 1,
   overflowY: 'auto',
+  maxHeight: '35vh',
 }
 
 export const itemRow = {

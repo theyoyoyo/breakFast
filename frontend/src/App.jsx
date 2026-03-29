@@ -30,11 +30,22 @@ function getStoredAuth() {
   return null
 }
 
+function useIsNarrow(breakpoint = 540) {
+  const [narrow, setNarrow] = useState(() => window.innerWidth < breakpoint)
+  useEffect(() => {
+    const onResize = () => setNarrow(window.innerWidth < breakpoint)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [breakpoint])
+  return narrow
+}
+
 export default function App() {
   const [auth, setAuth] = useState(getStoredAuth)
   const [authChecked, setAuthChecked] = useState(false)
   const [activeTab, setActiveTab] = useState('Chat')
   const [offline, setOffline] = useState(false)
+  const narrow = useIsNarrow()
 
   // Validate stored token against backend on app start
   useEffect(() => {
@@ -88,7 +99,7 @@ export default function App() {
         {TABS.map(({ key, label, Icon }) => (
           <button
             key={key}
-            style={s.tab(activeTab === key)}
+            style={s.tab(activeTab === key, narrow)}
             onClick={() => {
               if (key === activeTab && auth.user.name === 'demo') {
                 if (key === 'Chat') chatRef.current?.injectDemoSchedule()
@@ -98,9 +109,10 @@ export default function App() {
                 setActiveTab(key)
               }
             }}
+            title={label}
           >
-            <Icon size={14} style={{ marginRight: 4, verticalAlign: -2 }} />
-            {label}
+            <Icon size={narrow ? 18 : 14} style={narrow ? { verticalAlign: -3 } : { marginRight: 4, verticalAlign: -2 }} />
+            {!narrow && label}
           </button>
         ))}
         <div style={s.userInfo}>
@@ -109,9 +121,9 @@ export default function App() {
             onClick={() => chatRef.current?.injectDemoMeal()}
             title="Demo action"
           >{auth.user.name}</span>
-          <button style={s.logoutBtn} onClick={handleLogout}>
-            <LogOut size={12} style={{ marginRight: 4, verticalAlign: -1 }} />
-            Logout
+          <button style={s.logoutBtn} onClick={handleLogout} title="Logout">
+            <LogOut size={12} style={narrow ? { verticalAlign: -1 } : { marginRight: 4, verticalAlign: -1 }} />
+            {!narrow && 'Logout'}
           </button>
         </div>
       </nav>

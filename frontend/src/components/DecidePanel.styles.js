@@ -1,7 +1,7 @@
 import { secondaryColor } from '../styles/common'
 
 export const overlay = {
-  position: 'absolute',
+  position: 'fixed',
   inset: 0,
   background: 'rgba(0,0,0,0.5)',
   zIndex: 20,

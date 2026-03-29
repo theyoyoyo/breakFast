@@ -136,7 +136,7 @@ export const overlayPanel = {
   padding: '20px',
   boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
   overflowY: 'auto',
-  maxHeight: '80vh',
+  maxHeight: '80dvh',
   display: 'flex',
   flexDirection: 'column',
 }

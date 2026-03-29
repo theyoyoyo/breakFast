@@ -77,7 +77,7 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
     const selectedIds = Object.entries(checked)
       .filter(([, v]) => v)
       .map(([id]) => Number(id))
-    if (selectedIds.length === 0) return
+    if (selectedIds.length === 0) { onClose?.(); return }
 
     // Build expiry_dates mapping: { item_name: date }
     const dateMap = {}
@@ -106,8 +106,8 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
   if (!open) return null
 
   return (
-    <div style={s.overlay}>
-      <div style={s.panel}>
+    <div style={s.overlay} onClick={onClose}>
+      <div style={s.panel} onClick={(e) => e.stopPropagation()}>
         <div style={s.header}>
           <ShoppingCart size={16} />
           <span style={s.title}>Shopping List</span>
@@ -166,11 +166,11 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
           <button style={s.addBtn} onClick={handleAdd}><Plus size={14} /></button>
         </div>
 
-        {/* Done button — always active, refreshes list if nothing checked */}
+        {/* Done button — buys checked items or closes panel */}
         {items.length > 0 && (
           <button
             style={{ ...s.doneBtn, cursor: 'pointer' }}
-            onClick={checkedCount > 0 ? handleBought : load}
+            onClick={handleBought}
           >
             Done{checkedCount > 0 ? ` (${checkedCount})` : ''} ✓
           </button>

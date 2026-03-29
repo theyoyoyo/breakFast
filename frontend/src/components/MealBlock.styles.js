@@ -1,11 +1,60 @@
 // --- Inline block in chat ---
 
+export const blockWrapper = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignSelf: 'flex-end',
+  maxWidth: '80%',
+  minWidth: 0,
+}
+
+export const titleBar = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: '4px 10px',
+  background: 'var(--surface2)',
+  borderRadius: '10px 10px 0 0',
+  border: '1px solid var(--border)',
+  borderBottom: 'none',
+  cursor: 'pointer',
+  overflow: 'hidden',
+}
+
+export const titleIcon = {
+  fontSize: 14,
+  flexShrink: 0,
+}
+
+export const titleName = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: 'var(--accent)',
+  flex: 1,
+  minWidth: 0,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+}
+
+export const titlePrep = {
+  fontSize: 10,
+  color: 'var(--text-muted)',
+  flexShrink: 0,
+  whiteSpace: 'nowrap',
+}
+
+export const titleId = {
+  fontSize: 9,
+  color: 'var(--text-muted)',
+  opacity: 0.5,
+  flexShrink: 0,
+}
+
 export const blockRow = {
   display: 'flex',
   alignItems: 'center',
-  gap: 8,
-  alignSelf: 'flex-end',
-  maxWidth: '80%',
+  gap: 6,
   minWidth: 0,
   overflow: 'hidden',
 }
@@ -27,18 +76,14 @@ export const block = {
   gap: 8,
   background: 'var(--surface2)',
   border: '1px solid var(--border)',
-  borderRadius: 12,
+  borderRadius: '0 0 12px 12px',
+  borderTop: 'none',
   padding: '10px 14px',
   cursor: 'pointer',
   transition: 'border-color 0.15s',
   flex: 1,
   minWidth: 0,
   overflow: 'hidden',
-}
-
-export const blockIcon = {
-  fontSize: 18,
-  flexShrink: 0,
 }
 
 export const blockText = {
@@ -53,23 +98,13 @@ export const blockText = {
 export const analyzeBtn = (analyzing) => ({
   background: 'none',
   border: 'none',
-  fontSize: 20,
+  fontSize: 18,
   cursor: analyzing ? 'default' : 'pointer',
   opacity: analyzing ? 0.5 : 1,
-  padding: '2px 4px',
+  padding: '2px 2px',
   flexShrink: 0,
   transition: 'opacity 0.15s',
 })
-
-export const prepBadge = {
-  fontSize: 11,
-  color: 'var(--text-muted)',
-  background: 'var(--surface)',
-  borderRadius: 8,
-  padding: '2px 8px',
-  flexShrink: 0,
-  whiteSpace: 'nowrap',
-}
 
 // --- Overlay panel ---
 
@@ -91,7 +126,7 @@ export const panel = {
   padding: '20px',
   boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
   overflowY: 'auto',
-  maxHeight: '80vh',
+  maxHeight: '80dvh',
   display: 'flex',
   flexDirection: 'column',
 }
