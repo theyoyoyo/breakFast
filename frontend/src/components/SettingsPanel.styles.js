@@ -216,6 +216,7 @@ export const mealCard = {
   border: '1px solid var(--border)',
   borderRadius: 8,
   overflow: 'hidden',
+  flexShrink: 0,
 }
 
 export const mealHeader = {

@@ -64,35 +64,41 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
 
   return (
     <>
-      <div style={s.blockRow}>
-        <button
-          style={s.checkbox(checked)}
-          onClick={(e) => { e.stopPropagation(); onCheck?.() }}
-          title={checked ? 'Selected as today\'s meal' : 'Select as today\'s meal'}
-        >
-          {checked ? '☑' : '☐'}
-        </button>
-        <div style={s.block} onClick={() => { setPanelOpen(true); setFavAdded(false) }}>
-          <span style={s.blockIcon}>{emoji}</span>
-          <span style={s.blockText}>{displayNames}</span>
-          {meal?.prep_time_min && <span style={s.prepBadge}>⏱ {meal.prep_time_min}m</span>}
+      <div style={s.blockWrapper}>
+        <div style={s.titleBar} onClick={() => { setPanelOpen(true); setFavAdded(false) }}>
+          <span style={s.titleIcon}>{emoji}</span>
+          <span style={s.titleName}>{meal?.meal_name || 'Meal'}</span>
+          {meal?.prep_time_min && <span style={s.titlePrep}>⏱ {meal.prep_time_min}m</span>}
+          {meal?.id && <span style={s.titleId}>#{meal.id}</span>}
         </div>
-        <button
-          style={s.analyzeBtn(scheduling)}
-          onClick={(e) => { e.stopPropagation(); onSchedule?.() }}
-          disabled={scheduling}
-          title="Prep timeline"
-        >
-          {scheduling ? '⏳' : '📋'}
-        </button>
-        <button
-          style={s.analyzeBtn(analyzing)}
-          onClick={(e) => { e.stopPropagation(); onAnalyze?.() }}
-          disabled={analyzing}
-          title="Nutrition analysis"
-        >
-          {analyzing ? '⏳' : '📊'}
-        </button>
+        <div style={s.blockRow}>
+          <button
+            style={s.analyzeBtn(scheduling)}
+            onClick={(e) => { e.stopPropagation(); onSchedule?.() }}
+            disabled={scheduling}
+            title="Prep timeline"
+          >
+            {scheduling ? '⏳' : '📋'}
+          </button>
+          <button
+            style={s.analyzeBtn(analyzing)}
+            onClick={(e) => { e.stopPropagation(); onAnalyze?.() }}
+            disabled={analyzing}
+            title="Nutrition analysis"
+          >
+            {analyzing ? '⏳' : '📊'}
+          </button>
+          <button
+            style={s.checkbox(checked)}
+            onClick={(e) => { e.stopPropagation(); onCheck?.() }}
+            title={checked ? 'Selected as today\'s meal' : 'Select as today\'s meal'}
+          >
+            {checked ? '☑' : '☐'}
+          </button>
+          <div style={s.block} onClick={() => { setPanelOpen(true); setFavAdded(false) }}>
+            <span style={s.blockText}>{displayNames}</span>
+          </div>
+        </div>
       </div>
 
       {panelOpen && (

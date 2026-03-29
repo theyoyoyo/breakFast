@@ -642,9 +642,11 @@ export default function SettingsPanel({ visible }) {
             try {
               setError(null)
               const result = await deleteOldMeals()
-              setError(result.deleted > 0
+              const msg = result.deleted > 0
                 ? `${result.deleted} old meal(s) deleted`
-                : 'No meals older than 1 year')
+                : 'No meals older than 1 year'
+              setError(msg)
+              setTimeout(() => setError(prev => prev === msg ? null : prev), 3000)
             } catch {
               setError('Failed to delete old meals')
             }

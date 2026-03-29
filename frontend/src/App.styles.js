@@ -1,6 +1,6 @@
 export const app = {
   display: 'grid',
-  height: '100vh',
+  height: '100dvh',
   gridTemplateRows: 'auto 1fr',
   maxWidth: 1200,
   margin: '0 auto',
@@ -16,8 +16,8 @@ export const nav = {
   alignItems: 'center',
 }
 
-export const tab = (active) => ({
-  padding: '8px 18px',
+export const tab = (active, narrow) => ({
+  padding: narrow ? '8px 10px' : '8px 18px',
   background: active ? 'var(--surface2)' : 'none',
   border: 'none',
   borderRadius: '8px 8px 0 0',
