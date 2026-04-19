@@ -302,28 +302,33 @@ async def get_shopping_suggestions(
 ):
     """Generate AI-powered shopping suggestions based on full user context."""
     import json as _json
+    import logging
     from services.context import load_shopping_context
     from services.suggestion import build_shopping_prompt
-    from services.llm import chat_complete, LLMUnavailableError
+    from services.llm import chat_complete, LLMUnavailableError, lyric_cycler
 
     exclude = body.exclude if body else []
 
-    async with get_db() as db:
-        ctx = await load_shopping_context(db, user_id)
+    try:
+        async with get_db() as db:
+            ctx = await load_shopping_context(db, user_id)
 
-    prompt = build_shopping_prompt(
-        ingredient_inventory=ctx["ingredients"],
-        recent_meal_history=ctx["history"],
-        user_preferences=ctx["preferences"],
-        stated_habits=ctx["stated_habits"],
-        inferred_habits=ctx["inferred_habits"],
-        health_rules=ctx["health_rules"],
-        user_profile=ctx["user_profile"],
-        supplements=ctx["supplements"],
-        avoid_list=ctx["avoid_list"],
-        exclude_names=exclude,
-        shopping_list=ctx.get("shopping_list"),
-    )
+        prompt = build_shopping_prompt(
+            ingredient_inventory=ctx["ingredients"],
+            recent_meal_history=ctx["history"],
+            user_preferences=ctx["preferences"],
+            stated_habits=ctx["stated_habits"],
+            inferred_habits=ctx["inferred_habits"],
+            health_rules=ctx["health_rules"],
+            user_profile=ctx["user_profile"],
+            supplements=ctx["supplements"],
+            avoid_list=ctx["avoid_list"],
+            exclude_names=exclude,
+            shopping_list=ctx.get("shopping_list"),
+        )
+    except Exception as e:
+        logging.exception("Shopping context/prompt build failed")
+        return {"suggestions": [], "lyric": lyric_cycler.next(), "error": str(e)}
 
     try:
         response = await chat_complete(
@@ -331,8 +336,10 @@ async def get_shopping_suggestions(
             messages=[{"role": "user", "content": "Benim için alışveriş önerileri hazırla."}],
         )
     except LLMUnavailableError:
-        from services.llm import lyric_cycler
         return {"suggestions": [], "lyric": lyric_cycler.next()}
+    except Exception as e:
+        logging.exception("Shopping LLM call failed")
+        return {"suggestions": [], "lyric": lyric_cycler.next(), "error": str(e)}
 
     # Parse the JSON array from the response
     from utils import extract_json_block

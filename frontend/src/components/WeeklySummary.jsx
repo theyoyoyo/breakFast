@@ -105,7 +105,9 @@ export default function WeeklySummary({ onBack }) {
                         </div>
                       )}
                       {nutrition.analysis_text && (
-                        <div style={s.analysisText}>{nutrition.analysis_text}</div>
+                        <div style={s.analysisText}>
+                          {nutrition.analysis_text.replace(/```json[\s\S]*?```/g, '').trim()}
+                        </div>
                       )}
                     </div>
                   ) : (

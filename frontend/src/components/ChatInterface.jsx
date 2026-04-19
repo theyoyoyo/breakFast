@@ -51,6 +51,13 @@ function stripJsonBlock(text) {
   return text.replace(JSON_BLOCK_RE, '').trim()
 }
 
+// During streaming the closing ``` may not have arrived yet — strip from the
+// opening fence onwards so the raw JSON is never visible while buffering.
+function stripStreamingJsonBlock(text) {
+  const idx = text.indexOf('```json')
+  return idx === -1 ? text : text.slice(0, idx).trim()
+}
+
 // Try to parse a ```json block from text — captures everything between
 // the fences so nested objects/arrays are included
 function parseJsonBlock(text) {
@@ -578,7 +585,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
         })}
 
         {streamBuffer !== null && streamBuffer !== '' && (
-          <div style={s.bubble('assistant')}>{streamBuffer}</div>
+          <div style={s.bubble('assistant')}>{stripStreamingJsonBlock(streamBuffer)}</div>
         )}
         {streamBuffer === '' && (
           <div style={s.thinking}>{PIPELINE_STEPS[pipelineStep] || 'Düşünüyorum…'}</div>
