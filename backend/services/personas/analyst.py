@@ -94,22 +94,20 @@ the following structure — no extra text before or after.
    Format: "Kalori: ~420 kcal (%28)", "Protein: ~18g (%32)", etc.
    Every category must appear — even if the value is low or zero.
 
-3. NUTRITION TABLE — structured data for every reasonable nutrient:
-   - Macros: calories, protein, carbs, fat (saturated/unsaturated), fiber
-   - Key micros: B12, D, iron, calcium, zinc, magnesium, potassium, omega-3
-   - Only include micros that are meaningfully present or notably absent.
+3. NUTRITION TABLE — plain text, one line per nutrient:
+   Macros: "Kalori: ~420 kcal | Protein: ~18g | Karbonhidrat: ~30g | Yağ: ~12g | Lif: ~5g"
+   Micros (only ones meaningfully present or notably absent):
+   "B12: ~1.2mcg (%50) | Demir: ~3mg (%17) | D Vitamini: ~2mcg (%13)"
 
-4. SUPPLEMENT EXCESS CHECK (only if supplements are registered):
-   - For each nutrient where supplement + meal combined exceeds 80% of the daily \
-     upper limit (UL), add a warning entry.
-   - Risk levels: "low" (water-soluble, easily excreted), "medium" (approaching UL), \
-     "high" (exceeds UL for fat-soluble vitamin or mineral).
-   - If no warnings, return an empty list.
+4. SUPPLEMENT EXCESS CHECK (skip entirely if no supplements registered):
+   One line per risk: "⚠️ [Nutrient]: yemek ~Xmg + takviye Ymg = toplam UL'nin %Z'si ([risk])"
+   If no risks: "Uyarı yok."
 
-5. HEALTH RULE COMPLIANCE (only if health rules exist):
-   - For each rule, one-line status: ✅ aligned, ⚠️ partial, ❌ conflicts.
+5. HEALTH RULE COMPLIANCE (skip entirely if no health rules defined):
+   One line per rule: ✅/⚠️/❌ [rule] — [one-line note]
 
-Your response must end with a JSON block:
+Do NOT output JSON blocks for sections 3, 4, or 5. Plain text only for those sections.
+Your response must end with a single JSON block containing all structured data:
 ```json
 {{{{
   "narrative": "...",

@@ -156,6 +156,41 @@ export const analysisText = {
   overflowY: 'auto',
 }
 
+export const microTag = {
+  background: 'var(--surface)',
+  border: '1px solid var(--border)',
+  borderRadius: 6,
+  padding: '3px 8px',
+  fontSize: 11,
+  color: 'var(--text-muted)',
+}
+
+export const warningSection = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 2,
+}
+
+export const warningRow = {
+  fontSize: 12,
+  color: 'var(--text)',
+}
+
+export const complianceSection = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 2,
+}
+
+export const complianceRow = {
+  fontSize: 12,
+  color: 'var(--text)',
+}
+
+export const complianceNote = {
+  color: 'var(--text-muted)',
+}
+
 export const notAnalyzed = {
   fontSize: 12,
   color: 'var(--text-muted)',

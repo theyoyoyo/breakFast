@@ -88,24 +88,51 @@ export default function WeeklySummary({ onBack }) {
 
                   {nutrition ? (
                     <div style={s.nutritionSection}>
-                      {nutrition.analysis_data && (
-                        <div style={s.macroRow}>
-                          {nutrition.analysis_data.macros?.calories_kcal != null && (
-                            <span style={s.macroTag}>{nutrition.analysis_data.macros.calories_kcal} kcal</span>
+                      {nutrition.analysis_data && (() => {
+                        const d = nutrition.analysis_data
+                        return (<>
+                          {d.macros && (
+                            <div style={s.macroRow}>
+                              {d.macros.calories_kcal != null && <span style={s.macroTag}>{d.macros.calories_kcal} kcal</span>}
+                              {d.macros.protein_g != null && <span style={s.macroTag}>{d.macros.protein_g}g protein</span>}
+                              {d.macros.carbs_g != null && <span style={s.macroTag}>{d.macros.carbs_g}g carbs</span>}
+                              {d.macros.fat_g != null && <span style={s.macroTag}>{d.macros.fat_g}g fat</span>}
+                              {d.macros.fiber_g != null && <span style={s.macroTag}>{d.macros.fiber_g}g fiber</span>}
+                            </div>
                           )}
-                          {nutrition.analysis_data.macros?.protein_g != null && (
-                            <span style={s.macroTag}>{nutrition.analysis_data.macros.protein_g}g protein</span>
+                          {d.micros?.length > 0 && (
+                            <div style={s.macroRow}>
+                              {d.micros.map((m, i) => (
+                                <span key={i} style={s.microTag}>{m.name}: {m.value} ({m.daily_percent}%)</span>
+                              ))}
+                            </div>
                           )}
-                          {nutrition.analysis_data.macros?.carbs_g != null && (
-                            <span style={s.macroTag}>{nutrition.analysis_data.macros.carbs_g}g carbs</span>
+                          {d.supplement_warnings?.length > 0 && (
+                            <div style={s.warningSection}>
+                              {d.supplement_warnings.map((w, i) => (
+                                <div key={i} style={s.warningRow}>⚠️ {w.nutrient}: {w.total_percent_ul}% UL ({w.risk})</div>
+                              ))}
+                            </div>
                           )}
-                          {nutrition.analysis_data.macros?.fat_g != null && (
-                            <span style={s.macroTag}>{nutrition.analysis_data.macros.fat_g}g fat</span>
+                          {d.health_rule_compliance?.length > 0 && (
+                            <div style={s.complianceSection}>
+                              {d.health_rule_compliance.map((r, i) => (
+                                <div key={i} style={s.complianceRow}>
+                                  {r.status === 'aligned' ? '✅' : r.status === 'conflicts' ? '❌' : '⚠️'} {r.rule}
+                                  {r.note && <span style={s.complianceNote}> — {r.note}</span>}
+                                </div>
+                              ))}
+                            </div>
                           )}
+                          {d.narrative && (
+                            <div style={s.analysisText}>{d.narrative}</div>
+                          )}
+                        </>)
+                      })()}
+                      {!nutrition.analysis_data && nutrition.analysis_text && (
+                        <div style={s.analysisText}>
+                          {nutrition.analysis_text.replace(/```json[\s\S]*?```/g, '').trim()}
                         </div>
-                      )}
-                      {nutrition.analysis_text && (
-                        <div style={s.analysisText}>{nutrition.analysis_text}</div>
                       )}
                     </div>
                   ) : (

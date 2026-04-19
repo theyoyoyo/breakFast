@@ -36,5 +36,14 @@ cd ..
 echo Frontend dependencies installed.
 echo.
 
+REM Pull the Ollama model
+echo Pulling LLM model (qwen2.5:7b) — this may take a few minutes on first run...
+ollama pull qwen2.5:7b
+if errorlevel 1 (
+    echo WARNING: Could not pull model. Make sure Ollama is installed and running.
+    echo Download Ollama from https://ollama.com then re-run setup.bat.
+)
+echo.
+
 echo === Setup complete! Run start.bat to launch the app. ===
 pause
