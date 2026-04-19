@@ -114,7 +114,10 @@ async def _ollama_stream(
             f"{OLLAMA_BASE_URL}/api/chat",
             json=payload,
         ) as response:
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                raise LLMUnavailableError(f"Ollama error {e.response.status_code}: model may not be downloaded") from e
             async for line in response.aiter_lines():
                 if not line:
                     continue
