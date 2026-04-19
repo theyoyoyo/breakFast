@@ -14,9 +14,16 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
   const [existingRatings, setExistingRatings] = useState([])
   const [saving, setSaving] = useState(false)
 
-  // Initialize items from meal ingredients — normalize to structured form
+  // Initialize items from meal — use menu items if new format, else flat ingredients
   useEffect(() => {
-    if (meal?.ingredients) {
+    if (meal?.menu && meal.menu.length > 0) {
+      // New menu format: each top-level item (Omlet, Peynir, Zeytin) is a "product" to log/rate
+      setItems(meal.menu.map(item => ({
+        name: item.name,
+        quantity: item.amount ?? 1,
+        unit: item.unit || 'adet',
+      })))
+    } else if (meal?.ingredients) {
       setItems(meal.ingredients.map(normalizeItem))
     } else {
       setItems([])
@@ -97,13 +104,15 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
         quantity: parseQuantity(item.quantity) ?? 1,
       }))
       const finalPrepTime = typeof prepTime === 'number' ? prepTime : (parseInt(prepTime, 10) || null)
+      const mealName = meal?.meal_name || meal?.menu_name || 'Kahvaltı'
       await logMeal({
-        meal_name: meal?.meal_name || 'Kahvaltı',
+        meal_name: mealName,
         description: meal?.description || '',
         ingredients: finalItems,
         steps: meal?.steps || [],
         prep_time_min: finalPrepTime,
         nutrition_note: meal?.nutrition_note || '',
+        menu_items: meal?.menu || null,
       })
       onConfirm?.()
     } catch { /* Error saving */ }
@@ -145,7 +154,7 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
   return (
     <div style={s.overlay} onClick={handleOverlayClick}>
       <div style={s.panel}>
-        <div style={s.panelHeader}>Today I ate...</div>
+        <div style={s.panelHeader}>Today I ate: {meal?.menu_name || meal?.meal_name || 'Kahvaltı'}</div>
         <div style={s.prepTimeRow}>
           <span style={s.prepTimeLabel}>⏱</span>
           <input

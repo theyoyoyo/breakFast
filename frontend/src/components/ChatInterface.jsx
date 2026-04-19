@@ -66,6 +66,22 @@ function parseJsonBlock(text) {
   try { return JSON.parse(match[1].trim()) } catch { return null }
 }
 
+// Normalize a meal object to always have meal_name and a flat ingredients list.
+// Handles both old flat format and new menu format from the LLM.
+function normalizeMeal(meal) {
+  if (!meal) return meal
+  const name = meal.meal_name || meal.menu_name || 'Meal'
+  // Derive flat ingredients from menu if not already present
+  const ingredients = meal.ingredients && meal.ingredients.length > 0
+    ? meal.ingredients
+    : (meal.menu || []).flatMap(item =>
+        item.ingredients && item.ingredients.length > 0
+          ? item.ingredients.map(ing => ({ name: ing.name, quantity: ing.amount ?? 1, unit: ing.unit || 'adet' }))
+          : [{ name: item.name, quantity: item.amount ?? 1, unit: item.unit || 'adet' }]
+      )
+  return { ...meal, meal_name: name, ingredients }
+}
+
 // Template meal for demo/preview without LLM
 const DEMO_MEAL = {
   meal_name: 'Serpme Kahvaltı',
@@ -210,7 +226,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     msgs.forEach((m, i) => {
       if (m.role === 'assistant') {
         const meal = parseJsonBlock(m.content)
-        if (meal) blocks[i] = meal
+        if (meal) blocks[i] = normalizeMeal(meal)
       }
     })
     return blocks
@@ -282,13 +298,14 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       },
       // onMealLogged — attach meal block to the last assistant message
       (meal) => {
+        const normalized = normalizeMeal(meal)
         setMessages((prev) => {
           const lastIdx = prev.length - 1
-          setMealBlocks((blocks) => ({ ...blocks, [lastIdx]: meal }))
+          setMealBlocks((blocks) => ({ ...blocks, [lastIdx]: normalized }))
           setCheckedMealIdx(lastIdx)
           return prev
         })
-        onMealLoggedRef.current?.(meal)
+        onMealLoggedRef.current?.(normalized)
       },
       // onError — don't spam chat with error messages, header already shows "reconnecting…"
       () => {
@@ -313,9 +330,10 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       },
       // onMealUpdated — chat modified the current meal; update the selected block in place
       (meal) => {
+        const normalized = normalizeMeal(meal)
         setCheckedMealIdx((idx) => {
           if (idx !== null) {
-            setMealBlocks((blocks) => ({ ...blocks, [idx]: meal }))
+            setMealBlocks((blocks) => ({ ...blocks, [idx]: normalized }))
           }
           return idx
         })
@@ -493,18 +511,19 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     const abortCtrl = { cancelled: false }
     analyzeAbortRef.current = { abort: () => { abortCtrl.cancelled = true } }
     try {
-      const result = await analyzeMeal(meal.meal_name || 'Meal', meal.ingredients || [], meal.id || null)
+      const mealName = meal.meal_name || meal.menu_name || 'Meal'
+      const result = await analyzeMeal(mealName, meal.ingredients || [], meal.id || null)
       if (abortCtrl.cancelled) return
       // Strip JSON block from analysis text for display, show as assistant message
       const displayText = result.analysis_text
         ? result.analysis_text.replace(/```json[\s\S]*?```/g, '').trim()
         : 'Analiz sonucu alınamadı.'
       syncLyric(displayText) // keep client lyric index in sync if this was a fallback lyric
-      const analysisMsg = `📊 ${meal.meal_name || 'Meal'} — Besin Analizi\n\n${displayText}`
+      const analysisMsg = `📊 ${mealName} — Besin Analizi\n\n${displayText}`
       setMessages(prev => [...prev, { role: 'assistant', content: analysisMsg }])
     } catch {
       if (abortCtrl.cancelled) return
-      setMessages(prev => [...prev, { role: 'assistant', content: `📊 ${meal.meal_name || 'Meal'} — Besin Analizi\n\n${nextLyric()}` }])
+      setMessages(prev => [...prev, { role: 'assistant', content: `📊 ${meal.meal_name || meal.menu_name || 'Meal'} — Besin Analizi\n\n${nextLyric()}` }])
     } finally {
       analyzeAbortRef.current = null
       if (!abortCtrl.cancelled) setAnalyzingIdx(null)
@@ -515,9 +534,10 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     const meal = mealBlocks[msgIdx]
     if (!meal || streamBuffer !== null || schedulingIdx !== null) return
     setSchedulingIdx(msgIdx)
+    const mealName = meal.meal_name || meal.menu_name || 'Meal'
     try {
       const result = await getSchedule(
-        meal.meal_name || 'Meal',
+        mealName,
         meal.steps || [],
         meal.ingredients || [],
         meal.id || null,
@@ -525,11 +545,11 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       const text = result.formatted || 'Zamanlama oluşturulamadı.'
       syncLyric(text) // keep client lyric index in sync if this was a fallback lyric
       const idTag = meal.id ? ` (#${meal.id})` : ''
-      const scheduleMsg = `📋 ${meal.meal_name || 'Meal'}${idTag} — Hazırlık Planı\n\n${text}`
+      const scheduleMsg = `📋 ${mealName}${idTag} — Hazırlık Planı\n\n${text}`
       setMessages(prev => [...prev, { role: 'assistant', content: scheduleMsg }])
     } catch {
       const idTag = meal.id ? ` (#${meal.id})` : ''
-      setMessages(prev => [...prev, { role: 'assistant', content: `📋 ${meal.meal_name || 'Meal'}${idTag} — Hazırlık Planı\n\n${nextLyric()}` }])
+      setMessages(prev => [...prev, { role: 'assistant', content: `📋 ${mealName}${idTag} — Hazırlık Planı\n\n${nextLyric()}` }])
     } finally {
       setSchedulingIdx(null)
     }

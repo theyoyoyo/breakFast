@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Any
 
 
 class MealIngredient(BaseModel):
@@ -16,6 +16,7 @@ class MealLog(BaseModel):
     prep_time_min: Optional[int] = None
     nutrition_note: Optional[str] = None
     schedule: Optional[dict] = None
+    menu_items: Optional[List[Any]] = None  # new multi-item menu format
 
 
 class MealRating(BaseModel):
@@ -33,4 +34,5 @@ class Meal(BaseModel):
     schedule: Optional[dict] = None
     rating: Optional[int] = None
     cached_nutrition: Optional[dict] = None
+    menu_items: Optional[List[Any]] = None  # new multi-item menu format
     logged_at: str

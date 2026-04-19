@@ -63,12 +63,26 @@ IMPORTANT: The ingredient inventory only lists names — no quantities are track
 Assume the user has enough of each ingredient. Decide healthy, balanced portions yourself \
 based on standard Turkish breakfast servings and the user's profile.
 
+Use the menu format — complex dishes have sub-ingredients, simple items have amount+unit:
 ```json
 {{{{
-  "meal_name": "...",
+  "menu_name": "...",
   "description": "...",
-  "ingredients": ["yumurta", "beyaz peynir", "domates"],
-  "steps": ["...", "..."],
+  "menu": [
+    {{{{
+      "name": "Menemen",
+      "ingredients": [
+        {{{{"name": "Yumurta", "amount": 2, "unit": "adet"}}}},
+        {{{{"name": "Domates", "amount": 1, "unit": "adet"}}}}
+      ]
+    }}}},
+    {{{{
+      "name": "Beyaz peynir",
+      "amount": 50,
+      "unit": "gr",
+      "ingredients": []
+    }}}}
+  ],
   "prep_time_min": 10,
   "nutrition_note": "..."
 }}}}
