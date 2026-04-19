@@ -192,18 +192,17 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                     response_text = lyric_cycler.next()
 
             # Save suggestion if the response contains a ```json meal block.
-            # Save BEFORE persisting the message so we can embed the suggestion
-            # id in the stored text — the frontend uses this to restore meal
-            # blocks after page reload.
+            # Suggest responses: save to DB and notify frontend as a new meal.
+            # Chat responses: notify frontend as an update to the existing meal —
+            # do not save a new suggestion row (user didn't request a new meal).
             meal_data = extract_json_block(response_text)
             saved_text = response_text
-            if meal_data:
+            if meal_data and prompt_type == "suggest":
                 async with get_db() as db:
                     suggestion_id = await _save_suggestion(db, user_id, session_id, meal_data)
                 meal_data["id"] = suggestion_id
                 # Re-serialize JSON block with id so it persists in the message
-                enriched = {**meal_data}
-                enriched_json = json.dumps(enriched, ensure_ascii=False)
+                enriched_json = json.dumps(meal_data, ensure_ascii=False)
                 saved_text = response_text[:response_text.rfind("```json")] + "```json\n" + enriched_json + "\n```"
 
             # Persist both messages to DB
@@ -214,7 +213,10 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
             await websocket.send_json({"type": "done", "content": response_text})
 
             if meal_data:
-                await websocket.send_json({"type": "meal_logged", "meal": meal_data})
+                if prompt_type == "suggest":
+                    await websocket.send_json({"type": "meal_logged", "meal": meal_data})
+                else:
+                    await websocket.send_json({"type": "meal_updated", "meal": meal_data})
                 cached_context = None
 
     except WebSocketDisconnect:

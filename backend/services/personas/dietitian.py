@@ -114,6 +114,11 @@ This is a priority hint, not a hard constraint.
 ═══════════════════════════════════════════════════════════════
 USER CONTEXT
 ═══════════════════════════════════════════════════════════════
+INGREDIENT RULE: Build your meal ONLY using ingredients from the inventory below. \
+Do not introduce ingredients the user does not have. If a desired dish calls for a \
+missing ingredient, suggest the closest available substitute from the inventory instead \
+and note the substitution briefly.
+
 - Available ingredients: {ingredient_inventory}
 - Recent meals (last 10): {recent_meal_history}
 - Preferences: {user_preferences}

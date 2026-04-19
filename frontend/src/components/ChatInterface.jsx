@@ -310,6 +310,15 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       // onProgress — pipeline step updates
       (step) => {
         setPipelineStep(step)
+      },
+      // onMealUpdated — chat modified the current meal; update the selected block in place
+      (meal) => {
+        setCheckedMealIdx((idx) => {
+          if (idx !== null) {
+            setMealBlocks((blocks) => ({ ...blocks, [idx]: meal }))
+          }
+          return idx
+        })
       }
     )
     ws.addEventListener('open', () => {
