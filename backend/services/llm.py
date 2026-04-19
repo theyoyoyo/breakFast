@@ -56,12 +56,15 @@ class LLMUnavailableError(Exception):
 
 async def check_llm_availability() -> bool:
     """
-    Check if Ollama is reachable. Called before every message.
+    Check if Ollama is reachable AND the configured model is downloaded.
     """
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
             r = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
-            return r.status_code == 200
+            if r.status_code != 200:
+                return False
+            models = {m.get("name", "") for m in r.json().get("models", [])}
+            return OLLAMA_MODEL in models
     except Exception:
         return False
 

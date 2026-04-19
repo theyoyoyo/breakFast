@@ -15,9 +15,11 @@ from services.llm import check_llm_availability, chat_stream, LLMUnavailableErro
 
 @pytest.mark.asyncio
 async def test_check_llm_availability_ollama_up():
-    """When Ollama responds 200, availability is True."""
+    """When Ollama responds 200 and the model is present, availability is True."""
+    from services.llm import OLLAMA_MODEL
     mock_response = AsyncMock()
     mock_response.status_code = 200
+    mock_response.json = lambda: {"models": [{"name": OLLAMA_MODEL}]}
 
     with patch("services.llm.httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
@@ -28,6 +30,24 @@ async def test_check_llm_availability_ollama_up():
 
         result = await check_llm_availability()
         assert result is True
+
+
+@pytest.mark.asyncio
+async def test_check_llm_availability_model_not_downloaded():
+    """When Ollama is up but the model is missing, availability is False."""
+    mock_response = AsyncMock()
+    mock_response.status_code = 200
+    mock_response.json = lambda: {"models": [{"name": "some-other-model:latest"}]}
+
+    with patch("services.llm.httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client_cls.return_value = mock_client
+
+        result = await check_llm_availability()
+        assert result is False
 
 
 @pytest.mark.asyncio
