@@ -256,7 +256,7 @@ export default function MealEditor({
                       onClick={() => toggleDish(idx)}
                       title={isOpen ? 'Close ingredients' : 'Edit ingredients'}
                     >
-                      {isOpen ? '▲' : '▶'}
+                      {isOpen ? '▲ Ingredients' : '▶ Ingredients'}
                     </button>
                     <button style={s.deleteBtn} onClick={() => handleDelete(idx)} title="Delete">🗑️</button>
                   </div>

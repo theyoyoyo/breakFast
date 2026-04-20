@@ -91,7 +91,7 @@ export const itemRow = {
 export const qtyGroup = {
   display: 'flex',
   alignItems: 'center',
-  gap: 6,
+  gap: 2,
   flexShrink: 0,
 }
 
@@ -137,10 +137,9 @@ export const unitSelect = {
   flexShrink: 0,
   minWidth: 30,
   maxWidth: 110,
+  marginLeft: 8,
   marginRight: 8,
   padding: 0,
-  textAlign: 'right',
-  direction: 'rtl',
 }
 
 export const itemText = {
