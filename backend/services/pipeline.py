@@ -41,6 +41,8 @@ async def run_suggestion_pipeline(
     """
 
     # --- Build prompts ---
+    language = context.get("language", "tr")
+
     suggestion_prompt = build_suggestion_prompt(
         ingredient_inventory=context["ingredients"],
         recent_meal_history=context["history"],
@@ -53,6 +55,7 @@ async def run_suggestion_pipeline(
         avoid_list=context["avoid_list"],
         mode=mode,
         kitchen_appliances=context.get("kitchen_appliances"),
+        language=language,
     )
 
     analyst_prompt = build_pipeline_analyst_prompt(
@@ -60,6 +63,7 @@ async def run_suggestion_pipeline(
         user_profile=context["user_profile"],
         supplements=context["supplements"],
         health_rules=context["health_rules"],
+        language=language,
     )
 
     # --- Step 1: Draft ---

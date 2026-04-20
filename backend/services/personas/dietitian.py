@@ -18,9 +18,13 @@ from services.knowledge import (
     format_supplements,
 )
 
+def _lang(language: str) -> str:
+    return "Always respond in Turkish." if language != "en" else "Always respond in English."
+
+
 SUGGESTION_TEMPLATE = """\
 You are break FAST, a professional breakfast nutrition planner for a single person.
-Always respond in Turkish.
+{lang_instruction}
 Your job: design the healthiest, most satisfying breakfast menu possible based on \
 the user's available ingredients, physical profile, meal history, supplement intake, \
 and preferences.
@@ -93,13 +97,19 @@ Prefer seasonal fruits and vegetables — they're healthier and tastier. \
 This is a priority hint, not a hard constraint.
 
 ═══════════════════════════════════════════════════════════════
+HARD CONSTRAINT — FRIDGE-ONLY
+═══════════════════════════════════════════════════════════════
+EVERY ingredient in every dish MUST appear in the available inventory below.
+Do NOT suggest, assume, or reference any ingredient not on the list.
+This is a strict rule — do not break it even for "standard" items like butter, oil, or salt \
+unless they appear in the inventory.
+If a dish you'd like to suggest is missing one ingredient, use the closest available \
+substitute from the inventory and note the swap briefly in the response text.
+If no reasonable substitute exists from the inventory, pick a different dish entirely.
+
+═══════════════════════════════════════════════════════════════
 USER CONTEXT
 ═══════════════════════════════════════════════════════════════
-INGREDIENT RULE: Build your menu ONLY using ingredients from the inventory below. \
-Do not introduce ingredients the user does not have. If a desired dish calls for a \
-missing ingredient, suggest the closest available substitute from the inventory instead \
-and note the substitution briefly.
-
 - Available ingredients: {ingredient_inventory}
 - Recent meals (last 10): {recent_meal_history}
 - Preferences: {user_preferences}
@@ -214,10 +224,12 @@ def build_suggestion_prompt(
     avoid_list: list[str] | None = None,
     mode: str | None = None,
     kitchen_appliances: list[str] | None = None,
+    language: str = "tr",
 ) -> str:
     """Build the suggestion persona system prompt (profesyonel diyetisyen)."""
     appliance_str = ", ".join(kitchen_appliances) if kitchen_appliances else "Bilgi yok"
     base = SUGGESTION_TEMPLATE.format(
+        lang_instruction=_lang(language),
         ingredient_inventory=format_ingredients(ingredient_inventory),
         recent_meal_history=format_history(recent_meal_history, limit=10),
         user_preferences=format_preferences(user_preferences),

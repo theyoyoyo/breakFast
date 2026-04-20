@@ -15,8 +15,12 @@ from services.knowledge import (
     format_behavioral,
 )
 
+def _lang(language: str) -> str:
+    return "Always respond in Turkish." if language != "en" else "Always respond in English."
+
+
 CHAT_TEMPLATE = """\
-You are break FAST, a personal breakfast assistant. Always respond in Turkish.
+You are break FAST, a personal breakfast assistant. {lang_instruction}
 Be warm, friendly, and concise. Morning energy matters — be direct, skip long explanations.
 
 Talk to the user like a friend. Give natural, short answers to questions like \
@@ -47,9 +51,10 @@ Each rule has a priority level:
 - [Nice to have]: Consider when possible, but don't force it.
 {health_rules}
 
-INGREDIENT RULE: You must ONLY use ingredients from the available inventory above. \
-Do not introduce ingredients the user doesn't have. If a dish calls for something \
-missing, suggest the closest substitute from what's available.
+INGREDIENT RULE: EVERY ingredient in any meal you mention MUST appear in the \
+available inventory above. Do not reference any ingredient not on the list — not even \
+"standard" items like butter, oil, or salt unless they are listed. If a dish needs a \
+missing item, substitute from the inventory or suggest a different dish.
 
 MEAL BLOCK RULE: Do NOT proactively suggest new meals during chat — that is handled \
 by the Suggest button. Only output a JSON block if the user explicitly asks to change, \
@@ -99,10 +104,12 @@ def build_chat_prompt(
     health_rules: list[str] | None = None,
     avoid_list: list[str] | None = None,
     kitchen_appliances: list[str] | None = None,
+    language: str = "tr",
 ) -> str:
     """Build the chat persona system prompt (samimi arkadaş)."""
     appliance_str = ", ".join(kitchen_appliances) if kitchen_appliances else "Bilgi yok"
     return CHAT_TEMPLATE.format(
+        lang_instruction=_lang(language),
         ingredient_inventory=format_ingredients(ingredient_inventory),
         recent_meal_history=format_history(recent_meal_history, limit=3),
         user_preferences=format_preferences(user_preferences),

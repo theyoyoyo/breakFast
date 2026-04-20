@@ -131,7 +131,9 @@ export default function WeeklySummary({ onBack }) {
                       })()}
                       {!nutrition.analysis_data && nutrition.analysis_text && (
                         <div style={s.analysisText}>
-                          {nutrition.analysis_text.replace(/```json[\s\S]*?```/g, '').trim()}
+                          {nutrition.analysis_text
+                            .replace(/`+json[\s\S]*?(`+|$)/g, '')
+                            .trim()}
                         </div>
                       )}
                     </div>

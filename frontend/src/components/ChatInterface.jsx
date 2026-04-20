@@ -594,7 +594,9 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       <div style={s.messages}>
         {messages.map((m, i) => {
           const hasMealBlock = mealBlocks[i] !== undefined
-          const displayText = hasMealBlock ? stripJsonBlock(m.content) : m.content
+          // Always strip JSON blocks from assistant messages — prevents a flash of raw
+          // JSON between onDone (message added) and onMealLogged (hasMealBlock set).
+          const displayText = m.role === 'assistant' ? stripJsonBlock(m.content) : m.content
 
           return (
             <div key={i} style={s.messageWrapper(m.role)}>
@@ -607,7 +609,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
                 <MealBlock
                   meal={mealBlocks[i]}
                   checked={checkedMealIdx === i}
-                  onCheck={() => setCheckedMealIdx(prev => prev === i ? null : i)}
+                  onCheck={() => setCheckedMealIdx(i)}
                   onSave={(updated) => setMealBlocks(prev => ({ ...prev, [i]: updated }))}
                   onAnalyze={() => handleAnalyze(i)}
                   analyzing={analyzingIdx === i}
@@ -645,38 +647,36 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
 
       <div style={s.actionRow}>
         <div style={s.actionStack}>
-          {todaySupps.length > 0 && (
-            <div style={s.suppMenuWrapper}>
-              {suppMenuOpen && !decideOpen && (
-                <div style={s.suppMenu}>
-                  <span style={s.suppMenuLabel}>Supplements</span>
-                  {todaySupps.map(sup => {
-                    const isDaily = sup.frequency === 'daily'
-                    const taken = isDaily || !!sup.taken_today
-                    return (
-                      <button
-                        key={sup.id}
-                        style={s.suppPill(taken, isDaily)}
-                        onClick={() => !isDaily && handleToggleSupplement(sup.id, !!sup.taken_today)}
-                        title={sup.contents || sup.name}
-                        disabled={isDaily}
-                      >
-                        {isDaily ? '⚡' : taken ? '✓' : '○'} {sup.name}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-              <button
-                style={s.suppToggleBtn(suppMenuOpen && !decideOpen)}
-                onClick={() => !decideOpen && setSuppMenuOpen(prev => !prev)}
-                disabled={decideOpen}
-                title="Toggle supplements"
-              >
-                💊
-              </button>
-            </div>
-          )}
+          <div style={s.suppMenuWrapper}>
+            {todaySupps.length > 0 && suppMenuOpen && !decideOpen && (
+              <div style={s.suppMenu}>
+                <span style={s.suppMenuLabel}>Supplements</span>
+                {todaySupps.map(sup => {
+                  const isDaily = sup.frequency === 'daily'
+                  const taken = isDaily || !!sup.taken_today
+                  return (
+                    <button
+                      key={sup.id}
+                      style={s.suppPill(taken, isDaily)}
+                      onClick={() => !isDaily && handleToggleSupplement(sup.id, !!sup.taken_today)}
+                      title={sup.contents || sup.name}
+                      disabled={isDaily}
+                    >
+                      {isDaily ? '⚡' : taken ? '✓' : '○'} {sup.name}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+            <button
+              style={s.suppToggleBtn(suppMenuOpen && !decideOpen)}
+              onClick={() => !decideOpen && todaySupps.length > 0 && setSuppMenuOpen(prev => !prev)}
+              disabled={decideOpen || todaySupps.length === 0}
+              title={todaySupps.length === 0 ? 'No supplements logged' : 'Toggle supplements'}
+            >
+              💊
+            </button>
+          </div>
 
           <button
             style={s.decideBtn(decideOpen)}

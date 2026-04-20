@@ -22,7 +22,7 @@ export const messages = {
   flex: 1,
   overflowY: 'auto',
   overflowX: 'hidden',
-  padding: '16px',
+  padding: '16px 16px 24px',
   display: 'flex',
   flexDirection: 'column',
   gap: 12,

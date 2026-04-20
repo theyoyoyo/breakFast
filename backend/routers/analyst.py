@@ -66,6 +66,7 @@ async def analyze_meal(body: AnalyzeRequest, user_id: int = Depends(require_user
         user_profile=ctx["user_profile"],
         supplements=ctx["supplements"],
         health_rules=ctx["health_rules"],
+        language=ctx.get("language", "tr"),
     )
 
     # Format ingredients — handles both string and structured forms
