@@ -91,12 +91,12 @@ export const itemRow = {
 export const qtyGroup = {
   display: 'flex',
   alignItems: 'center',
-  gap: 2,
+  gap: 6,
   flexShrink: 0,
 }
 
 export const qtyInput = {
-  width: 46,
+  width: 38,
   background: 'var(--surface)',
   border: '1px solid var(--border)',
   borderRadius: 6,
@@ -139,6 +139,8 @@ export const unitSelect = {
   maxWidth: 110,
   marginRight: 8,
   padding: 0,
+  textAlign: 'right',
+  direction: 'rtl',
 }
 
 export const itemText = {
