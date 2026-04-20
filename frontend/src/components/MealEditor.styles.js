@@ -126,6 +126,21 @@ export const unitLabel = {
   marginRight: 8,
 }
 
+// Styled to look like the static unitLabel — blends in, no border chrome
+export const unitSelect = {
+  fontSize: 13,
+  color: 'var(--text-muted)',
+  background: 'none',
+  border: 'none',
+  outline: 'none',
+  cursor: 'pointer',
+  flexShrink: 0,
+  minWidth: 30,
+  maxWidth: 110,
+  marginRight: 8,
+  padding: 0,
+}
+
 export const itemText = {
   flex: 1,
   color: 'var(--text)',

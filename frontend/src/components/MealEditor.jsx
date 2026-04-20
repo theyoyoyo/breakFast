@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { normalizeItem } from '../utils/ingredients'
+import { normalizeItem, UNITS, resolveUnit, rememberUnit } from '../utils/ingredients'
 import * as s from './MealEditor.styles'
 
 /**
@@ -87,8 +87,8 @@ export default function MealEditor({
     const entry = menuMode
       ? (isDish
         ? { name: v, ingredients: [] }
-        : { name: v, amount: 1, unit: 'adet', ingredients: [] })
-      : { name: v, quantity: 1, unit: 'adet' }
+        : { name: v, amount: 1, unit: resolveUnit(v), ingredients: [] })
+      : { name: v, quantity: 1, unit: resolveUnit(v) }
     setItems(prev => [...prev, entry])
     setNewItem('')
   }
@@ -137,9 +137,27 @@ export default function MealEditor({
     if (!v) return
     updateSubs(dishIdx, subs => {
       if (subs.some(s => s.name.toLowerCase() === v.toLowerCase())) return subs
-      return [...subs, { name: v, amount: 1, unit: 'adet' }]
+      return [...subs, { name: v, amount: 1, unit: resolveUnit(v) }]
     })
     setNewSubItem('')
+  }
+
+  // ── Unit change (saves preference to localStorage) ───────────────────────
+
+  const handleUnitChange = (idx, unit) => {
+    setItems(prev => prev.map((item, i) => {
+      if (i !== idx) return item
+      rememberUnit(item.name, unit)
+      return { ...item, unit }
+    }))
+  }
+
+  const handleSubUnitChange = (dishIdx, subIdx, unit) => {
+    updateSubs(dishIdx, subs => subs.map((s, i) => {
+      if (i !== subIdx) return s
+      rememberUnit(s.name, unit)
+      return { ...s, unit }
+    }))
   }
 
   // ── Prep time ────────────────────────────────────────────────────────────
@@ -258,7 +276,10 @@ export default function MealEditor({
                     />
                     <button style={s.arrowBtn} onClick={() => handleQtyStep(idx, 1)}>▲</button>
                   </div>
-                  <span style={s.unitLabel}>{item.unit}</span>
+                  <select style={s.unitSelect} value={item.unit} onChange={(e) => handleUnitChange(idx, e.target.value)}>
+                    {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                    {!UNITS.includes(item.unit) && <option value={item.unit}>{item.unit}</option>}
+                  </select>
                   <span style={s.itemText}>{item.name}</span>
                   <div style={s.itemActions}>
                     <button style={s.deleteBtn} onClick={() => handleDelete(idx)} title="Delete">🗑️</button>
@@ -283,7 +304,10 @@ export default function MealEditor({
                         />
                         <button style={s.arrowBtn} onClick={() => handleSubQtyStep(idx, si, 1)}>▲</button>
                       </div>
-                      <span style={s.unitLabel}>{sub.unit || 'adet'}</span>
+                      <select style={s.unitSelect} value={sub.unit || 'adet'} onChange={(e) => handleSubUnitChange(idx, si, e.target.value)}>
+                        {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                        {sub.unit && !UNITS.includes(sub.unit) && <option value={sub.unit}>{sub.unit}</option>}
+                      </select>
                       <span style={s.itemText}>{sub.name}</span>
                       <div style={s.itemActions}>
                         <button style={s.deleteBtn} onClick={() => handleSubDelete(idx, si)} title="Delete">🗑️</button>
