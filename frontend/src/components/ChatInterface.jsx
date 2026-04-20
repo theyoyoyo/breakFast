@@ -158,12 +158,17 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
 
   // Inject a meal into chat (used by demo and favorites send-to-chat)
   const injectMealToChat = useCallback((meal, introText) => {
-    const jsonBlock = '\n\n```json\n' + JSON.stringify(meal) + '\n```'
+    // Normalize: map menu_items → menu so MealBlock renders correctly
+    const normalized = normalizeMeal({
+      ...meal,
+      menu: meal.menu || meal.menu_items || undefined,
+    })
+    const jsonBlock = '\n\n```json\n' + JSON.stringify(normalized) + '\n```'
     const fullContent = introText + jsonBlock
     setMessages(prev => {
       const newIdx = prev.length
       const newMsgs = [...prev, { role: 'assistant', content: fullContent }]
-      setMealBlocks(blocks => ({ ...blocks, [newIdx]: meal }))
+      setMealBlocks(blocks => ({ ...blocks, [newIdx]: normalized }))
       setCheckedMealIdx(newIdx)
       return newMsgs
     })
