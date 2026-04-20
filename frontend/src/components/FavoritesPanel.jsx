@@ -15,7 +15,6 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
     } catch { /* Backend not available */ }
   }, [])
 
-  // Reload when tab becomes visible
   useEffect(() => {
     if (visible) load()
   }, [visible, load])
@@ -28,13 +27,18 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
     } catch { /* ignore */ }
   }
 
-  const handleSendToChat = (meal) => {
+  const handleSendToChat = (fav) => {
+    // Map menu_items → menu so ChatInterface renders dishes correctly
+    const meal = { ...fav, menu: fav.menu_items || fav.menu || undefined }
     onSendToChat?.(meal)
   }
 
   const handleEditorSave = async (updated) => {
     try {
-      await updateFavorite(editingId, updated)
+      await updateFavorite(editingId, {
+        ...updated,
+        menu_items: updated.menu || updated.menu_items || null,
+      })
       setFavorites(prev => prev.map(f => f.id === editingId ? { ...f, ...updated } : f))
     } catch { /* ignore */ }
     setEditingId(null)
@@ -56,7 +60,13 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
         {favorites.map(fav => {
           const expanded = expandedId === fav.id
           const editing = editingId === fav.id
-          const ingredients = Array.isArray(fav.ingredients) ? fav.ingredients : []
+          const menuItems = fav.menu_items
+          const isMenuFormat = menuItems && menuItems.length > 0
+          // Display: menu item names if menu format, else flat ingredients
+          const displayItems = isMenuFormat
+            ? menuItems
+            : (Array.isArray(fav.ingredients) ? fav.ingredients : [])
+
           return (
             <div key={fav.id} style={s.card}>
               <div style={s.cardHeader} onClick={() => { setExpandedId(expanded ? null : fav.id); if (editing) setEditingId(null) }}>
@@ -66,13 +76,21 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
                   {' '}{expanded ? '▲' : '▼'}
                 </span>
               </div>
+
               {expanded && !editing && (
                 <div style={s.cardBody}>
                   {fav.description && <div style={s.description}>{fav.description}</div>}
                   <div style={s.ingredientList}>
-                    {ingredients.map((ing, i) => (
-                      <span key={i} style={s.ingredientChip}>{formatIngredient(ing)}</span>
-                    ))}
+                    {isMenuFormat
+                      ? menuItems.map((item, i) => (
+                          <span key={i} style={s.ingredientChip}>
+                            {item.amount != null ? `${item.amount} ${item.unit || ''} ` : '🍳 '}{item.name}
+                          </span>
+                        ))
+                      : displayItems.map((ing, i) => (
+                          <span key={i} style={s.ingredientChip}>{formatIngredient(ing)}</span>
+                        ))
+                    }
                   </div>
                   <div style={s.cardActions}>
                     <button style={s.sendBtn} onClick={() => handleSendToChat(fav)} title="Send to chat as suggestion">
@@ -87,15 +105,17 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
                   </div>
                 </div>
               )}
+
               {editing && (
                 <div style={s.overlay} onClick={(e) => { if (e.target === e.currentTarget) setEditingId(null) }}>
                   <div style={s.overlayPanel}>
                     <MealEditor
-                      meal={fav}
+                      meal={{ ...fav, menu: fav.menu_items || undefined }}
                       onSave={handleEditorSave}
                       onClose={() => setEditingId(null)}
                       showPrepTime={true}
                       editPrepTime={true}
+                      menuMode={isMenuFormat}
                     />
                   </div>
                 </div>

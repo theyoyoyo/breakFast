@@ -12,7 +12,6 @@ import KitchenSettings from './KitchenSettings'
 import MealEditor from './MealEditor'
 import StarRating from './StarRating'
 import * as s from './SettingsPanel.styles'
-import * as es from './MealEditor.styles'
 
 const PRIORITY_OPTIONS = [
   { value: 'low', label: "Don't really care" },
@@ -38,9 +37,7 @@ export default function SettingsPanel({ visible }) {
 
   // Meal history state
   const [meals, setMeals] = useState([])
-  const [expandedMealId, setExpandedMealId] = useState(null)
-  const [favSaving, setFavSaving] = useState(false)
-  const [favAdded, setFavAdded] = useState({})
+  const [editingMealId, setEditingMealId] = useState(null)
 
   // Health rules state
   const [healthRules, setHealthRules] = useState([])
@@ -234,27 +231,19 @@ export default function SettingsPanel({ visible }) {
   }
 
   // Meal history handlers
-  const handleExpandMeal = (meal) => {
-    if (expandedMealId === meal.id) {
-      setExpandedMealId(null)
-      return
-    }
-    setExpandedMealId(meal.id)
-  }
-
   const handleSaveMeal = async (meal) => {
     try {
       setError(null)
       await updateMeal(meal.id, {
-        meal_name: meal.meal_name,
+        meal_name: meal.menu_name || meal.meal_name,
         ingredients: meal.ingredients,
         description: meal.description,
         steps: meal.steps,
         prep_time_min: meal.prep_time_min,
         nutrition_note: meal.nutrition_note,
+        menu_items: meal.menu || meal.menu_items || null,
       })
-      setExpandedMealId(null)
-      setFavAdded(prev => { const next = { ...prev }; delete next[meal.id]; return next })
+      setEditingMealId(null)
       load()
     } catch {
       setError('Failed to update meal')
@@ -262,7 +251,7 @@ export default function SettingsPanel({ visible }) {
   }
 
   const handleToggleMealDelete = (id) => {
-    if (expandedMealId === id) setExpandedMealId(null)
+    if (editingMealId === id) setEditingMealId(null)
     setPendingMealDeletes(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id); else next.add(id)
@@ -285,20 +274,17 @@ export default function SettingsPanel({ visible }) {
     }
   }
 
-  const handleCopyToFavorites = async (meal) => {
-    setFavSaving(true)
-    try {
-      await addFavorite({
-        meal_name: meal.meal_name,
-        description: meal.description,
-        ingredients: Array.isArray(meal.ingredients) ? meal.ingredients : [],
-        steps: Array.isArray(meal.steps) ? meal.steps : [],
-        prep_time_min: meal.prep_time_min,
-        nutrition_note: meal.nutrition_note,
-      })
-      setFavAdded(prev => ({ ...prev, [meal.id]: true }))
-    } catch { /* ignore */ }
-    setFavSaving(false)
+  // Receives current editor state (not stale meal prop) via MealEditor's onFavorite
+  const handleCopyToFavorites = async (currentMeal) => {
+    await addFavorite({
+      meal_name: currentMeal.menu_name || currentMeal.meal_name,
+      description: currentMeal.description,
+      ingredients: Array.isArray(currentMeal.ingredients) ? currentMeal.ingredients : [],
+      steps: Array.isArray(currentMeal.steps) ? currentMeal.steps : [],
+      prep_time_min: currentMeal.prep_time_min,
+      nutrition_note: currentMeal.nutrition_note,
+      menu_items: currentMeal.menu || currentMeal.menu_items || null,
+    })
   }
 
   // --- Weekly Summary sub-page ---
@@ -324,40 +310,38 @@ export default function SettingsPanel({ visible }) {
           {meals.length === 0 && <span style={s.empty}>No meals logged yet</span>}
           {meals.map((meal) => {
             const markedForDelete = pendingMealDeletes.has(meal.id)
+            const editing = editingMealId === meal.id
+            const isMenuFormat = !!(meal.menu_items && meal.menu_items.length > 0)
             return (
               <div key={meal.id} style={{ ...s.mealCard, opacity: markedForDelete ? 0.4 : 1 }}>
-                <div style={s.mealHeader} onClick={() => !markedForDelete && handleExpandMeal(meal)}>
+                <div style={{ ...s.mealHeader, cursor: 'default' }}>
                   <div style={s.mealInfo}>
                     <span style={{ ...s.mealName, textDecoration: markedForDelete ? 'line-through' : 'none' }}>{meal.meal_name}</span>
                     <span style={s.mealDate}>{new Date(meal.logged_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
                   <div style={s.mealActions}>
-                    {!markedForDelete && <span style={s.expandIcon}>{expandedMealId === meal.id ? '▼' : '▶'}</span>}
+                    {!markedForDelete && (
+                      <button style={s.editMealBtn} onClick={() => setEditingMealId(editing ? null : meal.id)} title="Edit meal">✏️</button>
+                    )}
                     <button style={s.deleteMealBtn} onClick={(e) => { e.stopPropagation(); handleToggleMealDelete(meal.id) }} title={markedForDelete ? 'Undo delete' : 'Delete meal'}>
                       {markedForDelete ? '↩' : '🗑️'}
                     </button>
                   </div>
                 </div>
 
-                {expandedMealId === meal.id && !markedForDelete && (
-                  <div style={s.mealExpanded}>
-                    <MealEditor
-                      meal={meal}
-                      onSave={(updated) => handleSaveMeal({ ...meal, ...updated })}
-                      onClose={() => { setExpandedMealId(null); setFavAdded(prev => { const next = { ...prev }; delete next[meal.id]; return next }) }}
-                      showPrepTime={true}
-                      editPrepTime={true}
-                      extraActions={
-                        <button
-                          style={favAdded[meal.id] ? es.copyToFavBtnDone : es.copyToFavBtn}
-                          onClick={() => handleCopyToFavorites(meal)}
-                          disabled={favSaving || favAdded[meal.id]}
-                          title={favAdded[meal.id] ? 'Added to favorites' : 'Copy to favorites'}
-                        >
-                          {favSaving ? '...' : favAdded[meal.id] ? '✓ Saved' : '⭐ Save'}
-                        </button>
-                      }
-                    />
+                {editing && !markedForDelete && (
+                  <div style={s.overlay} onClick={(e) => { if (e.target === e.currentTarget) setEditingMealId(null) }}>
+                    <div style={s.overlayPanel}>
+                      <MealEditor
+                        meal={{ ...meal, menu: meal.menu_items || undefined }}
+                        onSave={(updated) => handleSaveMeal({ ...meal, ...updated })}
+                        onClose={() => setEditingMealId(null)}
+                        showPrepTime={true}
+                        editPrepTime={true}
+                        menuMode={isMenuFormat}
+                        onFavorite={handleCopyToFavorites}
+                      />
+                    </div>
                   </div>
                 )}
               </div>

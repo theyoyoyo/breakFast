@@ -21,21 +21,37 @@ router = APIRouter()
 
 async def _save_suggestion(db, user_id: int, session_id: str, meal_data: dict) -> int:
     """Insert a suggested meal into suggested_meals. Returns the new suggestion's id."""
+    # Support both old flat format and new menu format
+    menu_items = meal_data.get("menu")
+    meal_name = meal_data.get("menu_name") or meal_data.get("meal_name", "Unknown")
+    # Flatten ingredients from menu for backward-compat fields
+    if menu_items:
+        flat_ingredients = []
+        for item in menu_items:
+            sub = item.get("ingredients") or []
+            if sub:
+                flat_ingredients.extend(sub)
+            else:
+                flat_ingredients.append({"name": item.get("name", ""), "amount": item.get("amount", 1), "unit": item.get("unit", "adet")})
+    else:
+        flat_ingredients = meal_data.get("ingredients", [])
+
     await db.execute(
         """
         INSERT INTO suggested_meals
-            (user_id, session_id, meal_name, description, ingredients, steps, prep_time_min, nutrition_note)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (user_id, session_id, meal_name, description, ingredients, steps, prep_time_min, nutrition_note, menu_items)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             user_id,
             session_id,
-            meal_data.get("meal_name", "Unknown"),
+            meal_name,
             meal_data.get("description"),
-            json.dumps(meal_data.get("ingredients", []), ensure_ascii=False),
+            json.dumps(flat_ingredients, ensure_ascii=False),
             json.dumps(meal_data.get("steps", []), ensure_ascii=False),
             meal_data.get("prep_time_min"),
             meal_data.get("nutrition_note"),
+            json.dumps(menu_items, ensure_ascii=False) if menu_items else None,
         ),
     )
     await db.commit()
@@ -201,6 +217,9 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                 async with get_db() as db:
                     suggestion_id = await _save_suggestion(db, user_id, session_id, meal_data)
                 meal_data["id"] = suggestion_id
+                # Normalize: ensure meal_name is always set (may come as menu_name)
+                if "menu_name" in meal_data and "meal_name" not in meal_data:
+                    meal_data["meal_name"] = meal_data["menu_name"]
                 # Re-serialize JSON block with id so it persists in the message
                 enriched_json = json.dumps(meal_data, ensure_ascii=False)
                 saved_text = response_text[:response_text.rfind("```json")] + "```json\n" + enriched_json + "\n```"

@@ -96,7 +96,7 @@ export const qtyGroup = {
 }
 
 export const qtyInput = {
-  width: 46,
+  width: 38,
   background: 'var(--surface)',
   border: '1px solid var(--border)',
   borderRadius: 6,
@@ -126,6 +126,22 @@ export const unitLabel = {
   marginRight: 8,
 }
 
+// Styled to look like the static unitLabel — blends in, no border chrome
+export const unitSelect = {
+  fontSize: 13,
+  color: 'var(--text-muted)',
+  background: 'none',
+  border: 'none',
+  outline: 'none',
+  cursor: 'pointer',
+  flexShrink: 0,
+  minWidth: 30,
+  maxWidth: 110,
+  marginLeft: 8,
+  marginRight: 8,
+  padding: 0,
+}
+
 export const itemText = {
   flex: 1,
   color: 'var(--text)',
@@ -143,6 +159,50 @@ export const deleteBtn = {
   cursor: 'pointer',
   fontSize: 18,
   padding: '4px 6px',
+}
+
+export const dishBadge = {
+  fontSize: 16,
+  flexShrink: 0,
+  marginRight: 6,
+}
+
+export const expandBtn = (isOpen) => ({
+  background: 'none',
+  border: '1px solid var(--border)',
+  borderRadius: 4,
+  cursor: 'pointer',
+  fontSize: 10,
+  padding: '2px 6px',
+  color: isOpen ? 'var(--accent)' : 'var(--text-muted)',
+  lineHeight: 1,
+})
+
+export const subList = {
+  marginLeft: 16,
+  marginTop: 2,
+  marginBottom: 4,
+  borderLeft: '2px solid var(--border)',
+  paddingLeft: 10,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 4,
+}
+
+export const subRow = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: '6px 10px',
+  background: 'var(--surface)',
+  borderRadius: 8,
+  fontSize: 13,
+}
+
+export const subAddRow = {
+  display: 'flex',
+  gap: 6,
+  marginTop: 2,
 }
 
 export const addRow = {

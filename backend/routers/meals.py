@@ -81,8 +81,8 @@ async def log_meal(body: MealLog, user_id: int = Depends(require_user)):
         await db.execute(
             """
             INSERT INTO meal_history
-                (user_id, meal_name, description, ingredients, steps, prep_time_min, nutrition_note, schedule)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (user_id, meal_name, description, ingredients, steps, prep_time_min, nutrition_note, schedule, menu_items)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user_id,
@@ -93,6 +93,7 @@ async def log_meal(body: MealLog, user_id: int = Depends(require_user)):
                 body.prep_time_min,
                 body.nutrition_note,
                 json.dumps(body.schedule, ensure_ascii=False) if body.schedule else None,
+                json.dumps(body.menu_items, ensure_ascii=False) if body.menu_items else None,
             ),
         )
         await db.commit()
@@ -123,7 +124,7 @@ async def update_meal(meal_id: int, body: MealLog, user_id: int = Depends(requir
             UPDATE meal_history SET
                 meal_name = ?, description = ?, ingredients = ?,
                 steps = ?, prep_time_min = ?, nutrition_note = ?,
-                cached_nutrition = NULL, schedule = NULL
+                cached_nutrition = NULL, schedule = NULL, menu_items = ?
             WHERE id = ? AND user_id = ?
             """,
             (
@@ -133,6 +134,7 @@ async def update_meal(meal_id: int, body: MealLog, user_id: int = Depends(requir
                 json.dumps(body.steps or [], ensure_ascii=False),
                 body.prep_time_min,
                 body.nutrition_note,
+                json.dumps(body.menu_items, ensure_ascii=False) if body.menu_items else None,
                 meal_id,
                 user_id,
             ),

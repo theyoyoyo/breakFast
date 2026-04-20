@@ -27,21 +27,23 @@ async def list_favorites(user_id: int = Depends(require_user)):
 async def add_favorite(meal: dict, user_id: int = Depends(require_user)):
     ingredients = _json.dumps(meal.get("ingredients", []), ensure_ascii=False)
     steps = _json.dumps(meal.get("steps", []), ensure_ascii=False)
+    menu_items = meal.get("menu_items") or meal.get("menu")
     async with get_db() as db:
         cur = await db.execute(
             """
             INSERT INTO favorite_meals
-                (user_id, meal_name, description, ingredients, steps, prep_time_min, nutrition_note)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (user_id, meal_name, description, ingredients, steps, prep_time_min, nutrition_note, menu_items)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user_id,
-                meal.get("meal_name", "Meal"),
+                meal.get("menu_name") or meal.get("meal_name", "Meal"),
                 meal.get("description"),
                 ingredients,
                 steps,
                 meal.get("prep_time_min"),
                 meal.get("nutrition_note"),
+                _json.dumps(menu_items, ensure_ascii=False) if menu_items else None,
             ),
         )
         await db.commit()
@@ -52,21 +54,23 @@ async def add_favorite(meal: dict, user_id: int = Depends(require_user)):
 async def update_favorite(fav_id: int, meal: dict, user_id: int = Depends(require_user)):
     ingredients = _json.dumps(meal.get("ingredients", []), ensure_ascii=False)
     steps = _json.dumps(meal.get("steps", []), ensure_ascii=False)
+    menu_items = meal.get("menu_items") or meal.get("menu")
     async with get_db() as db:
         cur = await db.execute(
             """
             UPDATE favorite_meals
             SET meal_name = ?, description = ?, ingredients = ?, steps = ?,
-                prep_time_min = ?, nutrition_note = ?
+                prep_time_min = ?, nutrition_note = ?, menu_items = ?
             WHERE id = ? AND user_id = ?
             """,
             (
-                meal.get("meal_name", "Meal"),
+                meal.get("menu_name") or meal.get("meal_name", "Meal"),
                 meal.get("description"),
                 ingredients,
                 steps,
                 meal.get("prep_time_min"),
                 meal.get("nutrition_note"),
+                _json.dumps(menu_items, ensure_ascii=False) if menu_items else None,
                 fav_id,
                 user_id,
             ),

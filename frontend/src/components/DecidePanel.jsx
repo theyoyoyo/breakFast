@@ -1,118 +1,108 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { getRatings, createRating, logMeal } from '../services/api'
-import { normalizeItem, parseQuantity } from '../utils/ingredients'
+import MealEditor from './MealEditor'
 import StarRating from './StarRating'
 import * as s from './DecidePanel.styles'
 
 export default function DecidePanel({ meal, onClose, onConfirm }) {
-  // Phase: 'edit' = editing ingredients, 'rate' = rating products
+  // Phase: 'edit' = MealEditor open, 'rate' = star-rating unrated items
   const [phase, setPhase] = useState('edit')
-  const [items, setItems] = useState([])
-  const [prepTime, setPrepTime] = useState('')
-  const [newItem, setNewItem] = useState('')
   const [ratings, setRatings] = useState({})
   const [existingRatings, setExistingRatings] = useState([])
   const [saving, setSaving] = useState(false)
+  // Holds the meal state captured from MealEditor when proceeding to rating
+  const pendingMealRef = useRef(null)
 
-  // Initialize items from meal ingredients — normalize to structured form
+  // Reset phase whenever a new meal is passed in
   useEffect(() => {
-    if (meal?.ingredients) {
-      setItems(meal.ingredients.map(normalizeItem))
-    } else {
-      setItems([])
-    }
-    setPrepTime(meal?.prep_time_min ?? '')
     setPhase('edit')
     setRatings({})
+    pendingMealRef.current = null
   }, [meal])
 
-  // Load existing ratings to skip already-rated products
+  // Load existing ratings to skip already-rated products in the rate phase
   useEffect(() => {
     getRatings()
       .then(setExistingRatings)
       .catch(() => setExistingRatings([]))
   }, [])
 
-  const handleDelete = (idx) => {
-    setItems(prev => prev.filter((_, i) => i !== idx))
-  }
+  // Build a menu-format meal for MealEditor (always menuMode so "+ Dish" is always available).
+  // If the incoming meal already has a menu, use it. If it has flat ingredients, convert them to
+  // simple menu items. If it's empty, MealEditor starts blank.
+  const editorMeal = (() => {
+    const menu = meal?.menu || meal?.menu_items
+    if (menu && menu.length > 0) return { ...meal, menu }
+    const flat = meal?.ingredients || []
+    return {
+      ...meal,
+      menu: flat.map(ing => ({
+        name: ing.name,
+        amount: ing.quantity ?? ing.amount ?? 1,
+        unit: ing.unit || 'adet',
+        ingredients: [],
+      })),
+    }
+  })()
 
-  const handleQuantityChange = (idx, val) => {
-    if (val !== '' && !/^\d*\.?\d{0,2}$/.test(val)) return
-    setItems(prev => prev.map((item, i) =>
-      i === idx ? { ...item, quantity: val === '' ? '' : val } : item
-    ))
-  }
+  // Core log-meal call — used by both direct save and post-rating save
+  const doLogMeal = useCallback(async (updatedMeal) => {
+    await logMeal({
+      meal_name: updatedMeal.menu_name || updatedMeal.meal_name || 'Kahvaltı',
+      description: updatedMeal.description || '',
+      ingredients: updatedMeal.ingredients || [],
+      steps: updatedMeal.steps || [],
+      prep_time_min: updatedMeal.prep_time_min ?? null,
+      nutrition_note: updatedMeal.nutrition_note || '',
+      menu_items: updatedMeal.menu || updatedMeal.menu_items || null,
+    })
+    onConfirm?.()
+  }, [onConfirm])
 
-  const handleQuantityBlur = (idx) => {
-    setItems(prev => prev.map((item, i) => {
-      if (i !== idx) return item
-      const parsed = parseQuantity(item.quantity)
-      return { ...item, quantity: parsed !== null ? parsed : 1 }
-    }))
-  }
+  // MealEditor's Save button → log directly without rating
+  const handleEditorSave = useCallback(async (updatedMeal) => {
+    setSaving(true)
+    try {
+      await doLogMeal(updatedMeal)
+    } catch { /* ignore */ }
+    setSaving(false)
+  }, [doLogMeal])
 
-  const handleQuantityStep = (idx, delta) => {
-    setItems(prev => prev.map((item, i) => {
-      if (i !== idx) return item
-      const current = typeof item.quantity === 'number' ? item.quantity : parseFloat(item.quantity) || 1
-      const next = Math.round((current + delta) * 100) / 100
-      return { ...item, quantity: next > 0 ? next : current }
-    }))
-  }
-
-  const handleAdd = () => {
-    const v = newItem.trim()
-    if (!v) return
-    if (items.some(item => item.name.toLowerCase() === v.toLowerCase())) return
-    setItems(prev => [...prev, { name: v, quantity: 1, unit: 'adet' }])
-    setNewItem('')
-  }
-
-  const handleProceedToRating = useCallback(() => {
-    if (items.length === 0) return
+  // MealEditor's extraActions "Confirm" button → collect ratings for unrated items, then log
+  const handleProceedToRating = useCallback((updatedMeal) => {
+    pendingMealRef.current = updatedMeal
     const ratedNames = new Set(existingRatings.map(r => r.product_name.toLowerCase()))
-    const unrated = items.filter(item => !ratedNames.has(item.name.toLowerCase()))
+    // Always menu format now — top-level menu items are what the user rates
+    const topItems = updatedMeal.menu || updatedMeal.ingredients || []
+    const unrated = topItems.filter(item => !ratedNames.has(item.name.toLowerCase()))
     if (unrated.length === 0) {
-      handleSave()
+      // All already rated — skip to save
+      handleEditorSave(updatedMeal)
       return
     }
-    const defaultRatings = {}
-    unrated.forEach(item => { defaultRatings[item.name] = 10 })
-    setRatings(defaultRatings)
+    const defaults = {}
+    unrated.forEach(item => { defaults[item.name] = 10 })
+    setRatings(defaults)
     setPhase('rate')
-  }, [items, existingRatings])
+  }, [existingRatings, handleEditorSave])
 
-  const handleSave = useCallback(async () => {
+  // Rating phase Save — persist ratings then log meal
+  const handleSaveWithRatings = useCallback(async () => {
     setSaving(true)
     try {
       for (const [name, rating] of Object.entries(ratings)) {
-        try {
-          await createRating(name, rating)
-        } catch { /* Already rated or error — skip */ }
+        try { await createRating(name, rating) } catch { /* already rated or error — skip */ }
       }
-      // Finalize quantities before saving
-      const finalItems = items.map(item => ({
-        ...item,
-        quantity: parseQuantity(item.quantity) ?? 1,
-      }))
-      const finalPrepTime = typeof prepTime === 'number' ? prepTime : (parseInt(prepTime, 10) || null)
-      await logMeal({
-        meal_name: meal?.meal_name || 'Kahvaltı',
-        description: meal?.description || '',
-        ingredients: finalItems,
-        steps: meal?.steps || [],
-        prep_time_min: finalPrepTime,
-        nutrition_note: meal?.nutrition_note || '',
-      })
-      onConfirm?.()
-    } catch { /* Error saving */ }
+      await doLogMeal(pendingMealRef.current || meal)
+    } catch { /* ignore */ }
     setSaving(false)
-  }, [ratings, items, meal, onConfirm])
+  }, [ratings, meal, doLogMeal])
 
   const handleOverlayClick = (e) => {
     if (e.target === e.currentTarget) onClose()
   }
+
+  // ── Rate phase ────────────────────────────────────────────────────────────
 
   if (phase === 'rate') {
     const unratedItems = Object.keys(ratings)
@@ -133,7 +123,7 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
           </div>
           <div style={s.actions}>
             <button style={s.backBtn} onClick={() => setPhase('edit')}>Back</button>
-            <button style={s.confirmBtn} onClick={handleSave} disabled={saving}>
+            <button style={s.confirmBtn} onClick={handleSaveWithRatings} disabled={saving}>
               {saving ? '...' : 'Save'}
             </button>
           </div>
@@ -142,70 +132,29 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
     )
   }
 
+  // ── Edit phase ────────────────────────────────────────────────────────────
+
   return (
     <div style={s.overlay} onClick={handleOverlayClick}>
       <div style={s.panel}>
-        <div style={s.panelHeader}>Today I ate...</div>
-        <div style={s.prepTimeRow}>
-          <span style={s.prepTimeLabel}>⏱</span>
-          <input
-            style={s.prepTimeInput}
-            type="text"
-            inputMode="numeric"
-            value={prepTime}
-            onChange={(e) => {
-              const v = e.target.value
-              if (v === '') { setPrepTime(''); return }
-              const n = parseInt(v, 10)
-              if (!isNaN(n) && n >= 0 && n <= 999) setPrepTime(n)
-            }}
-            placeholder="—"
-          />
-          <span style={s.prepTimeUnit}>min</span>
-        </div>
-        <div style={s.itemList}>
-          {items.map((item, idx) => (
-            <div key={idx} style={s.itemRow}>
-              <div style={s.qtyGroup}>
-                <button style={s.arrowBtn} onClick={() => handleQuantityStep(idx, -1)}>▼</button>
-                <input
-                  style={s.qtyInput}
-                  type="text"
-                  inputMode="decimal"
-                  value={item.quantity}
-                  onChange={(e) => handleQuantityChange(idx, e.target.value)}
-                  onBlur={() => handleQuantityBlur(idx)}
-                />
-                <button style={s.arrowBtn} onClick={() => handleQuantityStep(idx, 1)}>▲</button>
-              </div>
-              <span style={s.unitLabel}>{item.unit}</span>
-              <span style={s.itemText}>{item.name}</span>
-              <div style={s.itemActions}>
-                <button style={s.deleteBtn} onClick={() => handleDelete(idx)} title="Delete">🗑️</button>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={s.addRow}>
-          <input
-            style={s.addInput}
-            value={newItem}
-            onChange={(e) => setNewItem(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-            placeholder="Add item…"
-          />
-          <button style={s.addBtn} onClick={handleAdd}>+</button>
-        </div>
-        <div style={s.actions}>
-          <button style={s.cancelBtn} onClick={onClose}>Close</button>
-          <button
-            style={s.confirmBtn}
-            onClick={handleProceedToRating}
-            disabled={items.length === 0}
-          >
-            Confirm
-          </button>
-        </div>
+        <div style={s.panelHeader}>Today I ate</div>
+        <MealEditor
+          meal={editorMeal}
+          onSave={handleEditorSave}
+          onClose={onClose}
+          showPrepTime={true}
+          editPrepTime={true}
+          menuMode={true}
+          extraActions={(buildCurrentMeal) => (
+            <button
+              style={s.confirmBtn}
+              onClick={() => handleProceedToRating(buildCurrentMeal())}
+              disabled={saving}
+            >
+              Confirm
+            </button>
+          )}
+        />
       </div>
     </div>
   )

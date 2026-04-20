@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS meal_history (
     schedule        TEXT,           -- JSON (kitchen scheduler output)
     rating          INTEGER,        -- 1 = thumbs down, 5 = thumbs up, NULL = no feedback
     cached_nutrition TEXT,           -- JSON (analyst output cache, NULL = not yet analyzed)
+    menu_items      TEXT,           -- JSON menu array (new multi-item format)
     logged_at       TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -161,6 +162,7 @@ CREATE TABLE IF NOT EXISTS favorite_meals (
     steps           TEXT,           -- JSON list
     prep_time_min   INTEGER,
     nutrition_note  TEXT,
+    menu_items      TEXT,           -- JSON menu array (new multi-item format)
     created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -174,6 +176,7 @@ CREATE TABLE IF NOT EXISTS suggested_meals (
     steps           TEXT,           -- JSON list
     prep_time_min   INTEGER,
     nutrition_note  TEXT,
+    menu_items      TEXT,           -- JSON menu array (new multi-item format)
     created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -329,6 +332,30 @@ async def init_db() -> None:
         try:
             await db.execute(
                 "ALTER TABLE users ADD COLUMN last_expiry_check TEXT"
+            )
+        except Exception:
+            pass  # Column already exists
+
+        # Migrate: add menu_items column to meal_history if missing
+        try:
+            await db.execute(
+                "ALTER TABLE meal_history ADD COLUMN menu_items TEXT"
+            )
+        except Exception:
+            pass  # Column already exists
+
+        # Migrate: add menu_items column to suggested_meals if missing
+        try:
+            await db.execute(
+                "ALTER TABLE suggested_meals ADD COLUMN menu_items TEXT"
+            )
+        except Exception:
+            pass  # Column already exists
+
+        # Migrate: add menu_items column to favorite_meals if missing
+        try:
+            await db.execute(
+                "ALTER TABLE favorite_meals ADD COLUMN menu_items TEXT"
             )
         except Exception:
             pass  # Column already exists

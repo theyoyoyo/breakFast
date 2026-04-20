@@ -45,6 +45,7 @@ def row_to_meal(row) -> dict:
     d["steps"] = parse_json_field(d.get("steps"), [])
     d["schedule"] = parse_json_field(d.get("schedule"), None)
     d["cached_nutrition"] = parse_json_field(d.get("cached_nutrition"), None)
+    d["menu_items"] = parse_json_field(d.get("menu_items"), None)
     return d
 
 
@@ -53,4 +54,5 @@ def row_to_favorite(row) -> dict:
     d = dict(row)
     for field in ("ingredients", "steps"):
         d[field] = parse_json_field(d.get(field), [])
+    d["menu_items"] = parse_json_field(d.get("menu_items"), None)
     return d

@@ -3,7 +3,6 @@ import { addFavorite } from '../services/api'
 import { formatIngredient } from '../utils/ingredients'
 import MealEditor from './MealEditor'
 import * as s from './MealBlock.styles'
-import * as es from './MealEditor.styles'
 
 const BREAKFAST_EMOJIS = [
   '🍳', '🥐', '🧀', '🥚', '🫕', '🥞', '🧇', '🥣', '🍞', '🥯', '🫖', '☕',
@@ -12,9 +11,6 @@ const BREAKFAST_EMOJIS = [
   '🍋', '🥝', '🍑', '🫚', '🥥', '🧆', '🥙', '🫓', '🥖', '🥨', '🥮', '🍠',
 ]
 
-/**
- * Pick a purely random emoji from the pool.
- */
 function pickEmoji() {
   return BREAKFAST_EMOJIS[Math.floor(Math.random() * BREAKFAST_EMOJIS.length)]
 }
@@ -26,16 +22,18 @@ function pickEmoji() {
  */
 export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, analyzing, onSchedule, scheduling }) {
   const [panelOpen, setPanelOpen] = useState(false)
-  const [favSaving, setFavSaving] = useState(false)
-  const [favAdded, setFavAdded] = useState(false)
-
-  // Pick once on mount — stays the same for the lifetime of this block
   const [emoji] = useState(pickEmoji)
 
-  const ingredients = meal?.ingredients || []
-  const displayNames = ingredients.length > 0
-    ? ingredients.map(formatIngredient).join(', ')
-    : meal?.meal_name || 'Meal'
+  const menuItems = meal?.menu
+  const isMenuFormat = menuItems && menuItems.length > 0
+
+  const displayNames = isMenuFormat
+    ? menuItems.map(i => i.name).join(', ')
+    : (meal?.ingredients || []).length > 0
+      ? meal.ingredients.map(formatIngredient).join(', ')
+      : meal?.meal_name || 'Meal'
+
+  const mealName = meal?.menu_name || meal?.meal_name || 'Meal'
 
   const handleOverlayClick = (e) => {
     if (e.target === e.currentTarget) setPanelOpen(false)
@@ -46,20 +44,17 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
     setPanelOpen(false)
   }
 
-  const handleCopyToFavorites = async () => {
-    setFavSaving(true)
-    try {
-      await addFavorite({
-        meal_name: meal?.meal_name || 'Meal',
-        description: meal?.description,
-        ingredients: meal?.ingredients || [],
-        steps: meal?.steps || [],
-        prep_time_min: meal?.prep_time_min,
-        nutrition_note: meal?.nutrition_note,
-      })
-      setFavAdded(true)
-    } catch { /* ignore */ }
-    setFavSaving(false)
+  // Called by MealEditor with the current edited state — always saves what user sees
+  const handleFavorite = async (currentMeal) => {
+    await addFavorite({
+      meal_name: currentMeal.menu_name || currentMeal.meal_name || mealName,
+      description: currentMeal.description,
+      ingredients: currentMeal.ingredients || [],
+      steps: currentMeal.steps || [],
+      prep_time_min: currentMeal.prep_time_min,
+      nutrition_note: currentMeal.nutrition_note,
+      menu_items: currentMeal.menu || currentMeal.menu_items || null,
+    })
   }
 
   return (
@@ -67,7 +62,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
       <div style={s.blockWrapper}>
         <div style={s.titleBar} onClick={() => { setPanelOpen(true); setFavAdded(false) }}>
           <span style={s.titleIcon}>{emoji}</span>
-          <span style={s.titleName}>{meal?.meal_name || 'Meal'}</span>
+          <span style={s.titleName}>{mealName}</span>
           {meal?.prep_time_min && <span style={s.titlePrep}>⏱ {meal.prep_time_min}m</span>}
           {meal?.id && <span style={s.titleId}>#{meal.id}</span>}
         </div>
@@ -105,22 +100,14 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
         <div style={s.overlay} onClick={handleOverlayClick}>
           <div style={s.panel}>
             <MealEditor
-              meal={meal}
+              meal={{ ...meal, meal_name: mealName }}
               onSave={handleEditorSave}
               onClose={() => setPanelOpen(false)}
               showPrepTime={true}
               editPrepTime={true}
               showId={true}
-              extraActions={
-                <button
-                  style={favAdded ? es.copyToFavBtnDone : es.copyToFavBtn}
-                  onClick={handleCopyToFavorites}
-                  disabled={favSaving || favAdded}
-                  title={favAdded ? 'Added to favorites' : 'Copy to favorites'}
-                >
-                  {favSaving ? '...' : favAdded ? '✓ Saved' : '⭐ Save'}
-                </button>
-              }
+              menuMode={isMenuFormat}
+              onFavorite={handleFavorite}
             />
           </div>
         </div>
