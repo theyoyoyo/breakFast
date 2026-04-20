@@ -84,7 +84,7 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
     unrated.forEach(item => { defaults[item.name] = 10 })
     setRatings(defaults)
     setPhase('rate')
-  }, [existingRatings, isMenuFormat, handleEditorSave])
+  }, [existingRatings, handleEditorSave])
 
   // Rating phase Save — persist ratings then log meal
   const handleSaveWithRatings = useCallback(async () => {
