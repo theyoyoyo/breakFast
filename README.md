@@ -1,84 +1,66 @@
 # break FAST
 
-A personal AI-powered breakfast planner. Knows your ingredients, your kitchen, and your health context. Suggests the richest, healthiest, most efficiently prepared breakfast each morning with minimal friction.
+A personal AI-powered breakfast planner. Knows your ingredients, your kitchen, and your health context. Suggests the richest, healthiest, most efficiently prepared breakfast each morning with minimal friction. Multi-user, local-first, free forever.
 
 ---
 
-## Setup (Third PC — Backend)
+## Setup
 
 ### Prerequisites
 
-- Python 3.11+ (tested up to 3.14)
-- Node.js 18+ (for frontend)
-- [Ollama](https://ollama.ai) — optional, only needed for local LLM
+- Python 3.11+
+- Node.js 18+
+- [Ollama](https://ollama.ai) — optional, only needed for AI chat/suggestions
 
-### Quick Start (without LLM)
+### Quick start (Windows)
 
-You can run the app without Ollama or an API key. The UI and all CRUD features (ingredients, meals, preferences) will work — only the chat/suggestion engine requires an LLM connection.
+Double-click `start.bat`. It opens the backend and frontend in separate terminal windows.
+
+### Manual start
 
 ```bash
-# 1. Setup
-cp .env.example .env
+# Backend
 cd backend && pip install -r requirements.txt
-cd ../frontend && npm install
+python -m uvicorn main:app --host 0.0.0.0 --port 8000
 
-# 2. Run (two terminals)
-cd backend && python -m uvicorn main:app --host 0.0.0.0 --port 8000
-cd frontend && npm run dev
-```
-
-Open http://localhost:5173 in your browser.
-
-### Full Setup (with LLM)
-
-### 1. Pull the Ollama model
-
-```bash
-ollama pull llama3.1:8b
-```
-
-### 2. Configure environment
-
-```bash
-cp .env.example .env
-# Edit .env — adjust OLLAMA_BASE_URL if needed
-```
-
-### 3. Install backend dependencies
-
-```bash
-cd backend
-pip install -r requirements.txt
-```
-
-### 4. Start the backend
-
-```bash
-cd backend
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-The backend is now reachable at `http://<third-pc-ip>:8000`.
-
----
-
-## Setup (Frontend — any machine)
-
-```bash
-cd frontend
-npm install
-npm run dev
+# Frontend (separate terminal)
+cd frontend && npm install && npm run dev
 ```
 
 Open `http://localhost:5173` in your browser.
 
-For phone access on home WiFi, open `http://<third-pc-ip>:5173` (Vite will need `--host` flag or set `server.host = true` in `vite.config.js`).
+### With Ollama (local LLM)
+
+```bash
+ollama pull llama3.1:8b
+cp .env.example .env   # adjust OLLAMA_BASE_URL if needed
+```
+
+The app works without Ollama — all CRUD features run fine. Only chat and meal suggestions require an LLM.
 
 ---
 
-## Remote Access via Tailscale
+## User Management (admin CLI)
 
-Install Tailscale on the third PC and on your phone/laptop. Once connected, the backend is accessible at the Tailscale IP (`100.x.x.x:8000`) from anywhere, encrypted end-to-end. No port forwarding needed.
+Users are managed from the command line on the server machine. Each user gets their own PIN.
+
+```bash
+cd backend
+python manage.py add-user "Onur" --pin 1234
+python manage.py list-users
+python manage.py delete-user "Onur"
+python manage.py backup-db
+```
+
+Users log in from the browser with their name and PIN. Sessions are device-independent (works from phone and desktop with the same account).
+
+---
+
+## Remote Access
+
+Install [Tailscale](https://tailscale.com) on the server PC and your devices. The backend becomes accessible at the Tailscale IP (`100.x.x.x:8000`) from anywhere — encrypted, no port forwarding needed.
+
+For phone access on home WiFi: `http://<server-ip>:5173` (Vite serves on `0.0.0.0` by default).
 
 ---
 
@@ -86,10 +68,9 @@ Install Tailscale on the third PC and on your phone/laptop. Once connected, the 
 
 ```
 [Phone / Desktop — browser]
-         |
-         | HTTP / WebSocket
+         |  HTTP / WebSocket
          v
- [FastAPI Backend — third PC]
+[FastAPI Backend — third PC]
    |               |
    v               v
 [Ollama]    [Song lyric fallback]
@@ -109,6 +90,6 @@ Install Tailscale on the third PC and on your phone/laptop. Once connected, the 
 | Local LLM | Ollama + Llama 3.1 8B |
 | LLM Fallback | Song lyric cycling (when Ollama is unreachable) |
 | Database | SQLite |
-| Voice | Web Speech API |
+| Voice | Web Speech API (browser-native) |
 | Nutrition | Open Food Facts API |
 | Remote Access | Tailscale |
