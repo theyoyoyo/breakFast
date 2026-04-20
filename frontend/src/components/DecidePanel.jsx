@@ -27,7 +27,23 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
       .catch(() => setExistingRatings([]))
   }, [])
 
-  const isMenuFormat = !!(meal?.menu && meal.menu.length > 0)
+  // Build a menu-format meal for MealEditor (always menuMode so "+ Dish" is always available).
+  // If the incoming meal already has a menu, use it. If it has flat ingredients, convert them to
+  // simple menu items. If it's empty, MealEditor starts blank.
+  const editorMeal = (() => {
+    const menu = meal?.menu || meal?.menu_items
+    if (menu && menu.length > 0) return { ...meal, menu }
+    const flat = meal?.ingredients || []
+    return {
+      ...meal,
+      menu: flat.map(ing => ({
+        name: ing.name,
+        amount: ing.quantity ?? ing.amount ?? 1,
+        unit: ing.unit || 'adet',
+        ingredients: [],
+      })),
+    }
+  })()
 
   // Core log-meal call — used by both direct save and post-rating save
   const doLogMeal = useCallback(async (updatedMeal) => {
@@ -56,9 +72,8 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
   const handleProceedToRating = useCallback((updatedMeal) => {
     pendingMealRef.current = updatedMeal
     const ratedNames = new Set(existingRatings.map(r => r.product_name.toLowerCase()))
-    const topItems = isMenuFormat
-      ? (updatedMeal.menu || [])
-      : (updatedMeal.ingredients || [])
+    // Always menu format now — top-level menu items are what the user rates
+    const topItems = updatedMeal.menu || updatedMeal.ingredients || []
     const unrated = topItems.filter(item => !ratedNames.has(item.name.toLowerCase()))
     if (unrated.length === 0) {
       // All already rated — skip to save
@@ -124,12 +139,12 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
       <div style={s.panel}>
         <div style={s.panelHeader}>Today I ate</div>
         <MealEditor
-          meal={{ ...meal, menu: meal?.menu || meal?.menu_items || undefined }}
+          meal={editorMeal}
           onSave={handleEditorSave}
           onClose={onClose}
           showPrepTime={true}
           editPrepTime={true}
-          menuMode={isMenuFormat}
+          menuMode={true}
           extraActions={(buildCurrentMeal) => (
             <button
               style={s.confirmBtn}
