@@ -200,6 +200,39 @@ capabilities (batching, multi-burner, etc.) without per-appliance hardcoded note
 Appliance list defined in `backend/models/kitchen.py` (KITCHEN_APPLIANCES). Frontend
 component: `KitchenSettings.jsx`, accessible from Settings → Kitchen sub-page.
 
+**Multi-item menu format.** LLM now returns a full breakfast menu instead of a single
+dish. The JSON schema uses `menu_name`, `menu[]` where each item is either a complex
+dish (no top-level `amount`, has `ingredients[]` sub-array) or a simple item (has
+`amount` + `unit`, empty `ingredients[]`). DB: `menu_items TEXT` column added to
+`meal_history`, `suggested_meals`, `favorite_meals` via ALTER TABLE migrations.
+`MealLog` and `Meal` models updated. `_save_suggestion` stores full menu and derives
+flat ingredients for backward compat. Old flat-format meals continue to work via
+`normalizeMeal()` in the frontend. `isSimpleItem(item)` = `item.amount != null`.
+
+**Suggestion text simplified.** The suggestion persona no longer outputs prep steps,
+cooking timelines, nutrition tables, vitamin notes, or supplement context in the
+response text. Those details belong in the 📊 Analyze and 📋 Prep Timeline buttons.
+Tips in the text are taste/texture only (e.g. "yulafı sütte bekletirsen kremsi olur").
+
+**Shared MealEditor.** A single `MealEditor` component handles all meal editing across
+chat, favorites, meal history, and "Today I ate". Complex dishes show a
+"▶ Ingredients" expand button revealing sub-ingredients inline. Menu mode has separate
+"+ Item" and "+ Dish" add buttons. Unit field is a subtle dropdown (blends with text)
+with smart keyword defaults (`zeytinyağı → yemek kaşığı`, `yumurta → adet`, etc.) and
+localStorage memory per ingredient name — recalled on next add. Utilities in
+`frontend/src/utils/ingredients.js`: `UNITS`, `getSmartUnit`, `resolveUnit`,
+`rememberUnit`, `recallUnit`.
+
+**Meal editing patterns standardised.** Favorites panel and meal history in Settings
+both use an overlay edit pattern: a ✏️ button opens a full-screen `MealEditor` overlay
+(backdrop click to dismiss). No more inline expand/collapse dropdowns for editing.
+
+**"Today I ate" panel.** Uses `MealEditor` with `menuMode=true`. Flat-ingredient meals
+from old format are auto-converted to simple menu items on open. Save logs directly;
+Confirm goes to the star-rating phase first. `extraActions` prop on MealEditor accepts
+a function `(buildCurrentMeal) => ReactNode` so the Confirm button captures live editor
+state rather than the stale meal prop.
+
 #### Remaining
 
 **Habit import and onboarding.** A one-time onboarding conversation where the user
@@ -304,9 +337,9 @@ be added in Phase 3 as an accuracy improvement.
 ## LLM System Prompts (Six Personas)
 
 The system uses six distinct personas defined in `backend/services/personas/`.
-Prompts are written in English with "Always respond in Turkish" instruction — this
-produces better results with Llama 3.1 8B than fully Turkish prompts. Turkish versions
-are kept as comments for a future "Turkish brain / English brain" toggle.
+Prompts are written in English with "Always respond in Turkish" instruction. A
+Settings toggle for English responses is planned (English will be the default when
+implemented — the Turkish path will remain in place).
 
 | Persona | Job | Temperature | File |
 |---|---|---|---|
@@ -327,8 +360,10 @@ Used for everyday conversation via the WebSocket chat endpoint.
 - **Health rules**: injected silently, never mentioned to user
 - **Behavior**: steers non-breakfast topics back gently, confirms ingredient updates
   naturally, learns preferences through conversation
-- **Output**: free-form Turkish text; appends a JSON block when suggesting a meal
-  (parsed by frontend to render MealBlock and log the meal)
+- **Output**: free-form Turkish text; currently appends a JSON meal block when it
+  judges the conversation is meal-relevant (parsed by frontend to render MealBlock).
+  Planned change: chat persona should never produce meal blocks — only the Suggest
+  button triggers them.
 
 ### Suggestion Persona (`build_suggestion_prompt`)
 
@@ -344,11 +379,14 @@ comfort (default short press), explore, and quick (long-press selection).
   "sometimes" ones check today's toggle status, fills gaps through food
 - **Nutrition analysis**: mandatory for every suggestion — calories, macros, fiber,
   key vitamins/minerals, omega-3 sources, weekly balance review
+- **Fridge constraint**: must build the meal from current inventory. Small missing
+  items may be noted as optional substitutes, but the meal must work with what's there.
 - **Avoid list**: hard ban — never suggest avoided ingredients, suggest alternatives
 - **Seasonality**: prefer seasonal produce (hint, not hard constraint)
-- **Advance prep tips**: if overnight soak or pre-chop helps, note it at recipe start
-- **Output**: structured Turkish response with nutrition detail + JSON block including
-  `nutrition_detail` object and `advance_prep_tip` field
+- **Output**: short Turkish text (taste tips only, no prep steps, no nutrition table,
+  no supplement notes) + JSON block with `menu_name`, `menu[]` (nested ingredients),
+  `prep_time_min`, `nutrition_note` (one line). Prep details belong in Prep Timeline;
+  nutrition details belong in Analyze.
 
 ### Analyst Persona (`build_analyst_prompt`)
 
@@ -481,6 +519,7 @@ breakFAST/
     │   ├── components/
     │   │   ├── ChatInterface.jsx    ← main chat UI + supplement toggle bar
     │   │   ├── MealBlock.jsx        ← inline meal suggestion block in chat
+    │   │   ├── MealEditor.jsx       ← shared meal editor (used everywhere)
     │   │   ├── DecidePanel.jsx      ← "Today I ate..." confirm + rate flow
     │   │   ├── SuggestButton.jsx    ← suggest button + long-press mode panel
     │   │   ├── WeeklySummary.jsx    ← weekly meals summary view
@@ -495,6 +534,9 @@ breakFAST/
     │   ├── services/
     │   │   ├── api.js               ← backend API calls (REST + WebSocket)
     │   │   └── api.test.js          ← API service tests
+    │   ├── utils/
+    │   │   └── ingredients.js       ← formatIngredient, normalizeItem, UNITS,
+    │   │                               resolveUnit, rememberUnit (unit memory)
     │   └── hooks/
     │       └── useVoice.js          ← Web Speech API hook
     └── package.json
