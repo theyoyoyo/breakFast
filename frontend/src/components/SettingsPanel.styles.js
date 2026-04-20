@@ -267,12 +267,34 @@ export const deleteMealBtn = {
   padding: '2px 4px',
 }
 
-export const mealExpanded = {
-  padding: '0 12px 12px',
+export const editMealBtn = {
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  fontSize: 15,
+  padding: '2px 4px',
+}
+
+export const overlay = {
+  position: 'fixed',
+  inset: 0,
+  background: 'rgba(0,0,0,0.5)',
+  zIndex: 30,
   display: 'flex',
   flexDirection: 'column',
-  gap: 6,
-  borderTop: '1px solid var(--border)',
-  paddingTop: 10,
+  justifyContent: 'center',
+  padding: 16,
+}
+
+export const overlayPanel = {
+  background: 'var(--surface)',
+  border: '1px solid var(--border)',
+  borderRadius: 16,
+  padding: '20px',
+  boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+  overflowY: 'auto',
+  maxHeight: '80dvh',
+  display: 'flex',
+  flexDirection: 'column',
 }
 
