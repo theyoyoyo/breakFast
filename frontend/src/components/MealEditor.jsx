@@ -329,7 +329,7 @@ export default function MealEditor({
 
       <div style={s.actions}>
         <button style={s.closeBtn} onClick={onClose}>Close</button>
-        {extraActions}
+        {typeof extraActions === 'function' ? extraActions(buildCurrentMeal) : extraActions}
         {onFavorite && (
           <button
             style={favAdded ? s.copyToFavBtnDone : s.copyToFavBtn}
