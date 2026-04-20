@@ -25,32 +25,41 @@ export default function MealEditor({
   showId = false,
   menuMode = false,
 }) {
-  // In menu mode: items are menu entries {name, amount?, unit?, ingredients: []}
-  // In normal mode: items are flat ingredients {name, quantity, unit}
   const [items, setItems] = useState(() => initItems(meal, menuMode))
   const [mealName, setMealName] = useState(meal?.meal_name || meal?.menu_name || 'Meal')
   const [prepTime, setPrepTime] = useState(meal?.prep_time_min ?? '')
   const [newItem, setNewItem] = useState('')
+  // Which dish row has its sub-ingredient dropdown open (index or null)
+  const [openDishIdx, setOpenDishIdx] = useState(null)
+  // Input value for the sub-ingredient add field (shared — only one open at a time)
+  const [newSubItem, setNewSubItem] = useState('')
 
   useEffect(() => {
     setItems(initItems(meal, menuMode))
     setMealName(meal?.meal_name || meal?.menu_name || 'Meal')
     setPrepTime(meal?.prep_time_min ?? '')
     setNewItem('')
+    setOpenDishIdx(null)
+    setNewSubItem('')
   }, [meal, menuMode])
 
-  // ── Normal mode helpers ──────────────────────────────────────────────────
+  // ── Top-level item handlers ──────────────────────────────────────────────
 
-  const handleDelete = (idx) => setItems(prev => prev.filter((_, i) => i !== idx))
+  const handleDelete = (idx) => {
+    if (openDishIdx === idx) setOpenDishIdx(null)
+    else if (openDishIdx !== null && openDishIdx > idx) setOpenDishIdx(i => i - 1)
+    setItems(prev => prev.filter((_, i) => i !== idx))
+  }
 
-  const handleQuantityChange = (idx, val) => {
+  const handleQtyChange = (idx, val) => {
     if (val !== '' && !/^\d*\.?\d{0,2}$/.test(val)) return
+    const key = menuMode ? 'amount' : 'quantity'
     setItems(prev => prev.map((item, i) =>
-      i === idx ? { ...item, [menuMode ? 'amount' : 'quantity']: val === '' ? '' : val } : item
+      i === idx ? { ...item, [key]: val === '' ? '' : val } : item
     ))
   }
 
-  const handleQuantityBlur = (idx) => {
+  const handleQtyBlur = (idx) => {
     const key = menuMode ? 'amount' : 'quantity'
     setItems(prev => prev.map((item, i) => {
       if (i !== idx) return item
@@ -59,13 +68,13 @@ export default function MealEditor({
     }))
   }
 
-  const handleQuantityStep = (idx, delta) => {
+  const handleQtyStep = (idx, delta) => {
     const key = menuMode ? 'amount' : 'quantity'
     setItems(prev => prev.map((item, i) => {
       if (i !== idx) return item
-      const current = typeof item[key] === 'number' ? item[key] : parseFloat(item[key]) || 1
-      const next = Math.round((current + delta) * 100) / 100
-      return { ...item, [key]: next > 0 ? next : current }
+      const cur = typeof item[key] === 'number' ? item[key] : parseFloat(item[key]) || 1
+      const next = Math.round((cur + delta) * 100) / 100
+      return { ...item, [key]: next > 0 ? next : cur }
     }))
   }
 
@@ -73,22 +82,73 @@ export default function MealEditor({
     const v = newItem.trim()
     if (!v) return
     if (items.some(item => item.name.toLowerCase() === v.toLowerCase())) return
-    if (menuMode) {
-      const entry = isDish
+    const entry = menuMode
+      ? (isDish
         ? { name: v, ingredients: [] }
-        : { name: v, amount: 1, unit: 'adet', ingredients: [] }
-      setItems(prev => [...prev, entry])
-    } else {
-      setItems(prev => [...prev, { name: v, quantity: 1, unit: 'adet' }])
-    }
+        : { name: v, amount: 1, unit: 'adet', ingredients: [] })
+      : { name: v, quantity: 1, unit: 'adet' }
+    setItems(prev => [...prev, entry])
     setNewItem('')
   }
+
+  // ── Dish toggle ──────────────────────────────────────────────────────────
+
+  const toggleDish = (idx) => {
+    setOpenDishIdx(prev => prev === idx ? null : idx)
+    setNewSubItem('')
+  }
+
+  // ── Sub-ingredient handlers ──────────────────────────────────────────────
+
+  const updateSubs = (dishIdx, fn) =>
+    setItems(prev => prev.map((item, i) =>
+      i === dishIdx ? { ...item, ingredients: fn(item.ingredients || []) } : item
+    ))
+
+  const handleSubDelete = (dishIdx, subIdx) =>
+    updateSubs(dishIdx, subs => subs.filter((_, i) => i !== subIdx))
+
+  const handleSubQtyChange = (dishIdx, subIdx, val) => {
+    if (val !== '' && !/^\d*\.?\d{0,2}$/.test(val)) return
+    updateSubs(dishIdx, subs => subs.map((s, i) =>
+      i === subIdx ? { ...s, amount: val === '' ? '' : val } : s
+    ))
+  }
+
+  const handleSubQtyBlur = (dishIdx, subIdx) =>
+    updateSubs(dishIdx, subs => subs.map((s, i) => {
+      if (i !== subIdx) return s
+      const num = parseFloat(s.amount)
+      return { ...s, amount: (!isNaN(num) && num > 0) ? Math.round(num * 100) / 100 : 1 }
+    }))
+
+  const handleSubQtyStep = (dishIdx, subIdx, delta) =>
+    updateSubs(dishIdx, subs => subs.map((s, i) => {
+      if (i !== subIdx) return s
+      const cur = typeof s.amount === 'number' ? s.amount : parseFloat(s.amount) || 1
+      const next = Math.round((cur + delta) * 100) / 100
+      return { ...s, amount: next > 0 ? next : cur }
+    }))
+
+  const handleSubAdd = (dishIdx) => {
+    const v = newSubItem.trim()
+    if (!v) return
+    updateSubs(dishIdx, subs => {
+      if (subs.some(s => s.name.toLowerCase() === v.toLowerCase())) return subs
+      return [...subs, { name: v, amount: 1, unit: 'adet' }]
+    })
+    setNewSubItem('')
+  }
+
+  // ── Prep time ────────────────────────────────────────────────────────────
 
   const handlePrepTimeChange = (val) => {
     if (val === '') { setPrepTime(''); return }
     const num = parseInt(val, 10)
     if (!isNaN(num) && num >= 0 && num <= 999) setPrepTime(num)
   }
+
+  // ── Save ─────────────────────────────────────────────────────────────────
 
   const handleSave = () => {
     const finalPrepTime = typeof prepTime === 'number' ? prepTime : (parseInt(prepTime, 10) || null)
@@ -114,6 +174,8 @@ export default function MealEditor({
       onSave?.({ ...meal, meal_name: name, ingredients: finalItems, prep_time_min: finalPrepTime })
     }
   }
+
+  // ── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div style={s.editorContainer}>
@@ -147,40 +209,92 @@ export default function MealEditor({
       </div>
 
       <div style={s.itemList}>
-        {items.map((item, idx) => (
-          menuMode && !isSimpleItem(item)
-            ? (
-              // Dish row — no qty stepper
-              <div key={idx} style={s.itemRow}>
-                <span style={s.dishBadge}>🍳</span>
-                <span style={{ ...s.itemText, fontWeight: 500 }}>{item.name}</span>
-                <div style={s.itemActions}>
-                  <button style={s.deleteBtn} onClick={() => handleDelete(idx)} title="Delete">🗑️</button>
+        {items.map((item, idx) => {
+          const isDish = menuMode && !isSimpleItem(item)
+          const isOpen = openDishIdx === idx
+
+          return (
+            <div key={idx}>
+              {isDish ? (
+                // ── Dish row ──────────────────────────────────────────────
+                <div style={s.itemRow}>
+                  <span style={s.dishBadge}>🍳</span>
+                  <span style={{ ...s.itemText, fontWeight: 500 }}>{item.name}</span>
+                  <div style={s.itemActions}>
+                    <button
+                      style={s.expandBtn(isOpen)}
+                      onClick={() => toggleDish(idx)}
+                      title={isOpen ? 'Close ingredients' : 'Edit ingredients'}
+                    >
+                      {isOpen ? '▲' : '▶'}
+                    </button>
+                    <button style={s.deleteBtn} onClick={() => handleDelete(idx)} title="Delete">🗑️</button>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              // Simple item row — with qty stepper
-              <div key={idx} style={s.itemRow}>
-                <div style={s.qtyGroup}>
-                  <button style={s.arrowBtn} onClick={() => handleQuantityStep(idx, -1)}>▼</button>
-                  <input
-                    style={s.qtyInput}
-                    type="text"
-                    inputMode="decimal"
-                    value={menuMode ? (item.amount ?? 1) : item.quantity}
-                    onChange={(e) => handleQuantityChange(idx, e.target.value)}
-                    onBlur={() => handleQuantityBlur(idx)}
-                  />
-                  <button style={s.arrowBtn} onClick={() => handleQuantityStep(idx, 1)}>▲</button>
+              ) : (
+                // ── Simple item row ───────────────────────────────────────
+                <div style={s.itemRow}>
+                  <div style={s.qtyGroup}>
+                    <button style={s.arrowBtn} onClick={() => handleQtyStep(idx, -1)}>▼</button>
+                    <input
+                      style={s.qtyInput}
+                      type="text"
+                      inputMode="decimal"
+                      value={menuMode ? (item.amount ?? 1) : item.quantity}
+                      onChange={(e) => handleQtyChange(idx, e.target.value)}
+                      onBlur={() => handleQtyBlur(idx)}
+                    />
+                    <button style={s.arrowBtn} onClick={() => handleQtyStep(idx, 1)}>▲</button>
+                  </div>
+                  <span style={s.unitLabel}>{item.unit}</span>
+                  <span style={s.itemText}>{item.name}</span>
+                  <div style={s.itemActions}>
+                    <button style={s.deleteBtn} onClick={() => handleDelete(idx)} title="Delete">🗑️</button>
+                  </div>
                 </div>
-                <span style={s.unitLabel}>{item.unit}</span>
-                <span style={s.itemText}>{item.name}</span>
-                <div style={s.itemActions}>
-                  <button style={s.deleteBtn} onClick={() => handleDelete(idx)} title="Delete">🗑️</button>
+              )}
+
+              {/* ── Sub-ingredient dropdown (dish only) ─────────────────── */}
+              {isDish && isOpen && (
+                <div style={s.subList}>
+                  {(item.ingredients || []).map((sub, si) => (
+                    <div key={si} style={s.subRow}>
+                      <div style={s.qtyGroup}>
+                        <button style={s.arrowBtn} onClick={() => handleSubQtyStep(idx, si, -1)}>▼</button>
+                        <input
+                          style={s.qtyInput}
+                          type="text"
+                          inputMode="decimal"
+                          value={sub.amount ?? 1}
+                          onChange={(e) => handleSubQtyChange(idx, si, e.target.value)}
+                          onBlur={() => handleSubQtyBlur(idx, si)}
+                        />
+                        <button style={s.arrowBtn} onClick={() => handleSubQtyStep(idx, si, 1)}>▲</button>
+                      </div>
+                      <span style={s.unitLabel}>{sub.unit || 'adet'}</span>
+                      <span style={s.itemText}>{sub.name}</span>
+                      <div style={s.itemActions}>
+                        <button style={s.deleteBtn} onClick={() => handleSubDelete(idx, si)} title="Delete">🗑️</button>
+                      </div>
+                    </div>
+                  ))}
+                  {/* Always-visible add field at the bottom of the dropdown */}
+                  <div style={s.subAddRow}>
+                    <input
+                      style={s.addInput}
+                      value={newSubItem}
+                      onChange={(e) => setNewSubItem(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSubAdd(idx)}
+                      placeholder="Add ingredient…"
+                      autoFocus
+                    />
+                    <button style={s.addBtn} onClick={() => handleSubAdd(idx)}>＋ Item</button>
+                  </div>
                 </div>
-              </div>
-            )
-        ))}
+              )}
+            </div>
+          )
+        })}
       </div>
 
       <div style={s.addRow}>
@@ -214,7 +328,10 @@ export default function MealEditor({
 
 function initItems(meal, menuMode) {
   if (menuMode) {
-    return (meal?.menu || []).map(item => ({ ...item }))
+    return (meal?.menu || []).map(item => ({
+      ...item,
+      ingredients: (item.ingredients || []).map(s => ({ ...s })),
+    }))
   }
   return (meal?.ingredients || []).map(normalizeItem)
 }
