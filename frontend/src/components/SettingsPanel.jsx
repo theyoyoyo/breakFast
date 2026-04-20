@@ -12,7 +12,6 @@ import KitchenSettings from './KitchenSettings'
 import MealEditor from './MealEditor'
 import StarRating from './StarRating'
 import * as s from './SettingsPanel.styles'
-import * as es from './MealEditor.styles'
 
 const PRIORITY_OPTIONS = [
   { value: 'low', label: "Don't really care" },
@@ -39,8 +38,6 @@ export default function SettingsPanel({ visible }) {
   // Meal history state
   const [meals, setMeals] = useState([])
   const [expandedMealId, setExpandedMealId] = useState(null)
-  const [favSaving, setFavSaving] = useState(false)
-  const [favAdded, setFavAdded] = useState({})
 
   // Health rules state
   const [healthRules, setHealthRules] = useState([])
@@ -246,15 +243,15 @@ export default function SettingsPanel({ visible }) {
     try {
       setError(null)
       await updateMeal(meal.id, {
-        meal_name: meal.meal_name,
+        meal_name: meal.menu_name || meal.meal_name,
         ingredients: meal.ingredients,
         description: meal.description,
         steps: meal.steps,
         prep_time_min: meal.prep_time_min,
         nutrition_note: meal.nutrition_note,
+        menu_items: meal.menu || meal.menu_items || null,
       })
       setExpandedMealId(null)
-      setFavAdded(prev => { const next = { ...prev }; delete next[meal.id]; return next })
       load()
     } catch {
       setError('Failed to update meal')
@@ -285,20 +282,17 @@ export default function SettingsPanel({ visible }) {
     }
   }
 
-  const handleCopyToFavorites = async (meal) => {
-    setFavSaving(true)
-    try {
-      await addFavorite({
-        meal_name: meal.meal_name,
-        description: meal.description,
-        ingredients: Array.isArray(meal.ingredients) ? meal.ingredients : [],
-        steps: Array.isArray(meal.steps) ? meal.steps : [],
-        prep_time_min: meal.prep_time_min,
-        nutrition_note: meal.nutrition_note,
-      })
-      setFavAdded(prev => ({ ...prev, [meal.id]: true }))
-    } catch { /* ignore */ }
-    setFavSaving(false)
+  // Receives current editor state (not stale meal prop) via MealEditor's onFavorite
+  const handleCopyToFavorites = async (currentMeal) => {
+    await addFavorite({
+      meal_name: currentMeal.menu_name || currentMeal.meal_name,
+      description: currentMeal.description,
+      ingredients: Array.isArray(currentMeal.ingredients) ? currentMeal.ingredients : [],
+      steps: Array.isArray(currentMeal.steps) ? currentMeal.steps : [],
+      prep_time_min: currentMeal.prep_time_min,
+      nutrition_note: currentMeal.nutrition_note,
+      menu_items: currentMeal.menu || currentMeal.menu_items || null,
+    })
   }
 
   // --- Weekly Summary sub-page ---
@@ -342,21 +336,13 @@ export default function SettingsPanel({ visible }) {
                 {expandedMealId === meal.id && !markedForDelete && (
                   <div style={s.mealExpanded}>
                     <MealEditor
-                      meal={meal}
+                      meal={{ ...meal, menu: meal.menu_items || undefined }}
                       onSave={(updated) => handleSaveMeal({ ...meal, ...updated })}
-                      onClose={() => { setExpandedMealId(null); setFavAdded(prev => { const next = { ...prev }; delete next[meal.id]; return next }) }}
+                      onClose={() => setExpandedMealId(null)}
                       showPrepTime={true}
                       editPrepTime={true}
-                      extraActions={
-                        <button
-                          style={favAdded[meal.id] ? es.copyToFavBtnDone : es.copyToFavBtn}
-                          onClick={() => handleCopyToFavorites(meal)}
-                          disabled={favSaving || favAdded[meal.id]}
-                          title={favAdded[meal.id] ? 'Added to favorites' : 'Copy to favorites'}
-                        >
-                          {favSaving ? '...' : favAdded[meal.id] ? '✓ Saved' : '⭐ Save'}
-                        </button>
-                      }
+                      menuMode={!!(meal.menu_items && meal.menu_items.length > 0)}
+                      onFavorite={handleCopyToFavorites}
                     />
                   </div>
                 )}

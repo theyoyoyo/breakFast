@@ -24,15 +24,16 @@ export default function MealEditor({
   extraActions,
   showId = false,
   menuMode = false,
+  onFavorite,        // (currentMeal) => void — called with current editor state
 }) {
   const [items, setItems] = useState(() => initItems(meal, menuMode))
   const [mealName, setMealName] = useState(meal?.meal_name || meal?.menu_name || 'Meal')
   const [prepTime, setPrepTime] = useState(meal?.prep_time_min ?? '')
   const [newItem, setNewItem] = useState('')
-  // Which dish row has its sub-ingredient dropdown open (index or null)
   const [openDishIdx, setOpenDishIdx] = useState(null)
-  // Input value for the sub-ingredient add field (shared — only one open at a time)
   const [newSubItem, setNewSubItem] = useState('')
+  const [favSaving, setFavSaving] = useState(false)
+  const [favAdded, setFavAdded] = useState(false)
 
   useEffect(() => {
     setItems(initItems(meal, menuMode))
@@ -41,6 +42,7 @@ export default function MealEditor({
     setNewItem('')
     setOpenDishIdx(null)
     setNewSubItem('')
+    setFavAdded(false)
   }, [meal, menuMode])
 
   // ── Top-level item handlers ──────────────────────────────────────────────
@@ -148,12 +150,11 @@ export default function MealEditor({
     if (!isNaN(num) && num >= 0 && num <= 999) setPrepTime(num)
   }
 
-  // ── Save ─────────────────────────────────────────────────────────────────
+  // ── Build + Save ─────────────────────────────────────────────────────────
 
-  const handleSave = () => {
+  const buildCurrentMeal = () => {
     const finalPrepTime = typeof prepTime === 'number' ? prepTime : (parseInt(prepTime, 10) || null)
     const name = mealName.trim() || meal?.meal_name || meal?.menu_name || 'Meal'
-
     if (menuMode) {
       const finalMenu = items.map(item => {
         if (isSimpleItem(item)) {
@@ -162,7 +163,7 @@ export default function MealEditor({
         }
         return item
       })
-      onSave?.({ ...meal, meal_name: name, menu_name: name, menu: finalMenu, prep_time_min: finalPrepTime })
+      return { ...meal, meal_name: name, menu_name: name, menu: finalMenu, menu_items: finalMenu, prep_time_min: finalPrepTime }
     } else {
       const finalItems = items.map(item => ({
         ...item,
@@ -171,8 +172,19 @@ export default function MealEditor({
           return (!isNaN(num) && num > 0) ? Math.round(num * 100) / 100 : 1
         })(),
       }))
-      onSave?.({ ...meal, meal_name: name, ingredients: finalItems, prep_time_min: finalPrepTime })
+      return { ...meal, meal_name: name, ingredients: finalItems, prep_time_min: finalPrepTime }
     }
+  }
+
+  const handleSave = () => onSave?.(buildCurrentMeal())
+
+  const handleFavorite = async () => {
+    setFavSaving(true)
+    try {
+      await onFavorite?.(buildCurrentMeal())
+      setFavAdded(true)
+    } catch { /* ignore */ }
+    setFavSaving(false)
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -318,6 +330,16 @@ export default function MealEditor({
       <div style={s.actions}>
         <button style={s.closeBtn} onClick={onClose}>Close</button>
         {extraActions}
+        {onFavorite && (
+          <button
+            style={favAdded ? s.copyToFavBtnDone : s.copyToFavBtn}
+            onClick={handleFavorite}
+            disabled={favSaving || favAdded}
+            title={favAdded ? 'Added to favorites' : 'Copy to favorites'}
+          >
+            {favSaving ? '...' : favAdded ? '✓ Saved' : '⭐ Save'}
+          </button>
+        )}
         <button style={s.saveBtn} onClick={handleSave}>Save</button>
       </div>
     </div>

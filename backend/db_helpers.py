@@ -54,4 +54,5 @@ def row_to_favorite(row) -> dict:
     d = dict(row)
     for field in ("ingredients", "steps"):
         d[field] = parse_json_field(d.get(field), [])
+    d["menu_items"] = parse_json_field(d.get("menu_items"), None)
     return d

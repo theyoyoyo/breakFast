@@ -3,7 +3,6 @@ import { addFavorite } from '../services/api'
 import { formatIngredient } from '../utils/ingredients'
 import MealEditor from './MealEditor'
 import * as s from './MealBlock.styles'
-import * as es from './MealEditor.styles'
 
 const BREAKFAST_EMOJIS = [
   '🍳', '🥐', '🧀', '🥚', '🫕', '🥞', '🧇', '🥣', '🍞', '🥯', '🫖', '☕',
@@ -23,19 +22,15 @@ function pickEmoji() {
  */
 export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, analyzing, onSchedule, scheduling }) {
   const [panelOpen, setPanelOpen] = useState(false)
-  const [favSaving, setFavSaving] = useState(false)
-  const [favAdded, setFavAdded] = useState(false)
-
   const [emoji] = useState(pickEmoji)
 
   const menuItems = meal?.menu
   const isMenuFormat = menuItems && menuItems.length > 0
 
-  // Display text: menu item names if new format, else flat ingredients
   const displayNames = isMenuFormat
     ? menuItems.map(i => i.name).join(', ')
     : (meal?.ingredients || []).length > 0
-      ? (meal.ingredients).map(formatIngredient).join(', ')
+      ? meal.ingredients.map(formatIngredient).join(', ')
       : meal?.meal_name || 'Meal'
 
   const mealName = meal?.menu_name || meal?.meal_name || 'Meal'
@@ -49,20 +44,17 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
     setPanelOpen(false)
   }
 
-  const handleCopyToFavorites = async () => {
-    setFavSaving(true)
-    try {
-      await addFavorite({
-        meal_name: mealName,
-        description: meal?.description,
-        ingredients: meal?.ingredients || [],
-        steps: meal?.steps || [],
-        prep_time_min: meal?.prep_time_min,
-        nutrition_note: meal?.nutrition_note,
-      })
-      setFavAdded(true)
-    } catch { /* ignore */ }
-    setFavSaving(false)
+  // Called by MealEditor with the current edited state — always saves what user sees
+  const handleFavorite = async (currentMeal) => {
+    await addFavorite({
+      meal_name: currentMeal.menu_name || currentMeal.meal_name || mealName,
+      description: currentMeal.description,
+      ingredients: currentMeal.ingredients || [],
+      steps: currentMeal.steps || [],
+      prep_time_min: currentMeal.prep_time_min,
+      nutrition_note: currentMeal.nutrition_note,
+      menu_items: currentMeal.menu || currentMeal.menu_items || null,
+    })
   }
 
   return (
@@ -115,16 +107,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
               editPrepTime={true}
               showId={true}
               menuMode={isMenuFormat}
-              extraActions={
-                <button
-                  style={favAdded ? es.copyToFavBtnDone : es.copyToFavBtn}
-                  onClick={handleCopyToFavorites}
-                  disabled={favSaving || favAdded}
-                  title={favAdded ? 'Added to favorites' : 'Copy to favorites'}
-                >
-                  {favSaving ? '...' : favAdded ? '✓ Saved' : '⭐ Save'}
-                </button>
-              }
+              onFavorite={handleFavorite}
             />
           </div>
         </div>
