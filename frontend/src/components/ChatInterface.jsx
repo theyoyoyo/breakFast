@@ -84,23 +84,24 @@ function normalizeMeal(meal) {
 
 // Template meal for demo/preview without LLM
 const DEMO_MEAL = {
+  menu_name: 'Serpme Kahvaltı',
   meal_name: 'Serpme Kahvaltı',
-  description: 'Klasik Türk kahvaltısı — zengin, dengeli ve doyurucu.',
-  ingredients: [
-    { name: 'Beyaz peynir', quantity: 50, unit: 'g' },
-    { name: 'Zeytin', quantity: 6, unit: 'adet' },
-    { name: 'Domates', quantity: 1, unit: 'adet' },
-    { name: 'Salatalık', quantity: 1, unit: 'adet' },
-    { name: 'Yumurta', quantity: 2, unit: 'adet' },
-    { name: 'Bal', quantity: 1, unit: 'yemek kaşığı' },
-    { name: 'Tereyağı', quantity: 10, unit: 'g' },
-    { name: 'Ekmek', quantity: 3, unit: 'dilim' },
-  ],
-  steps: [
-    'Yumurtayı kaynar suda 7 dakika haşla.',
-    'Peynir, zeytin, domates ve salatalığı tabağa yerleştir.',
-    'Bal ve tereyağını küçük kaselere koy.',
-    'Ekmeği dilimle ve servis et.',
+  description: 'Klasik Türk kahvaltısı — menemen, taze peynir ve zeytinle zengin ve doyurucu bir sabah.',
+  menu: [
+    {
+      name: 'Menemen',
+      ingredients: [
+        { name: 'Yumurta', amount: 2, unit: 'adet' },
+        { name: 'Domates', amount: 1, unit: 'adet' },
+        { name: 'Yeşil biber', amount: 1, unit: 'adet' },
+        { name: 'Zeytinyağı', amount: 1, unit: 'yemek kaşığı' },
+      ],
+    },
+    { name: 'Beyaz peynir', amount: 50, unit: 'g', ingredients: [] },
+    { name: 'Zeytin', amount: 6, unit: 'adet', ingredients: [] },
+    { name: 'Salatalık', amount: 1, unit: 'adet', ingredients: [] },
+    { name: 'Ekmek', amount: 3, unit: 'dilim', ingredients: [] },
+    { name: 'Bal', amount: 1, unit: 'yemek kaşığı', ingredients: [] },
   ],
   prep_time_min: 12,
   nutrition_note: 'Protein, kalsiyum ve sağlıklı yağlar açısından zengin bir öğün.',
