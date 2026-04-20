@@ -145,6 +145,12 @@ export const deleteBtn = {
   padding: '4px 6px',
 }
 
+export const dishBadge = {
+  fontSize: 16,
+  flexShrink: 0,
+  marginRight: 6,
+}
+
 export const addRow = {
   display: 'flex',
   gap: 8,

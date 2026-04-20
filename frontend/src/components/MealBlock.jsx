@@ -16,41 +16,6 @@ function pickEmoji() {
   return BREAKFAST_EMOJIS[Math.floor(Math.random() * BREAKFAST_EMOJIS.length)]
 }
 
-/** Format a menu sub-ingredient: {name, amount, unit} → "2 adet Yumurta" */
-function formatSubIngredient(ing) {
-  if (typeof ing === 'string') return ing
-  const amt = ing.amount != null ? ing.amount : (ing.quantity != null ? ing.quantity : '')
-  const unit = ing.unit || ''
-  return `${amt} ${unit} ${ing.name}`.trim()
-}
-
-/** Menu item row with expandable sub-ingredients for complex dishes. */
-function MenuItemRow({ item }) {
-  const [open, setOpen] = useState(false)
-  const hasIngredients = item.ingredients && item.ingredients.length > 0
-  const simpleLabel = item.amount != null
-    ? `${item.amount} ${item.unit || ''} ${item.name}`.trim()
-    : item.name
-
-  return (
-    <div style={s.menuItemRow}>
-      <div style={s.menuItemHeader} onClick={() => hasIngredients && setOpen(o => !o)}>
-        <span style={s.menuItemName}>{simpleLabel}</span>
-        {hasIngredients && (
-          <span style={s.menuItemToggle}>{open ? '▲' : '▼'}</span>
-        )}
-      </div>
-      {open && hasIngredients && (
-        <div style={s.menuItemIngredients}>
-          {item.ingredients.map((ing, i) => (
-            <span key={i} style={s.menuSubIngredient}>{formatSubIngredient(ing)}</span>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 /**
  * Clickable meal summary block rendered inline in chat.
  * Shows checkbox, meal names, prep time, and analysis button.
@@ -64,22 +29,22 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
   const [emoji] = useState(pickEmoji)
 
   const menuItems = meal?.menu
-  // Display text: menu item names if new format, else ingredients
-  const displayNames = menuItems && menuItems.length > 0
+  const isMenuFormat = menuItems && menuItems.length > 0
+
+  // Display text: menu item names if new format, else flat ingredients
+  const displayNames = isMenuFormat
     ? menuItems.map(i => i.name).join(', ')
     : (meal?.ingredients || []).length > 0
       ? (meal.ingredients).map(formatIngredient).join(', ')
       : meal?.meal_name || 'Meal'
+
+  const mealName = meal?.menu_name || meal?.meal_name || 'Meal'
 
   const handleOverlayClick = (e) => {
     if (e.target === e.currentTarget) setPanelOpen(false)
   }
 
   const handleEditorSave = (updated) => {
-    // Preserve menu if user didn't explicitly clear it
-    if (menuItems && !updated.menu) {
-      updated = { ...updated, menu: menuItems }
-    }
     onSave?.(updated)
     setPanelOpen(false)
   }
@@ -88,7 +53,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
     setFavSaving(true)
     try {
       await addFavorite({
-        meal_name: meal?.meal_name || meal?.menu_name || 'Meal',
+        meal_name: mealName,
         description: meal?.description,
         ingredients: meal?.ingredients || [],
         steps: meal?.steps || [],
@@ -99,8 +64,6 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
     } catch { /* ignore */ }
     setFavSaving(false)
   }
-
-  const mealName = meal?.menu_name || meal?.meal_name || 'Meal'
 
   return (
     <>
@@ -144,13 +107,6 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
       {panelOpen && (
         <div style={s.overlay} onClick={handleOverlayClick}>
           <div style={s.panel}>
-            {menuItems && menuItems.length > 0 && (
-              <div style={s.menuSection}>
-                {menuItems.map((item, i) => (
-                  <MenuItemRow key={i} item={item} />
-                ))}
-              </div>
-            )}
             <MealEditor
               meal={{ ...meal, meal_name: mealName }}
               onSave={handleEditorSave}
@@ -158,6 +114,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
               showPrepTime={true}
               editPrepTime={true}
               showId={true}
+              menuMode={isMenuFormat}
               extraActions={
                 <button
                   style={favAdded ? es.copyToFavBtnDone : es.copyToFavBtn}

@@ -106,54 +106,6 @@ export const analyzeBtn = (analyzing) => ({
   transition: 'opacity 0.15s',
 })
 
-// --- Menu items section (in overlay panel) ---
-
-export const menuSection = {
-  borderBottom: '1px solid var(--border)',
-  paddingBottom: 12,
-  marginBottom: 12,
-}
-
-export const menuItemRow = {
-  marginBottom: 4,
-}
-
-export const menuItemHeader = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 6,
-  cursor: 'pointer',
-  padding: '2px 0',
-}
-
-export const menuItemName = {
-  fontSize: 13,
-  color: 'var(--text)',
-  fontWeight: 500,
-}
-
-export const menuItemToggle = {
-  fontSize: 10,
-  color: 'var(--text-muted)',
-  flexShrink: 0,
-}
-
-export const menuItemIngredients = {
-  display: 'flex',
-  flexWrap: 'wrap',
-  gap: '4px 8px',
-  paddingLeft: 12,
-  paddingTop: 4,
-}
-
-export const menuSubIngredient = {
-  fontSize: 11,
-  color: 'var(--text-muted)',
-  background: 'var(--surface2)',
-  borderRadius: 6,
-  padding: '1px 6px',
-}
-
 // --- Overlay panel ---
 
 export const overlay = {
