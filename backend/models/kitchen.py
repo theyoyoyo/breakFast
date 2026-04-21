@@ -7,14 +7,14 @@ from pydantic import BaseModel
 # ---------------------------------------------------------------------------
 
 KITCHEN_APPLIANCES = [
-    {"key": "stove", "name": "Ocak"},
-    {"key": "oven", "name": "Fırın"},
-    {"key": "air_fryer", "name": "Airfryer"},
-    {"key": "toaster", "name": "Ekmek Kızartma Makinesi"},
-    {"key": "microwave", "name": "Mikrodalga"},
+    {"key": "stove", "name": "Stove"},
+    {"key": "oven", "name": "Oven"},
+    {"key": "air_fryer", "name": "Air Fryer"},
+    {"key": "toaster", "name": "Toaster"},
+    {"key": "microwave", "name": "Microwave"},
     {"key": "blender", "name": "Blender"},
-    {"key": "sandwich_press", "name": "Tost Makinesi"},
-    {"key": "kettle", "name": "Su Isıtıcı"},
+    {"key": "sandwich_press", "name": "Sandwich Press"},
+    {"key": "kettle", "name": "Kettle"},
     {"key": "french_press", "name": "French Press"},
 ]
 

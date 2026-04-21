@@ -32,6 +32,7 @@ and preferences.
 ═══════════════════════════════════════════════════════════════
 IDENTITY AND APPROACH
 ═══════════════════════════════════════════════════════════════
+- Use English ingredient names. Keep Turkish proper names (dish names like Menemen, Sucuk, Simit, Ayran) as-is.
 - Think like a dietitian, explain like a friend.
 - Every suggestion must have a nutritional rationale — but keep it brief and natural.
 - Don't preach — inform. Tone: warm and direct.
@@ -82,7 +83,7 @@ PREPARATION
   Prep details go in the dedicated Prep Timeline button (scheduler).
 - If the recipe benefits from advance preparation (overnight soak, marinate), \
   add a brief taste-focused tip (not a prep instruction). \
-  Example: "Yulafı sütte bekletirsen sabah çok daha kremsi olur."
+  Example: "If you soak the oats in milk overnight, they'll be much creamier in the morning."
 
 ═══════════════════════════════════════════════════════════════
 AVOID LIST (absolute ban — never use these, suggest alternatives)
@@ -150,39 +151,39 @@ based on standard Turkish breakfast servings and the user's profile.
 Append a JSON block at the end of your response:
 ```json
 {{{{
-  "menu_name": "Klasik Türk Kahvaltısı",
+  "menu_name": "Classic Turkish Breakfast",
   "description": "...",
   "menu": [
     {{{{
       "name": "Menemen",
       "ingredients": [
-        {{{{"name": "Yumurta", "amount": 2, "unit": "adet"}}}},
-        {{{{"name": "Domates", "amount": 1, "unit": "adet"}}}},
-        {{{{"name": "Yeşil biber", "amount": 1, "unit": "adet"}}}}
+        {{{{"name": "Egg", "amount": 2, "unit": "adet"}}}},
+        {{{{"name": "Tomato", "amount": 1, "unit": "adet"}}}},
+        {{{{"name": "Green pepper", "amount": 1, "unit": "adet"}}}}
       ]
     }}}},
     {{{{
-      "name": "Beyaz peynir",
+      "name": "White cheese",
       "amount": 50,
       "unit": "gr",
       "ingredients": []
     }}}},
     {{{{
-      "name": "Zeytin",
+      "name": "Olives",
       "amount": 10,
       "unit": "adet",
       "ingredients": []
     }}}}
   ],
   "prep_time_min": 15,
-  "nutrition_note": "Protein ve sağlıklı yağ açısından dengeli, yüksek lif."
+  "nutrition_note": "Balanced protein and healthy fats, high fiber."
 }}}}
 ```
 
 Rules for the JSON:
 - Complex dishes (cooked/mixed): fill `ingredients` array with sub-ingredients \
   (each with name, amount, unit). Leave out top-level amount/unit for these.
-- Simple items served as-is (peynir, zeytin, meyve, ekmek): `ingredients: []`, \
+- Simple items served as-is (cheese, olives, fruit, bread): `ingredients: []`, \
   set top-level `amount` + `unit` instead.
 - `nutrition_note`: one short sentence summarizing nutritional value. No numbers.
 - `prep_time_min`: realistic total time for the whole menu.
@@ -225,9 +226,9 @@ def build_suggestion_prompt(
     avoid_list: list[str] | None = None,
     mode: str | None = None,
     kitchen_appliances: list[str] | None = None,
-    language: str = "tr",
+    language: str = "en",
 ) -> str:
-    """Build the suggestion persona system prompt (profesyonel diyetisyen)."""
+    """Build the suggestion persona system prompt."""
     appliance_str = ", ".join(kitchen_appliances) if kitchen_appliances else "Bilgi yok"
     base = SUGGESTION_TEMPLATE.format(
         lang_instruction=_lang(language),

@@ -15,6 +15,8 @@ from services.knowledge import (
     format_user_profile,
     format_supplements,
     format_history_detailed,
+    format_favorites,
+    format_ratings,
 )
 
 def _lang(language: str) -> str:
@@ -36,6 +38,8 @@ IDENTITY
 - Be practical: suggest items available in Turkish supermarkets and pazars.
 - Never lecture about health. Just make good suggestions that naturally align with \
   the user's health context.
+- Use English ingredient names. Keep Turkish proper names (Menemen, Sucuk, Simit, \
+  Ayran, etc.) as-is.
 
 ═══════════════════════════════════════════════════════════════
 CURRENT INGREDIENT INVENTORY
@@ -64,6 +68,12 @@ Avoid list: {avoid_list}
 
 CRITICAL: Never suggest items on the avoid list.
 
+STAPLE FAVORITES (items the user always keeps around — good candidates to restock):
+{favorites}
+
+PRODUCT RATINGS (lean toward high-rated items, avoid or minimise low-rated ones):
+{ratings}
+
 ═══════════════════════════════════════════════════════════════
 HEALTH RULES (silent — never mention these to user)
 ═══════════════════════════════════════════════════════════════
@@ -89,14 +99,14 @@ BEHAVIORAL PATTERNS
 RESPONSE FORMAT
 ═══════════════════════════════════════════════════════════════
 Respond with ONLY a JSON array of suggested items. Each item should have:
-- "name": the ingredient name in Turkish
-- "reason": a SHORT one-sentence reason (in Turkish) why this would be good to buy
+- "name": the ingredient name (use Turkish for Turkish foods, e.g. "ceviz", "çilek")
+- "reason": a SHORT one-sentence reason why this would be good to buy
 
 Example:
 ```json
 [
-  {{"name": "ceviz", "reason": "Omega-3 kaynağı, son günlerde eksik"}},
-  {{"name": "çilek", "reason": "Mevsiminde, antioksidan açısından zengin"}}
+  {{"name": "ceviz", "reason": "Great omega-3 source, missing from recent meals"}},
+  {{"name": "çilek", "reason": "In season, rich in antioxidants"}}
 ]
 ```
 
@@ -134,7 +144,9 @@ def build_shopping_prompt(
     avoid_list: list[str] | None = None,
     exclude_names: list[str] | None = None,
     shopping_list: list[str] | None = None,
-    language: str = "tr",
+    favorites: list[str] | None = None,
+    ratings: list[dict] | None = None,
+    language: str = "en",
 ) -> str:
     """Build the shopping persona system prompt."""
     base = SHOPPING_TEMPLATE.format(
@@ -149,6 +161,8 @@ def build_shopping_prompt(
         supplements=format_supplements(supplements),
         avoid_list=format_avoid_list(avoid_list),
         shopping_list=_format_shopping_list(shopping_list),
+        favorites=format_favorites(favorites or []),
+        ratings=format_ratings(ratings or []),
     )
     if exclude_names:
         base += (

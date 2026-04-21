@@ -128,20 +128,23 @@ async def get_schedule(body: ScheduleRequest, user_id: int = Depends(require_use
                 )
 
     if not body.steps:
-        return ScheduleResponse(timeline=[], makespan_min=0, formatted="Adım bulunamadı.")
+        return ScheduleResponse(timeline=[], makespan_min=0, formatted="No steps found.")
 
     # Format ingredients for the prompt
     if body.ingredients:
         ingredients_str = ", ".join(format_ingredient_item(i) for i in body.ingredients)
     else:
-        ingredients_str = "malzeme listesi yok"
+        ingredients_str = "ingredient list unavailable"
 
-    # Fetch user's kitchen appliances for the prompt
+    # Fetch user's kitchen appliances and language preference for the prompt
     from services.context import fetch_kitchen_appliances
+    from db_helpers import fetch_preferences
     async with get_db() as db:
         kitchen_appliances = await fetch_kitchen_appliances(db, user_id)
+        prefs = await fetch_preferences(db, user_id)
+    language = prefs.get("response_language", "en")
 
-    system_prompt = build_scheduler_prompt(body.meal_name, body.steps, ingredients_str, kitchen_appliances=kitchen_appliances)
+    system_prompt = build_scheduler_prompt(body.meal_name, body.steps, ingredients_str, kitchen_appliances=kitchen_appliances, language=language)
     user_message = build_scheduler_user_message(body.meal_name, body.steps, ingredients_str)
 
     # Collect full LLM response

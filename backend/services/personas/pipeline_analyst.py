@@ -125,7 +125,7 @@ def build_pipeline_analyst_prompt(
     user_profile: dict | None = None,
     supplements: list[dict] | None = None,
     health_rules: list[dict] | None = None,
-    language: str = "tr",
+    language: str = "en",
 ) -> str:
     """Build the pipeline analyst prompt (internal reviewer for suggestion refinement)."""
     return PIPELINE_ANALYST_TEMPLATE.format(

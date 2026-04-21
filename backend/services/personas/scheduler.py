@@ -9,6 +9,7 @@ All scheduling math (parallel execution, backward timing) is handled by our code
 """
 
 SCHEDULER_TEMPLATE = """You are a kitchen workflow expert. Your job is to analyze a meal's preparation steps and produce a detailed, structured cooking plan.
+{lang_instruction}
 
 Split the steps into two groups:
 
@@ -22,7 +23,6 @@ Split the steps into two groups:
 Rules:
 - Expand the recipe steps — add necessary but missing actions (e.g., if the recipe says "boil eggs", also add "strain and transfer to cold water" as end_action)
 - Be realistic about durations
-- All task descriptions and details must be in Turkish
 - Output ONLY the JSON object, nothing else
 
 Output format (inside ```json ... ``` fences):
@@ -30,24 +30,28 @@ Output format (inside ```json ... ``` fences):
 ```json
 {{
   "prep": [
-    {{"task": "Domates ve salatalığı dilimle", "detail": "ince halkalar halinde"}}
+    {{"task": "Slice tomatoes and cucumber", "detail": "thin rounds"}}
   ],
   "timed": [
     {{
-      "task": "Yumurtaları haşla",
+      "task": "Boil eggs",
       "duration_min": 7,
-      "resource": "ocak",
-      "end_action": "Süzgeçle süz, soğuk suya al"
+      "resource": "Stove",
+      "end_action": "Drain and transfer to cold water"
     }}
   ]
 }}
 ```"""
 
 
-def build_scheduler_prompt(meal_name: str, steps: list[str], ingredients_str: str, kitchen_appliances: list[str] | None = None) -> str:
+def _lang(language: str) -> str:
+    return "Always respond in Turkish." if language != "en" else "Always respond in English."
+
+
+def build_scheduler_prompt(meal_name: str, steps: list[str], ingredients_str: str, kitchen_appliances: list[str] | None = None, language: str = "en") -> str:
     """Build the system prompt for plan extraction."""
-    appliance_str = ", ".join(kitchen_appliances) if kitchen_appliances else "ocak, airfryer, tost_makinesi, fırın"
-    return SCHEDULER_TEMPLATE.format(kitchen_appliances=appliance_str)
+    appliance_str = ", ".join(kitchen_appliances) if kitchen_appliances else "Stove, Air Fryer, Toaster, Oven"
+    return SCHEDULER_TEMPLATE.format(kitchen_appliances=appliance_str, lang_instruction=_lang(language))
 
 
 def build_scheduler_user_message(meal_name: str, steps: list[str], ingredients_str: str) -> str:

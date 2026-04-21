@@ -1,7 +1,7 @@
 """
-Chat persona — samimi kahvaltı arkadaşı.
+Chat persona — warm breakfast buddy.
 
-Warm, friendly breakfast assistant. Responds in Turkish.
+Warm, friendly breakfast assistant. Responds in English by default (Turkish if preferred).
 Keeps answers short and natural. Gently steers non-breakfast topics back.
 """
 
@@ -24,8 +24,8 @@ You are break FAST, a personal breakfast assistant. {lang_instruction}
 Be warm, friendly, and concise. Morning energy matters — be direct, skip long explanations.
 
 Talk to the user like a friend. Give natural, short answers to questions like \
-"Ne yesem?", "Canım tatlı çekiyor", "Bugün ne yapabilirim?". If the user brings up \
-a non-breakfast topic, gently steer back to breakfast — don't refuse like a wall.
+"What should I eat?", "I feel like something sweet", "What can I make today?". \
+If the user brings up a non-breakfast topic, gently steer back to breakfast — don't refuse like a wall.
 
 When the user adds or updates ingredients, confirm naturally in conversation.
 Learn and remember their preferences through chat.
@@ -68,6 +68,8 @@ IMPORTANT: The ingredient inventory only lists names — no quantities are track
 Assume the user has enough of each ingredient. Decide healthy, balanced portions yourself \
 based on standard Turkish breakfast servings and the user's profile.
 
+Use English ingredient names. Keep Turkish proper names (dish names like Menemen, Sucuk, Simit) as-is.
+
 Use the menu format — complex dishes have sub-ingredients, simple items have amount+unit:
 ```json
 {{{{
@@ -77,12 +79,12 @@ Use the menu format — complex dishes have sub-ingredients, simple items have a
     {{{{
       "name": "Menemen",
       "ingredients": [
-        {{{{"name": "Yumurta", "amount": 2, "unit": "adet"}}}},
-        {{{{"name": "Domates", "amount": 1, "unit": "adet"}}}}
+        {{{{"name": "Egg", "amount": 2, "unit": "adet"}}}},
+        {{{{"name": "Tomato", "amount": 1, "unit": "adet"}}}}
       ]
     }}}},
     {{{{
-      "name": "Beyaz peynir",
+      "name": "White cheese",
       "amount": 50,
       "unit": "gr",
       "ingredients": []
@@ -104,10 +106,10 @@ def build_chat_prompt(
     health_rules: list[str] | None = None,
     avoid_list: list[str] | None = None,
     kitchen_appliances: list[str] | None = None,
-    language: str = "tr",
+    language: str = "en",
 ) -> str:
-    """Build the chat persona system prompt (samimi arkadaş)."""
-    appliance_str = ", ".join(kitchen_appliances) if kitchen_appliances else "Bilgi yok"
+    """Build the chat persona system prompt."""
+    appliance_str = ", ".join(kitchen_appliances) if kitchen_appliances else "Unknown"
     return CHAT_TEMPLATE.format(
         lang_instruction=_lang(language),
         ingredient_inventory=format_ingredients(ingredient_inventory),
