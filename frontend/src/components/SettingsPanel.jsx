@@ -607,23 +607,23 @@ export default function SettingsPanel({ visible }) {
         <div style={s.section}>
           <div style={s.sectionLabel}>AI Response Language</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
-            <span style={{ fontSize: 13, color: language === 'tr' ? 'var(--accent)' : 'var(--text-muted)' }}>Turkish</span>
+            <span style={{ fontSize: 13, color: language === 'en' ? 'var(--accent)' : 'var(--text-muted)' }}>English</span>
             <button
               style={{
                 width: 44, height: 24, borderRadius: 12, border: '1px solid var(--border)',
-                background: language === 'en' ? 'var(--accent)' : 'var(--surface2)',
+                background: language === 'tr' ? 'var(--accent)' : 'var(--surface2)',
                 cursor: 'pointer', position: 'relative', transition: 'background 0.2s',
               }}
               onClick={handleLanguageToggle}
-              title={`Switch to ${language === 'tr' ? 'English' : 'Turkish'}`}
+              title={`Switch to ${language === 'en' ? 'Turkish' : 'English'}`}
             >
               <span style={{
                 position: 'absolute', top: 3, width: 16, height: 16, borderRadius: 8,
                 background: '#fff', transition: 'left 0.2s',
-                left: language === 'en' ? 24 : 4,
+                left: language === 'tr' ? 24 : 4,
               }} />
             </button>
-            <span style={{ fontSize: 13, color: language === 'en' ? 'var(--accent)' : 'var(--text-muted)' }}>English</span>
+            <span style={{ fontSize: 13, color: language === 'tr' ? 'var(--accent)' : 'var(--text-muted)' }}>Turkish</span>
           </div>
         </div>
 
