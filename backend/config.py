@@ -14,8 +14,11 @@ DATABASE_PATH = os.getenv("DATABASE_PATH", "./breakFAST.db")
 BACKEND_HOST = os.getenv("BACKEND_HOST", "0.0.0.0")
 BACKEND_PORT = int(os.getenv("BACKEND_PORT", "8000"))
 
-_cors_raw = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000")
+_cors_raw = os.getenv("CORS_ORIGINS", "*")
 CORS_ORIGINS = [o.strip() for o in _cors_raw.split(",") if o.strip()]
+# When CORS_ORIGINS is ["*"], credentials mode is disabled (CORS spec forbids
+# wildcard + credentials). Bearer token auth via Authorization header still works.
+CORS_ALLOW_CREDENTIALS = "*" not in CORS_ORIGINS
 
 SERVE_FRONTEND = os.getenv("SERVE_FRONTEND", "").lower() in ("1", "true", "yes")
 

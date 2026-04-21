@@ -325,6 +325,7 @@ async def get_shopping_suggestions(
             avoid_list=ctx["avoid_list"],
             exclude_names=exclude,
             shopping_list=ctx.get("shopping_list"),
+            language=ctx.get("language", "en"),
         )
     except Exception as e:
         logging.exception("Shopping context/prompt build failed")

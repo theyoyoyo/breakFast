@@ -12,9 +12,13 @@ from services.knowledge import (
     format_history_detailed,
 )
 
+def _lang(language: str) -> str:
+    return "Always respond in Turkish." if language != "en" else "Always respond in English."
+
+
 PIPELINE_ANALYST_TEMPLATE = """\
 You are the break FAST Nutrition Analyst — a harsh, precise internal reviewer.
-Always respond in Turkish.
+{lang_instruction}
 You are NOT talking to the user. You are reviewing a draft meal suggestion created \
 by the Suggestion persona. Your feedback will be passed back to the Suggestion persona \
 so it can refine the meal before showing it to the user.
@@ -121,9 +125,11 @@ def build_pipeline_analyst_prompt(
     user_profile: dict | None = None,
     supplements: list[dict] | None = None,
     health_rules: list[dict] | None = None,
+    language: str = "tr",
 ) -> str:
     """Build the pipeline analyst prompt (internal reviewer for suggestion refinement)."""
     return PIPELINE_ANALYST_TEMPLATE.format(
+        lang_instruction=_lang(language),
         user_profile=format_user_profile(user_profile),
         supplements=format_supplements(supplements),
         recent_history=format_history_detailed(recent_meal_history, limit=5),

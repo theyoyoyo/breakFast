@@ -6,6 +6,7 @@ import {
   getMeals, updateMeal, deleteMeal, deleteOldMeals,
   getHealthRules, createHealthRule, updateHealthRule, deleteHealthRule,
   addFavorite,
+  getPreferences, setPreference,
 } from '../services/api'
 import WeeklySummary from './WeeklySummary'
 import KitchenSettings from './KitchenSettings'
@@ -47,11 +48,14 @@ export default function SettingsPanel({ visible }) {
   // Meal pending deletes
   const [pendingMealDeletes, setPendingMealDeletes] = useState(new Set())
 
+  // Language preference ('tr' = Turkish, 'en' = English)
+  const [language, setLanguage] = useState('en')
+
   const load = async () => {
     try {
       setError(null)
-      const [r, prof, supps, rules, m] = await Promise.all([
-        getRatings(), getProfile(), getSupplements(), getHealthRules(), getMeals(),
+      const [r, prof, supps, rules, m, prefs] = await Promise.all([
+        getRatings(), getProfile(), getSupplements(), getHealthRules(), getMeals(), getPreferences(),
       ])
       setRatings(r)
       setMeals(m)
@@ -67,8 +71,25 @@ export default function SettingsPanel({ visible }) {
       setSupplements(supps)
       setHealthRules(rules)
       setProfileDirty(false)
+      const langPref = prefs.find(p => p.key === 'response_language')
+      if (langPref) {
+        setLanguage(langPref.value)
+      } else {
+        // No preference stored yet — persist the default so the backend uses it
+        setPreference('response_language', 'en').catch(() => {})
+      }
     } catch {
       setError('Failed to load settings')
+    }
+  }
+
+  const handleLanguageToggle = async () => {
+    const next = language === 'tr' ? 'en' : 'tr'
+    setLanguage(next)
+    try {
+      await setPreference('response_language', next)
+    } catch {
+      setLanguage(language)
     }
   }
 
@@ -579,6 +600,30 @@ export default function SettingsPanel({ visible }) {
               />
               <button style={s.addBtn} onClick={handleAddSupplement}>+</button>
             </div>
+          </div>
+        </div>
+
+        {/* Language toggle */}
+        <div style={s.section}>
+          <div style={s.sectionLabel}>AI Response Language</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
+            <span style={{ fontSize: 13, color: language === 'en' ? 'var(--accent)' : 'var(--text-muted)' }}>English</span>
+            <button
+              style={{
+                width: 44, height: 24, borderRadius: 12, border: '1px solid var(--border)',
+                background: language === 'tr' ? 'var(--accent)' : 'var(--surface2)',
+                cursor: 'pointer', position: 'relative', transition: 'background 0.2s',
+              }}
+              onClick={handleLanguageToggle}
+              title={`Switch to ${language === 'en' ? 'Turkish' : 'English'}`}
+            >
+              <span style={{
+                position: 'absolute', top: 3, width: 16, height: 16, borderRadius: 8,
+                background: '#fff', transition: 'left 0.2s',
+                left: language === 'tr' ? 24 : 4,
+              }} />
+            </button>
+            <span style={{ fontSize: 13, color: language === 'tr' ? 'var(--accent)' : 'var(--text-muted)' }}>Turkish</span>
           </div>
         </div>
 

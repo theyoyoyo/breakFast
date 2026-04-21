@@ -116,7 +116,8 @@ async def load_chat_context(db, user_id: int) -> dict:
         fetch_kitchen_appliances(db, user_id),
     )
     avoid_list = [v for k, v in prefs.items() if k.startswith("avoid:")]
-    filtered_prefs = {k: v for k, v in prefs.items() if not k.startswith("avoid:")}
+    filtered_prefs = {k: v for k, v in prefs.items() if not k.startswith("avoid:") and k != "response_language"}
+    language = prefs.get("response_language", "en")
 
     return {
         "ingredients": ingredients,
@@ -129,6 +130,7 @@ async def load_chat_context(db, user_id: int) -> dict:
         "supplements": supplements,
         "avoid_list": avoid_list,
         "kitchen_appliances": kitchen_appliances,
+        "language": language,
     }
 
 
@@ -159,7 +161,8 @@ async def load_shopping_context(db, user_id: int) -> dict:
         fetch_shopping_list(db, user_id),
     )
     avoid_list = [v for k, v in prefs.items() if k.startswith("avoid:")]
-    filtered_prefs = {k: v for k, v in prefs.items() if not k.startswith("avoid:")}
+    filtered_prefs = {k: v for k, v in prefs.items() if not k.startswith("avoid:") and k != "response_language"}
+    language = prefs.get("response_language", "en")
 
     return {
         "ingredients": ingredients,
@@ -172,20 +175,23 @@ async def load_shopping_context(db, user_id: int) -> dict:
         "supplements": supplements,
         "avoid_list": avoid_list,
         "shopping_list": shopping_list,
+        "language": language,
     }
 
 
 async def load_analyst_context(db, user_id: int) -> dict:
     """Load lighter context for the analyst persona."""
-    history, profile, supplements, health_rules = await asyncio.gather(
+    history, profile, supplements, health_rules, prefs = await asyncio.gather(
         fetch_history(db, user_id, limit=15, include_ingredients=True),
         fetch_profile(db, user_id),
         fetch_supplements(db, user_id),
         fetch_health_rules(db, user_id),
+        fetch_preferences(db, user_id),
     )
     return {
         "history": history,
         "user_profile": profile,
         "supplements": supplements,
         "health_rules": health_rules,
+        "language": prefs.get("response_language", "en"),
     }

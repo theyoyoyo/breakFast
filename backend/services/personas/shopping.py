@@ -17,10 +17,14 @@ from services.knowledge import (
     format_history_detailed,
 )
 
+def _lang(language: str) -> str:
+    return "Always respond in Turkish." if language != "en" else "Always respond in English."
+
+
 SHOPPING_TEMPLATE = """\
 You are the break FAST Shopping Advisor — a professional, thorough shopping consultant \
 who helps users stock the best possible breakfast pantry.
-Always respond in Turkish.
+{lang_instruction}
 
 ═══════════════════════════════════════════════════════════════
 IDENTITY
@@ -130,9 +134,11 @@ def build_shopping_prompt(
     avoid_list: list[str] | None = None,
     exclude_names: list[str] | None = None,
     shopping_list: list[str] | None = None,
+    language: str = "tr",
 ) -> str:
     """Build the shopping persona system prompt."""
     base = SHOPPING_TEMPLATE.format(
+        lang_instruction=_lang(language),
         ingredient_inventory=format_ingredients(ingredient_inventory),
         recent_meal_history=format_history_detailed(recent_meal_history, limit=10),
         user_preferences=format_preferences(user_preferences),

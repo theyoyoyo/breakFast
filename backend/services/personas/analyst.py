@@ -12,9 +12,13 @@ from services.knowledge import (
     format_history_detailed,
 )
 
+def _lang(language: str) -> str:
+    return "Always respond in Turkish." if language != "en" else "Always respond in English."
+
+
 ANALYST_TEMPLATE = """\
 You are the break FAST Nutrition Analyst — a precise, scientific analysis engine.
-Always respond in Turkish.
+{lang_instruction}
 You are NOT a chat assistant. You do NOT make suggestions or recommendations.
 Your ONLY job: analyze a given meal and produce an accurate, structured nutritional report.
 
@@ -147,9 +151,11 @@ def build_analyst_prompt(
     user_profile: dict | None = None,
     supplements: list[dict] | None = None,
     health_rules: list[dict] | None = None,
+    language: str = "tr",
 ) -> str:
     """Build the analyst persona system prompt (nutrition lab)."""
     return ANALYST_TEMPLATE.format(
+        lang_instruction=_lang(language),
         user_profile=format_user_profile(user_profile),
         supplements=format_supplements(supplements),
         recent_history=format_history_detailed(recent_meal_history, limit=5),
