@@ -120,6 +120,7 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
             # Determine prompt type: "suggest" uses suggestion persona, default uses chat
             prompt_type = payload.get("type", "chat")
             suggest_mode = payload.get("mode")  # "favorites" or "explore"
+            chat_context = payload.get("chat_context")  # recent user messages for suggest context
 
             # Use session_id from payload if provided, otherwise keep current
             if "session_id" in payload:
@@ -167,6 +168,7 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                         user_message=user_message,
                         mode=suggest_mode,
                         temperature=temperature,
+                        chat_context=chat_context,
                     ):
                         if event["type"] == "progress":
                             await websocket.send_json(event)

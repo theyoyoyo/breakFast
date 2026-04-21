@@ -353,7 +353,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     return ws
   }, [])
 
-  const sendMessage = useCallback((text, type = 'chat', mode = null) => {
+  const sendMessage = useCallback((text, type = 'chat', mode = null, chatContext = null) => {
     const msg = text.trim()
     if (!msg || streamBuffer !== null || analyzingIdx !== null) return
 
@@ -366,6 +366,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     if (type !== 'chat') payload.type = type
     if (mode) payload.mode = mode
     if (sessionIdRef.current) payload.session_id = sessionIdRef.current
+    if (chatContext && chatContext.length > 0) payload.chat_context = chatContext
 
     const ws = ensureSocket()
     if (ws.readyState === WebSocket.OPEN) {
@@ -507,8 +508,15 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       explore: 'Dünya mutfağından farklı bir kahvaltı öner',
     }
     const msg = modeLabels[mode] || 'Bana kahvaltı öner'
-    sendMessage(msg, 'suggest', mode || null)
-  }, [sendMessage])
+
+    // Collect last 5 user messages (chronological) as breakfast feedback context
+    const recentUserMsgs = messages
+      .filter(m => m.role === 'user')
+      .slice(-5)
+      .map(m => m.content)
+
+    sendMessage(msg, 'suggest', mode || null, recentUserMsgs.length > 0 ? recentUserMsgs : null)
+  }, [sendMessage, messages])
 
   const handleAnalyze = useCallback(async (msgIdx) => {
     const meal = mealBlocks[msgIdx]
