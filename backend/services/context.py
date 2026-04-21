@@ -117,7 +117,7 @@ async def load_chat_context(db, user_id: int) -> dict:
     )
     avoid_list = [v for k, v in prefs.items() if k.startswith("avoid:")]
     filtered_prefs = {k: v for k, v in prefs.items() if not k.startswith("avoid:") and k != "response_language"}
-    language = prefs.get("response_language", "tr")
+    language = prefs.get("response_language", "en")
 
     return {
         "ingredients": ingredients,
@@ -162,7 +162,7 @@ async def load_shopping_context(db, user_id: int) -> dict:
     )
     avoid_list = [v for k, v in prefs.items() if k.startswith("avoid:")]
     filtered_prefs = {k: v for k, v in prefs.items() if not k.startswith("avoid:") and k != "response_language"}
-    language = prefs.get("response_language", "tr")
+    language = prefs.get("response_language", "en")
 
     return {
         "ingredients": ingredients,
@@ -193,5 +193,5 @@ async def load_analyst_context(db, user_id: int) -> dict:
         "user_profile": profile,
         "supplements": supplements,
         "health_rules": health_rules,
-        "language": prefs.get("response_language", "tr"),
+        "language": prefs.get("response_language", "en"),
     }

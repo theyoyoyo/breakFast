@@ -41,7 +41,7 @@ async def run_suggestion_pipeline(
     """
 
     # --- Build prompts ---
-    language = context.get("language", "tr")
+    language = context.get("language", "en")
 
     suggestion_prompt = build_suggestion_prompt(
         ingredient_inventory=context["ingredients"],

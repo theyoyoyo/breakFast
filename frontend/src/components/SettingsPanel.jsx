@@ -49,7 +49,7 @@ export default function SettingsPanel({ visible }) {
   const [pendingMealDeletes, setPendingMealDeletes] = useState(new Set())
 
   // Language preference ('tr' = Turkish, 'en' = English)
-  const [language, setLanguage] = useState('tr')
+  const [language, setLanguage] = useState('en')
 
   const load = async () => {
     try {
