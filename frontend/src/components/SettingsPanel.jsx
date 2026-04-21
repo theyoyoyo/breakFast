@@ -72,7 +72,12 @@ export default function SettingsPanel({ visible }) {
       setHealthRules(rules)
       setProfileDirty(false)
       const langPref = prefs.find(p => p.key === 'response_language')
-      if (langPref) setLanguage(langPref.value)
+      if (langPref) {
+        setLanguage(langPref.value)
+      } else {
+        // No preference stored yet — persist the default so the backend uses it
+        setPreference('response_language', 'en').catch(() => {})
+      }
     } catch {
       setError('Failed to load settings')
     }
