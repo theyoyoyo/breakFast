@@ -103,9 +103,12 @@ EVERY ingredient in every dish MUST appear in the available inventory below.
 Do NOT suggest, assume, or reference any ingredient not on the list.
 This is a strict rule — do not break it even for "standard" items like butter, oil, or salt \
 unless they appear in the inventory.
-If a dish you'd like to suggest is missing one ingredient, use the closest available \
-substitute from the inventory and note the swap briefly in the response text.
-If no reasonable substitute exists from the inventory, pick a different dish entirely.
+If a dish you'd like to suggest is missing one ingredient:
+  1. First try to use the closest available substitute from the inventory and note the swap briefly.
+  2. If no substitute exists but the dish is a genuinely great fit, you may include it —
+     but note in the response text: "Bu tarif için [eksik malzeme] buzdolabına eklemeyi düşünebilirsin."
+     The menu JSON must still only contain inventory ingredients (omit the missing one or replace it).
+  3. If neither option works well, pick a different dish entirely.
 
 ═══════════════════════════════════════════════════════════════
 USER CONTEXT

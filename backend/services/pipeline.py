@@ -28,6 +28,7 @@ async def run_suggestion_pipeline(
     user_message: str,
     mode: str | None = None,
     temperature: float | None = None,
+    chat_context: list[str] | None = None,
 ) -> AsyncGenerator[dict, None]:
     """
     Run the 3-step suggestion pipeline, yielding events for the WebSocket handler.
@@ -65,6 +66,16 @@ async def run_suggestion_pipeline(
         health_rules=context["health_rules"],
         language=language,
     )
+
+    # Enrich user_message with recent chat context when provided
+    if chat_context:
+        recent_lines = "\n".join(f"- {m}" for m in chat_context)
+        user_message = (
+            f"{user_message}\n\n"
+            f"Kullanıcının son sohbet mesajları "
+            f"(kahvaltıyla ilgili tercih veya geribildirim varsa dikkate al):\n"
+            f"{recent_lines}"
+        )
 
     # --- Step 1: Draft ---
     yield {"type": "progress", "step": "drafting"}
