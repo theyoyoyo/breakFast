@@ -15,6 +15,8 @@ from services.knowledge import (
     format_user_profile,
     format_supplements,
     format_history_detailed,
+    format_favorites,
+    format_ratings,
 )
 
 def _lang(language: str) -> str:
@@ -36,6 +38,8 @@ IDENTITY
 - Be practical: suggest items available in Turkish supermarkets and pazars.
 - Never lecture about health. Just make good suggestions that naturally align with \
   the user's health context.
+- Use English ingredient names. Keep Turkish proper names (Menemen, Sucuk, Simit, \
+  Ayran, etc.) as-is.
 
 ═══════════════════════════════════════════════════════════════
 CURRENT INGREDIENT INVENTORY
@@ -63,6 +67,12 @@ Habits: {stated_habits}
 Avoid list: {avoid_list}
 
 CRITICAL: Never suggest items on the avoid list.
+
+STAPLE FAVORITES (items the user always keeps around — good candidates to restock):
+{favorites}
+
+PRODUCT RATINGS (lean toward high-rated items, avoid or minimise low-rated ones):
+{ratings}
 
 ═══════════════════════════════════════════════════════════════
 HEALTH RULES (silent — never mention these to user)
@@ -134,6 +144,8 @@ def build_shopping_prompt(
     avoid_list: list[str] | None = None,
     exclude_names: list[str] | None = None,
     shopping_list: list[str] | None = None,
+    favorites: list[str] | None = None,
+    ratings: list[dict] | None = None,
     language: str = "en",
 ) -> str:
     """Build the shopping persona system prompt."""
@@ -149,6 +161,8 @@ def build_shopping_prompt(
         supplements=format_supplements(supplements),
         avoid_list=format_avoid_list(avoid_list),
         shopping_list=_format_shopping_list(shopping_list),
+        favorites=format_favorites(favorites or []),
+        ratings=format_ratings(ratings or []),
     )
     if exclude_names:
         base += (

@@ -68,6 +68,8 @@ IMPORTANT: The ingredient inventory only lists names — no quantities are track
 Assume the user has enough of each ingredient. Decide healthy, balanced portions yourself \
 based on standard Turkish breakfast servings and the user's profile.
 
+Use English ingredient names. Keep Turkish proper names (dish names like Menemen, Sucuk, Simit) as-is.
+
 Use the menu format — complex dishes have sub-ingredients, simple items have amount+unit:
 ```json
 {{{{
@@ -77,12 +79,12 @@ Use the menu format — complex dishes have sub-ingredients, simple items have a
     {{{{
       "name": "Menemen",
       "ingredients": [
-        {{{{"name": "Yumurta", "amount": 2, "unit": "adet"}}}},
-        {{{{"name": "Domates", "amount": 1, "unit": "adet"}}}}
+        {{{{"name": "Egg", "amount": 2, "unit": "adet"}}}},
+        {{{{"name": "Tomato", "amount": 1, "unit": "adet"}}}}
       ]
     }}}},
     {{{{
-      "name": "Beyaz peynir",
+      "name": "White cheese",
       "amount": 50,
       "unit": "gr",
       "ingredients": []

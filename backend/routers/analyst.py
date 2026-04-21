@@ -73,7 +73,7 @@ async def analyze_meal(body: AnalyzeRequest, user_id: int = Depends(require_user
     if body.ingredients:
         ingredients_str = ", ".join(format_ingredient_item(i) for i in body.ingredients)
     else:
-        ingredients_str = "malzeme listesi yok"
+        ingredients_str = "no ingredients listed"
     user_message = f"Analyze: {body.meal_name}\nIngredients: {ingredients_str}"
 
     # Non-streaming collection with low temperature for accuracy

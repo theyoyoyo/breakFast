@@ -36,7 +36,7 @@ Output format (inside ```json ... ``` fences):
     {{
       "task": "Boil eggs",
       "duration_min": 7,
-      "resource": "ocak",
+      "resource": "Stove",
       "end_action": "Drain and transfer to cold water"
     }}
   ]
@@ -50,7 +50,7 @@ def _lang(language: str) -> str:
 
 def build_scheduler_prompt(meal_name: str, steps: list[str], ingredients_str: str, kitchen_appliances: list[str] | None = None, language: str = "en") -> str:
     """Build the system prompt for plan extraction."""
-    appliance_str = ", ".join(kitchen_appliances) if kitchen_appliances else "ocak, airfryer, tost_makinesi, fırın"
+    appliance_str = ", ".join(kitchen_appliances) if kitchen_appliances else "Stove, Air Fryer, Toaster, Oven"
     return SCHEDULER_TEMPLATE.format(kitchen_appliances=appliance_str, lang_instruction=_lang(language))
 
 

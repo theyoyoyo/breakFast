@@ -122,6 +122,24 @@ def format_supplements(supplements: list[dict] | None) -> str:
     return "\n".join(lines)
 
 
+def format_favorites(favorites: list[str]) -> str:
+    if not favorites:
+        return "No favorites set."
+    return ", ".join(favorites)
+
+
+def format_ratings(ratings: list[dict]) -> str:
+    """Top-10 high-rated and bottom-10 low-rated items for shopping context."""
+    high = [r["product_name"] for r in ratings if r.get("rating", 0) >= 7][:10]
+    low  = [r["product_name"] for r in ratings if r.get("rating", 10) <= 4][:10]
+    parts = []
+    if high:
+        parts.append(f"High-rated (favour these): {', '.join(high)}")
+    if low:
+        parts.append(f"Low-rated (avoid or minimise): {', '.join(low)}")
+    return "\n".join(parts) if parts else "No ratings yet."
+
+
 def format_ingredient_item(item) -> str:
     """Format a single ingredient — handles both string and dict forms."""
     if isinstance(item, dict):
