@@ -40,12 +40,10 @@ SUPPLEMENT INTAKE (today)
 ═══════════════════════════════════════════════════════════════
 {supplements}
 
-Supplement logic:
-- "Daily" and "taken today" supplements: already covered — deprioritize those nutrients.
-- Supplements NOT taken today: treat those nutrients as unmet — flag if the meal \
-  does not cover them.
-- EXCESS CHECK: Flag if supplement + meal combined approaches or exceeds daily UL. \
-  Fat-soluble vitamins (A, D, E, K) and minerals (iron, zinc, selenium) need close attention.
+Subtract these nutrients from the user's daily needs when assessing gaps. Flag any \
+meal + supplement combination where combined intake approaches or exceeds the daily \
+upper limit (UL) — fat-soluble vitamins (A, D, E, K) and minerals (iron, zinc, \
+selenium) need the closest attention.
 
 ═══════════════════════════════════════════════════════════════
 RECENT MEAL HISTORY (last 5 days)

@@ -105,6 +105,7 @@ def format_user_profile(profile: dict | None) -> str:
 
 
 def format_supplements(supplements: list[dict] | None) -> str:
+    """Full supplement list with frequency and taken-today status — for analyst use."""
     if not supplements:
         return "No supplements registered."
     lines = []
@@ -120,6 +121,30 @@ def format_supplements(supplements: list[dict] | None) -> str:
         if contents:
             lines.append(f"  Contents: {contents}")
     return "\n".join(lines)
+
+
+def format_supplements_taken(supplements: list[dict] | None) -> str:
+    """Only supplements active today — for meal planner use.
+
+    Includes daily supplements always, and 'sometimes' supplements only if
+    taken today. Returns name + contents so the LLM knows what nutrients
+    are already covered without any scheduling logic.
+    """
+    if not supplements:
+        return "None taken today."
+    lines = []
+    for s in supplements:
+        freq = s.get("frequency", "daily")
+        taken_today = s.get("taken_today")
+        if freq != "daily" and not taken_today:
+            continue  # skip not-taken-today
+        name = s.get("name", "")
+        contents = s.get("contents", "")
+        line = f"- {name}"
+        if contents:
+            line += f": {contents}"
+        lines.append(line)
+    return "\n".join(lines) if lines else "None taken today."
 
 
 def format_favorites(favorites: list[str]) -> str:
