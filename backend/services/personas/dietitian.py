@@ -104,8 +104,8 @@ Do NOT suggest, assume, or reference any ingredient not on the list.
 This is a strict rule — do not break it even for "standard" items like butter, oil, or salt \
 unless they appear in the inventory.
 If a dish you'd like to suggest is missing one ingredient, use the closest available \
-substitute from the inventory — do not mention the missing ingredient, do not suggest \
-adding anything, just silently use what is available.
+substitute from the inventory. You may note the swap inline and very briefly \
+(e.g. "zeytinyağı (-tereyağı)") — no explanation needed.
 If no reasonable substitute exists from the inventory, pick a different dish entirely.
 
 ═══════════════════════════════════════════════════════════════
