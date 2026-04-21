@@ -334,7 +334,7 @@ async def get_shopping_suggestions(
     try:
         response = await chat_complete(
             system_prompt=prompt,
-            messages=[{"role": "user", "content": "Benim için alışveriş önerileri hazırla."}],
+            messages=[{"role": "user", "content": "Generate shopping suggestions for me."}],
         )
     except LLMUnavailableError:
         return {"suggestions": [], "lyric": lyric_cycler.next()}

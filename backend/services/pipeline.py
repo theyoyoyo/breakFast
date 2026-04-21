@@ -72,8 +72,8 @@ async def run_suggestion_pipeline(
         recent_lines = "\n".join(f"- {m}" for m in chat_context)
         user_message = (
             f"{user_message}\n\n"
-            f"Kullanıcının son sohbet mesajları "
-            f"(kahvaltıyla ilgili tercih veya geribildirim varsa dikkate al):\n"
+            f"User's recent chat messages "
+            f"(treat as breakfast preference/feedback if relevant):\n"
             f"{recent_lines}"
         )
 
@@ -88,7 +88,7 @@ async def run_suggestion_pipeline(
     # --- Step 2: Analyst review ---
     yield {"type": "progress", "step": "analyzing"}
 
-    analyst_message = f"Taslak öneri:\n\n{draft_text}"
+    analyst_message = f"Draft suggestion:\n\n{draft_text}"
     analyst_chunks = []
     async for chunk in stream_response(analyst_prompt, [], analyst_message, temperature=0.3):
         analyst_chunks.append(chunk)
@@ -107,11 +107,11 @@ async def run_suggestion_pipeline(
     yield {"type": "progress", "step": "finalizing"}
 
     refinement_message = (
-        f"Aşağıda senin hazırladığın taslak kahvaltı önerisi ve beslenme analistinin "
-        f"detaylı geri bildirimi var. Geri bildirimdeki her maddeyi dikkate alarak "
-        f"öneriyi düzelt ve iyileştir. Sonucu kullanıcıya sunacağın şekilde yaz.\n\n"
-        f"═══ TASLAK ÖNERİ ═══\n{draft_text}\n\n"
-        f"═══ ANALİST GERİ BİLDİRİMİ ═══\n{feedback_formatted}"
+        f"Below is the draft breakfast suggestion you prepared, along with detailed feedback "
+        f"from the nutrition analyst. Revise and improve the suggestion by addressing every "
+        f"feedback point. Write the result as you would present it to the user.\n\n"
+        f"═══ DRAFT SUGGESTION ═══\n{draft_text}\n\n"
+        f"═══ ANALYST FEEDBACK ═══\n{feedback_formatted}"
     )
 
     final_chunks = []

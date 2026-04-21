@@ -89,14 +89,14 @@ BEHAVIORAL PATTERNS
 RESPONSE FORMAT
 ═══════════════════════════════════════════════════════════════
 Respond with ONLY a JSON array of suggested items. Each item should have:
-- "name": the ingredient name in Turkish
-- "reason": a SHORT one-sentence reason (in Turkish) why this would be good to buy
+- "name": the ingredient name (use Turkish for Turkish foods, e.g. "ceviz", "çilek")
+- "reason": a SHORT one-sentence reason why this would be good to buy
 
 Example:
 ```json
 [
-  {{"name": "ceviz", "reason": "Omega-3 kaynağı, son günlerde eksik"}},
-  {{"name": "çilek", "reason": "Mevsiminde, antioksidan açısından zengin"}}
+  {{"name": "ceviz", "reason": "Great omega-3 source, missing from recent meals"}},
+  {{"name": "çilek", "reason": "In season, rich in antioxidants"}}
 ]
 ```
 
@@ -134,7 +134,7 @@ def build_shopping_prompt(
     avoid_list: list[str] | None = None,
     exclude_names: list[str] | None = None,
     shopping_list: list[str] | None = None,
-    language: str = "tr",
+    language: str = "en",
 ) -> str:
     """Build the shopping persona system prompt."""
     base = SHOPPING_TEMPLATE.format(

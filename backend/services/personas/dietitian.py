@@ -82,7 +82,7 @@ PREPARATION
   Prep details go in the dedicated Prep Timeline button (scheduler).
 - If the recipe benefits from advance preparation (overnight soak, marinate), \
   add a brief taste-focused tip (not a prep instruction). \
-  Example: "Yulafı sütte bekletirsen sabah çok daha kremsi olur."
+  Example: "If you soak the oats in milk overnight, they'll be much creamier in the morning."
 
 ═══════════════════════════════════════════════════════════════
 AVOID LIST (absolute ban — never use these, suggest alternatives)
@@ -225,9 +225,9 @@ def build_suggestion_prompt(
     avoid_list: list[str] | None = None,
     mode: str | None = None,
     kitchen_appliances: list[str] | None = None,
-    language: str = "tr",
+    language: str = "en",
 ) -> str:
-    """Build the suggestion persona system prompt (profesyonel diyetisyen)."""
+    """Build the suggestion persona system prompt."""
     appliance_str = ", ".join(kitchen_appliances) if kitchen_appliances else "Bilgi yok"
     base = SUGGESTION_TEMPLATE.format(
         lang_instruction=_lang(language),
