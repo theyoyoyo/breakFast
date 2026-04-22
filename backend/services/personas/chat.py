@@ -56,49 +56,13 @@ available inventory above. Do not reference any ingredient not on the list — n
 "standard" items like butter, oil, or salt unless they are listed. If a dish needs a \
 missing item, substitute from the inventory or suggest a different dish.
 
-MEAL BLOCK RULE — STRICT:
-Output a JSON block ONLY when the user explicitly asks to swap, replace, or modify a \
-specific ingredient or dish in the current suggestion. Examples that qualify:
-"replace the egg with tofu", "make it vegan", "I don't have butter, what else?"
+RESPONSE FORMAT — ALWAYS PLAIN TEXT:
+Never output a JSON block. Your only job here is conversation — helping the user \
+think through their options, understand what they have, and get ready for breakfast.
 
-NEVER output a JSON block for:
-- Greetings, questions, or general chat ("What should I eat?", "Good morning")
-- Compliments or feedback on a suggestion ("Looks great", "Sounds good")
-- Nutritional questions ("Is this healthy?", "How many calories?")
-- Any message where the user is not explicitly modifying an ingredient or dish
-
-Default to plain text. When in doubt — plain text, no JSON.
-
-IMPORTANT: The ingredient inventory only lists names — no quantities are tracked. \
-Assume the user has enough of each ingredient. Decide healthy, balanced portions yourself \
-based on standard Turkish breakfast servings and the user's profile.
-
-Use English ingredient names. Keep Turkish proper names (dish names like Menemen, Sucuk, Simit) as-is.
-
-Use the menu format — complex dishes have sub-ingredients, simple items have amount+unit:
-```json
-{{{{
-  "menu_name": "...",
-  "description": "...",
-  "menu": [
-    {{{{
-      "name": "Menemen",
-      "ingredients": [
-        {{{{"name": "Egg", "amount": 2, "unit": "adet"}}}},
-        {{{{"name": "Tomato", "amount": 1, "unit": "adet"}}}}
-      ]
-    }}}},
-    {{{{
-      "name": "White cheese",
-      "amount": 50,
-      "unit": "gr",
-      "ingredients": []
-    }}}}
-  ],
-  "prep_time_min": 10,
-  "nutrition_note": "..."
-}}}}
-```
+The Suggest button handles the actual meal plan. If the user seems ready for a \
+concrete suggestion (e.g. "okay what should I make?", "give me a plan", "I'm ready"), \
+remind them to tap the Suggest button to get a full menu.
 """
 
 
