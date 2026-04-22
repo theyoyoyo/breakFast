@@ -43,6 +43,7 @@ export default function SettingsPanel({ visible }) {
   const [editingMealId, setEditingMealId] = useState(null)
   const [analyzingMealId, setAnalyzingMealId] = useState(null)
   const [expandedAnalysisId, setExpandedAnalysisId] = useState(null)
+  const [llmFallbackLyric, setLlmFallbackLyric] = useState(null) // shown when LLM is down
 
   // Health rules state
   const [healthRules, setHealthRules] = useState([])
@@ -331,14 +332,21 @@ export default function SettingsPanel({ visible }) {
 
   const handleAnalyzeMeal = async (meal) => {
     setAnalyzingMealId(meal.id)
+    setLlmFallbackLyric(null)
     try {
       const result = await analyzeMeal(meal.meal_name, meal.ingredients, meal.id)
-      setMeals(prev => prev.map(m =>
-        m.id === meal.id
-          ? { ...m, cached_nutrition: { analysis_text: result.analysis_text, analysis_data: result.analysis_data } }
-          : m
-      ))
-    } catch { /* Analysis failed silently */ }
+      if (result.fallback) {
+        // LLM unavailable — show lyric, don't touch cached_nutrition so meal reverts to "Analyze"
+        setLlmFallbackLyric(result.analysis_text)
+      } else {
+        setLlmFallbackLyric(null)
+        setMeals(prev => prev.map(m =>
+          m.id === meal.id
+            ? { ...m, cached_nutrition: { analysis_text: result.analysis_text, analysis_data: result.analysis_data } }
+            : m
+        ))
+      }
+    } catch { /* network error — fail silently */ }
     setAnalyzingMealId(null)
   }
 
@@ -363,11 +371,16 @@ export default function SettingsPanel({ visible }) {
     return (
       <div style={s.container}>
         <div style={{ ...s.header, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button style={s.backBtn} onClick={() => { setPendingMealDeletes(new Set()); setView('settings') }}>←</button>
+          <button style={s.backBtn} onClick={() => { setPendingMealDeletes(new Set()); setLlmFallbackLyric(null); setView('settings') }}>←</button>
           <span>Meal History ({meals.length})</span>
         </div>
         <div style={s.body}>
           {error && <div style={s.error}>{error}</div>}
+          {llmFallbackLyric && (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', padding: '8px 12px', background: 'var(--surface2)', borderRadius: 8, lineHeight: 1.5 }}>
+              🎵 {llmFallbackLyric}
+            </div>
+          )}
           {meals.length === 0 && <span style={s.empty}>No meals logged yet</span>}
           {meals.map((meal) => {
             const markedForDelete = pendingMealDeletes.has(meal.id)
