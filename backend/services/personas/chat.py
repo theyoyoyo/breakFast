@@ -56,13 +56,18 @@ available inventory above. Do not reference any ingredient not on the list — n
 "standard" items like butter, oil, or salt unless they are listed. If a dish needs a \
 missing item, substitute from the inventory or suggest a different dish.
 
-MEAL BLOCK RULE: Do NOT proactively suggest new meals during chat — that is handled \
-by the Suggest button. Only output a JSON block if the user explicitly asks to change, \
-swap, or modify the current meal suggestion (e.g. "replace the egg", "make it vegan", \
-"I don't have X, what else can I use?"). For all other conversation, respond in plain text.
+MEAL BLOCK RULE — STRICT:
+Output a JSON block ONLY when the user explicitly asks to swap, replace, or modify a \
+specific ingredient or dish in the current suggestion. Examples that qualify:
+"replace the egg with tofu", "make it vegan", "I don't have butter, what else?"
 
-When you do output a JSON block, append it at the end of your response (inside triple \
-backticks tagged as "json") — the app will parse it to update the current meal card.
+NEVER output a JSON block for:
+- Greetings, questions, or general chat ("What should I eat?", "Good morning")
+- Compliments or feedback on a suggestion ("Looks great", "Sounds good")
+- Nutritional questions ("Is this healthy?", "How many calories?")
+- Any message where the user is not explicitly modifying an ingredient or dish
+
+Default to plain text. When in doubt — plain text, no JSON.
 
 IMPORTANT: The ingredient inventory only lists names — no quantities are tracked. \
 Assume the user has enough of each ingredient. Decide healthy, balanced portions yourself \

@@ -38,11 +38,11 @@ function syncLyric(serverLyric) {
   if (idx !== -1) _lyricIdx = (idx + 1) % OFFLINE_LYRICS.length
 }
 
-// Pipeline progress step labels (Turkish)
+// Pipeline progress step labels
 const PIPELINE_STEPS = {
-  drafting: 'Tarif hazırlanıyor…',
-  analyzing: 'Besin analizi yapılıyor…',
-  finalizing: 'Son dokunuşlar…',
+  drafting: 'Drafting…',
+  analyzing: 'Analyzing nutrition…',
+  finalizing: 'Final touches…',
 }
 
 // Strip ```json ... ``` blocks from message text
@@ -633,10 +633,10 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
           <div style={s.bubble('assistant')}>{stripStreamingJsonBlock(streamBuffer)}</div>
         )}
         {streamBuffer === '' && (
-          <div style={s.thinking}>{PIPELINE_STEPS[pipelineStep] || 'Düşünüyorum…'}</div>
+          <div style={s.thinking}>{PIPELINE_STEPS[pipelineStep] || 'Thinking…'}</div>
         )}
         {analyzingIdx !== null && (
-          <div style={s.thinking}>Analiz ediliyor…</div>
+          <div style={s.thinking}>Analyzing…</div>
         )}
 
         <div ref={messagesEndRef} />
@@ -656,10 +656,14 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       <div style={s.actionRow}>
         <div style={s.actionStack}>
           <div style={s.suppMenuWrapper}>
-            {todaySupps.length > 0 && suppMenuOpen && !decideOpen && (
+            {suppMenuOpen && !decideOpen && (
               <div style={s.suppMenu}>
                 <span style={s.suppMenuLabel}>Supplements</span>
-                {todaySupps.map(sup => {
+                {todaySupps.length === 0 ? (
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '4px 0' }}>
+                    None added — Settings → Supplements
+                  </span>
+                ) : todaySupps.map(sup => {
                   const isDaily = sup.frequency === 'daily'
                   const taken = isDaily || !!sup.taken_today
                   return (
@@ -678,9 +682,9 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
             )}
             <button
               style={s.suppToggleBtn(suppMenuOpen && !decideOpen)}
-              onClick={() => !decideOpen && todaySupps.length > 0 && setSuppMenuOpen(prev => !prev)}
-              disabled={decideOpen || todaySupps.length === 0}
-              title={todaySupps.length === 0 ? 'No supplements logged' : 'Toggle supplements'}
+              onClick={() => !decideOpen && setSuppMenuOpen(prev => !prev)}
+              disabled={decideOpen}
+              title="Supplements"
             >
               💊
             </button>
