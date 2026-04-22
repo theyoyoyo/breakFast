@@ -42,6 +42,7 @@ export default function SettingsPanel({ visible }) {
   const [meals, setMeals] = useState([])
   const [editingMealId, setEditingMealId] = useState(null)
   const [analyzingMealId, setAnalyzingMealId] = useState(null)
+  const [expandedAnalysisId, setExpandedAnalysisId] = useState(null)
 
   // Health rules state
   const [healthRules, setHealthRules] = useState([])
@@ -284,6 +285,7 @@ export default function SettingsPanel({ visible }) {
         menu_items: meal.menu || meal.menu_items || null,
       })
       setEditingMealId(null)
+      setExpandedAnalysisId(prev => prev === meal.id ? null : prev) // clear expanded if this meal was open
       load()
     } catch {
       setError('Failed to update meal')
@@ -379,17 +381,23 @@ export default function SettingsPanel({ visible }) {
                     <span style={s.mealDate}>{new Date(meal.logged_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
                   <div style={s.mealActions}>
-                    {!markedForDelete && meal.cached_nutrition && (
-                      <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>✓</span>
+                    {!markedForDelete && analyzingMealId === meal.id && (
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', padding: '2px 4px' }}>Analyzing…</span>
                     )}
-                    {!markedForDelete && !meal.cached_nutrition && (
+                    {!markedForDelete && analyzingMealId !== meal.id && !meal.cached_nutrition && (
                       <button
-                        style={{ ...s.editMealBtn, fontSize: 11, padding: '2px 8px' }}
+                        style={{ ...s.editMealBtn, fontSize: 11, padding: '2px 8px', color: 'var(--accent)' }}
                         onClick={(e) => { e.stopPropagation(); handleAnalyzeMeal(meal) }}
-                        disabled={analyzingMealId === meal.id}
-                        title="Analyze nutrition"
                       >
-                        {analyzingMealId === meal.id ? '…' : '⚡'}
+                        Analyze
+                      </button>
+                    )}
+                    {!markedForDelete && analyzingMealId !== meal.id && meal.cached_nutrition && (
+                      <button
+                        style={{ ...s.editMealBtn, fontSize: 11, padding: '2px 8px', color: 'var(--accent)' }}
+                        onClick={(e) => { e.stopPropagation(); setExpandedAnalysisId(expandedAnalysisId === meal.id ? null : meal.id) }}
+                      >
+                        Analysis {expandedAnalysisId === meal.id ? '▼' : '▶'}
                       </button>
                     )}
                     {!markedForDelete && (
@@ -400,6 +408,30 @@ export default function SettingsPanel({ visible }) {
                     </button>
                   </div>
                 </div>
+
+                {/* Inline analysis dropdown */}
+                {expandedAnalysisId === meal.id && meal.cached_nutrition && !markedForDelete && (() => {
+                  const n = meal.cached_nutrition
+                  const d = n.analysis_data
+                  return (
+                    <div style={s.analysisDropdown}>
+                      {d?.macros && (
+                        <div style={s.analysisMacroRow}>
+                          {d.macros.calories_kcal != null && <span style={s.analysisMacroTag}>{d.macros.calories_kcal} kcal</span>}
+                          {d.macros.protein_g != null && <span style={s.analysisMacroTag}>{d.macros.protein_g}g protein</span>}
+                          {d.macros.carbs_g != null && <span style={s.analysisMacroTag}>{d.macros.carbs_g}g carbs</span>}
+                          {d.macros.fat_g != null && <span style={s.analysisMacroTag}>{d.macros.fat_g}g fat</span>}
+                          {d.macros.fiber_g != null && <span style={s.analysisMacroTag}>{d.macros.fiber_g}g fiber</span>}
+                        </div>
+                      )}
+                      {(d?.narrative || n.analysis_text) && (
+                        <div style={s.analysisNarrative}>
+                          {d?.narrative || n.analysis_text?.replace(/`+json[\s\S]*?(`+|$)/g, '').trim()}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
 
                 {editing && !markedForDelete && (
                   <div style={s.overlay} onClick={(e) => { if (e.target === e.currentTarget) setEditingMealId(null) }}>
@@ -657,7 +689,7 @@ export default function SettingsPanel({ visible }) {
           </div>
         </div>
 
-        {/* Language toggle */}
+        {/* Language + analysis toggles */}
         <div style={s.section}>
           <div style={s.sectionLabel}>AI Response Language</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
@@ -679,6 +711,24 @@ export default function SettingsPanel({ visible }) {
             </button>
             <span style={{ fontSize: 13, color: language === 'tr' ? 'var(--accent)' : 'var(--text-muted)' }}>Turkish</span>
           </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
+            <span style={{ fontSize: 13, color: 'var(--text-muted)', flex: 1 }}>Suggestions based on analysis</span>
+            <button
+              style={{
+                width: 44, height: 24, borderRadius: 12, border: '1px solid var(--border)',
+                background: weeklySummaryInSuggestions ? 'var(--accent)' : 'var(--surface2)',
+                cursor: 'pointer', position: 'relative', transition: 'background 0.2s',
+              }}
+              onClick={handleWeeklySummaryToggle}
+              title={weeklySummaryInSuggestions ? 'Disable' : 'Enable'}
+            >
+              <span style={{
+                position: 'absolute', top: 3, width: 16, height: 16, borderRadius: 8,
+                background: '#fff', transition: 'left 0.2s',
+                left: weeklySummaryInSuggestions ? 24 : 4,
+              }} />
+            </button>
+          </div>
         </div>
 
         {/* Kitchen — navigates to sub-page */}
@@ -688,31 +738,11 @@ export default function SettingsPanel({ visible }) {
           </button>
         </div>
 
-        {/* Weekly Summary — navigates to sub-page + toggle for suggestion injection */}
+        {/* Weekly Summary — navigates to sub-page */}
         <div style={s.section}>
           <button style={s.healthRulesBtn} onClick={() => setView('weekly')}>
             Weekly Summary →
           </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
-            <span style={{ fontSize: 13, color: 'var(--text-muted)', flex: 1 }}>
-              Feed analysis to meal suggestions
-            </span>
-            <button
-              style={{
-                width: 44, height: 24, borderRadius: 12, border: '1px solid var(--border)',
-                background: weeklySummaryInSuggestions ? 'var(--accent)' : 'var(--surface2)',
-                cursor: 'pointer', position: 'relative', transition: 'background 0.2s',
-              }}
-              onClick={handleWeeklySummaryToggle}
-              title={weeklySummaryInSuggestions ? 'Disable weekly summary in suggestions' : 'Enable weekly summary in suggestions'}
-            >
-              <span style={{
-                position: 'absolute', top: 3, width: 16, height: 16, borderRadius: 8,
-                background: '#fff', transition: 'left 0.2s',
-                left: weeklySummaryInSuggestions ? 24 : 4,
-              }} />
-            </button>
-          </div>
         </div>
 
         {/* Meal History — navigates to sub-page */}

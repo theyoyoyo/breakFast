@@ -298,3 +298,33 @@ export const overlayPanel = {
   flexDirection: 'column',
 }
 
+export const analysisDropdown = {
+  borderTop: '1px solid var(--border)',
+  padding: '10px 12px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 6,
+}
+
+export const analysisMacroRow = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 4,
+}
+
+export const analysisMacroTag = {
+  background: 'var(--surface)',
+  border: '1px solid var(--border)',
+  borderRadius: 6,
+  padding: '3px 8px',
+  fontSize: 11,
+  color: secondaryColor,
+  fontWeight: 600,
+}
+
+export const analysisNarrative = {
+  fontSize: 12,
+  color: 'var(--text-muted)',
+  lineHeight: 1.5,
+}
+

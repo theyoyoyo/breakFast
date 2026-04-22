@@ -113,7 +113,7 @@ async def generate_weekly_review(user_id: int = Depends(require_user)):
     from services.knowledge import format_history_for_weekly_review
     from services.context import fetch_profile, fetch_supplements, fetch_health_rules, fetch_preferences
     from services.suggestion import stream_response
-    from services.llm import LLMUnavailableError
+    from services.llm import LLMUnavailableError, lyric_cycler
     from utils import extract_json_block
 
     week_key = dt_date.today().strftime("%G-W%V")
@@ -162,7 +162,12 @@ async def generate_weekly_review(user_id: int = Depends(require_user)):
         async for chunk in stream_response(system_prompt, [], user_message, temperature=0.3):
             full_response.append(chunk)
     except LLMUnavailableError:
-        raise HTTPException(status_code=503, detail="LLM unavailable")
+        return WeeklyReviewResponse(
+            narrative=lyric_cycler.next(),
+            scores=[],
+            week_key=week_key,
+            cached=False,
+        )
 
     response_text = "".join(full_response)
     data = extract_json_block(response_text)
