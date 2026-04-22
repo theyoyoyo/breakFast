@@ -15,7 +15,7 @@ from services.knowledge import (
     format_avoid_list,
     format_behavioral,
     format_user_profile,
-    format_supplements,
+    format_supplements_taken,
 )
 
 def _lang(language: str) -> str:
@@ -54,12 +54,12 @@ Use this data to:
 - Factor in BMI for general health context but NEVER mention BMI to the user.
 
 ═══════════════════════════════════════════════════════════════
-SUPPLEMENT INTAKE
+SUPPLEMENTS TAKEN TODAY
 ═══════════════════════════════════════════════════════════════
 {supplements}
 
-- "Daily" / "Taken today" supplements: already covered — deprioritize those nutrients.
-- Supplements NOT taken today: try to compensate through food.
+These nutrients are already covered today — deprioritize them and fill remaining \
+gaps through food instead.
 
 ═══════════════════════════════════════════════════════════════
 NUTRITION GUIDANCE (internal — do NOT include a nutrition table in your response)
@@ -239,7 +239,7 @@ def build_suggestion_prompt(
         behavioral_patterns=format_behavioral(inferred_habits),
         health_rules=format_health_rules(health_rules or []),
         user_profile=format_user_profile(user_profile),
-        supplements=format_supplements(supplements),
+        supplements=format_supplements_taken(supplements),
         avoid_list=format_avoid_list(avoid_list),
         kitchen_appliances=appliance_str,
     )
