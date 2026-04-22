@@ -20,6 +20,7 @@ export const header = {
 
 export const messages = {
   flex: 1,
+  minHeight: 0,           // prevents flex item from overflowing and hiding the action row
   overflowY: 'auto',
   overflowX: 'hidden',
   padding: '16px 16px 24px',
