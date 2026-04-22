@@ -1,150 +1,90 @@
 import { useState, useEffect } from 'react'
-import { getWeeklyMeals, analyzeMeal } from '../services/api'
-import { formatIngredient } from '../utils/ingredients'
+import { generateWeeklyReview } from '../services/api'
 import * as s from './WeeklySummary.styles'
 
-/**
- * Format a date string to Turkish locale short format.
- */
-function formatDate(dateStr) {
-  try {
-    return new Date(dateStr).toLocaleDateString('tr-TR', {
-      weekday: 'short', day: 'numeric', month: 'short',
-    })
-  } catch {
-    return dateStr
-  }
-}
-
 export default function WeeklySummary({ onBack }) {
-  const [meals, setMeals] = useState([])
+  const [review, setReview] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [analyzingId, setAnalyzingId] = useState(null)
-  const [expandedId, setExpandedId] = useState(null)
+  const [error, setError] = useState(null)
 
-  useEffect(() => {
-    getWeeklyMeals()
-      .then(setMeals)
-      .catch(() => setMeals([]))
-      .finally(() => setLoading(false))
-  }, [])
-
-  const handleAnalyze = async (meal) => {
-    setAnalyzingId(meal.id)
+  const load = async (force = false) => {
+    setLoading(true)
+    setError(null)
     try {
-      const result = await analyzeMeal(meal.meal_name, meal.ingredients, meal.id)
-      setMeals(prev => prev.map(m =>
-        m.id === meal.id
-          ? { ...m, cached_nutrition: { analysis_text: result.analysis_text, analysis_data: result.analysis_data } }
-          : m
-      ))
-    } catch { /* Analysis failed */ }
-    setAnalyzingId(null)
+      const data = await generateWeeklyReview(force)
+      setReview(data)
+    } catch (err) {
+      if (err?.message?.includes('404')) {
+        setError('No meals logged in the last 7 days.')
+      } else if (err?.message?.includes('503')) {
+        setError('AI is currently unavailable. Try again later.')
+      } else {
+        setError('Failed to load weekly review.')
+      }
+    } finally {
+      setLoading(false)
+    }
   }
+
+  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={s.container}>
       <div style={s.header}>
         <button style={s.backBtn} onClick={onBack}>←</button>
-        <span>Weekly Summary ({meals.length})</span>
+        <span>Weekly Summary</span>
       </div>
+
       <div style={s.body}>
-        {loading && <span style={s.empty}>Loading...</span>}
-        {!loading && meals.length === 0 && <span style={s.empty}>No recent consecutive meals</span>}
-        {meals.map((meal) => {
-          const nutrition = meal.cached_nutrition
-          const expanded = expandedId === meal.id
-          return (
-            <div key={meal.id} style={s.mealCard}>
-              <div style={s.mealHeader} onClick={() => setExpandedId(expanded ? null : meal.id)}>
-                <div style={s.mealInfo}>
-                  <span style={s.mealDate}>{formatDate(meal.logged_at)}</span>
-                  <span style={s.mealName}>{meal.meal_name}</span>
-                  {meal.prep_time_min && <span style={s.prepBadge}>⏱ {meal.prep_time_min}m</span>}
-                </div>
-                <div style={s.mealBadges}>
-                  {nutrition ? (
-                    <span style={s.analyzedBadge}>Analyzed</span>
-                  ) : (
-                    <button
-                      style={s.analyzeBtn}
-                      onClick={(e) => { e.stopPropagation(); handleAnalyze(meal) }}
-                      disabled={analyzingId === meal.id}
-                    >
-                      {analyzingId === meal.id ? '...' : 'Analyze'}
-                    </button>
-                  )}
-                  <span style={s.expandIcon}>{expanded ? '▼' : '▶'}</span>
-                </div>
-              </div>
+        {loading && (
+          <span style={s.empty}>
+            {review ? 'Refreshing…' : 'Analyzing your week…'}
+          </span>
+        )}
 
-              {expanded && (
-                <div style={s.mealExpanded}>
-                  <div style={s.ingredientList}>
-                    {(meal.ingredients || []).map((item, idx) => (
-                      <span key={idx} style={s.ingredientTag}>{formatIngredient(item)}</span>
-                    ))}
+        {!loading && error && (
+          <div style={s.noDataCard}>{error}</div>
+        )}
+
+        {!loading && review && (
+          <div style={s.reviewSection}>
+            {/* Narrative */}
+            {review.narrative && (
+              <div style={s.narrative}>{review.narrative}</div>
+            )}
+
+            {/* Score cards */}
+            {review.scores?.length > 0 && (
+              <div style={s.scoreGrid}>
+                {review.scores.map((item, idx) => (
+                  <div key={idx} style={s.scoreCard(item.score)}>
+                    <span style={s.scoreLabel}>{item.label}</span>
+                    <span style={s.scoreValue(item.score)}>{item.score}</span>
+                    {item.note && <span style={s.scoreNote}>{item.note}</span>}
                   </div>
+                ))}
+              </div>
+            )}
 
-                  {nutrition ? (
-                    <div style={s.nutritionSection}>
-                      {nutrition.analysis_data && (() => {
-                        const d = nutrition.analysis_data
-                        return (<>
-                          {d.macros && (
-                            <div style={s.macroRow}>
-                              {d.macros.calories_kcal != null && <span style={s.macroTag}>{d.macros.calories_kcal} kcal</span>}
-                              {d.macros.protein_g != null && <span style={s.macroTag}>{d.macros.protein_g}g protein</span>}
-                              {d.macros.carbs_g != null && <span style={s.macroTag}>{d.macros.carbs_g}g carbs</span>}
-                              {d.macros.fat_g != null && <span style={s.macroTag}>{d.macros.fat_g}g fat</span>}
-                              {d.macros.fiber_g != null && <span style={s.macroTag}>{d.macros.fiber_g}g fiber</span>}
-                            </div>
-                          )}
-                          {d.micros?.length > 0 && (
-                            <div style={s.macroRow}>
-                              {d.micros.map((m, i) => (
-                                <span key={i} style={s.microTag}>{m.name}: {m.value} ({m.daily_percent}%)</span>
-                              ))}
-                            </div>
-                          )}
-                          {d.supplement_warnings?.length > 0 && (
-                            <div style={s.warningSection}>
-                              {d.supplement_warnings.map((w, i) => (
-                                <div key={i} style={s.warningRow}>⚠️ {w.nutrient}: {w.total_percent_ul}% UL ({w.risk})</div>
-                              ))}
-                            </div>
-                          )}
-                          {d.health_rule_compliance?.length > 0 && (
-                            <div style={s.complianceSection}>
-                              {d.health_rule_compliance.map((r, i) => (
-                                <div key={i} style={s.complianceRow}>
-                                  {r.status === 'aligned' ? '✅' : r.status === 'conflicts' ? '❌' : '⚠️'} {r.rule}
-                                  {r.note && <span style={s.complianceNote}> — {r.note}</span>}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {d.narrative && (
-                            <div style={s.analysisText}>{d.narrative}</div>
-                          )}
-                        </>)
-                      })()}
-                      {!nutrition.analysis_data && nutrition.analysis_text && (
-                        <div style={s.analysisText}>
-                          {nutrition.analysis_text
-                            .replace(/`+json[\s\S]*?(`+|$)/g, '')
-                            .trim()}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <span style={s.notAnalyzed}>Not analyzed</span>
-                  )}
-                </div>
+            {/* Actions row */}
+            <div style={s.reviewActions}>
+              {review.week_key && (
+                <span style={s.weekLabel}>{review.week_key}</span>
               )}
+              <button
+                style={s.refreshBtn}
+                onClick={() => load(true)}
+                disabled={loading}
+              >
+                ↺ Refresh
+              </button>
             </div>
-          )
-        })}
+          </div>
+        )}
+
+        {!loading && !review && !error && (
+          <div style={s.noDataCard}>No meals found in the last 7 days.</div>
+        )}
       </div>
     </div>
   )

@@ -172,6 +172,9 @@ export const deleteOldMeals = () =>
 export const getWeeklyMeals = () =>
   apiFetch(`${BASE_URL}/meals/weekly`)
 
+export const generateWeeklyReview = (force = false) =>
+  apiFetch(`${BASE_URL}/meals/weekly-review?force=${force}`, { method: 'POST' })
+
 // ---------------------------------------------------------------------------
 // Preferences
 // ---------------------------------------------------------------------------

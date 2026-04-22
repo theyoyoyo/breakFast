@@ -104,7 +104,7 @@ async def load_chat_context(db, user_id: int) -> dict:
         ingredients, history, prefs,
         (stated_habits, inferred_habits),
         health_rules, user_profile, supplements,
-        kitchen_appliances,
+        kitchen_appliances, weekly_summary,
     ) = await asyncio.gather(
         fetch_ingredients(db, user_id),
         fetch_history(db, user_id, limit=10),
@@ -114,6 +114,7 @@ async def load_chat_context(db, user_id: int) -> dict:
         fetch_profile(db, user_id),
         fetch_supplements(db, user_id),
         fetch_kitchen_appliances(db, user_id),
+        fetch_weekly_summary(db, user_id),
     )
     avoid_list = [v for k, v in prefs.items() if k.startswith("avoid:")]
     filtered_prefs = {k: v for k, v in prefs.items() if not k.startswith("avoid:") and k != "response_language"}
@@ -130,6 +131,7 @@ async def load_chat_context(db, user_id: int) -> dict:
         "supplements": supplements,
         "avoid_list": avoid_list,
         "kitchen_appliances": kitchen_appliances,
+        "weekly_summary": weekly_summary,
         "language": language,
     }
 
@@ -198,6 +200,20 @@ async def load_shopping_context(db, user_id: int) -> dict:
         "ratings": ratings,
         "language": language,
     }
+
+
+async def fetch_weekly_summary(db, user_id: int) -> dict | None:
+    """Fetch the cached weekly summary for the current ISO week, or None."""
+    from datetime import date as date_type
+    week_key = date_type.today().strftime("%G-W%V")
+    async with db.execute(
+        "SELECT narrative, scores FROM weekly_summaries WHERE user_id = ? AND week_key = ?",
+        (user_id, week_key),
+    ) as cur:
+        row = await cur.fetchone()
+    if row:
+        return {"narrative": row["narrative"], "scores": row["scores"]}
+    return None
 
 
 async def load_analyst_context(db, user_id: int) -> dict:

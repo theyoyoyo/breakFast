@@ -196,6 +196,16 @@ CREATE TABLE IF NOT EXISTS user_kitchen_appliances (
     UNIQUE(user_id, appliance_key)
 );
 
+CREATE TABLE IF NOT EXISTS weekly_summaries (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL REFERENCES users(id),
+    week_key   TEXT NOT NULL,
+    narrative  TEXT NOT NULL,
+    scores     TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(user_id, week_key)
+);
+
 -- Indices on frequently-filtered foreign key columns
 CREATE INDEX IF NOT EXISTS idx_shopping_list_user ON shopping_list(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_kitchen_appliances_user ON user_kitchen_appliances(user_id);

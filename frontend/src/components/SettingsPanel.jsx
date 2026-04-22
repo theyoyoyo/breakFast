@@ -7,6 +7,7 @@ import {
   getHealthRules, createHealthRule, updateHealthRule, deleteHealthRule,
   addFavorite,
   getPreferences, setPreference,
+  analyzeMeal,
 } from '../services/api'
 import WeeklySummary from './WeeklySummary'
 import KitchenSettings from './KitchenSettings'
@@ -40,6 +41,7 @@ export default function SettingsPanel({ visible }) {
   // Meal history state
   const [meals, setMeals] = useState([])
   const [editingMealId, setEditingMealId] = useState(null)
+  const [analyzingMealId, setAnalyzingMealId] = useState(null)
 
   // Health rules state
   const [healthRules, setHealthRules] = useState([])
@@ -310,6 +312,19 @@ export default function SettingsPanel({ visible }) {
     })
   }
 
+  const handleAnalyzeMeal = async (meal) => {
+    setAnalyzingMealId(meal.id)
+    try {
+      const result = await analyzeMeal(meal.meal_name, meal.ingredients, meal.id)
+      setMeals(prev => prev.map(m =>
+        m.id === meal.id
+          ? { ...m, cached_nutrition: { analysis_text: result.analysis_text, analysis_data: result.analysis_data } }
+          : m
+      ))
+    } catch { /* Analysis failed silently */ }
+    setAnalyzingMealId(null)
+  }
+
   const profileIncomplete = profileLoaded && (
     !profile.age || !profile.gender || !profile.height_cm || !profile.weight_kg || !profile.activity_level
   )
@@ -349,6 +364,19 @@ export default function SettingsPanel({ visible }) {
                     <span style={s.mealDate}>{new Date(meal.logged_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
                   <div style={s.mealActions}>
+                    {!markedForDelete && meal.cached_nutrition && (
+                      <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>✓</span>
+                    )}
+                    {!markedForDelete && !meal.cached_nutrition && (
+                      <button
+                        style={{ ...s.editMealBtn, fontSize: 11, padding: '2px 8px' }}
+                        onClick={(e) => { e.stopPropagation(); handleAnalyzeMeal(meal) }}
+                        disabled={analyzingMealId === meal.id}
+                        title="Analyze nutrition"
+                      >
+                        {analyzingMealId === meal.id ? '…' : '⚡'}
+                      </button>
+                    )}
                     {!markedForDelete && (
                       <button style={s.editMealBtn} onClick={() => setEditingMealId(editing ? null : meal.id)} title="Edit meal">✏️</button>
                     )}

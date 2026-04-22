@@ -191,3 +191,54 @@ def format_history_detailed(history: list[dict], limit: int = 5) -> str:
         return "no history yet"
     meals = history[-limit:]
     return "\n".join(f"- {format_meal_detail(m)}" for m in meals)
+
+
+def format_history_for_weekly_review(meals: list[dict]) -> str:
+    """Format meals for the weekly analyst prompt, grouped by date.
+
+    Each entry shows the date, meal name, ingredient list, and nutrition note.
+    Meals are presented oldest-first so the analyst reads them chronologically.
+    """
+    if not meals:
+        return "No meals logged this week."
+    # Sort oldest-first
+    sorted_meals = sorted(meals, key=lambda m: m.get("logged_at", ""))
+    lines = []
+    for m in sorted_meals:
+        date_str = m.get("logged_at", "")[:10]  # YYYY-MM-DD
+        name = m.get("meal_name", "Unknown")
+        ingredients = m.get("ingredients", "[]")
+        if isinstance(ingredients, str):
+            try:
+                ingredients = json.loads(ingredients)
+            except (json.JSONDecodeError, TypeError):
+                ingredients = []
+        items = ", ".join(format_ingredient_item(i) for i in ingredients) if ingredients else "no items listed"
+        note = m.get("nutrition_note") or ""
+        line = f"[{date_str}] {name} — {items}"
+        if note:
+            line += f"\n  Note: {note}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def format_weekly_summary(summary: dict | None) -> str:
+    """Format a saved weekly summary for injection into the suggestion prompt."""
+    if not summary:
+        return "No weekly summary available yet."
+    narrative = summary.get("narrative", "")
+    scores_raw = summary.get("scores", "[]")
+    if isinstance(scores_raw, str):
+        try:
+            scores = json.loads(scores_raw)
+        except (json.JSONDecodeError, TypeError):
+            scores = []
+    else:
+        scores = scores_raw
+    lines = [narrative] if narrative else []
+    for s in scores:
+        label = s.get("label", "")
+        score = s.get("score", "?")
+        note = s.get("note", "")
+        lines.append(f"- {label}: {score}/100 — {note}")
+    return "\n".join(lines) if lines else "No weekly summary available yet."

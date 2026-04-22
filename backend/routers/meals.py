@@ -3,8 +3,10 @@
 All queries are scoped to the authenticated user.
 """
 
+import asyncio
 import json
 from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel
 from database import get_db
 from auth import require_user
 from models.meal import Meal, MealLog, MealRating
@@ -60,6 +62,124 @@ async def weekly_meals(user_id: int = Depends(require_user)):
         if len(result) >= 7:
             break
     return result
+
+
+class WeeklyReviewResponse(BaseModel):
+    narrative: str
+    scores: list[dict]
+    week_key: str
+    cached: bool = False
+
+
+@router.post("/weekly-review", response_model=WeeklyReviewResponse)
+async def generate_weekly_review(force: bool = False, user_id: int = Depends(require_user)):
+    """Generate (or return cached) a holistic weekly nutrition review.
+
+    Uses the weekly analyst persona to evaluate the last 7 calendar days of
+    meals. Result is cached per ISO week and returned on subsequent calls
+    unless force=True.
+    """
+    from datetime import date as dt_date, timedelta
+    from services.personas.weekly_analyst import build_weekly_analyst_prompt_with_meals
+    from services.knowledge import format_history_for_weekly_review
+    from services.context import fetch_profile, fetch_supplements, fetch_health_rules, fetch_preferences
+    from services.suggestion import stream_response
+    from services.llm import LLMUnavailableError, lyric_cycler
+    from utils import extract_json_block
+
+    week_key = dt_date.today().strftime("%G-W%V")
+
+    # Return cached result unless forced
+    if not force:
+        async with get_db() as db:
+            async with db.execute(
+                "SELECT narrative, scores FROM weekly_summaries WHERE user_id = ? AND week_key = ?",
+                (user_id, week_key),
+            ) as cur:
+                row = await cur.fetchone()
+        if row:
+            return WeeklyReviewResponse(
+                narrative=row["narrative"],
+                scores=json.loads(row["scores"]),
+                week_key=week_key,
+                cached=True,
+            )
+
+    # Fetch meals from the last 7 calendar days
+    today = dt_date.today()
+    week_start = today - timedelta(days=6)
+    async with get_db() as db:
+        async with db.execute(
+            """
+            SELECT meal_name, ingredients, nutrition_note, logged_at
+            FROM meal_history
+            WHERE user_id = ? AND date(logged_at) >= ? AND date(logged_at) <= ?
+            ORDER BY logged_at ASC
+            """,
+            (user_id, week_start.isoformat(), today.isoformat()),
+        ) as cur:
+            meal_rows = [dict(r) for r in await cur.fetchall()]
+
+    if not meal_rows:
+        raise HTTPException(status_code=404, detail="No meals found in the last 7 days")
+
+    # Load user context
+    async with get_db() as db:
+        profile, supplements, health_rules, prefs = await asyncio.gather(
+            fetch_profile(db, user_id),
+            fetch_supplements(db, user_id),
+            fetch_health_rules(db, user_id),
+            fetch_preferences(db, user_id),
+        )
+    language = prefs.get("response_language", "en")
+
+    weekly_meals_text = format_history_for_weekly_review(meal_rows)
+    system_prompt = build_weekly_analyst_prompt_with_meals(
+        weekly_meals_text=weekly_meals_text,
+        user_profile=profile,
+        supplements=supplements,
+        health_rules=health_rules,
+        language=language,
+    )
+
+    user_message = "Please review this week's breakfasts and provide your assessment."
+
+    full_response = []
+    try:
+        async for chunk in stream_response(system_prompt, [], user_message, temperature=0.3):
+            full_response.append(chunk)
+    except LLMUnavailableError:
+        raise HTTPException(status_code=503, detail="LLM unavailable")
+
+    response_text = "".join(full_response)
+    data = extract_json_block(response_text)
+    if not data or "scores" not in data:
+        raise HTTPException(status_code=500, detail="Weekly analyst returned invalid JSON")
+
+    narrative = data.get("narrative", "")
+    scores = data.get("scores", [])
+
+    # Cache the result
+    async with get_db() as db:
+        await db.execute(
+            """
+            INSERT INTO weekly_summaries (user_id, week_key, narrative, scores)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id, week_key) DO UPDATE SET
+                narrative = excluded.narrative,
+                scores = excluded.scores,
+                created_at = datetime('now')
+            """,
+            (user_id, week_key, narrative, json.dumps(scores, ensure_ascii=False)),
+        )
+        await db.commit()
+
+    return WeeklyReviewResponse(
+        narrative=narrative,
+        scores=scores,
+        week_key=week_key,
+        cached=False,
+    )
 
 
 @router.get("/{meal_id}", response_model=Meal)
