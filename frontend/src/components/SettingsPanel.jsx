@@ -29,6 +29,7 @@ export default function SettingsPanel({ visible }) {
   // Profile state
   const [profile, setProfile] = useState({ age: '', gender: '', height_cm: '', weight_kg: '', activity_level: '' })
   const [profileDirty, setProfileDirty] = useState(false)
+  const [profileLoaded, setProfileLoaded] = useState(false)
 
   // Supplements state
   const [supplements, setSupplements] = useState([])
@@ -71,6 +72,7 @@ export default function SettingsPanel({ visible }) {
       setSupplements(supps)
       setHealthRules(rules)
       setProfileDirty(false)
+      setProfileLoaded(true)
       const langPref = prefs.find(p => p.key === 'response_language')
       if (langPref) {
         setLanguage(langPref.value)
@@ -308,6 +310,12 @@ export default function SettingsPanel({ visible }) {
     })
   }
 
+  const profileIncomplete = profileLoaded && (
+    !profile.age || !profile.gender || !profile.height_cm || !profile.weight_kg || !profile.activity_level
+  )
+  const missingField = (val) => profileIncomplete && !val
+    ? { borderColor: '#e74c3c' } : {}
+
   // --- Weekly Summary sub-page ---
   if (view === 'weekly') {
     return <WeeklySummary onBack={() => setView('settings')} />
@@ -483,7 +491,10 @@ export default function SettingsPanel({ visible }) {
 
         {/* Profile */}
         <div style={s.section}>
-          <div style={s.sectionLabel}>Profile</div>
+          <div style={s.sectionLabel}>
+            Profile
+            {profileIncomplete && <span style={{ color: '#e74c3c', marginLeft: 6, fontSize: 10 }}>●</span>}
+          </div>
           <div style={s.profileGrid}>
             <div style={s.profileField}>
               <label style={s.profileLabel}>Age</label>
@@ -491,7 +502,7 @@ export default function SettingsPanel({ visible }) {
                 <input
                   type="number"
                   min="1"
-                  style={s.input}
+                  style={{ ...s.input, ...missingField(profile.age) }}
                   value={profile.age}
                   onChange={(e) => handleProfileChange('age', e.target.value)}
                   placeholder="—"
@@ -502,7 +513,7 @@ export default function SettingsPanel({ visible }) {
             <div style={s.profileField}>
               <label style={s.profileLabel}>Gender</label>
               <select
-                style={s.select}
+                style={{ ...s.select, ...missingField(profile.gender) }}
                 value={profile.gender}
                 onChange={(e) => handleProfileChange('gender', e.target.value)}
               >
@@ -517,7 +528,7 @@ export default function SettingsPanel({ visible }) {
                 <input
                   type="number"
                   min="1"
-                  style={s.input}
+                  style={{ ...s.input, ...missingField(profile.height_cm) }}
                   value={profile.height_cm}
                   onChange={(e) => handleProfileChange('height_cm', e.target.value)}
                   placeholder="—"
@@ -532,7 +543,7 @@ export default function SettingsPanel({ visible }) {
                   type="number"
                   min="0.1"
                   step="0.1"
-                  style={s.input}
+                  style={{ ...s.input, ...missingField(profile.weight_kg) }}
                   value={profile.weight_kg}
                   onChange={(e) => handleProfileChange('weight_kg', e.target.value)}
                   placeholder="—"
@@ -544,7 +555,7 @@ export default function SettingsPanel({ visible }) {
           <div style={s.profileField}>
             <label style={s.profileLabel}>Activity Level</label>
             <select
-              style={s.select}
+              style={{ ...s.select, ...missingField(profile.activity_level) }}
               value={profile.activity_level}
               onChange={(e) => handleProfileChange('activity_level', e.target.value)}
             >
