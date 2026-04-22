@@ -56,9 +56,8 @@ available inventory above. Do not reference any ingredient not on the list — n
 "standard" items like butter, oil, or salt unless they are listed. If a dish needs a \
 missing item, substitute from the inventory or suggest a different dish.
 
-RESPONSE FORMAT — ALWAYS PLAIN TEXT:
-Never output a JSON block. Your only job here is conversation — helping the user \
-think through their options, understand what they have, and get ready for breakfast.
+Your job here is conversation — helping the user think through their options, \
+understand what they have, and get ready for breakfast.
 
 The Suggest button handles the actual meal plan. If the user seems ready for a \
 concrete suggestion (e.g. "okay what should I make?", "give me a plan", "I'm ready"), \
