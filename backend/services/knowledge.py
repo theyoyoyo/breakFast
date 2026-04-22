@@ -223,7 +223,11 @@ def format_history_for_weekly_review(meals: list[dict]) -> str:
 
 
 def format_weekly_summary(summary: dict | None) -> str:
-    """Format a saved weekly summary for injection into the suggestion prompt."""
+    """Format a saved weekly summary for the suggestion prompt (lean version).
+
+    Only surfaces the narrative and weak areas (score < 75) — the planner
+    doesn't need raw scores for well-covered dimensions.
+    """
     if not summary:
         return "No weekly summary available yet."
     narrative = summary.get("narrative", "")
@@ -235,10 +239,11 @@ def format_weekly_summary(summary: dict | None) -> str:
             scores = []
     else:
         scores = scores_raw
+
+    weak = [s for s in scores if isinstance(s.get("score"), (int, float)) and s["score"] < 75]
+
     lines = [narrative] if narrative else []
-    for s in scores:
-        label = s.get("label", "")
-        score = s.get("score", "?")
-        note = s.get("note", "")
-        lines.append(f"- {label}: {score}/100 — {note}")
+    if weak:
+        weak_parts = ", ".join(f"{s['label']} ({s['score']}/100)" for s in weak)
+        lines.append(f"Weak this week — prioritize: {weak_parts}.")
     return "\n".join(lines) if lines else "No weekly summary available yet."

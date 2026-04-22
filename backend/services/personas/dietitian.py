@@ -122,7 +122,7 @@ If no reasonable substitute exists from the inventory, pick a different dish ent
 USER CONTEXT
 ═══════════════════════════════════════════════════════════════
 - Available ingredients: {ingredient_inventory}
-- Recent meals (last 10): {recent_meal_history}
+- Recent meals (last 4): {recent_meal_history}
 - Preferences: {user_preferences}
 - Habits: {stated_habits}
 
@@ -243,7 +243,7 @@ def build_suggestion_prompt(
     base = SUGGESTION_TEMPLATE.format(
         lang_instruction=_lang(language),
         ingredient_inventory=format_ingredients(ingredient_inventory),
-        recent_meal_history=format_history(recent_meal_history, limit=10),
+        recent_meal_history=format_history(recent_meal_history, limit=4),
         user_preferences=format_preferences(user_preferences),
         stated_habits=format_habits(stated_habits),
         behavioral_patterns=format_behavioral(inferred_habits),
