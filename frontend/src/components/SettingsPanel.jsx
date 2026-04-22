@@ -7,6 +7,7 @@ import {
   getHealthRules, createHealthRule, updateHealthRule, deleteHealthRule,
   addFavorite,
   getPreferences, setPreference,
+  analyzeMeal,
 } from '../services/api'
 import WeeklySummary from './WeeklySummary'
 import KitchenSettings from './KitchenSettings'
@@ -40,6 +41,9 @@ export default function SettingsPanel({ visible }) {
   // Meal history state
   const [meals, setMeals] = useState([])
   const [editingMealId, setEditingMealId] = useState(null)
+  const [analyzingMealId, setAnalyzingMealId] = useState(null)
+  const [expandedAnalysisId, setExpandedAnalysisId] = useState(null)
+  const [llmFallbackLyric, setLlmFallbackLyric] = useState(null) // shown when LLM is down
 
   // Health rules state
   const [healthRules, setHealthRules] = useState([])
@@ -51,6 +55,9 @@ export default function SettingsPanel({ visible }) {
 
   // Language preference ('tr' = Turkish, 'en' = English)
   const [language, setLanguage] = useState('en')
+
+  // Weekly summary in suggestions toggle (default off)
+  const [weeklySummaryInSuggestions, setWeeklySummaryInSuggestions] = useState(false)
 
   const load = async () => {
     try {
@@ -80,6 +87,8 @@ export default function SettingsPanel({ visible }) {
         // No preference stored yet — persist the default so the backend uses it
         setPreference('response_language', 'en').catch(() => {})
       }
+      const weeklySummaryPref = prefs.find(p => p.key === 'weekly_summary_in_suggestions')
+      setWeeklySummaryInSuggestions(weeklySummaryPref?.value === 'true')
     } catch {
       setError('Failed to load settings')
     }
@@ -92,6 +101,16 @@ export default function SettingsPanel({ visible }) {
       await setPreference('response_language', next)
     } catch {
       setLanguage(language)
+    }
+  }
+
+  const handleWeeklySummaryToggle = async () => {
+    const next = !weeklySummaryInSuggestions
+    setWeeklySummaryInSuggestions(next)
+    try {
+      await setPreference('weekly_summary_in_suggestions', next ? 'true' : 'false')
+    } catch {
+      setWeeklySummaryInSuggestions(weeklySummaryInSuggestions)
     }
   }
 
@@ -267,6 +286,7 @@ export default function SettingsPanel({ visible }) {
         menu_items: meal.menu || meal.menu_items || null,
       })
       setEditingMealId(null)
+      setExpandedAnalysisId(prev => prev === meal.id ? null : prev) // clear expanded if this meal was open
       load()
     } catch {
       setError('Failed to update meal')
@@ -310,6 +330,26 @@ export default function SettingsPanel({ visible }) {
     })
   }
 
+  const handleAnalyzeMeal = async (meal) => {
+    setAnalyzingMealId(meal.id)
+    setLlmFallbackLyric(null)
+    try {
+      const result = await analyzeMeal(meal.meal_name, meal.ingredients, meal.id)
+      if (result.fallback) {
+        // LLM unavailable — show lyric, don't touch cached_nutrition so meal reverts to "Analyze"
+        setLlmFallbackLyric(result.analysis_text)
+      } else {
+        setLlmFallbackLyric(null)
+        setMeals(prev => prev.map(m =>
+          m.id === meal.id
+            ? { ...m, cached_nutrition: { analysis_text: result.analysis_text, analysis_data: result.analysis_data } }
+            : m
+        ))
+      }
+    } catch { /* network error — fail silently */ }
+    setAnalyzingMealId(null)
+  }
+
   const profileIncomplete = profileLoaded && (
     !profile.age || !profile.gender || !profile.height_cm || !profile.weight_kg || !profile.activity_level
   )
@@ -331,11 +371,16 @@ export default function SettingsPanel({ visible }) {
     return (
       <div style={s.container}>
         <div style={{ ...s.header, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button style={s.backBtn} onClick={() => { setPendingMealDeletes(new Set()); setView('settings') }}>←</button>
+          <button style={s.backBtn} onClick={() => { setPendingMealDeletes(new Set()); setLlmFallbackLyric(null); setView('settings') }}>←</button>
           <span>Meal History ({meals.length})</span>
         </div>
         <div style={s.body}>
           {error && <div style={s.error}>{error}</div>}
+          {llmFallbackLyric && (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', padding: '8px 12px', background: 'var(--surface2)', borderRadius: 8, lineHeight: 1.5 }}>
+              🎵 {llmFallbackLyric}
+            </div>
+          )}
           {meals.length === 0 && <span style={s.empty}>No meals logged yet</span>}
           {meals.map((meal) => {
             const markedForDelete = pendingMealDeletes.has(meal.id)
@@ -349,6 +394,25 @@ export default function SettingsPanel({ visible }) {
                     <span style={s.mealDate}>{new Date(meal.logged_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
                   <div style={s.mealActions}>
+                    {!markedForDelete && analyzingMealId === meal.id && (
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', padding: '2px 4px' }}>Analyzing…</span>
+                    )}
+                    {!markedForDelete && analyzingMealId !== meal.id && !meal.cached_nutrition && (
+                      <button
+                        style={{ ...s.editMealBtn, fontSize: 11, padding: '2px 8px', color: 'var(--accent)' }}
+                        onClick={(e) => { e.stopPropagation(); handleAnalyzeMeal(meal) }}
+                      >
+                        Analyze
+                      </button>
+                    )}
+                    {!markedForDelete && analyzingMealId !== meal.id && meal.cached_nutrition && (
+                      <button
+                        style={{ ...s.editMealBtn, fontSize: 11, padding: '2px 8px', color: 'var(--accent)' }}
+                        onClick={(e) => { e.stopPropagation(); setExpandedAnalysisId(expandedAnalysisId === meal.id ? null : meal.id) }}
+                      >
+                        Analysis {expandedAnalysisId === meal.id ? '▼' : '▶'}
+                      </button>
+                    )}
                     {!markedForDelete && (
                       <button style={s.editMealBtn} onClick={() => setEditingMealId(editing ? null : meal.id)} title="Edit meal">✏️</button>
                     )}
@@ -357,6 +421,30 @@ export default function SettingsPanel({ visible }) {
                     </button>
                   </div>
                 </div>
+
+                {/* Inline analysis dropdown */}
+                {expandedAnalysisId === meal.id && meal.cached_nutrition && !markedForDelete && (() => {
+                  const n = meal.cached_nutrition
+                  const d = n.analysis_data
+                  return (
+                    <div style={s.analysisDropdown}>
+                      {d?.macros && (
+                        <div style={s.analysisMacroRow}>
+                          {d.macros.calories_kcal != null && <span style={s.analysisMacroTag}>{d.macros.calories_kcal} kcal</span>}
+                          {d.macros.protein_g != null && <span style={s.analysisMacroTag}>{d.macros.protein_g}g protein</span>}
+                          {d.macros.carbs_g != null && <span style={s.analysisMacroTag}>{d.macros.carbs_g}g carbs</span>}
+                          {d.macros.fat_g != null && <span style={s.analysisMacroTag}>{d.macros.fat_g}g fat</span>}
+                          {d.macros.fiber_g != null && <span style={s.analysisMacroTag}>{d.macros.fiber_g}g fiber</span>}
+                        </div>
+                      )}
+                      {(d?.narrative || n.analysis_text) && (
+                        <div style={s.analysisNarrative}>
+                          {d?.narrative || n.analysis_text?.replace(/`+json[\s\S]*?(`+|$)/g, '').trim()}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
 
                 {editing && !markedForDelete && (
                   <div style={s.overlay} onClick={(e) => { if (e.target === e.currentTarget) setEditingMealId(null) }}>
@@ -614,7 +702,7 @@ export default function SettingsPanel({ visible }) {
           </div>
         </div>
 
-        {/* Language toggle */}
+        {/* Language + analysis toggles */}
         <div style={s.section}>
           <div style={s.sectionLabel}>AI Response Language</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
@@ -635,6 +723,24 @@ export default function SettingsPanel({ visible }) {
               }} />
             </button>
             <span style={{ fontSize: 13, color: language === 'tr' ? 'var(--accent)' : 'var(--text-muted)' }}>Turkish</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
+            <span style={{ fontSize: 13, color: 'var(--text-muted)', flex: 1 }}>Suggestions based on analysis</span>
+            <button
+              style={{
+                width: 44, height: 24, borderRadius: 12, border: '1px solid var(--border)',
+                background: weeklySummaryInSuggestions ? 'var(--accent)' : 'var(--surface2)',
+                cursor: 'pointer', position: 'relative', transition: 'background 0.2s',
+              }}
+              onClick={handleWeeklySummaryToggle}
+              title={weeklySummaryInSuggestions ? 'Disable' : 'Enable'}
+            >
+              <span style={{
+                position: 'absolute', top: 3, width: 16, height: 16, borderRadius: 8,
+                background: '#fff', transition: 'left 0.2s',
+                left: weeklySummaryInSuggestions ? 24 : 4,
+              }} />
+            </button>
           </div>
         </div>
 

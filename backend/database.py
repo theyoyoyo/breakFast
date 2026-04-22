@@ -196,6 +196,15 @@ CREATE TABLE IF NOT EXISTS user_kitchen_appliances (
     UNIQUE(user_id, appliance_key)
 );
 
+CREATE TABLE IF NOT EXISTS weekly_summaries (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL REFERENCES users(id),
+    week_key   TEXT NOT NULL,
+    narrative  TEXT NOT NULL,
+    scores     TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Indices on frequently-filtered foreign key columns
 CREATE INDEX IF NOT EXISTS idx_shopping_list_user ON shopping_list(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_kitchen_appliances_user ON user_kitchen_appliances(user_id);
@@ -213,6 +222,7 @@ CREATE INDEX IF NOT EXISTS idx_user_supplements_user ON user_supplements(user_id
 CREATE INDEX IF NOT EXISTS idx_favorite_meals_user ON favorite_meals(user_id);
 CREATE INDEX IF NOT EXISTS idx_suggested_meals_session ON suggested_meals(session_id);
 CREATE INDEX IF NOT EXISTS idx_suggested_meals_user ON suggested_meals(user_id);
+CREATE INDEX IF NOT EXISTS idx_weekly_summaries_user_week ON weekly_summaries(user_id, week_key);
 """
 
 
@@ -359,6 +369,26 @@ async def init_db() -> None:
             )
         except Exception:
             pass  # Column already exists
+
+        # Migrate: recreate weekly_summaries without UNIQUE constraint (allow multiple per week)
+        async with db.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='weekly_summaries'"
+        ) as cur:
+            ws_row = await cur.fetchone()
+        if ws_row and "UNIQUE" in (ws_row[0] or ""):
+            await db.execute("DROP TABLE IF EXISTS weekly_summaries")
+            await db.executescript("""
+                CREATE TABLE IF NOT EXISTS weekly_summaries (
+                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id    INTEGER NOT NULL REFERENCES users(id),
+                    week_key   TEXT NOT NULL,
+                    narrative  TEXT NOT NULL,
+                    scores     TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+                CREATE INDEX IF NOT EXISTS idx_weekly_summaries_user_week
+                    ON weekly_summaries(user_id, week_key);
+            """)
 
         # Clean up chat sessions older than 8 days
         await db.execute(

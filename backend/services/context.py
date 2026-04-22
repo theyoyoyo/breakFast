@@ -119,6 +119,10 @@ async def load_chat_context(db, user_id: int) -> dict:
     filtered_prefs = {k: v for k, v in prefs.items() if not k.startswith("avoid:") and k != "response_language"}
     language = prefs.get("response_language", "en")
 
+    # Only inject weekly summary into suggestions if the user has opted in
+    use_weekly_summary = prefs.get("weekly_summary_in_suggestions", "false") == "true"
+    weekly_summary = await fetch_weekly_summary(db, user_id) if use_weekly_summary else None
+
     return {
         "ingredients": ingredients,
         "history": history,
@@ -130,6 +134,7 @@ async def load_chat_context(db, user_id: int) -> dict:
         "supplements": supplements,
         "avoid_list": avoid_list,
         "kitchen_appliances": kitchen_appliances,
+        "weekly_summary": weekly_summary,
         "language": language,
     }
 
@@ -198,6 +203,20 @@ async def load_shopping_context(db, user_id: int) -> dict:
         "ratings": ratings,
         "language": language,
     }
+
+
+async def fetch_weekly_summary(db, user_id: int) -> dict | None:
+    """Fetch the cached weekly summary for the current ISO week, or None."""
+    from datetime import date as date_type
+    week_key = date_type.today().strftime("%G-W%V")
+    async with db.execute(
+        "SELECT narrative, scores FROM weekly_summaries WHERE user_id = ? AND week_key = ?",
+        (user_id, week_key),
+    ) as cur:
+        row = await cur.fetchone()
+    if row:
+        return {"narrative": row["narrative"], "scores": row["scores"]}
+    return None
 
 
 async def load_analyst_context(db, user_id: int) -> dict:

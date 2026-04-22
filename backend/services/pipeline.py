@@ -56,6 +56,7 @@ async def run_suggestion_pipeline(
         avoid_list=context["avoid_list"],
         mode=mode,
         kitchen_appliances=context.get("kitchen_appliances"),
+        weekly_summary=context.get("weekly_summary"),
         language=language,
     )
 

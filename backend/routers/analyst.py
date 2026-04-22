@@ -36,6 +36,7 @@ class AnalyzeResponse(BaseModel):
     analysis_text: str
     analysis_data: dict | None = None
     cached: bool = False
+    fallback: bool = False  # True when LLM was unavailable and a lyric was returned
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
@@ -85,6 +86,7 @@ async def analyze_meal(body: AnalyzeRequest, user_id: int = Depends(require_user
         return AnalyzeResponse(
             analysis_text=lyric_cycler.next(),
             analysis_data=None,
+            fallback=True,
         )
 
     response_text = "".join(full_response)

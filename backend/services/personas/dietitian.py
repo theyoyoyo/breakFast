@@ -16,6 +16,7 @@ from services.knowledge import (
     format_behavioral,
     format_user_profile,
     format_supplements_taken,
+    format_weekly_summary,
 )
 
 def _lang(language: str) -> str:
@@ -60,6 +61,14 @@ SUPPLEMENTS TAKEN TODAY
 
 These nutrients are already covered today — deprioritize them and fill remaining \
 gaps through food instead.
+
+═══════════════════════════════════════════════════════════════
+THIS WEEK'S NUTRITIONAL PATTERN (internal — do NOT mention to the user)
+═══════════════════════════════════════════════════════════════
+{weekly_summary}
+
+Use this to complement and balance this week's nutrition.
+If scores are low in a particular dimension, actively address it in today's suggestion.
 
 ═══════════════════════════════════════════════════════════════
 NUTRITION GUIDANCE (internal — do NOT include a nutrition table in your response)
@@ -113,7 +122,7 @@ If no reasonable substitute exists from the inventory, pick a different dish ent
 USER CONTEXT
 ═══════════════════════════════════════════════════════════════
 - Available ingredients: {ingredient_inventory}
-- Recent meals (last 10): {recent_meal_history}
+- Recent meals (last 4): {recent_meal_history}
 - Preferences: {user_preferences}
 - Habits: {stated_habits}
 
@@ -226,14 +235,15 @@ def build_suggestion_prompt(
     avoid_list: list[str] | None = None,
     mode: str | None = None,
     kitchen_appliances: list[str] | None = None,
+    weekly_summary: dict | None = None,
     language: str = "en",
 ) -> str:
     """Build the suggestion persona system prompt."""
-    appliance_str = ", ".join(kitchen_appliances) if kitchen_appliances else "Bilgi yok"
+    appliance_str = ", ".join(kitchen_appliances) if kitchen_appliances else "Not configured"
     base = SUGGESTION_TEMPLATE.format(
         lang_instruction=_lang(language),
         ingredient_inventory=format_ingredients(ingredient_inventory),
-        recent_meal_history=format_history(recent_meal_history, limit=10),
+        recent_meal_history=format_history(recent_meal_history, limit=4),
         user_preferences=format_preferences(user_preferences),
         stated_habits=format_habits(stated_habits),
         behavioral_patterns=format_behavioral(inferred_habits),
@@ -242,6 +252,7 @@ def build_suggestion_prompt(
         supplements=format_supplements_taken(supplements),
         avoid_list=format_avoid_list(avoid_list),
         kitchen_appliances=appliance_str,
+        weekly_summary=format_weekly_summary(weekly_summary),
     )
     mode_instruction = MODE_INSTRUCTIONS.get(mode, "")
     return base + mode_instruction
