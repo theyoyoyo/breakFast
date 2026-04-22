@@ -104,7 +104,7 @@ async def load_chat_context(db, user_id: int) -> dict:
         ingredients, history, prefs,
         (stated_habits, inferred_habits),
         health_rules, user_profile, supplements,
-        kitchen_appliances, weekly_summary,
+        kitchen_appliances,
     ) = await asyncio.gather(
         fetch_ingredients(db, user_id),
         fetch_history(db, user_id, limit=10),
@@ -114,11 +114,14 @@ async def load_chat_context(db, user_id: int) -> dict:
         fetch_profile(db, user_id),
         fetch_supplements(db, user_id),
         fetch_kitchen_appliances(db, user_id),
-        fetch_weekly_summary(db, user_id),
     )
     avoid_list = [v for k, v in prefs.items() if k.startswith("avoid:")]
     filtered_prefs = {k: v for k, v in prefs.items() if not k.startswith("avoid:") and k != "response_language"}
     language = prefs.get("response_language", "en")
+
+    # Only inject weekly summary into suggestions if the user has opted in
+    use_weekly_summary = prefs.get("weekly_summary_in_suggestions", "false") == "true"
+    weekly_summary = await fetch_weekly_summary(db, user_id) if use_weekly_summary else None
 
     return {
         "ingredients": ingredients,

@@ -54,6 +54,9 @@ export default function SettingsPanel({ visible }) {
   // Language preference ('tr' = Turkish, 'en' = English)
   const [language, setLanguage] = useState('en')
 
+  // Weekly summary in suggestions toggle (default off)
+  const [weeklySummaryInSuggestions, setWeeklySummaryInSuggestions] = useState(false)
+
   const load = async () => {
     try {
       setError(null)
@@ -82,6 +85,8 @@ export default function SettingsPanel({ visible }) {
         // No preference stored yet — persist the default so the backend uses it
         setPreference('response_language', 'en').catch(() => {})
       }
+      const weeklySummaryPref = prefs.find(p => p.key === 'weekly_summary_in_suggestions')
+      setWeeklySummaryInSuggestions(weeklySummaryPref?.value === 'true')
     } catch {
       setError('Failed to load settings')
     }
@@ -94,6 +99,16 @@ export default function SettingsPanel({ visible }) {
       await setPreference('response_language', next)
     } catch {
       setLanguage(language)
+    }
+  }
+
+  const handleWeeklySummaryToggle = async () => {
+    const next = !weeklySummaryInSuggestions
+    setWeeklySummaryInSuggestions(next)
+    try {
+      await setPreference('weekly_summary_in_suggestions', next ? 'true' : 'false')
+    } catch {
+      setWeeklySummaryInSuggestions(weeklySummaryInSuggestions)
     }
   }
 
@@ -673,11 +688,31 @@ export default function SettingsPanel({ visible }) {
           </button>
         </div>
 
-        {/* Weekly Summary — navigates to sub-page */}
+        {/* Weekly Summary — navigates to sub-page + toggle for suggestion injection */}
         <div style={s.section}>
           <button style={s.healthRulesBtn} onClick={() => setView('weekly')}>
             Weekly Summary →
           </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
+            <span style={{ fontSize: 13, color: 'var(--text-muted)', flex: 1 }}>
+              Feed analysis to meal suggestions
+            </span>
+            <button
+              style={{
+                width: 44, height: 24, borderRadius: 12, border: '1px solid var(--border)',
+                background: weeklySummaryInSuggestions ? 'var(--accent)' : 'var(--surface2)',
+                cursor: 'pointer', position: 'relative', transition: 'background 0.2s',
+              }}
+              onClick={handleWeeklySummaryToggle}
+              title={weeklySummaryInSuggestions ? 'Disable weekly summary in suggestions' : 'Enable weekly summary in suggestions'}
+            >
+              <span style={{
+                position: 'absolute', top: 3, width: 16, height: 16, borderRadius: 8,
+                background: '#fff', transition: 'left 0.2s',
+                left: weeklySummaryInSuggestions ? 24 : 4,
+              }} />
+            </button>
+          </div>
         </div>
 
         {/* Meal History — navigates to sub-page */}

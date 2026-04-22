@@ -1,17 +1,31 @@
 import { useState, useEffect } from 'react'
-import { generateWeeklyReview } from '../services/api'
+import { getWeeklyReview, generateWeeklyReview } from '../services/api'
 import * as s from './WeeklySummary.styles'
 
 export default function WeeklySummary({ onBack }) {
   const [review, setReview] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
   const [error, setError] = useState(null)
 
-  const load = async (force = false) => {
-    setLoading(true)
+  // Load cached review on mount
+  useEffect(() => {
+    getWeeklyReview()
+      .then(setReview)
+      .catch((err) => {
+        if (!err?.message?.includes('404')) {
+          setError('Failed to load weekly review.')
+        }
+        // 404 = no review yet, that's fine
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
+  const handleGenerate = async () => {
+    setGenerating(true)
     setError(null)
     try {
-      const data = await generateWeeklyReview(force)
+      const data = await generateWeeklyReview()
       setReview(data)
     } catch (err) {
       if (err?.message?.includes('404')) {
@@ -19,14 +33,12 @@ export default function WeeklySummary({ onBack }) {
       } else if (err?.message?.includes('503')) {
         setError('AI is currently unavailable. Try again later.')
       } else {
-        setError('Failed to load weekly review.')
+        setError('Failed to generate weekly review.')
       }
     } finally {
-      setLoading(false)
+      setGenerating(false)
     }
   }
-
-  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={s.container}>
@@ -36,11 +48,7 @@ export default function WeeklySummary({ onBack }) {
       </div>
 
       <div style={s.body}>
-        {loading && (
-          <span style={s.empty}>
-            {review ? 'Refreshing…' : 'Analyzing your week…'}
-          </span>
-        )}
+        {loading && <span style={s.empty}>Loading…</span>}
 
         {!loading && error && (
           <div style={s.noDataCard}>{error}</div>
@@ -48,12 +56,10 @@ export default function WeeklySummary({ onBack }) {
 
         {!loading && review && (
           <div style={s.reviewSection}>
-            {/* Narrative */}
             {review.narrative && (
               <div style={s.narrative}>{review.narrative}</div>
             )}
 
-            {/* Score cards */}
             {review.scores?.length > 0 && (
               <div style={s.scoreGrid}>
                 {review.scores.map((item, idx) => (
@@ -66,24 +72,40 @@ export default function WeeklySummary({ onBack }) {
               </div>
             )}
 
-            {/* Actions row */}
             <div style={s.reviewActions}>
               {review.week_key && (
                 <span style={s.weekLabel}>{review.week_key}</span>
               )}
               <button
                 style={s.refreshBtn}
-                onClick={() => load(true)}
-                disabled={loading}
+                onClick={handleGenerate}
+                disabled={generating}
               >
-                ↺ Refresh
+                {generating ? '…' : '↺ Analyze again'}
               </button>
             </div>
           </div>
         )}
 
         {!loading && !review && !error && (
-          <div style={s.noDataCard}>No meals found in the last 7 days.</div>
+          <div style={s.noDataCard}>
+            No analysis yet for this week.
+          </div>
+        )}
+
+        {/* Analyze button — shown when no review exists or after loading */}
+        {!loading && !review && (
+          <button
+            style={{ ...s.refreshBtn, alignSelf: 'center', marginTop: 8 }}
+            onClick={handleGenerate}
+            disabled={generating}
+          >
+            {generating ? 'Analyzing…' : 'Analyze this week'}
+          </button>
+        )}
+
+        {generating && (
+          <span style={s.empty}>Analyzing your week…</span>
         )}
       </div>
     </div>

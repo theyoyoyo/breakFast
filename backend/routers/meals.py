@@ -71,39 +71,52 @@ class WeeklyReviewResponse(BaseModel):
     cached: bool = False
 
 
-@router.post("/weekly-review", response_model=WeeklyReviewResponse)
-async def generate_weekly_review(force: bool = False, user_id: int = Depends(require_user)):
-    """Generate (or return cached) a holistic weekly nutrition review.
+@router.get("/weekly-review", response_model=WeeklyReviewResponse)
+async def get_weekly_review(user_id: int = Depends(require_user)):
+    """Return the most recent cached weekly review for the current ISO week.
 
-    Uses the weekly analyst persona to evaluate the last 7 calendar days of
-    meals. Result is cached per ISO week and returned on subsequent calls
-    unless force=True.
+    Returns 404 if no analysis has been run yet this week.
+    """
+    from datetime import date as dt_date
+
+    week_key = dt_date.today().strftime("%G-W%V")
+    async with get_db() as db:
+        async with db.execute(
+            """
+            SELECT narrative, scores, created_at FROM weekly_summaries
+            WHERE user_id = ? AND week_key = ?
+            ORDER BY created_at DESC LIMIT 1
+            """,
+            (user_id, week_key),
+        ) as cur:
+            row = await cur.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="No weekly review found for this week")
+
+    return WeeklyReviewResponse(
+        narrative=row["narrative"],
+        scores=json.loads(row["scores"]),
+        week_key=week_key,
+        cached=True,
+    )
+
+
+@router.post("/weekly-review", response_model=WeeklyReviewResponse)
+async def generate_weekly_review(user_id: int = Depends(require_user)):
+    """Run the weekly analyst and save a new review entry for the current ISO week.
+
+    Always generates a fresh analysis — existing entries are kept (not overwritten).
     """
     from datetime import date as dt_date, timedelta
     from services.personas.weekly_analyst import build_weekly_analyst_prompt_with_meals
     from services.knowledge import format_history_for_weekly_review
     from services.context import fetch_profile, fetch_supplements, fetch_health_rules, fetch_preferences
     from services.suggestion import stream_response
-    from services.llm import LLMUnavailableError, lyric_cycler
+    from services.llm import LLMUnavailableError
     from utils import extract_json_block
 
     week_key = dt_date.today().strftime("%G-W%V")
-
-    # Return cached result unless forced
-    if not force:
-        async with get_db() as db:
-            async with db.execute(
-                "SELECT narrative, scores FROM weekly_summaries WHERE user_id = ? AND week_key = ?",
-                (user_id, week_key),
-            ) as cur:
-                row = await cur.fetchone()
-        if row:
-            return WeeklyReviewResponse(
-                narrative=row["narrative"],
-                scores=json.loads(row["scores"]),
-                week_key=week_key,
-                cached=True,
-            )
 
     # Fetch meals from the last 7 calendar days
     today = dt_date.today()
@@ -159,17 +172,10 @@ async def generate_weekly_review(force: bool = False, user_id: int = Depends(req
     narrative = data.get("narrative", "")
     scores = data.get("scores", [])
 
-    # Cache the result
+    # Always insert a new row — history is preserved, latest retrieved by ORDER BY created_at DESC
     async with get_db() as db:
         await db.execute(
-            """
-            INSERT INTO weekly_summaries (user_id, week_key, narrative, scores)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(user_id, week_key) DO UPDATE SET
-                narrative = excluded.narrative,
-                scores = excluded.scores,
-                created_at = datetime('now')
-            """,
+            "INSERT INTO weekly_summaries (user_id, week_key, narrative, scores) VALUES (?, ?, ?, ?)",
             (user_id, week_key, narrative, json.dumps(scores, ensure_ascii=False)),
         )
         await db.commit()
