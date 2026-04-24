@@ -344,24 +344,26 @@ async def get_shopping_suggestions(
         logging.exception("Shopping LLM call failed")
         return {"suggestions": [], "lyric": lyric_cycler.next(), "error": str(e)}
 
-    # Parse the JSON array from the response
+    # Parse the JSON array from the response.
+    # extract_json_block already returns parsed data (list or dict) — NOT a string.
     from utils import extract_json_block
-    json_str = extract_json_block(response)
-    if json_str:
-        try:
-            suggestions = _json.loads(json_str)
+    try:
+        parsed = extract_json_block(response)
+        if isinstance(parsed, list):
+            return {"suggestions": parsed, "lyric": None}
+
+        # Fallback: LLM returned a bare JSON array without ```json fences
+        stripped = response.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            suggestions = _json.loads(stripped)
             if isinstance(suggestions, list):
                 return {"suggestions": suggestions, "lyric": None}
-        except _json.JSONDecodeError:
-            pass
+    except Exception:
+        logging.exception("Shopping suggestions parse failed")
 
-    # Fallback: try parsing the entire response as JSON
-    try:
-        suggestions = _json.loads(response)
-        if isinstance(suggestions, list):
-            return {"suggestions": suggestions, "lyric": None}
-    except _json.JSONDecodeError:
-        pass
-
-    # If all parsing fails, return raw text wrapped
-    return {"suggestions": [{"name": "error", "reason": "Could not parse suggestions. Raw: " + response[:500]}], "lyric": None}
+    # Parsing failed — return empty list with debug hint instead of 500
+    return {
+        "suggestions": [],
+        "lyric": None,
+        "error": "Could not parse LLM output as a JSON array.",
+    }

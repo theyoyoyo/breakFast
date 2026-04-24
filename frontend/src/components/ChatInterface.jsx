@@ -84,45 +84,45 @@ function normalizeMeal(meal) {
 
 // Template meal for demo/preview without LLM
 const DEMO_MEAL = {
-  menu_name: 'Serpme Kahvaltı',
-  meal_name: 'Serpme Kahvaltı',
-  description: 'Klasik Türk kahvaltısı — menemen, taze peynir ve zeytinle zengin ve doyurucu bir sabah.',
+  menu_name: 'Classic Spread Breakfast',
+  meal_name: 'Classic Spread Breakfast',
+  description: 'A rich, balanced Turkish breakfast — menemen, fresh cheese, and olives.',
   menu: [
     {
       name: 'Menemen',
       ingredients: [
-        { name: 'Yumurta', amount: 2, unit: 'adet' },
-        { name: 'Domates', amount: 1, unit: 'adet' },
-        { name: 'Yeşil biber', amount: 1, unit: 'adet' },
-        { name: 'Zeytinyağı', amount: 1, unit: 'yemek kaşığı' },
+        { name: 'Egg', amount: 2, unit: 'pcs' },
+        { name: 'Tomato', amount: 1, unit: 'pcs' },
+        { name: 'Green pepper', amount: 1, unit: 'pcs' },
+        { name: 'Olive oil', amount: 1, unit: 'tbsp' },
       ],
     },
-    { name: 'Beyaz peynir', amount: 50, unit: 'g', ingredients: [] },
-    { name: 'Zeytin', amount: 6, unit: 'adet', ingredients: [] },
-    { name: 'Salatalık', amount: 1, unit: 'adet', ingredients: [] },
-    { name: 'Ekmek', amount: 3, unit: 'dilim', ingredients: [] },
-    { name: 'Bal', amount: 1, unit: 'yemek kaşığı', ingredients: [] },
+    { name: 'White cheese', amount: 50, unit: 'g', ingredients: [] },
+    { name: 'Olives', amount: 6, unit: 'pcs', ingredients: [] },
+    { name: 'Cucumber', amount: 1, unit: 'pcs', ingredients: [] },
+    { name: 'Bread', amount: 3, unit: 'slices', ingredients: [] },
+    { name: 'Honey', amount: 1, unit: 'tbsp', ingredients: [] },
   ],
   prep_time_min: 12,
-  nutrition_note: 'Protein, kalsiyum ve sağlıklı yağlar açısından zengin bir öğün.',
+  nutrition_note: 'Rich in protein, calcium, and healthy fats.',
 }
 
 // Demo schedule output — shows what the scheduler produces
-const DEMO_SCHEDULE = `📋 Serpme Kahvaltı — Hazırlık Planı
+const DEMO_SCHEDULE = `📋 Classic Spread Breakfast — Prep Plan
 
-🔪 Hazırlık
-  • Domates ve salatalığı dilimle — ince halkalar halinde
-  • Beyaz peyniri küçük küpler halinde kes
-  • Zeytinleri süzüp tabağa yerleştir
-  • Bal ve tereyağını küçük kaselere koy
-  • Ekmeği 3 dilim kes
+🔪 Prep
+  • Slice tomato and cucumber — thin rounds
+  • Cube the white cheese
+  • Drain olives and plate
+  • Put honey and butter in small bowls
+  • Cut 3 slices of bread
 
-⏱ Zamanlama (7 dk)
-  0:00  — Yumurtaları kaynar suya koy (7 dk)  [ocak]
-         ↳ Süzgeçle süz, soğuk suya al ve soy
-  5:00  — Ekmek dilimlerini tost makinesine koy (2 dk)  [tost makinesi]
-         ↳ Çıkar ve tabağa yerleştir
-  7:00  — Hazır! ✓`
+⏱ Timing (7 min)
+  0:00  — Drop eggs into boiling water (7 min)  [stove]
+         ↳ Drain, cool in cold water, peel
+  5:00  — Put bread slices in the toaster (2 min)  [toaster]
+         ↳ Remove and plate
+  7:00  — Ready! ✓`
 
 export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref) {
   const [messages, setMessages] = useState([WELCOME_MSG])
@@ -180,14 +180,14 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
   // Expose methods to parent via ref
   useImperativeHandle(ref, () => ({
     injectDemoMeal: () => {
-      const introText = 'İşte sana güzel bir serpme kahvaltı önerisi! 🫕\n\nTaze ve dengeli malzemelerle hazırlanan klasik bir Türk kahvaltısı.'
+      const introText = "Here's a nice classic spread breakfast for you! 🫕\n\nA balanced Turkish breakfast with fresh, wholesome ingredients."
       injectMealToChat(DEMO_MEAL, introText)
     },
     injectDemoSchedule: () => {
       setMessages(prev => [...prev, { role: 'assistant', content: DEMO_SCHEDULE }])
     },
     injectFavoriteMeal: (meal) => {
-      const introText = `⭐ Favorilerden: ${meal.meal_name}\n\n${meal.description || 'Afiyet olsun!'}`
+      const introText = `⭐ From favorites: ${meal.meal_name}\n\n${meal.description || 'Enjoy!'}`
       injectMealToChat(meal, introText)
     },
   }))
@@ -498,16 +498,16 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       analyzeAbortRef.current.abort()
       analyzeAbortRef.current = null
       setAnalyzingIdx(null)
-      setMessages(prev => [...prev, { role: 'assistant', content: '📊 [Analiz durduruldu]' }])
+      setMessages(prev => [...prev, { role: 'assistant', content: '📊 [Analysis stopped]' }])
     }
   }, [streamBuffer])
 
   const handleSuggest = useCallback((mode) => {
     const modeLabels = {
-      favorites: 'Sevdiğim yemeklerden kahvaltı öner',
-      explore: 'Dünya mutfağından farklı bir kahvaltı öner',
+      favorites: 'Suggest a breakfast from my favorites',
+      explore: 'Suggest a different breakfast from world cuisines',
     }
-    const msg = modeLabels[mode] || 'Bana kahvaltı öner'
+    const msg = modeLabels[mode] || 'Suggest a breakfast for me'
 
     // Collect last 5 user messages (chronological) as breakfast feedback context
     const recentUserMsgs = messages

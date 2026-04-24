@@ -220,26 +220,26 @@ async def test_thrown_empty_list(client):
 
 
 async def test_add_ingredient_default_group(client):
-    """Adding without group_name defaults to Diğer."""
+    """Adding without group_name defaults to Other."""
     r = await client.post("/ingredients/", json={"name": "salt"})
     assert r.status_code == 201
-    assert r.json()["group_name"] == "🍽️ Diğer"
+    assert r.json()["group_name"] == "🍽️ Other"
 
 
 async def test_add_ingredient_with_group(client):
     """Adding with explicit group assigns it correctly."""
-    r = await client.post("/ingredients/", json={"name": "sucuk", "group_name": "🐄 Hayvansal"})
+    r = await client.post("/ingredients/", json={"name": "sucuk", "group_name": "🐄 Animal Products"})
     assert r.status_code == 201
-    assert r.json()["group_name"] == "🐄 Hayvansal"
+    assert r.json()["group_name"] == "🐄 Animal Products"
 
 
 async def test_update_ingredient_group(client):
     """PATCH can change an ingredient's group."""
-    created = (await client.post("/ingredients/", json={"name": "kekik"})).json()
-    assert created["group_name"] == "🍽️ Diğer"
-    r = await client.patch(f"/ingredients/{created['id']}", json={"group_name": "🧂 Baharatlar"})
+    created = (await client.post("/ingredients/", json={"name": "thyme"})).json()
+    assert created["group_name"] == "🍽️ Other"
+    r = await client.patch(f"/ingredients/{created['id']}", json={"group_name": "🧂 Spices"})
     assert r.status_code == 200
-    assert r.json()["group_name"] == "🧂 Baharatlar"
+    assert r.json()["group_name"] == "🧂 Spices"
 
 
 async def test_invalid_group_rejected(client):
@@ -250,27 +250,27 @@ async def test_invalid_group_rejected(client):
 
 async def test_group_memory_on_readd(client):
     """Deleting and re-adding an ingredient restores its remembered group."""
-    created = (await client.post("/ingredients/", json={"name": "domates", "group_name": "🥬 Sebze Meyve"})).json()
+    created = (await client.post("/ingredients/", json={"name": "tomato", "group_name": "🥬 Produce"})).json()
     await client.delete(f"/ingredients/{created['id']}")
     # Re-add without specifying group — should restore from memory
-    r = await client.post("/ingredients/", json={"name": "domates"})
+    r = await client.post("/ingredients/", json={"name": "tomato"})
     assert r.status_code == 201
-    assert r.json()["group_name"] == "🥬 Sebze Meyve"
+    assert r.json()["group_name"] == "🥬 Produce"
 
 
 async def test_bulk_add_with_group_memory(client):
     """Bulk add restores group from memory for previously assigned items."""
     # First, add with explicit group and delete
-    created = (await client.post("/ingredients/", json={"name": "biber", "group_name": "🥬 Sebze Meyve"})).json()
+    created = (await client.post("/ingredients/", json={"name": "pepper", "group_name": "🥬 Produce"})).json()
     await client.delete(f"/ingredients/{created['id']}")
     # Bulk add without group — should restore from memory
-    r = await client.post("/ingredients/bulk", json=[{"name": "biber"}, {"name": "tuz"}])
+    r = await client.post("/ingredients/bulk", json=[{"name": "pepper"}, {"name": "salt"}])
     assert r.status_code == 201
     listed = (await client.get("/ingredients/")).json()
-    biber = [i for i in listed if i["name"] == "biber"][0]
-    tuz = [i for i in listed if i["name"] == "tuz"][0]
-    assert biber["group_name"] == "🥬 Sebze Meyve"
-    assert tuz["group_name"] == "🍽️ Diğer"
+    pepper = [i for i in listed if i["name"] == "pepper"][0]
+    salt = [i for i in listed if i["name"] == "salt"][0]
+    assert pepper["group_name"] == "🥬 Produce"
+    assert salt["group_name"] == "🍽️ Other"
 
 
 async def test_groups_endpoint(client):
@@ -278,7 +278,7 @@ async def test_groups_endpoint(client):
     r = await client.get("/ingredients/groups")
     assert r.status_code == 200
     data = r.json()
-    assert "🐄 Hayvansal" in data["groups"]
-    assert "🍽️ Diğer" in data["groups"]
-    assert data["default"] == "🍽️ Diğer"
+    assert "🐄 Animal Products" in data["groups"]
+    assert "🍽️ Other" in data["groups"]
+    assert data["default"] == "🍽️ Other"
     assert len(data["groups"]) == 10

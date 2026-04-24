@@ -10,6 +10,7 @@ from services.knowledge import (
     format_user_profile,
     format_supplements,
     format_history_detailed,
+    format_ingredients,
 )
 
 def _lang(language: str) -> str:
@@ -56,6 +57,11 @@ Use this to:
 - Identify weekly nutrient gaps this meal should try to fill.
 
 ═══════════════════════════════════════════════════════════════
+AVAILABLE FRIDGE INVENTORY (authoritative — do NOT assume anything beyond this)
+═══════════════════════════════════════════════════════════════
+{ingredient_inventory}
+
+═══════════════════════════════════════════════════════════════
 HEALTH RULES
 ═══════════════════════════════════════════════════════════════
 {health_rules}
@@ -84,8 +90,11 @@ INGREDIENT QUALITY:
 - Are there healthier alternatives for any ingredient?
 - Any ingredient that conflicts with health rules?
 - Portion sizes appropriate? (The inventory tracks only ingredient names, not quantities. \
-  Assume standard healthy Turkish breakfast portions when evaluating.)
+  Assume standard healthy breakfast portions when evaluating.)
 - Seasonal availability consideration?
+- FRIDGE CONSTRAINT — CRITICAL: every ingredient in the draft must appear in the user's \
+  available inventory (listed in the draft's context). Flag any ingredient that is NOT in \
+  the inventory as a hard violation that must be substituted or dropped.
 
 MEAL BALANCE & VARIETY:
 - Does this meal repeat recent meals too closely?
@@ -123,6 +132,7 @@ def build_pipeline_analyst_prompt(
     user_profile: dict | None = None,
     supplements: list[dict] | None = None,
     health_rules: list[dict] | None = None,
+    ingredient_inventory: list[dict] | None = None,
     language: str = "en",
 ) -> str:
     """Build the pipeline analyst prompt (internal reviewer for suggestion refinement)."""
@@ -132,4 +142,5 @@ def build_pipeline_analyst_prompt(
         supplements=format_supplements(supplements),
         recent_history=format_history_detailed(recent_meal_history, limit=5),
         health_rules=format_health_rules(health_rules or []),
+        ingredient_inventory=format_ingredients(ingredient_inventory or []),
     )
