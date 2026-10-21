@@ -15,18 +15,18 @@ from config import (
 
 
 FALLBACK_LYRICS = [
-    "Benim aklım başımda değil~",
-    "🎶 Sana söylediklerimi kafana takma ne olursun...",
-    "🎵 Onlar ipe sapa gelir şeyler değil!",
-    "💔 Seni sevmiyorum dedim; yalandı~",
-    "🎶 İstemiyorum artık; palavra!",
-    "💐 Ellerimde çiçekler~",
-    "🌧️ Kapında sırıksıklam...",
-    "👀 Görürsen bir gün şaşırma~",
-    "🎵 Beni böyle çaresiz...",
-    "🎶 Beni böyle derbeder...",
-    "🎵 Beni böyle ortalarda bırakma!",
-    "🙈 Son zamanlar yaptıklarıma bakma ne olursun~",
+    "Benim aklım ocakta kaldı~",
+    "🎶 Dünkü menüyü kafana takma ne olursun...",
+    "🎵 Onlar çaya simide gelir şeyler değil!",
+    "💔 Menemen yapmam dedim; yalandı~",
+    "🎶 Çay istemiyorum artık; palavra!",
+    "🥯 Ellerimde simitler~",
+    "☕ Kapında demlik elimde...",
+    "👀 Ocakta görürsen şaşırma~",
+    "🎵 Beni böyle aç susuz...",
+    "🎶 Beni böyle kahvaltısız...",
+    "🍳 Beni böyle sofrada yalnız bırakma!",
+    "🙈 Son zamanlarda yediklerime bakma ne olursun~",
 ]
 
 # Keep for backwards compatibility with imports
