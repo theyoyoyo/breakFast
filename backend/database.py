@@ -10,7 +10,7 @@ Usage in routers:
 import aiosqlite
 from contextlib import asynccontextmanager
 
-from config import DATABASE_PATH
+from config import DATABASE_PATH, DEMO_USER
 
 
 # ---------------------------------------------------------------------------
@@ -249,14 +249,15 @@ async def init_db() -> None:
         await db.execute("PRAGMA journal_mode=WAL")
         await db.executescript(_SCHEMA)
 
-        # Ensure a "demo" user always exists (for quick dev/demo access)
-        await db.execute(
-            """
-            INSERT OR IGNORE INTO users (name, pin_hash, is_admin)
-            VALUES (?, ?, 1)
-            """,
-            ("demo", hash_pin("")),
-        )
+        # Opt-in "demo" user with an empty PIN (DEMO_USER=true) for local try-outs
+        if DEMO_USER:
+            await db.execute(
+                """
+                INSERT OR IGNORE INTO users (name, pin_hash, is_admin)
+                VALUES (?, ?, 1)
+                """,
+                ("demo", hash_pin("")),
+            )
 
         # Migrate: add priority column to health_rules if missing
         try:

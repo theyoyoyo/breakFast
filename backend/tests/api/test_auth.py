@@ -133,3 +133,16 @@ async def test_user_data_isolation(tmp_path, monkeypatch):
         # User2 does NOT see it
         r = await client.get("/ingredients/", headers=h2)
         assert len(r.json()) == 0
+
+
+async def test_demo_user_not_created_by_default(unauth_client):
+    r = await unauth_client.post("/auth/login", json={"name": "demo", "pin": ""})
+    assert r.status_code == 401
+
+
+async def test_demo_user_created_when_enabled(unauth_client, monkeypatch):
+    monkeypatch.setattr(database, "DEMO_USER", True)
+    await database.init_db()
+    r = await unauth_client.post("/auth/login", json={"name": "demo", "pin": ""})
+    assert r.status_code == 200
+
