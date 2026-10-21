@@ -1,5 +1,9 @@
-const BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
-const WS_URL = BASE_URL.replace(/^http/, 'ws')
+// Auto-detect backend from current hostname so the app works from any IP
+// (home WiFi, Tailscale, localhost) without config changes.
+// VITE_BACKEND_URL in .env still overrides if explicitly set.
+const BASE_URL = import.meta.env.VITE_BACKEND_URL ||
+  `${window.location.protocol}//${window.location.hostname}:8000`
+const WS_URL = BASE_URL.replace(/^https?/, (p) => (p === 'https' ? 'wss' : 'ws'))
 
 // ---------------------------------------------------------------------------
 // Error types

@@ -14,11 +14,11 @@ import * as s from './IngredientPanel.styles'
 // Fixed ingredient groups (mirrors backend INGREDIENT_GROUPS)
 // ---------------------------------------------------------------------------
 const INGREDIENT_GROUPS = [
-  '🐄 Hayvansal', '🥬 Sebze Meyve', '🍞 Ekmekler', '🍯 Tatlılar',
-  '🫒 Kahvaltılık', '🥜 Kuruyemişler', '🌱 Bitkisel', '☕ İçecekler',
-  '🧂 Baharatlar', '🍽️ Diğer',
+  '🐄 Animal Products', '🥬 Produce', '🍞 Breads', '🍯 Sweets',
+  '🫒 Breakfast Staples', '🥜 Nuts & Seeds', '🌱 Plant-Based', '☕ Beverages',
+  '🧂 Spices', '🍽️ Other',
 ]
-const DEFAULT_GROUP = '🍽️ Diğer'
+const DEFAULT_GROUP = '🍽️ Other'
 
 const COLLAPSE_KEY = 'bf_ingredient_groups_collapsed'
 
@@ -164,18 +164,18 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
   useImperativeHandle(ref, () => ({
     injectDemoShopping: () => {
       const demoSuggestions = [
-        { name: 'Ceviz', reason: 'Omega-3 kaynağı, kahvaltıda beyin fonksiyonlarını destekler' },
-        { name: 'Çilek', reason: 'Mevsiminde, antioksidan açısından zengin' },
-        { name: 'Avokado', reason: 'Sağlıklı yağ kaynağı, tostu mükemmel' },
-        { name: 'Chia tohumu', reason: 'Lif ve omega-3 deposu, yoğurtla harika' },
-        { name: 'Tam buğday ekmeği', reason: 'Kompleks karbonhidrat, uzun süre tok tutar' },
-        { name: 'Lor peyniri', reason: 'Yüksek protein, düşük yağ' },
-        { name: 'Bal', reason: 'Doğal tatlandırıcı, enerji kaynağı' },
-        { name: 'Domates', reason: 'Likopen kaynağı, klasik kahvaltı malzemesi' },
-        { name: 'Salatalık', reason: 'Hidrasyon ve tazelik sağlar' },
-        { name: 'Zeytin', reason: 'Sağlıklı yağ, Akdeniz diyetinin temeli' },
-        { name: 'Tahin', reason: 'Kalsiyum ve demir kaynağı, pekmezle klasik' },
-        { name: 'Yulaf ezmesi', reason: 'Beta-glukan ile kolesterol düşürücü etki' },
+        { name: 'Walnuts', reason: 'Omega-3 source — supports brain function at breakfast' },
+        { name: 'Strawberries', reason: 'In season, rich in antioxidants' },
+        { name: 'Avocado', reason: 'Healthy fat source, perfect on toast' },
+        { name: 'Chia seeds', reason: 'Fiber and omega-3 — great with yogurt' },
+        { name: 'Whole-wheat bread', reason: 'Complex carbs, keeps you full longer' },
+        { name: 'Cottage cheese', reason: 'High protein, low fat' },
+        { name: 'Honey', reason: 'Natural sweetener, quick energy' },
+        { name: 'Tomato', reason: 'Lycopene source, classic breakfast staple' },
+        { name: 'Cucumber', reason: 'Hydrating and fresh' },
+        { name: 'Olives', reason: 'Healthy fats, foundation of the Mediterranean diet' },
+        { name: 'Tahini', reason: 'Calcium and iron source, classic with molasses' },
+        { name: 'Rolled oats', reason: 'Beta-glucan helps lower cholesterol' },
       ]
       setSuggestions(demoSuggestions)
       saveSuggestions(demoSuggestions)
@@ -328,6 +328,9 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
             setSelectedSuggestions(sel)
           }
         }
+      } else if (result.error && (!result.suggestions || result.suggestions.length === 0)) {
+        // Backend returned 200 with an error hint (e.g., parsing failed)
+        setError(result.error)
       } else if (result.suggestions && result.suggestions.length > 0) {
         if (suggestions.length > 0) {
           // "Suggest more" mode — append new, deduplicate by name

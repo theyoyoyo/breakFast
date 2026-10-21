@@ -63,6 +63,7 @@ async def run_suggestion_pipeline(
         user_profile=context["user_profile"],
         supplements=context["supplements"],
         health_rules=context["health_rules"],
+        ingredient_inventory=context["ingredients"],
         language=language,
     )
 

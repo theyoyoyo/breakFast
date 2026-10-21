@@ -117,14 +117,14 @@ async def test_bought_upserts_existing_ingredient(client):
 async def test_bought_restores_group_from_memory(client):
     """Buying an item restores its group from memory if previously assigned."""
     # Add ingredient with explicit group, then delete it
-    created = (await client.post("/ingredients/", json={"name": "kaşar", "group_name": "🐄 Hayvansal"})).json()
+    created = (await client.post("/ingredients/", json={"name": "kasar", "group_name": "🐄 Animal Products"})).json()
     await client.delete(f"/ingredients/{created['id']}")
 
     # Add to shopping list and buy
-    item = (await client.post("/shopping/", json={"item_name": "kaşar"})).json()
+    item = (await client.post("/shopping/", json={"item_name": "kasar"})).json()
     await client.post("/shopping/bought", json={"ids": [item["id"]]})
 
     # Check ingredient has restored group
     ingredients = (await client.get("/ingredients/")).json()
-    kasar = [i for i in ingredients if i["name"] == "kaşar"][0]
-    assert kasar["group_name"] == "🐄 Hayvansal"
+    kasar = [i for i in ingredients if i["name"] == "kasar"][0]
+    assert kasar["group_name"] == "🐄 Animal Products"

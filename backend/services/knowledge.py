@@ -22,7 +22,7 @@ def format_ingredients(ingredients: list[dict]) -> str:
         from models.ingredient import INGREDIENT_GROUPS
         grouped: dict[str, list[str]] = {}
         for i in ingredients:
-            g = i.get("group_name", "Diğer")
+            g = i.get("group_name", "🍽️ Other")
             grouped.setdefault(g, []).append(i["name"])
         parts = []
         for group in INGREDIENT_GROUPS:

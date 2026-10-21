@@ -39,14 +39,14 @@ class TestKnowledgeFormatters:
     # Grouped ingredients render with group labels for LLM context
     def test_format_ingredients_grouped(self):
         items = [
-            {"name": "sucuk", "group_name": "🐄 Hayvansal"},
-            {"name": "domates", "group_name": "🥬 Sebze Meyve"},
-            {"name": "tuz", "group_name": "🍽️ Diğer"},
+            {"name": "sucuk", "group_name": "🐄 Animal Products"},
+            {"name": "tomato", "group_name": "🥬 Produce"},
+            {"name": "salt", "group_name": "🍽️ Other"},
         ]
         result = format_ingredients(items)
-        assert "[🐄 Hayvansal] sucuk" in result
-        assert "[🥬 Sebze Meyve] domates" in result
-        assert "[🍽️ Diğer] tuz" in result
+        assert "[🐄 Animal Products] sucuk" in result
+        assert "[🥬 Produce] tomato" in result
+        assert "[🍽️ Other] salt" in result
 
     # Empty history returns fallback
     def test_format_history_empty(self):
