@@ -3,19 +3,37 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
+.venv/
+venv/
+.coverage
+htmlcov/
+
+# Database (WAL mode also writes -wal/-shm files next to the .db)
 *.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite
+*.sqlite3
 
 # Node
 node_modules/
 dist/
+dev-dist/
 .vite/
+coverage/
 
 # PWA build artifacts
 sw.js
 workbox-*.js
 
-# Environment
+# Environment (.env.example and frontend/.env.production are tracked on purpose)
 .env
+.env.local
+.env.*.local
+
+# Logs
+*.log
 
 # IDE
 .vscode/
@@ -24,6 +42,7 @@ workbox-*.js
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Claude
+# Claude Code local settings and worktrees
 .claude/
