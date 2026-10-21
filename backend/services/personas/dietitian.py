@@ -1,7 +1,7 @@
 """
-Suggestion persona — profesyonel diyetisyen.
+Suggestion persona — professional dietitian.
 
-Professional breakfast nutrition planner. Responds in Turkish.
+Professional breakfast nutrition planner. Responds in English by default (Turkish if preferred).
 Designs healthiest, most satisfying breakfast based on full user context.
 Supports "favorites" and "explore" modes.
 """
