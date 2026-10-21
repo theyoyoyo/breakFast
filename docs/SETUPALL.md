@@ -285,8 +285,8 @@ Go back to Step 1 and verify `ollama run qwen2.5:7b` works.
 
 ### 8.3 — Test the Fridge tab
 
-Switch to the Fridge tab. Add some ingredients (e.g., "yumurta", "beyaz peynir",
-"domates"). They should appear grouped under "🍽️ Diğer" (Other) by default.
+Switch to the Fridge tab. Add some ingredients (e.g., "eggs", "white cheese",
+"tomatoes"). They should appear grouped under "🍽️ Other" by default.
 
 ### 8.4 — Test meal suggestion
 
