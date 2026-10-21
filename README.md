@@ -84,7 +84,7 @@ The backend loads each user's context (inventory, recent meals, profile, supplem
 
 **Tested.** About 285 backend tests (pytest, with a fresh temporary SQLite database per test and the LLM mocked) and frontend unit tests with Vitest.
 
-### GenAI techniques used
+#### GenAI techniques used
 
 | Technique | Where it shows up |
 |---|---|
@@ -230,7 +230,7 @@ All backend settings are environment variables, documented in [`.env.example`](.
 
 break FAST is built for a trusted home network (LAN or Tailscale), not the open internet:
 
-- Users log in with a name and a short PIN, hashed with SHA-256. There is no salting or login rate limiting.
+- Users log in with a name and a PIN, hashed with SHA-256. There is no salting or login rate limiting yet, so use PINs of 6 or more digits.
 - Session tokens are random 256-bit values kept in memory, so everyone logs in again after a server restart.
 - Do not expose port 8000 to the public internet. Use Tailscale for remote access.
 
@@ -269,7 +269,7 @@ breakFast/
 - Habit onboarding: ask about routines one question at a time
 - Stricter fridge-only enforcement for suggestions
 - Appliance-aware prep plans that stagger tasks sharing one appliance
-- Stronger PIN hashing and login rate limiting
+- Auth hardening: salted, deliberately slow PIN hashing, a 6+ digit PIN minimum and login rate limiting
 
 ---
 

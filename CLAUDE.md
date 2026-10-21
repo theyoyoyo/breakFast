@@ -70,7 +70,7 @@ Chat with Ollama, ingredient inventory, meal suggestions, meal history, multi-us
 
 **Done:** Ingredient groups (10 fixed Turkish groups), expiry tracking, favorite ingredients (staples list), shopping list, delete confirm redesign, kitchen appliances settings, multi-item menu format, shared MealEditor, unit dropdown with smart defaults, simplified suggestion text, overlay edit pattern across all panels, explore mode, shopping assistant persona, weekly nutrition review, language toggle (English default + Turkish option), chat meal blocks only from the Suggest button.
 
-**Remaining:** Habit onboarding, stricter fridge constraint enforcement in suggestions.
+**Remaining:** Habit onboarding, stricter fridge constraint enforcement in suggestions, auth hardening (salted slow PIN hashing, 6+ digit PIN minimum, login rate limiting).
 
 ---
 
