@@ -96,9 +96,6 @@ export const getExpiredIngredients = () =>
 export const getExpiredCount = () =>
   apiFetch(`${BASE_URL}/ingredients/expired-count`)
 
-export const confirmExpiredThrown = (ids) =>
-  apiFetch(`${BASE_URL}/ingredients/expired/thrown`, json('POST', { ids }))
-
 export const handleExpiredAction = (delete_ids, keep_ids, shopping_ids) =>
   apiFetch(`${BASE_URL}/ingredients/expired/action`, json('POST', { delete_ids, keep_ids, shopping_ids }))
 
@@ -157,9 +154,6 @@ export const getMeals = (limit = 50) =>
 export const logMeal = (meal) =>
   apiFetch(`${BASE_URL}/meals/`, json('POST', meal))
 
-export const rateMeal = (id, rating) =>
-  apiFetch(`${BASE_URL}/meals/${id}/rating`, json('PATCH', { rating }))
-
 export const updateMeal = (id, meal) =>
   apiFetch(`${BASE_URL}/meals/${id}`, json('PUT', meal))
 
@@ -168,9 +162,6 @@ export const deleteMeal = (id) =>
 
 export const deleteOldMeals = () =>
   apiFetch(`${BASE_URL}/meals/old`, { method: 'DELETE' })
-
-export const getWeeklyMeals = () =>
-  apiFetch(`${BASE_URL}/meals/weekly`)
 
 export const getWeeklyReview = () =>
   apiFetch(`${BASE_URL}/meals/weekly-review`)

@@ -26,25 +26,6 @@ export function normalizeItem(item) {
   return { name: String(item), quantity: 1, unit: 'adet' }
 }
 
-/**
- * Get the display name of an ingredient (works for both string and structured forms).
- */
-export function getIngredientName(item) {
-  if (typeof item === 'object' && item !== null) return item.name || ''
-  return String(item)
-}
-
-/**
- * Clamp a quantity string to max 2 decimal places and return as number.
- * Returns null if the input is empty or invalid.
- */
-export function parseQuantity(val) {
-  if (val === '' || val === null || val === undefined) return null
-  const num = parseFloat(val)
-  if (isNaN(num)) return null
-  return Math.round(num * 100) / 100
-}
-
 // ── Unit utilities ─────────────────────────────────────────────────────────
 
 export const UNITS = [
