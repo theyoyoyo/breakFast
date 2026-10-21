@@ -504,10 +504,10 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
 
   const handleSuggest = useCallback((mode) => {
     const modeLabels = {
-      favorites: 'Suggest a breakfast from my favorites',
+      favorites: 'Suggest breakfast from my favorite meals',
       explore: 'Suggest a different breakfast from world cuisines',
     }
-    const msg = modeLabels[mode] || 'Suggest a breakfast for me'
+    const msg = modeLabels[mode] || 'Suggest Breakfast'
 
     // Collect last 5 user messages (chronological) as breakfast feedback context
     const recentUserMsgs = messages
