@@ -64,7 +64,7 @@ Phase 1 and Phase 2 are complete. Phase 3 is in progress.
 
 ### Phase 1 + 2 (COMPLETE)
 
-Chat with Ollama, ingredient inventory, meal suggestions, meal history, multi-user auth, session persistence, voice input/output, meal blocks in chat, kitchen prep planner, ratings, preferences (favorites/dislikes/habits/avoid), suggest button with modes, "Today I ate" flow, nutrition analysis, 3-step suggestion pipeline, user profiles, supplements, health rules, weekly summary, Settings page.
+Chat with Ollama, ingredient inventory, meal suggestions, meal history, multi-user auth, session persistence, voice input, meal blocks in chat, kitchen prep planner, ratings, preferences (favorites/dislikes/habits/avoid), suggest button with modes, "Today I ate" flow, nutrition analysis, 3-step suggestion pipeline, user profiles, supplements, health rules, weekly summary, Settings page.
 
 ### Phase 3 (IN PROGRESS)
 

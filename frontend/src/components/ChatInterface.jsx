@@ -153,8 +153,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
   const sessionIdRef = useRef(null)
   const abortedRef = useRef(false)
   const analyzeAbortRef = useRef(null)
-  const { isListening, startListening, stopListening, speak, supported: voiceSupported } = useVoice()
-  const speakRef = useRef(speak)
+  const { isListening, startListening, stopListening, supported: voiceSupported } = useVoice()
 
   // Inject a meal into chat (used by demo and favorites send-to-chat)
   const injectMealToChat = useCallback((meal, introText) => {
@@ -194,7 +193,6 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
 
   // Keep refs in sync so socket callbacks always see the latest props/functions
   useEffect(() => { onMealLoggedRef.current = onMealLogged }, [onMealLogged])
-  useEffect(() => { speakRef.current = speak }, [speak])
   useEffect(() => { sessionIdRef.current = sessionId }, [sessionId])
 
   const refreshNavState = useCallback(async (currentId) => {
