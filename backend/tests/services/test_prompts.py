@@ -195,11 +195,10 @@ class TestChatPrompt:
         assert "deprioritize" in prompt
         assert "NEVER fully exclude" in prompt
 
-    def test_json_block_present(self):
-        """The JSON example block should render correctly (escaped braces)."""
+    def test_no_json_block(self):
+        """Chat persona replies in plain text; meal blocks only come from Suggest."""
         prompt = build_chat_prompt([], [], {}, [])
-        assert '"meal_name"' in prompt
-        assert '"ingredients"' in prompt
+        assert "```json" not in prompt
 
     def test_includes_avoid_list_empty(self):
         prompt = build_chat_prompt([], [], {}, [])
@@ -234,12 +233,13 @@ class TestSuggestionPrompt:
         prompt = build_suggestion_prompt([], [], {}, [])
         assert "dietitian" in prompt.lower() or "professional" in prompt.lower()
 
-    def test_history_limit_is_10(self):
-        """Suggestion persona uses last 10 meals (fuller context)."""
+    def test_history_limit_is_4(self):
+        """Suggestion persona uses the last 4 meals."""
         meals = [{"meal_name": f"meal_{i}"} for i in range(15)]
         prompt = build_suggestion_prompt([], meals, {}, [])
         assert "meal_14" in prompt
-        assert "meal_5" in prompt
+        assert "meal_11" in prompt
+        assert "meal_10" not in prompt
         assert "meal_0" not in prompt
 
     def test_includes_health_rules(self):
@@ -251,7 +251,8 @@ class TestSuggestionPrompt:
 
     def test_json_block_present(self):
         prompt = build_suggestion_prompt([], [], {}, [])
-        assert '"meal_name"' in prompt
+        assert '"menu_name"' in prompt
+        assert '"menu"' in prompt
 
     def test_includes_behavioral_patterns(self):
         prompt = build_suggestion_prompt(
@@ -261,14 +262,13 @@ class TestSuggestionPrompt:
         assert "high egg consumption" in prompt
         assert "DIVERSIFY" in prompt
 
-    def test_includes_nutrition_detail_fields(self):
-        """Suggestion prompt should ask for detailed macro breakdown."""
+    def test_includes_nutrition_guidance(self):
+        """Suggestion prompt should carry internal nutrition guidance."""
         prompt = build_suggestion_prompt([], [], {}, [])
         assert "protein" in prompt.lower()
         assert "calori" in prompt.lower() or "kcal" in prompt.lower()
         assert "fiber" in prompt.lower()
         assert "omega" in prompt.lower()
-        assert "vitamin" in prompt.lower()
 
     def test_includes_advance_prep_tip(self):
         """Suggestion prompt should mention advance prep section."""
@@ -297,13 +297,12 @@ class TestSuggestionPrompt:
         prompt = build_suggestion_prompt([], [], {}, [])
         assert "Turkey" in prompt
 
-    def test_nutrition_detail_in_json_block(self):
-        """JSON block should include nutrition_detail fields."""
+    def test_nutrition_note_in_json_block(self):
+        """JSON block should include the short nutrition note and prep time."""
         prompt = build_suggestion_prompt([], [], {}, [])
-        assert '"nutrition_detail"' in prompt
-        assert '"calories_kcal"' in prompt
-        assert '"protein_g"' in prompt
-        assert '"advance_prep_tip"' in prompt
+        assert '"nutrition_note"' in prompt
+        assert '"prep_time_min"' in prompt
+        assert '"nutrition_detail"' not in prompt
 
     def test_includes_user_profile(self):
         """Suggestion prompt should render user physical profile."""
@@ -326,14 +325,14 @@ class TestSuggestionPrompt:
         )
         assert "B12" in prompt
         assert "1000mcg" in prompt
-        assert "Fish oil" in prompt
-        assert "NOT taken today" in prompt
+        # 'sometimes' supplements not taken today are left out
+        assert "Fish oil" not in prompt
 
     def test_profile_and_supplements_default_when_none(self):
         """When no profile/supplements given, should still render without error."""
         prompt = build_suggestion_prompt([], [], {}, [])
         assert "Not provided" in prompt
-        assert "No supplements" in prompt
+        assert "None taken today." in prompt
 
     def test_includes_calorie_calculation_guidance(self):
         """Prompt should mention Harris-Benedict or calorie calculation."""
@@ -446,10 +445,10 @@ class TestAnalystPrompt:
     # Daily coverage has all 4 fixed categories
     def test_daily_coverage_fixed_categories(self):
         prompt = build_analyst_prompt([], None, None, None)
-        assert "Kalori" in prompt
+        assert "Calories" in prompt
         assert "Protein" in prompt
-        assert "Lif" in prompt
-        assert "Vitamin & Mineral" in prompt
+        assert "Fiber" in prompt
+        assert "Vitamins & Minerals" in prompt
 
     # Supplement excess check instruction is present
     def test_supplement_excess_check(self):

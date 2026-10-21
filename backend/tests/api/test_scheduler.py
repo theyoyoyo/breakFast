@@ -15,7 +15,7 @@ async def test_plan_no_steps(client):
     data = r.json()
     assert data["timeline"] == []
     assert data["makespan_min"] == 0
-    assert data["formatted"] == "Adım bulunamadı."
+    assert data["formatted"] == "No steps found."
 
 
 async def test_plan_with_cached_schedule(client, db):

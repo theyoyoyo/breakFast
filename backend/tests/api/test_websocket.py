@@ -150,7 +150,7 @@ async def test_websocket_suggest_type_uses_pipeline(ws_setup):
 
     client = TestClient(app)
 
-    async def mock_pipeline(context, user_message, mode=None, temperature=None):
+    async def mock_pipeline(context, user_message, mode=None, temperature=None, chat_context=None):
         yield {"type": "progress", "step": "drafting"}
         yield {"type": "token", "content": "Merhaba"}
         yield {"type": "done", "content": "Merhaba"}
@@ -182,7 +182,7 @@ async def test_websocket_suggest_with_mode_passes_mode(ws_setup):
 
     client = TestClient(app)
 
-    async def mock_pipeline(context, user_message, mode=None, temperature=None):
+    async def mock_pipeline(context, user_message, mode=None, temperature=None, chat_context=None):
         yield {"type": "done", "content": "OK"}
 
     mock_fn = MagicMock(side_effect=mock_pipeline)
@@ -197,6 +197,7 @@ async def test_websocket_suggest_with_mode_passes_mode(ws_setup):
 
             msg = ws.receive_json()
             assert msg["type"] == "done"
+            assert msg["content"] == "OK"  # not a lyric fallback
             mock_fn.assert_called_once()
             call_kwargs = mock_fn.call_args
             assert call_kwargs.kwargs.get("mode") == "favorites"
