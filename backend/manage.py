@@ -22,6 +22,17 @@ from database import init_db
 from auth import hash_pin
 
 
+# Every table holding per-user rows, children before parents
+USER_TABLES = [
+    "supplement_daily_log", "user_supplements", "user_profiles",
+    "product_ratings", "favorite_meals", "suggested_meals", "chat_messages",
+    "ingredient_inventory", "ingredient_group_memory", "favorite_ingredients",
+    "meal_history", "user_preferences", "user_habits", "health_rules",
+    "shopping_list", "user_kitchen_appliances", "weekly_summaries",
+    "chat_sessions",
+]
+
+
 async def add_user(name: str, pin: str, is_admin: bool = False) -> None:
     await init_db()
     async with aiosqlite.connect(DATABASE_PATH) as db:
@@ -67,14 +78,8 @@ async def delete_user(name: str) -> None:
             sys.exit(1)
 
         user_id = row[0]
-        for table in [
-            "supplement_daily_log", "user_supplements", "user_profiles",
-            "product_ratings", "favorite_meals", "suggested_meals", "chat_messages",
-            "ingredient_inventory", "meal_history", "user_preferences",
-            "user_habits", "health_rules",
-        ]:
+        for table in USER_TABLES:
             await db.execute(f"DELETE FROM {table} WHERE user_id = ?", (user_id,))
-        await db.execute("DELETE FROM chat_sessions WHERE user_id = ?", (user_id,))
 
         await db.execute("DELETE FROM users WHERE id = ?", (user_id,))
         await db.commit()
