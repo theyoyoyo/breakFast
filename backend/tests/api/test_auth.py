@@ -26,7 +26,7 @@ async def unauth_client(tmp_path, monkeypatch):
     async with aiosqlite.connect(db_path) as db:
         await db.execute(
             "INSERT INTO users (name, pin_hash, is_admin) VALUES (?, ?, ?)",
-            ("Onur", hash_pin("1234"), 1),
+            ("Alice", hash_pin("1234"), 1),
         )
         await db.commit()
 
@@ -39,16 +39,16 @@ async def unauth_client(tmp_path, monkeypatch):
 
 
 async def test_login_success(unauth_client):
-    r = await unauth_client.post("/auth/login", json={"name": "Onur", "pin": "1234"})
+    r = await unauth_client.post("/auth/login", json={"name": "Alice", "pin": "1234"})
     assert r.status_code == 200
     data = r.json()
     assert "token" in data
-    assert data["user"]["name"] == "Onur"
+    assert data["user"]["name"] == "Alice"
     assert data["user"]["is_admin"] == 1
 
 
 async def test_login_wrong_pin(unauth_client):
-    r = await unauth_client.post("/auth/login", json={"name": "Onur", "pin": "9999"})
+    r = await unauth_client.post("/auth/login", json={"name": "Alice", "pin": "9999"})
     assert r.status_code == 401
 
 
@@ -72,7 +72,7 @@ async def test_endpoints_require_auth(unauth_client):
 async def test_endpoints_work_with_auth(unauth_client):
     """After login, token grants access to endpoints."""
     # Login first
-    r = await unauth_client.post("/auth/login", json={"name": "Onur", "pin": "1234"})
+    r = await unauth_client.post("/auth/login", json={"name": "Alice", "pin": "1234"})
     token = r.json()["token"]
     headers = {"Authorization": f"Bearer {token}"}
 

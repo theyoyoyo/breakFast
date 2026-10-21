@@ -1,10 +1,10 @@
 """
 CLI admin tool for break FAST.
 Usage:
-    python manage.py add-user "Onur" --pin 1234
-    python manage.py add-user "Onur" --pin 1234 --admin
+    python manage.py add-user "Alice" --pin 1234
+    python manage.py add-user "Alice" --pin 1234 --admin
     python manage.py list-users
-    python manage.py delete-user "Onur"
+    python manage.py delete-user "Alice"
     python manage.py backup-db
 """
 
