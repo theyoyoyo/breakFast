@@ -4,22 +4,22 @@ from typing import Optional
 
 # ---------------------------------------------------------------------------
 # Fixed ingredient groups — single source of truth.
-# To add a new group, append to INGREDIENT_GROUPS (before "Diğer").
+# To add a new group, append to INGREDIENT_GROUPS (before "Other").
 # ---------------------------------------------------------------------------
 
 INGREDIENT_GROUPS = [
-    "🐄 Hayvansal",
-    "🥬 Sebze Meyve",
-    "🍞 Ekmekler",
-    "🍯 Tatlılar",
-    "🫒 Kahvaltılık",
-    "🥜 Kuruyemişler",
-    "🌱 Bitkisel",
-    "☕ İçecekler",
-    "🧂 Baharatlar",
-    "🍽️ Diğer",
+    "🐄 Animal Products",
+    "🥬 Produce",
+    "🍞 Breads",
+    "🍯 Sweets",
+    "🫒 Breakfast Staples",
+    "🥜 Nuts & Seeds",
+    "🌱 Plant-Based",
+    "☕ Beverages",
+    "🧂 Spices",
+    "🍽️ Other",
 ]
-DEFAULT_GROUP = "🍽️ Diğer"
+DEFAULT_GROUP = "🍽️ Other"
 
 
 class IngredientCreate(BaseModel):

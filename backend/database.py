@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS ingredient_inventory (
     name                TEXT    NOT NULL,
     expiry_date         TEXT,
     expiry_acknowledged INTEGER NOT NULL DEFAULT 0,
-    group_name          TEXT    NOT NULL DEFAULT '🍽️ Diğer',
+    group_name          TEXT    NOT NULL DEFAULT '🍽️ Other',
     added_at            TEXT    NOT NULL DEFAULT (datetime('now')),
     updated_at          TEXT    NOT NULL DEFAULT (datetime('now')),
     UNIQUE(user_id, name)
@@ -321,12 +321,24 @@ async def init_db() -> None:
         except Exception:
             pass  # Column already exists
 
-        # Migrate: rename old group names to new ones
+        # Migrate: rename old group names to new ones (historical + Turkish → English)
         _GROUP_RENAMES = {
-            "🧀 Şarküteri": "🐄 Hayvansal",
-            "🥬 Sebze/Meyve": "🥬 Sebze Meyve",
-            "🌿 Baharatlar": "🧂 Baharatlar",
-            "📦 Diğer": "🍽️ Diğer",
+            # Historical renames (pre-English migration)
+            "🧀 Şarküteri": "🐄 Animal Products",
+            "🥬 Sebze/Meyve": "🥬 Produce",
+            "🌿 Baharatlar": "🧂 Spices",
+            "📦 Diğer": "🍽️ Other",
+            # Turkish → English
+            "🐄 Hayvansal": "🐄 Animal Products",
+            "🥬 Sebze Meyve": "🥬 Produce",
+            "🍞 Ekmekler": "🍞 Breads",
+            "🍯 Tatlılar": "🍯 Sweets",
+            "🫒 Kahvaltılık": "🫒 Breakfast Staples",
+            "🥜 Kuruyemişler": "🥜 Nuts & Seeds",
+            "🌱 Bitkisel": "🌱 Plant-Based",
+            "☕ İçecekler": "☕ Beverages",
+            "🧂 Baharatlar": "🧂 Spices",
+            "🍽️ Diğer": "🍽️ Other",
         }
         for old, new in _GROUP_RENAMES.items():
             await db.execute(

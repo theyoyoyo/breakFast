@@ -10,6 +10,7 @@ All scheduling math (parallel execution, backward timing) is handled by our code
 
 SCHEDULER_TEMPLATE = """You are a kitchen workflow expert. Your job is to analyze a meal's preparation steps and produce a detailed, structured cooking plan.
 {lang_instruction}
+All `task`, `detail`, and `end_action` strings in the JSON output MUST be written in that language — do not mix languages.
 
 Split the steps into two groups:
 
@@ -17,7 +18,7 @@ Split the steps into two groups:
 
 2. **timed**: Tasks that require a specific kitchen resource for a measured duration — boiling, toasting, frying, baking, etc. For each:
    - Estimate the duration in minutes (be realistic)
-   - Specify the resource using the appliance name (e.g., "ocak", "airfryer", "tost_makinesi"). Available appliances: {kitchen_appliances}. Only use these appliances.
+   - Specify the resource using an appliance name from this list (use these exact names, case-sensitive): {kitchen_appliances}. Only use these appliances.
    - Specify what to do when the task finishes (strain, remove, flip, etc.)
 
 Rules:
