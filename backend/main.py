@@ -10,6 +10,7 @@ from database import init_db
 from auth import require_user
 from routers import analyst, auth, chat, favorites, favorite_ingredients, ingredients, kitchen, meals, preferences, profile, ratings, sessions, health_rules, shopping, scheduler
 from services.insights import refresh_insights
+from utils import resolve_static_file
 
 
 @asynccontextmanager
@@ -76,7 +77,7 @@ if SERVE_FRONTEND and _frontend_dist.exists():
     @app.get("/{full_path:path}")
     async def serve_frontend(full_path: str):
         """Serve the React SPA — returns index.html for any non-API route."""
-        file_path = _frontend_dist / full_path
-        if file_path.exists() and file_path.is_file():
+        file_path = resolve_static_file(_frontend_dist, full_path)
+        if file_path:
             return FileResponse(str(file_path))
         return FileResponse(str(_frontend_dist / "index.html"))
