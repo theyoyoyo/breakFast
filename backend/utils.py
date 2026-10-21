@@ -35,7 +35,10 @@ def resolve_static_file(root: Path, requested: str) -> Optional[Path]:
     (e.g. "../" or encoded "%2F" traversal).
     """
     root = root.resolve()
-    candidate = (root / requested).resolve()
-    if candidate.is_file() and candidate.is_relative_to(root):
-        return candidate
+    try:
+        candidate = (root / requested).resolve()
+        if candidate.is_file() and candidate.is_relative_to(root):
+            return candidate
+    except (OSError, ValueError):  # e.g. embedded null byte, name too long
+        pass
     return None

@@ -54,3 +54,9 @@ def test_resolve_static_file_blocks_traversal(tmp_path):
     assert resolve_static_file(root, "../secret.db") is None
     assert resolve_static_file(root, "assets/../../secret.db") is None
     assert resolve_static_file(root, str(tmp_path / "secret.db")) is None  # absolute path
+
+
+def test_resolve_static_file_malformed_paths_return_none(tmp_path):
+    assert resolve_static_file(tmp_path, "a\x00b") is None
+    assert resolve_static_file(tmp_path, "x" * 5000) is None
+
