@@ -6,9 +6,6 @@ load_dotenv()
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
 
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
-
 DATABASE_PATH = os.getenv("DATABASE_PATH", "./breakFAST.db")
 
 BACKEND_HOST = os.getenv("BACKEND_HOST", "0.0.0.0")

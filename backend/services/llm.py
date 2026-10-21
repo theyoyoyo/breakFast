@@ -1,7 +1,7 @@
 """
 LLM abstraction layer.
-Tries Ollama; if unavailable, raises LLMUnavailableError.
-Claude API fallback is commented out — to be re-enabled later.
+Tries Ollama; if unavailable, raises LLMUnavailableError and callers fall
+back to the next line of FALLBACK_LYRICS.
 """
 
 import httpx
@@ -130,29 +130,3 @@ async def _ollama_stream(
                         break
                 except json.JSONDecodeError:
                     continue
-
-
-# ---------------------------------------------------------------------------
-# Claude API fallback — commented out, to be re-enabled later
-# ---------------------------------------------------------------------------
-#
-# import anthropic
-# from config import ANTHROPIC_API_KEY, CLAUDE_MODEL
-#
-# async def _claude_stream(
-#     system_prompt: str,
-#     messages: list[dict],
-# ) -> AsyncGenerator[str, None]:
-#     if not ANTHROPIC_API_KEY:
-#         yield "[LLM unavailable: Ollama is down and no ANTHROPIC_API_KEY is set]"
-#         return
-#
-#     client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
-#     async with client.messages.stream(
-#         model=CLAUDE_MODEL,
-#         max_tokens=2048,
-#         system=system_prompt,
-#         messages=messages,
-#     ) as stream:
-#         async for text in stream.text_stream:
-#             yield text
