@@ -20,5 +20,5 @@ echo Starting backend (serves API + frontend)...
 echo Access at: http://localhost:8000
 echo.
 
-cd /d %~dp0backend
+cd /d "%~dp0backend"
 python -m uvicorn main:app --host 0.0.0.0 --port 8000
