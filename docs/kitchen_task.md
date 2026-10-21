@@ -1,5 +1,9 @@
 # Kitchen Appliances Settings — Task Specification
 
+> **Status: implemented.** This is the original pre-implementation spec, kept for context.
+> The shipped version differs in places (e.g. only Stove is enabled by default). The
+> source of truth is `backend/models/kitchen.py`.
+
 ## Summary
 
 Add a "Kitchen" sub-page in Settings where users configure which kitchen appliances
