@@ -3,6 +3,8 @@ Tests for system prompt personas (chat + suggestion).
 Verifies template rendering, context injection, and health rules.
 """
 
+import json
+import re
 import sys
 from pathlib import Path
 
@@ -21,6 +23,12 @@ from services.suggestion import (
     _format_user_profile,
     _format_supplements,
     _format_avoid_list,
+)
+from services.personas import (
+    build_pipeline_analyst_prompt,
+    build_scheduler_prompt,
+    build_shopping_prompt,
+    build_weekly_analyst_prompt_with_meals,
 )
 
 
@@ -464,3 +472,36 @@ class TestAnalystPrompt:
         prompt = build_analyst_prompt([], None, None, None)
         assert "Not provided" in prompt
         assert "No supplements" in prompt
+
+
+# ---------------------------------------------------------------------------
+# JSON examples shown to the model
+# ---------------------------------------------------------------------------
+
+def _all_prompts():
+    return {
+        "chat": build_chat_prompt([], [], {}, []),
+        "suggestion": build_suggestion_prompt([], [], {}, []),
+        "analyst": build_analyst_prompt([], None, None, None),
+        "pipeline_analyst": build_pipeline_analyst_prompt([]),
+        "weekly_analyst": build_weekly_analyst_prompt_with_meals("Mon: eggs"),
+        "scheduler": build_scheduler_prompt("Menemen", ["cook"], "eggs"),
+        "shopping": build_shopping_prompt([], [], {}, []),
+    }
+
+
+class TestJsonExamples:
+    def test_no_doubled_braces(self):
+        """Templates are formatted once, so {{ must not survive into the prompt."""
+        for name, prompt in _all_prompts().items():
+            assert "{{" not in prompt, name
+
+    def test_json_examples_are_valid_json(self):
+        """Small models copy examples, so every example must parse."""
+        for name, prompt in _all_prompts().items():
+            for block in re.findall(r"```json\n([\s\S]*?)\n```", prompt):
+                try:
+                    json.loads(block)
+                except json.JSONDecodeError as e:
+                    raise AssertionError(f"{name}: invalid JSON example ({e})") from e
+

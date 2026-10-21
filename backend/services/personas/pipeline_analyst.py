@@ -107,13 +107,13 @@ internal feedback, not user-facing.
 
 Your response must be ONLY the JSON block below — no text before or after:
 ```json
-{{{{
+{{
   "feedback": [
     "Point 1: specific, actionable feedback with numbers",
     "Point 2: ...",
     "..."
   ]
-}}}}
+}}
 ```
 """
 

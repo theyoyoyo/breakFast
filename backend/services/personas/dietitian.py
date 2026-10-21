@@ -159,34 +159,34 @@ based on standard Turkish breakfast servings and the user's profile.
 
 Append a JSON block at the end of your response:
 ```json
-{{{{
+{{
   "menu_name": "Classic Turkish Breakfast",
   "description": "...",
   "menu": [
-    {{{{
+    {{
       "name": "Menemen",
       "ingredients": [
-        {{{{"name": "Egg", "amount": 2, "unit": "adet"}}}},
-        {{{{"name": "Tomato", "amount": 1, "unit": "adet"}}}},
-        {{{{"name": "Green pepper", "amount": 1, "unit": "adet"}}}}
+        {{"name": "Egg", "amount": 2, "unit": "adet"}},
+        {{"name": "Tomato", "amount": 1, "unit": "adet"}},
+        {{"name": "Green pepper", "amount": 1, "unit": "adet"}}
       ]
-    }}}},
-    {{{{
+    }},
+    {{
       "name": "White cheese",
       "amount": 50,
       "unit": "gr",
       "ingredients": []
-    }}}},
-    {{{{
+    }},
+    {{
       "name": "Olives",
       "amount": 10,
       "unit": "adet",
       "ingredients": []
-    }}}}
+    }}
   ],
   "prep_time_min": 15,
   "nutrition_note": "Balanced protein and healthy fats, high fiber."
-}}}}
+}}
 ```
 
 Rules for the JSON:
