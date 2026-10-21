@@ -1,6 +1,5 @@
 """Integration tests for the /profile endpoints (profile + supplements + daily toggle)."""
 
-import pytest
 
 
 # ---------------------------------------------------------------------------

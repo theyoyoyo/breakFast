@@ -11,7 +11,6 @@ import json
 import aiosqlite
 import pytest
 import pytest_asyncio
-from httpx import ASGITransport
 
 import database
 from auth import hash_pin, create_token
@@ -75,7 +74,7 @@ async def test_websocket_accepts_valid_token(ws_setup):
 
     client = TestClient(app)
 
-    # Mock build_system_prompt to return a simple string (avoids JSON template format issues)
+    # Mock build_chat_prompt to return a simple string
     # and stream_response as an async generator that raises LLMUnavailableError
     async def mock_stream(*args, **kwargs):
         raise LLMUnavailableError(LLM_UNAVAILABLE_MESSAGE)
@@ -117,8 +116,8 @@ async def test_websocket_handles_generic_exception(ws_setup):
 
 
 @pytest.mark.asyncio
-async def test_websocket_build_system_prompt_no_mock(ws_setup):
-    """WebSocket should work with real build_system_prompt (escaped JSON braces)."""
+async def test_websocket_build_chat_prompt_no_mock(ws_setup):
+    """WebSocket should work with the real build_chat_prompt."""
     app, token, _ = ws_setup
     from starlette.testclient import TestClient
     from unittest.mock import patch
@@ -126,7 +125,7 @@ async def test_websocket_build_system_prompt_no_mock(ws_setup):
 
     client = TestClient(app)
 
-    # Only mock stream_response — let build_system_prompt run for real
+    # Only mock stream_response — let build_chat_prompt run for real
     # to verify the JSON template braces are properly escaped
     async def mock_stream(*args, **kwargs):
         raise LLMUnavailableError(LLM_UNAVAILABLE_MESSAGE)

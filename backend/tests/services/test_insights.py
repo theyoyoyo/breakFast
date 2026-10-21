@@ -6,7 +6,7 @@ import json
 import aiosqlite
 import database
 from auth import hash_pin
-from services.insights import refresh_insights, refresh_insights_for_user, _build_insights, _RETENTION_DAYS
+from services.insights import refresh_insights_for_user, _RETENTION_DAYS
 
 
 async def _create_test_user(db_path: str, name: str = "testuser") -> int:

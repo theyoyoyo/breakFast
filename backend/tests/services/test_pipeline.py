@@ -4,12 +4,11 @@ Tests for the 3-step suggestion pipeline (draft → analyze → refine).
 
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import pytest
-import pytest_asyncio
 
 from services.suggestion import build_pipeline_analyst_prompt
 from services.pipeline import run_suggestion_pipeline

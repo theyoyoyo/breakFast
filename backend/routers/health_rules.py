@@ -6,7 +6,7 @@ All queries are scoped to the authenticated user.
 from database import get_db
 from fastapi import APIRouter, Depends, HTTPException
 from auth import require_user
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Literal
 
 

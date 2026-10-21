@@ -1,7 +1,6 @@
 """Integration tests for the /scheduler endpoints."""
 
 import json
-import pytest
 
 
 async def test_plan_no_steps(client):

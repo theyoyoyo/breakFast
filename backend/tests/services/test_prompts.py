@@ -8,12 +8,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-import pytest
 from services.suggestion import (
     build_chat_prompt,
     build_suggestion_prompt,
     build_analyst_prompt,
-    build_system_prompt,
     _format_ingredients,
     _format_history,
     _format_preferences,
@@ -466,9 +464,3 @@ class TestAnalystPrompt:
         prompt = build_analyst_prompt([], None, None, None)
         assert "Not provided" in prompt
         assert "No supplements" in prompt
-
-
-class TestBackwardCompat:
-    def test_build_system_prompt_is_chat_prompt(self):
-        """build_system_prompt is an alias for build_chat_prompt."""
-        assert build_system_prompt is build_chat_prompt
