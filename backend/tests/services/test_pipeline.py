@@ -42,7 +42,13 @@ class TestPipelineAnalystPrompt:
             recent_meal_history=SAMPLE_CONTEXT["history"],
         )
         assert "harsh" in prompt.lower() or "internal reviewer" in prompt.lower()
-        assert "Turkish" in prompt
+        assert "Always respond in English." in prompt
+
+    def test_respects_turkish_language_setting(self):
+        prompt = build_pipeline_analyst_prompt(
+            recent_meal_history=SAMPLE_CONTEXT["history"], language="tr",
+        )
+        assert "Always respond in Turkish." in prompt
 
     # Prompt injects user profile data
     def test_injects_user_profile(self):

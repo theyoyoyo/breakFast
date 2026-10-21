@@ -298,10 +298,10 @@ class TestSuggestionPrompt:
         prompt = build_suggestion_prompt([], [], {}, [])
         assert "seasonal" in prompt.lower()
 
-    def test_includes_turkey_context(self):
-        """Suggestion prompt should mention Turkey-available ingredients."""
+    def test_favors_widely_available_ingredients(self):
+        """Suggestion prompt should steer toward widely available ingredients."""
         prompt = build_suggestion_prompt([], [], {}, [])
-        assert "Turkey" in prompt
+        assert "widely available" in prompt
 
     def test_nutrition_note_in_json_block(self):
         """JSON block should include the short nutrition note and prep time."""
@@ -400,9 +400,13 @@ class TestAnalystPrompt:
         assert "NOT a chat assistant" in prompt
 
     # Analyst prompt responds in Turkish
-    def test_responds_in_turkish(self):
+    def test_responds_in_english_by_default(self):
         prompt = build_analyst_prompt([], None, None, None)
-        assert "Turkish" in prompt
+        assert "Always respond in English." in prompt
+
+    def test_responds_in_turkish_when_set(self):
+        prompt = build_analyst_prompt([], None, None, None, language="tr")
+        assert "Always respond in Turkish." in prompt
 
     # Analyst uses low temperature (instruction embedded in prompt)
     def test_mentions_low_temperature(self):
