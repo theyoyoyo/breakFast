@@ -1,2 +1,4 @@
 # Normalize line endings to LF in the repo, auto-convert on checkout
 * text=auto
+# cmd.exe needs CRLF line endings in batch files
+*.bat text eol=crlf
