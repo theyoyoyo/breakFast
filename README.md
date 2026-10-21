@@ -84,6 +84,23 @@ The backend loads each user's context (inventory, recent meals, profile, supplem
 
 **Tested.** About 285 backend tests (pytest, with a fresh temporary SQLite database per test and the LLM mocked) and frontend unit tests with Vitest.
 
+### GenAI techniques used
+
+| Technique | Where it shows up |
+|---|---|
+| **Role (persona) prompting** | Seven focused personas, one file each, instead of one do-everything prompt (`backend/services/personas/`). |
+| **Grounding in per-user data** | Every prompt is assembled at request time from the database: fridge inventory, recent meals, profile, supplements taken today, health rules and appliances. It is a lightweight, structured form of retrieval augmentation, with no vector store. |
+| **Constraints and priorities** | Hard rules (avoid list, fridge-only ingredients, available appliances) are stated as absolute. Health rules carry priority levels (top priority, important, nice to have) so a small model knows what to trade off, and are never mentioned to the user. |
+| **Structured output by example** | Personas return a fenced JSON block shaped by an example in the prompt. The backend extracts and parses it, and degrades gracefully when parsing fails. |
+| **Generate, critique, refine** | Suggestions use a self-refine loop: a draft, a separate reviewer persona that returns JSON feedback, then a refined menu. |
+| **LLM for judgment, code for math** | For prep plans the model only decomposes and estimates; the scheduling is deterministic, unit-tested code. |
+| **Per-task temperature** | 0.3 for analysis and planning, 0.6 for familiar suggestions, 0.9 for explore mode. |
+| **Context budgeting for a 7B model** | Only the last few meals (4 for suggestions, 3 for chat) and recent chat messages go into prompts. Older history is compressed into inferred habits and pruned after 30 days. |
+| **Long-term personalization memory** | `services/insights.py` turns meal history and ratings into behavioural patterns that steer suggestions toward variety. |
+| **Output-language control** | Prompts are written in English for reliability; a per-user setting adds an explicit response-language directive (English or Turkish). |
+| **Caching and graceful degradation** | Analyses and prep plans are cached per meal; when Ollama is down, features fall back instead of failing. |
+| **Prompt regression tests** | pytest suites check what each prompt contains (rules, context, output format) with the LLM mocked. |
+
 ---
 
 ## Tech stack
