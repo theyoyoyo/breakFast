@@ -529,13 +529,13 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       // Strip JSON block from analysis text for display, show as assistant message
       const displayText = result.analysis_text
         ? result.analysis_text.replace(/```json[\s\S]*?```/g, '').trim()
-        : 'Analiz sonucu alınamadı.'
+        : "Couldn't get the analysis."
       syncLyric(displayText) // keep client lyric index in sync if this was a fallback lyric
-      const analysisMsg = `📊 ${mealName} — Besin Analizi\n\n${displayText}`
+      const analysisMsg = `📊 ${mealName} — Nutrition Analysis\n\n${displayText}`
       setMessages(prev => [...prev, { role: 'assistant', content: analysisMsg }])
     } catch {
       if (abortCtrl.cancelled) return
-      setMessages(prev => [...prev, { role: 'assistant', content: `📊 ${meal.meal_name || meal.menu_name || 'Meal'} — Besin Analizi\n\n${nextLyric()}` }])
+      setMessages(prev => [...prev, { role: 'assistant', content: `📊 ${meal.meal_name || meal.menu_name || 'Meal'} — Nutrition Analysis\n\n${nextLyric()}` }])
     } finally {
       analyzeAbortRef.current = null
       if (!abortCtrl.cancelled) setAnalyzingIdx(null)
@@ -555,14 +555,14 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
         meal.id || null,
         meal.menu || [],
       )
-      const text = result.formatted || 'Zamanlama oluşturulamadı.'
+      const text = result.formatted || "Couldn't build a prep plan."
       syncLyric(text) // keep client lyric index in sync if this was a fallback lyric
       const idTag = meal.id ? ` (#${meal.id})` : ''
-      const scheduleMsg = `📋 ${mealName}${idTag} — Hazırlık Planı\n\n${text}`
+      const scheduleMsg = `📋 ${mealName}${idTag} — Prep Plan\n\n${text}`
       setMessages(prev => [...prev, { role: 'assistant', content: scheduleMsg }])
     } catch {
       const idTag = meal.id ? ` (#${meal.id})` : ''
-      setMessages(prev => [...prev, { role: 'assistant', content: `📋 ${mealName}${idTag} — Hazırlık Planı\n\n${nextLyric()}` }])
+      setMessages(prev => [...prev, { role: 'assistant', content: `📋 ${mealName}${idTag} — Prep Plan\n\n${nextLyric()}` }])
     } finally {
       setSchedulingIdx(null)
     }
@@ -716,7 +716,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Canın ne çekiyor?"
+          placeholder="What are you craving?"
           rows={1}
           disabled={isBusy}
         />
