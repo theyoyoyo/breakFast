@@ -131,6 +131,7 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 - **Fridge constraint**: suggestions must use current inventory. Substitutes OK for small gaps.
 - **CORS**: configurable via `CORS_ORIGINS` env var (comma-separated).
 - **Demo user**: only created when `DEMO_USER=true` (empty PIN). Never enable it on a reachable instance.
+- **Language**: the UI is English only; the setting changes AI replies. User data is often Turkish and pulls a 7B model toward Turkish, so every user-facing prompt ends with a `FINAL REMINDER` restating the language directive. Code-built text in replies (e.g. prep plan labels) follows the same setting.
 - **Line endings**: `.gitattributes` normalizes to LF in repo, CRLF on Windows checkout.
 
 ---
