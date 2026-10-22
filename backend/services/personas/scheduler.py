@@ -1,5 +1,5 @@
 """
-Scheduler persona — extracts a structured cooking plan from meal steps.
+Scheduler persona — extracts a structured cooking plan from a meal's menu and steps.
 
 The LLM focuses on producing a detailed, clear plan. It splits tasks into:
 - prep: quick manual tasks with no timing (chop, plate, mix)
@@ -8,11 +8,11 @@ The LLM focuses on producing a detailed, clear plan. It splits tasks into:
 All scheduling math (parallel execution, backward timing) is handled by our code.
 """
 
-SCHEDULER_TEMPLATE = """You are a kitchen workflow expert. Your job is to analyze a meal's preparation steps and produce a detailed, structured cooking plan.
+SCHEDULER_TEMPLATE = """You are a kitchen workflow expert. Your job is to turn a breakfast menu (its dishes and ingredients, plus any recipe steps given) into a detailed, structured cooking plan.
 {lang_instruction}
 All `task`, `detail`, and `end_action` strings in the JSON output MUST be written in that language — do not mix languages.
 
-Split the steps into two groups:
+Split the work into two groups:
 
 1. **prep**: Quick manual tasks with no specific timing — chopping, plating, mixing, putting into small bowls, slicing, etc. These are done first, before any timed cooking starts.
 
@@ -22,7 +22,8 @@ Split the steps into two groups:
    - Specify what to do when the task finishes (strain, remove, flip, etc.)
 
 Rules:
-- Expand the recipe steps — add necessary but missing actions (e.g., if the recipe says "boil eggs", also add "strain and transfer to cold water" as end_action)
+- Cover every item on the menu. Work out the actions each dish needs even when no steps are given, and add necessary but missing actions (e.g., for boiled eggs, add "strain and transfer to cold water" as end_action)
+- Items served as-is (cheese, olives, honey, fruit) usually need only a prep task such as slicing or plating
 - Be realistic about durations
 - Output ONLY the JSON object, nothing else
 
@@ -55,14 +56,35 @@ def build_scheduler_prompt(meal_name: str, steps: list[str], ingredients_str: st
     return SCHEDULER_TEMPLATE.format(kitchen_appliances=appliance_str, lang_instruction=_lang(language))
 
 
-def build_scheduler_user_message(meal_name: str, steps: list[str], ingredients_str: str) -> str:
-    """Build the user message with meal details."""
-    steps_text = "\n".join(f"{i+1}. {s}" for i, s in enumerate(steps))
-    return f"""Meal: {meal_name}
+def _with_amount(item) -> str:
+    """'Egg (2 adet)' for a dict with amount/unit, the plain name otherwise."""
+    if not isinstance(item, dict):
+        return str(item)
+    name = item.get("name", "?")
+    qty = " ".join(str(v) for v in (item.get("amount"), item.get("unit")) if v not in (None, ""))
+    return f"{name} ({qty})" if qty else name
 
-Ingredients: {ingredients_str}
 
-Steps:
-{steps_text}
+def format_menu(menu: list) -> str:
+    """One line per menu item: cooked dishes with their ingredients, simple items with their amount."""
+    lines = []
+    for item in menu:
+        subs = item.get("ingredients") if isinstance(item, dict) else None
+        if subs:
+            lines.append(f"- {item.get('name', '?')}: {', '.join(_with_amount(s) for s in subs)}")
+        else:
+            lines.append(f"- {_with_amount(item)}")
+    return "\n".join(lines)
 
-Produce the cooking plan:"""
+
+def build_scheduler_user_message(meal_name: str, steps: list[str], ingredients_str: str, menu: list | None = None) -> str:
+    """Build the user message with meal details. Menu-format meals usually have no steps."""
+    parts = [f"Meal: {meal_name}"]
+    if menu:
+        parts.append(f"Menu:\n{format_menu(menu)}")
+    else:
+        parts.append(f"Ingredients: {ingredients_str}")
+    if steps:
+        parts.append("Steps:\n" + "\n".join(f"{i+1}. {s}" for i, s in enumerate(steps)))
+    parts.append("Produce the cooking plan:")
+    return "\n\n".join(parts)

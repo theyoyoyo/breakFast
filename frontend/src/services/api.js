@@ -309,8 +309,8 @@ export const analyzeMeal = (meal_name, ingredients, meal_id = null) =>
 // Scheduler
 // ---------------------------------------------------------------------------
 
-export const getSchedule = (meal_name, steps, ingredients, meal_id = null) =>
-  apiFetch(`${BASE_URL}/scheduler/plan`, json('POST', { meal_name, steps, ingredients, meal_id }))
+export const getSchedule = (meal_name, steps, ingredients, meal_id = null, menu = []) =>
+  apiFetch(`${BASE_URL}/scheduler/plan`, json('POST', { meal_name, steps, menu, ingredients, meal_id }))
 
 // ---------------------------------------------------------------------------
 // WebSocket chat

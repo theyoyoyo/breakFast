@@ -24,7 +24,8 @@ router = APIRouter(prefix="/scheduler", tags=["scheduler"])
 
 class ScheduleRequest(BaseModel):
     meal_name: str
-    steps: list[str]
+    steps: list[str] = []
+    menu: list[Union[dict, str]] = []
     ingredients: list[Union[dict, str]] = []
     meal_id: int | None = None
 
@@ -127,7 +128,8 @@ async def get_schedule(body: ScheduleRequest, user_id: int = Depends(require_use
                     cached=True,
                 )
 
-    if not body.steps:
+    # Menu-format meals have no steps; the LLM plans from the menu instead
+    if not (body.steps or body.menu or body.ingredients):
         return ScheduleResponse(timeline=[], makespan_min=0, formatted="No steps found.")
 
     # Format ingredients for the prompt
@@ -144,7 +146,7 @@ async def get_schedule(body: ScheduleRequest, user_id: int = Depends(require_use
     language = prefs.get("response_language", "en")
 
     system_prompt = build_scheduler_prompt(body.meal_name, body.steps, ingredients_str, kitchen_appliances=kitchen_appliances, language=language)
-    user_message = build_scheduler_user_message(body.meal_name, body.steps, ingredients_str)
+    user_message = build_scheduler_user_message(body.meal_name, body.steps, ingredients_str, menu=body.menu)
 
     # Collect full LLM response
     full_response = []

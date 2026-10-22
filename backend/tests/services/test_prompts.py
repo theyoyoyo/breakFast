@@ -27,6 +27,7 @@ from services.suggestion import (
 from services.personas import (
     build_pipeline_analyst_prompt,
     build_scheduler_prompt,
+    build_scheduler_user_message,
     build_shopping_prompt,
     build_weekly_analyst_prompt_with_meals,
 )
@@ -476,6 +477,34 @@ class TestAnalystPrompt:
         prompt = build_analyst_prompt([], None, None, None)
         assert "Not provided" in prompt
         assert "No supplements" in prompt
+
+
+# ---------------------------------------------------------------------------
+# Scheduler (prep plan)
+# ---------------------------------------------------------------------------
+
+class TestSchedulerUserMessage:
+    MENU = [
+        {"name": "Menemen", "ingredients": [
+            {"name": "Egg", "amount": 2, "unit": "adet"},
+            {"name": "Tomato", "amount": 1, "unit": "adet"},
+        ]},
+        {"name": "White cheese", "amount": 50, "unit": "g", "ingredients": []},
+    ]
+
+    def test_menu_without_steps_lists_every_dish(self):
+        """A menu-format meal sends its dishes and amounts, with no empty Steps section."""
+        msg = build_scheduler_user_message("Classic Breakfast", [], "Egg, Tomato", menu=self.MENU)
+        assert "- Menemen: Egg (2 adet), Tomato (1 adet)" in msg
+        assert "- White cheese (50 g)" in msg
+        assert "Steps:" not in msg
+        assert "Ingredients:" not in msg
+
+    def test_steps_still_included(self):
+        """Older meals with recipe steps keep sending them, numbered."""
+        msg = build_scheduler_user_message("Eggs", ["Boil eggs", "Peel"], "Egg")
+        assert "Ingredients: Egg" in msg
+        assert "Steps:\n1. Boil eggs\n2. Peel" in msg
 
 
 # ---------------------------------------------------------------------------

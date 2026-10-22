@@ -553,6 +553,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
         meal.steps || [],
         meal.ingredients || [],
         meal.id || null,
+        meal.menu || [],
       )
       const text = result.formatted || 'Zamanlama oluşturulamadı.'
       syncLyric(text) // keep client lyric index in sync if this was a fallback lyric
