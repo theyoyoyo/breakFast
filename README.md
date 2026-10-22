@@ -67,39 +67,9 @@ The backend loads each user's context (inventory, recent meals, profile, supplem
 
 ### Engineering highlights
 
-**The LLM decides, plain code does the math.** For the prep plan, the model only breaks a menu into untimed prep (chop, slice) and timed tasks, each with an appliance, a duration and an end action, restricted to the appliances the user has enabled. The scheduling itself is deterministic and unit-tested (`_build_plan` in `backend/routers/scheduler.py`): the longest timed task sets the total time and every other task starts at *total − duration*, so everything finishes together. The result is cached on the meal.
+**GenAI approach.** Grounding every prompt in that per-user context at request time is a lightweight form of retrieval, with no vector store. Suggestions go through a draft, critique and refine loop. Hard constraints (avoid list, fridge-only, appliances) are absolute, and health rules carry priorities so a 7B model knows what to trade off. The model makes the judgment calls and plain code does the math: for prep plans it only breaks the menu into tasks and estimates times, and a deterministic, unit-tested scheduler times them so everything finishes together.
 
-| Start | Task | Appliance | Duration |
-|---|---|---|---|
-| 0:00 | Boil eggs | Stove | 7 min |
-| 2:00 | Brew tea | Kettle | 5 min |
-| 4:00 | Toast bread | Toaster | 3 min |
-| 7:00 | **Everything is ready** | | |
-
-**Per-user isolation.** Every user-owned table carries a `user_id`, and every query is scoped to the user resolved from the bearer token by a FastAPI dependency (`require_user`). Tests check that one user can never see another's data, and that the admin CLI's `delete-user` clears every per-user table in the schema.
-
-**Graceful degradation.** Before each LLM call the backend checks that Ollama is reachable (3-second timeout). If it is not, every AI feature answers with the next line of a breakfast-themed song parody instead of an error, and all non-AI features keep working. The client mirrors the same list, so the song carries on even when the server itself is unreachable.
-
-**Streaming end to end.** Tokens stream from Ollama through the FastAPI WebSocket to the browser, and the suggestion pipeline reports its progress (drafting, analyzing, finalizing) as it goes.
-
-**Tested.** About 285 backend tests (pytest, with a fresh temporary SQLite database per test and the LLM mocked) and frontend unit tests with Vitest.
-
-#### GenAI techniques used
-
-| Technique | Where it shows up |
-|---|---|
-| **Role (persona) prompting** | Seven focused personas, one file each, instead of one do-everything prompt (`backend/services/personas/`). |
-| **Grounding in per-user data** | Every prompt is assembled at request time from the database: fridge inventory, recent meals, profile, supplements taken today, health rules and appliances. It is a lightweight, structured form of retrieval augmentation, with no vector store. |
-| **Constraints and priorities** | Hard rules (avoid list, fridge-only ingredients, available appliances) are stated as absolute. Health rules carry priority levels (top priority, important, nice to have) so a small model knows what to trade off, and are never mentioned to the user. |
-| **Structured output by example** | Personas return a fenced JSON block shaped by an example in the prompt. The backend extracts and parses it, and degrades gracefully when parsing fails. |
-| **Generate, critique, refine** | Suggestions use a self-refine loop: a draft, a separate reviewer persona that returns JSON feedback, then a refined menu. |
-| **LLM for judgment, code for math** | For prep plans the model only decomposes and estimates; the scheduling is deterministic, unit-tested code. |
-| **Per-task temperature** | 0.3 for analysis and planning, 0.6 for familiar suggestions, 0.9 for explore mode. |
-| **Context budgeting for a 7B model** | Only the last few meals (4 for suggestions, 3 for chat) and recent chat messages go into prompts. Older history is compressed into inferred habits and pruned after 30 days. |
-| **Long-term personalization memory** | `services/insights.py` turns meal history and ratings into behavioural patterns that steer suggestions toward variety. |
-| **Output-language control** | Prompts are written in English for reliability; a per-user setting adds an explicit response-language directive (English or Turkish). |
-| **Caching and graceful degradation** | Analyses and prep plans are cached per meal; when Ollama is down, features fall back instead of failing. |
-| **Prompt regression tests** | pytest suites check what each prompt contains (rules, context, output format) with the LLM mocked. |
+**Engineering.** Every query is scoped to the logged-in user, tokens stream from Ollama to the browser over a WebSocket, and analyses and prep plans are cached per meal. When Ollama is down, AI features answer with a song parody instead of an error. About 290 backend tests (pytest, LLM mocked) and Vitest unit tests cover the code and the prompts.
 
 ---
 
