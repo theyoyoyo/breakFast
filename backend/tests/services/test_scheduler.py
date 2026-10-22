@@ -35,7 +35,7 @@ def test_build_plan_prep_section():
         ],
         "timed": [],
     }
-    result = _build_plan(raw)
+    result = _build_plan(raw, "tr")
     assert "🔪 Hazırlık" in result["formatted"]
     assert "Salatalık doğra — küp küp" in result["formatted"]
     assert "Zeytinleri süz" in result["formatted"]
@@ -50,9 +50,24 @@ def test_build_plan_end_action_shown():
             {"task": "Haşla", "duration_min": 5, "resource": "ocak", "end_action": "Süz ve soğut"},
         ],
     }
-    result = _build_plan(raw)
+    result = _build_plan(raw, "tr")
     assert "↳ Süz ve soğut" in result["formatted"]
     assert "Hazır! ✓" in result["formatted"]
+    assert "(5 dk)" in result["formatted"]
+
+
+def test_build_plan_labels_default_to_english():
+    """Plan labels follow the response language, English by default."""
+    raw = {
+        "prep": [{"task": "Slice tomatoes"}],
+        "timed": [{"task": "Boil eggs", "duration_min": 7, "resource": "Stove", "end_action": "Drain"}],
+    }
+    formatted = _build_plan(raw)["formatted"]
+    assert "🔪 Prep" in formatted
+    assert "⏱ Timeline (7 min)" in formatted
+    assert "Boil eggs (7 min)" in formatted
+    assert "Ready! ✓" in formatted
+    assert "Hazır" not in formatted
 
 
 def test_build_plan_no_timed_no_crash():
