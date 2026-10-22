@@ -11,7 +11,6 @@ Steps:
 3. Suggestion persona refines the meal using analyst feedback (streamed to user).
 """
 
-import json
 from typing import AsyncGenerator
 
 from services.suggestion import (
@@ -19,7 +18,6 @@ from services.suggestion import (
     build_pipeline_analyst_prompt,
     stream_response,
 )
-from services.llm import LLMUnavailableError
 from utils import extract_json_block
 
 

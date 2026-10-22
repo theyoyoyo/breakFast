@@ -12,7 +12,7 @@ from datetime import date as date_type
 
 async def fetch_kitchen_appliances(db, user_id: int) -> list[str]:
     """Return display names of enabled kitchen appliances for prompt injection."""
-    from models.kitchen import KITCHEN_APPLIANCES, DEFAULT_ENABLED_KEYS, VALID_APPLIANCE_KEYS
+    from models.kitchen import KITCHEN_APPLIANCES, DEFAULT_ENABLED_KEYS
 
     async with db.execute(
         "SELECT appliance_key, enabled FROM user_kitchen_appliances WHERE user_id = ?",

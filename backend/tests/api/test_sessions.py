@@ -93,8 +93,6 @@ async def test_delete_session_goes_back_to_previous(client):
 async def test_messages_persist_via_websocket(client, tmp_path, monkeypatch):
     """Messages sent via WebSocket should be persisted and retrievable."""
     import json
-    import database
-    from auth import create_token, get_user_id_from_token
     from starlette.testclient import TestClient
     from unittest.mock import patch
     from services.llm import LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE

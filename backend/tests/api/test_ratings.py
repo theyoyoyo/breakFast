@@ -1,6 +1,5 @@
 """Integration tests for the /ratings endpoints."""
 
-import pytest
 
 
 async def test_list_empty_on_fresh_db(client):

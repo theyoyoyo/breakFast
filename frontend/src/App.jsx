@@ -83,6 +83,9 @@ export default function App() {
     return <LoginScreen onLogin={(data) => setAuth(data)} />
   }
 
+  // Demo triggers (name click, re-clicking Chat/Fridge) are for the demo account only
+  const isDemo = auth.user.name === 'demo'
+
   const handleMealLogged = () => {
     setIngredientRefresh((n) => n + 1)
   }
@@ -101,7 +104,7 @@ export default function App() {
             key={key}
             style={s.tab(activeTab === key, narrow)}
             onClick={() => {
-              if (key === activeTab && auth.user.name === 'demo') {
+              if (key === activeTab && isDemo) {
                 if (key === 'Chat') chatRef.current?.injectDemoSchedule()
                 else if (key === 'Ingredients') ingredientRef.current?.injectDemoShopping()
                 else setActiveTab(key)
@@ -116,11 +119,15 @@ export default function App() {
           </button>
         ))}
         <div style={s.userInfo}>
-          <span
-            style={{ cursor: 'pointer' }}
-            onClick={() => chatRef.current?.injectDemoMeal()}
-            title="Demo action"
-          >{auth.user.name}</span>
+          {isDemo ? (
+            <span
+              style={{ cursor: 'pointer' }}
+              onClick={() => chatRef.current?.injectDemoMeal()}
+              title="Demo action"
+            >{auth.user.name}</span>
+          ) : (
+            <span>{auth.user.name}</span>
+          )}
           <button style={s.logoutBtn} onClick={handleLogout} title="Logout">
             <LogOut size={12} style={narrow ? { verticalAlign: -1 } : { marginRight: 4, verticalAlign: -1 }} />
             {!narrow && 'Logout'}

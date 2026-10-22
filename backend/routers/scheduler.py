@@ -24,7 +24,8 @@ router = APIRouter(prefix="/scheduler", tags=["scheduler"])
 
 class ScheduleRequest(BaseModel):
     meal_name: str
-    steps: list[str]
+    steps: list[str] = []
+    menu: list[Union[dict, str]] = []
     ingredients: list[Union[dict, str]] = []
     meal_id: int | None = None
 
@@ -36,12 +37,26 @@ class ScheduleResponse(BaseModel):
     cached: bool = False
 
 
-def _build_plan(raw: dict) -> dict:
+# Fixed labels in the formatted plan, per response language
+_PLAN_LABELS = {
+    "en": {"prep": "🔪 Prep", "timeline": "⏱ Timeline", "min": "min", "ready": "Ready! ✓",
+           "unreadable": "Couldn't read the plan. Please try again."},
+    "tr": {"prep": "🔪 Hazırlık", "timeline": "⏱ Zamanlama", "min": "dk", "ready": "Hazır! ✓",
+           "unreadable": "Plan ayrıştırılamadı. Lütfen tekrar dene."},
+}
+
+
+def _labels(language: str) -> dict:
+    return _PLAN_LABELS.get(language, _PLAN_LABELS["en"])
+
+
+def _build_plan(raw: dict, language: str = "en") -> dict:
     """
     Take the LLM's {prep, timed} output and produce a formatted plan.
 
     Timed tasks are scheduled backwards so they all finish at the same time.
     """
+    labels = _labels(language)
     prep = raw.get("prep", [])
     timed = raw.get("timed", [])
 
@@ -70,7 +85,7 @@ def _build_plan(raw: dict) -> dict:
     lines = []
 
     if prep:
-        lines.append("🔪 Hazırlık")
+        lines.append(labels["prep"])
         for p in prep:
             task = p.get("task", "?") if isinstance(p, dict) else str(p)
             detail = p.get("detail", "") if isinstance(p, dict) else ""
@@ -81,13 +96,13 @@ def _build_plan(raw: dict) -> dict:
         lines.append("")
 
     if timeline:
-        lines.append(f"⏱ Zamanlama ({int(makespan)} dk)")
+        lines.append(f"{labels['timeline']} ({int(makespan)} {labels['min']})")
         for entry in timeline:
             m = int(entry["start_min"])
             s = int((entry["start_min"] - m) * 60)
             res = f"  [{entry['resource']}]" if entry["resource"] else ""
             lines.append(
-                f"  {m}:{s:02d}  — {entry['task']} ({entry['duration_min']:.0f} dk){res}"
+                f"  {m}:{s:02d}  — {entry['task']} ({entry['duration_min']:.0f} {labels['min']}){res}"
             )
             if entry["end_action"]:
                 lines.append(f"         ↳ {entry['end_action']}")
@@ -95,7 +110,7 @@ def _build_plan(raw: dict) -> dict:
         # Final "done" line
         done_m = int(makespan)
         done_s = int((makespan - done_m) * 60)
-        lines.append(f"  {done_m}:{done_s:02d}  — Hazır! ✓")
+        lines.append(f"  {done_m}:{done_s:02d}  — {labels['ready']}")
 
     formatted = "\n".join(lines)
 
@@ -127,7 +142,8 @@ async def get_schedule(body: ScheduleRequest, user_id: int = Depends(require_use
                     cached=True,
                 )
 
-    if not body.steps:
+    # Menu-format meals have no steps; the LLM plans from the menu instead
+    if not (body.steps or body.menu or body.ingredients):
         return ScheduleResponse(timeline=[], makespan_min=0, formatted="No steps found.")
 
     # Format ingredients for the prompt
@@ -137,15 +153,14 @@ async def get_schedule(body: ScheduleRequest, user_id: int = Depends(require_use
         ingredients_str = "ingredient list unavailable"
 
     # Fetch user's kitchen appliances and language preference for the prompt
-    from services.context import fetch_kitchen_appliances
-    from db_helpers import fetch_preferences
+    from services.context import fetch_kitchen_appliances, fetch_preferences
     async with get_db() as db:
         kitchen_appliances = await fetch_kitchen_appliances(db, user_id)
         prefs = await fetch_preferences(db, user_id)
     language = prefs.get("response_language", "en")
 
     system_prompt = build_scheduler_prompt(body.meal_name, body.steps, ingredients_str, kitchen_appliances=kitchen_appliances, language=language)
-    user_message = build_scheduler_user_message(body.meal_name, body.steps, ingredients_str)
+    user_message = build_scheduler_user_message(body.meal_name, body.steps, ingredients_str, menu=body.menu)
 
     # Collect full LLM response
     full_response = []
@@ -167,11 +182,11 @@ async def get_schedule(body: ScheduleRequest, user_id: int = Depends(require_use
         return ScheduleResponse(
             timeline=[],
             makespan_min=0,
-            formatted="Plan ayrıştırılamadı.",
+            formatted=_labels(language)["unreadable"],
         )
 
     # Build the schedule ourselves
-    result = _build_plan(raw_plan)
+    result = _build_plan(raw_plan, language)
 
     # Cache if meal_id was provided
     if body.meal_id is not None:

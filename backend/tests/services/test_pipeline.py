@@ -4,12 +4,11 @@ Tests for the 3-step suggestion pipeline (draft → analyze → refine).
 
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import pytest
-import pytest_asyncio
 
 from services.suggestion import build_pipeline_analyst_prompt
 from services.pipeline import run_suggestion_pipeline
@@ -43,7 +42,13 @@ class TestPipelineAnalystPrompt:
             recent_meal_history=SAMPLE_CONTEXT["history"],
         )
         assert "harsh" in prompt.lower() or "internal reviewer" in prompt.lower()
-        assert "Turkish" in prompt
+        assert "Always respond in English." in prompt
+
+    def test_respects_turkish_language_setting(self):
+        prompt = build_pipeline_analyst_prompt(
+            recent_meal_history=SAMPLE_CONTEXT["history"], language="tr",
+        )
+        assert "Always respond in Turkish." in prompt
 
     # Prompt injects user profile data
     def test_injects_user_profile(self):

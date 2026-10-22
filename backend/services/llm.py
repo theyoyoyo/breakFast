@@ -1,7 +1,7 @@
 """
 LLM abstraction layer.
-Tries Ollama; if unavailable, raises LLMUnavailableError.
-Claude API fallback is commented out — to be re-enabled later.
+Tries Ollama; if unavailable, raises LLMUnavailableError and callers fall
+back to the next line of FALLBACK_LYRICS.
 """
 
 import httpx
@@ -15,18 +15,18 @@ from config import (
 
 
 FALLBACK_LYRICS = [
-    "Benim aklım başımda değil~",
-    "🎶 Sana söylediklerimi kafana takma ne olursun...",
-    "🎵 Onlar ipe sapa gelir şeyler değil!",
-    "💔 Seni sevmiyorum dedim; yalandı~",
-    "🎶 İstemiyorum artık; palavra!",
-    "💐 Ellerimde çiçekler~",
-    "🌧️ Kapında sırıksıklam...",
-    "👀 Görürsen bir gün şaşırma~",
-    "🎵 Beni böyle çaresiz...",
-    "🎶 Beni böyle derbeder...",
-    "🎵 Beni böyle ortalarda bırakma!",
-    "🙈 Son zamanlar yaptıklarıma bakma ne olursun~",
+    "Benim aklım ocakta kaldı~",
+    "🎶 Dünkü menüyü kafana takma ne olursun...",
+    "🎵 Onlar çaya simide gelir şeyler değil!",
+    "💔 Menemen yapmam dedim; yalandı~",
+    "🎶 Çay istemiyorum artık; palavra!",
+    "🥯 Ellerimde simitler~",
+    "☕ Kapında demlik elimde...",
+    "👀 Ocakta görürsen şaşırma~",
+    "🎵 Beni böyle aç susuz...",
+    "🎶 Beni böyle kahvaltısız...",
+    "🍳 Beni böyle sofrada yalnız bırakma!",
+    "🙈 Son zamanlarda yediklerime bakma ne olursun~",
 ]
 
 # Keep for backwards compatibility with imports
@@ -130,29 +130,3 @@ async def _ollama_stream(
                         break
                 except json.JSONDecodeError:
                     continue
-
-
-# ---------------------------------------------------------------------------
-# Claude API fallback — commented out, to be re-enabled later
-# ---------------------------------------------------------------------------
-#
-# import anthropic
-# from config import ANTHROPIC_API_KEY, CLAUDE_MODEL
-#
-# async def _claude_stream(
-#     system_prompt: str,
-#     messages: list[dict],
-# ) -> AsyncGenerator[str, None]:
-#     if not ANTHROPIC_API_KEY:
-#         yield "[LLM unavailable: Ollama is down and no ANTHROPIC_API_KEY is set]"
-#         return
-#
-#     client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
-#     async with client.messages.stream(
-#         model=CLAUDE_MODEL,
-#         max_tokens=2048,
-#         system=system_prompt,
-#         messages=messages,
-#     ) as stream:
-#         async for text in stream.text_stream:
-#             yield text

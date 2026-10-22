@@ -108,15 +108,15 @@ the following structure — no extra text before or after.
 Do NOT output JSON blocks for sections 3, 4, or 5. Plain text only for those sections.
 Your response must end with a single JSON block containing all structured data:
 ```json
-{{{{
+{{
   "narrative": "...",
   "daily_coverage": [
-    {{{{"label": "Calories", "value": "~420 kcal", "percent": 28}}}},
-    {{{{"label": "Protein", "value": "~18g", "percent": 32}}}},
-    {{{{"label": "Fiber", "value": "~5g", "percent": 20}}}},
-    {{{{"label": "Vitamins & Minerals", "value": "moderate", "percent": 35}}}}
+    {{"label": "Calories", "value": "~420 kcal", "percent": 28}},
+    {{"label": "Protein", "value": "~18g", "percent": 32}},
+    {{"label": "Fiber", "value": "~5g", "percent": 20}},
+    {{"label": "Vitamins & Minerals", "value": "moderate", "percent": 35}}
   ],
-  "macros": {{{{
+  "macros": {{
     "calories_kcal": 0,
     "protein_g": 0,
     "carbs_g": 0,
@@ -124,20 +124,23 @@ Your response must end with a single JSON block containing all structured data:
     "fat_saturated_g": 0,
     "fat_unsaturated_g": 0,
     "fiber_g": 0
-  }}}},
+  }},
   "micros": [
-    {{{{"name": "B12", "value": "~1.2mcg", "daily_percent": 50}}}},
-    {{{{"name": "Iron", "value": "~3mg", "daily_percent": 17}}}}
+    {{"name": "B12", "value": "~1.2mcg", "daily_percent": 50}},
+    {{"name": "Iron", "value": "~3mg", "daily_percent": 17}}
   ],
   "supplement_warnings": [
-    {{{{"nutrient": "Vitamin D", "meal_amount": "~15mcg", "supplement_amount": "25mcg", "total_percent_ul": 80, "risk": "medium"}}}},
-    {{{{"nutrient": "Iron", "meal_amount": "~8mg", "supplement_amount": "14mg", "total_percent_ul": 49, "risk": "low"}}}}
+    {{"nutrient": "Vitamin D", "meal_amount": "~15mcg", "supplement_amount": "25mcg", "total_percent_ul": 80, "risk": "medium"}},
+    {{"nutrient": "Iron", "meal_amount": "~8mg", "supplement_amount": "14mg", "total_percent_ul": 49, "risk": "low"}}
   ],
   "health_rule_compliance": [
-    {{{{"rule": "...", "status": "aligned", "note": "..."}}}},
+    {{"rule": "...", "status": "aligned", "note": "..."}}
   ]
-}}}}
+}}
 ```
+
+FINAL REMINDER: {lang_instruction} Write all report text in that language, even when ingredient \
+or meal names are in another language. Only dish names keep their original spelling; JSON keys stay as shown.
 """
 
 

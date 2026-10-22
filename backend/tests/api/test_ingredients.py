@@ -1,7 +1,5 @@
 """Integration tests for the /ingredients endpoints."""
 
-import pytest
-from unittest.mock import patch
 
 
 async def test_list_empty_on_fresh_db(client):

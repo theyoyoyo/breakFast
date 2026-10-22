@@ -29,7 +29,6 @@ from services.knowledge import (
     format_behavioral,
     format_user_profile,
     format_supplements,
-    format_history_detailed,
 )
 
 # Private aliases — used by tests
@@ -42,9 +41,6 @@ _format_avoid_list = format_avoid_list
 _format_behavioral = format_behavioral
 _format_user_profile = format_user_profile
 _format_supplements = format_supplements
-
-# Backward compat alias — used by existing chat.py
-build_system_prompt = build_chat_prompt
 
 
 async def stream_response(

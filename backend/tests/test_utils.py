@@ -1,6 +1,6 @@
-"""Unit tests for utils.extract_json_block."""
+"""Unit tests for utils."""
 
-from utils import extract_json_block
+from utils import extract_json_block, resolve_static_file
 
 
 def test_extracts_valid_json_block():
@@ -34,3 +34,29 @@ def test_handles_nested_objects_and_arrays():
     assert result["meal_name"] == "Serpme"
     assert len(result["ingredients"]) == 2
     assert result["ingredients"][0]["name"] == "Peynir"
+
+
+def test_resolve_static_file_inside_root(tmp_path):
+    (tmp_path / "assets").mkdir()
+    (tmp_path / "assets" / "app.js").write_text("js")
+    assert resolve_static_file(tmp_path, "assets/app.js") == (tmp_path / "assets" / "app.js").resolve()
+
+
+def test_resolve_static_file_missing_returns_none(tmp_path):
+    assert resolve_static_file(tmp_path, "nope.js") is None
+    assert resolve_static_file(tmp_path, "") is None  # directory, not a file
+
+
+def test_resolve_static_file_blocks_traversal(tmp_path):
+    root = tmp_path / "dist"
+    root.mkdir()
+    (tmp_path / "secret.db").write_text("secret")
+    assert resolve_static_file(root, "../secret.db") is None
+    assert resolve_static_file(root, "assets/../../secret.db") is None
+    assert resolve_static_file(root, str(tmp_path / "secret.db")) is None  # absolute path
+
+
+def test_resolve_static_file_malformed_paths_return_none(tmp_path):
+    assert resolve_static_file(tmp_path, "a\x00b") is None
+    assert resolve_static_file(tmp_path, "x" * 5000) is None
+

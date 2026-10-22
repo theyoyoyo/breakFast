@@ -68,25 +68,6 @@ export const mealName = {
   whiteSpace: 'nowrap',
 }
 
-export const prepBadge = {
-  fontSize: 11,
-  color: 'var(--text-muted)',
-  flexShrink: 0,
-}
-
-export const mealBadges = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-  flexShrink: 0,
-}
-
-export const analyzedBadge = {
-  fontSize: 11,
-  color: secondaryColor,
-  fontWeight: 600,
-}
-
 export const analyzeBtn = {
   background: 'var(--surface)',
   border: '1px solid var(--border)',
@@ -102,99 +83,10 @@ export const expandIcon = {
   color: 'var(--text-muted)',
 }
 
-export const mealExpanded = {
-  padding: '0 12px 12px',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 8,
-  borderTop: '1px solid var(--border)',
-  paddingTop: 10,
-}
-
 export const ingredientList = {
   display: 'flex',
   flexWrap: 'wrap',
   gap: 4,
-}
-
-export const ingredientTag = {
-  background: 'var(--surface)',
-  borderRadius: 6,
-  padding: '3px 8px',
-  fontSize: 12,
-  color: 'var(--text)',
-}
-
-export const nutritionSection = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 6,
-}
-
-export const macroRow = {
-  display: 'flex',
-  flexWrap: 'wrap',
-  gap: 6,
-}
-
-export const macroTag = {
-  background: 'var(--surface)',
-  border: '1px solid var(--border)',
-  borderRadius: 6,
-  padding: '3px 8px',
-  fontSize: 12,
-  color: secondaryColor,
-  fontWeight: 600,
-}
-
-export const analysisText = {
-  fontSize: 13,
-  color: 'var(--text-muted)',
-  lineHeight: 1.5,
-  whiteSpace: 'pre-wrap',
-  maxHeight: 200,
-  overflowY: 'auto',
-}
-
-export const microTag = {
-  background: 'var(--surface)',
-  border: '1px solid var(--border)',
-  borderRadius: 6,
-  padding: '3px 8px',
-  fontSize: 11,
-  color: 'var(--text-muted)',
-}
-
-export const warningSection = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 2,
-}
-
-export const warningRow = {
-  fontSize: 12,
-  color: 'var(--text)',
-}
-
-export const complianceSection = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 2,
-}
-
-export const complianceRow = {
-  fontSize: 12,
-  color: 'var(--text)',
-}
-
-export const complianceNote = {
-  color: 'var(--text-muted)',
-}
-
-export const notAnalyzed = {
-  fontSize: 12,
-  color: 'var(--text-muted)',
-  fontStyle: 'italic',
 }
 
 // --- Weekly Review styles ---

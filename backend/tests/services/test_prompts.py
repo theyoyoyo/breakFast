@@ -3,17 +3,17 @@ Tests for system prompt personas (chat + suggestion).
 Verifies template rendering, context injection, and health rules.
 """
 
+import json
+import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-import pytest
 from services.suggestion import (
     build_chat_prompt,
     build_suggestion_prompt,
     build_analyst_prompt,
-    build_system_prompt,
     _format_ingredients,
     _format_history,
     _format_preferences,
@@ -23,6 +23,13 @@ from services.suggestion import (
     _format_user_profile,
     _format_supplements,
     _format_avoid_list,
+)
+from services.personas import (
+    build_pipeline_analyst_prompt,
+    build_scheduler_prompt,
+    build_scheduler_user_message,
+    build_shopping_prompt,
+    build_weekly_analyst_prompt_with_meals,
 )
 
 
@@ -195,11 +202,10 @@ class TestChatPrompt:
         assert "deprioritize" in prompt
         assert "NEVER fully exclude" in prompt
 
-    def test_json_block_present(self):
-        """The JSON example block should render correctly (escaped braces)."""
+    def test_no_json_block(self):
+        """Chat persona replies in plain text; meal blocks only come from Suggest."""
         prompt = build_chat_prompt([], [], {}, [])
-        assert '"meal_name"' in prompt
-        assert '"ingredients"' in prompt
+        assert "```json" not in prompt
 
     def test_includes_avoid_list_empty(self):
         prompt = build_chat_prompt([], [], {}, [])
@@ -234,12 +240,13 @@ class TestSuggestionPrompt:
         prompt = build_suggestion_prompt([], [], {}, [])
         assert "dietitian" in prompt.lower() or "professional" in prompt.lower()
 
-    def test_history_limit_is_10(self):
-        """Suggestion persona uses last 10 meals (fuller context)."""
+    def test_history_limit_is_4(self):
+        """Suggestion persona uses the last 4 meals."""
         meals = [{"meal_name": f"meal_{i}"} for i in range(15)]
         prompt = build_suggestion_prompt([], meals, {}, [])
         assert "meal_14" in prompt
-        assert "meal_5" in prompt
+        assert "meal_11" in prompt
+        assert "meal_10" not in prompt
         assert "meal_0" not in prompt
 
     def test_includes_health_rules(self):
@@ -251,7 +258,8 @@ class TestSuggestionPrompt:
 
     def test_json_block_present(self):
         prompt = build_suggestion_prompt([], [], {}, [])
-        assert '"meal_name"' in prompt
+        assert '"menu_name"' in prompt
+        assert '"menu"' in prompt
 
     def test_includes_behavioral_patterns(self):
         prompt = build_suggestion_prompt(
@@ -261,14 +269,13 @@ class TestSuggestionPrompt:
         assert "high egg consumption" in prompt
         assert "DIVERSIFY" in prompt
 
-    def test_includes_nutrition_detail_fields(self):
-        """Suggestion prompt should ask for detailed macro breakdown."""
+    def test_includes_nutrition_guidance(self):
+        """Suggestion prompt should carry internal nutrition guidance."""
         prompt = build_suggestion_prompt([], [], {}, [])
         assert "protein" in prompt.lower()
         assert "calori" in prompt.lower() or "kcal" in prompt.lower()
         assert "fiber" in prompt.lower()
         assert "omega" in prompt.lower()
-        assert "vitamin" in prompt.lower()
 
     def test_includes_advance_prep_tip(self):
         """Suggestion prompt should mention advance prep section."""
@@ -292,18 +299,17 @@ class TestSuggestionPrompt:
         prompt = build_suggestion_prompt([], [], {}, [])
         assert "seasonal" in prompt.lower()
 
-    def test_includes_turkey_context(self):
-        """Suggestion prompt should mention Turkey-available ingredients."""
+    def test_favors_widely_available_ingredients(self):
+        """Suggestion prompt should steer toward widely available ingredients."""
         prompt = build_suggestion_prompt([], [], {}, [])
-        assert "Turkey" in prompt
+        assert "widely available" in prompt
 
-    def test_nutrition_detail_in_json_block(self):
-        """JSON block should include nutrition_detail fields."""
+    def test_nutrition_note_in_json_block(self):
+        """JSON block should include the short nutrition note and prep time."""
         prompt = build_suggestion_prompt([], [], {}, [])
-        assert '"nutrition_detail"' in prompt
-        assert '"calories_kcal"' in prompt
-        assert '"protein_g"' in prompt
-        assert '"advance_prep_tip"' in prompt
+        assert '"nutrition_note"' in prompt
+        assert '"prep_time_min"' in prompt
+        assert '"nutrition_detail"' not in prompt
 
     def test_includes_user_profile(self):
         """Suggestion prompt should render user physical profile."""
@@ -326,14 +332,14 @@ class TestSuggestionPrompt:
         )
         assert "B12" in prompt
         assert "1000mcg" in prompt
-        assert "Fish oil" in prompt
-        assert "NOT taken today" in prompt
+        # 'sometimes' supplements not taken today are left out
+        assert "Fish oil" not in prompt
 
     def test_profile_and_supplements_default_when_none(self):
         """When no profile/supplements given, should still render without error."""
         prompt = build_suggestion_prompt([], [], {}, [])
         assert "Not provided" in prompt
-        assert "No supplements" in prompt
+        assert "None taken today." in prompt
 
     def test_includes_calorie_calculation_guidance(self):
         """Prompt should mention Harris-Benedict or calorie calculation."""
@@ -395,9 +401,13 @@ class TestAnalystPrompt:
         assert "NOT a chat assistant" in prompt
 
     # Analyst prompt responds in Turkish
-    def test_responds_in_turkish(self):
+    def test_responds_in_english_by_default(self):
         prompt = build_analyst_prompt([], None, None, None)
-        assert "Turkish" in prompt
+        assert "Always respond in English." in prompt
+
+    def test_responds_in_turkish_when_set(self):
+        prompt = build_analyst_prompt([], None, None, None, language="tr")
+        assert "Always respond in Turkish." in prompt
 
     # Analyst uses low temperature (instruction embedded in prompt)
     def test_mentions_low_temperature(self):
@@ -446,10 +456,10 @@ class TestAnalystPrompt:
     # Daily coverage has all 4 fixed categories
     def test_daily_coverage_fixed_categories(self):
         prompt = build_analyst_prompt([], None, None, None)
-        assert "Kalori" in prompt
+        assert "Calories" in prompt
         assert "Protein" in prompt
-        assert "Lif" in prompt
-        assert "Vitamin & Mineral" in prompt
+        assert "Fiber" in prompt
+        assert "Vitamins & Minerals" in prompt
 
     # Supplement excess check instruction is present
     def test_supplement_excess_check(self):
@@ -469,7 +479,97 @@ class TestAnalystPrompt:
         assert "No supplements" in prompt
 
 
-class TestBackwardCompat:
-    def test_build_system_prompt_is_chat_prompt(self):
-        """build_system_prompt is an alias for build_chat_prompt."""
-        assert build_system_prompt is build_chat_prompt
+# ---------------------------------------------------------------------------
+# Scheduler (prep plan)
+# ---------------------------------------------------------------------------
+
+class TestSchedulerUserMessage:
+    MENU = [
+        {"name": "Menemen", "ingredients": [
+            {"name": "Egg", "amount": 2, "unit": "adet"},
+            {"name": "Tomato", "amount": 1, "unit": "adet"},
+        ]},
+        {"name": "White cheese", "amount": 50, "unit": "g", "ingredients": []},
+    ]
+
+    def test_menu_without_steps_lists_every_dish(self):
+        """A menu-format meal sends its dishes and amounts, with no empty Steps section."""
+        msg = build_scheduler_user_message("Classic Breakfast", [], "Egg, Tomato", menu=self.MENU)
+        assert "- Menemen: Egg (2 adet), Tomato (1 adet)" in msg
+        assert "- White cheese (50 g)" in msg
+        assert "Steps:" not in msg
+        assert "Ingredients:" not in msg
+
+    def test_steps_still_included(self):
+        """Older meals with recipe steps keep sending them, numbered."""
+        msg = build_scheduler_user_message("Eggs", ["Boil eggs", "Peel"], "Egg")
+        assert "Ingredients: Egg" in msg
+        assert "Steps:\n1. Boil eggs\n2. Peel" in msg
+
+
+# ---------------------------------------------------------------------------
+# Language directive repeated at the end
+# ---------------------------------------------------------------------------
+
+class TestLanguageReminder:
+    @staticmethod
+    def _user_facing(language):
+        return {
+            "suggestion": build_suggestion_prompt([], [], {}, [], language=language),
+            "suggestion_favorites": build_suggestion_prompt([], [], {}, [], mode="favorites", language=language),
+            "suggestion_explore": build_suggestion_prompt([], [], {}, [], mode="explore", language=language),
+            "analyst": build_analyst_prompt([], None, None, None, language=language),
+            "weekly_analyst": build_weekly_analyst_prompt_with_meals("Mon: eggs", language=language),
+            "scheduler": build_scheduler_prompt("Menemen", [], "eggs", language=language),
+        }
+
+    def test_english_directive_is_last(self):
+        """A 7B model drifts toward the language of Turkish data, so English is restated at the very end."""
+        for name, prompt in self._user_facing("en").items():
+            tail = prompt[-400:]
+            assert "FINAL REMINDER: Always respond in English." in tail, name
+            assert "respond in Turkish" not in tail, name
+
+    def test_turkish_directive_is_last(self):
+        """The Turkish setting gets the same closing reminder."""
+        for name, prompt in self._user_facing("tr").items():
+            assert "FINAL REMINDER: Always respond in Turkish." in prompt[-400:], name
+
+    def test_menu_name_follows_response_language(self):
+        """The menu name is a title in the response language, not a dish name kept in Turkish."""
+        prompt = build_suggestion_prompt([], [], {}, [])
+        assert "`menu_name`: a short descriptive title in the response language" in prompt
+        assert "never to the menu name" in prompt
+
+
+# ---------------------------------------------------------------------------
+# JSON examples shown to the model
+# ---------------------------------------------------------------------------
+
+def _all_prompts():
+    return {
+        "chat": build_chat_prompt([], [], {}, []),
+        "suggestion": build_suggestion_prompt([], [], {}, []),
+        "analyst": build_analyst_prompt([], None, None, None),
+        "pipeline_analyst": build_pipeline_analyst_prompt([]),
+        "weekly_analyst": build_weekly_analyst_prompt_with_meals("Mon: eggs"),
+        "scheduler": build_scheduler_prompt("Menemen", ["cook"], "eggs"),
+        "shopping": build_shopping_prompt([], [], {}, []),
+    }
+
+
+class TestJsonExamples:
+    def test_no_doubled_braces(self):
+        """Templates are formatted once, so {{ must not survive into the prompt."""
+        for name, prompt in _all_prompts().items():
+            assert "{{" not in prompt, name
+
+    def test_json_examples_are_valid_json(self):
+        """Small models copy examples, so every example must parse."""
+        for name, prompt in _all_prompts().items():
+            for block in re.findall(r"```json\n([\s\S]*?)\n```", prompt):
+                try:
+                    json.loads(block)
+                except json.JSONDecodeError as e:
+                    raise AssertionError(f"{name}: invalid JSON example ({e})") from e
+

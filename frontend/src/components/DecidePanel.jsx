@@ -48,7 +48,7 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
   // Core log-meal call — used by both direct save and post-rating save
   const doLogMeal = useCallback(async (updatedMeal) => {
     await logMeal({
-      meal_name: updatedMeal.menu_name || updatedMeal.meal_name || 'Kahvaltı',
+      meal_name: updatedMeal.menu_name || updatedMeal.meal_name || 'Breakfast',
       description: updatedMeal.description || '',
       ingredients: updatedMeal.ingredients || [],
       steps: updatedMeal.steps || [],

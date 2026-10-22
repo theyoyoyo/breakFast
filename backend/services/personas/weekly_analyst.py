@@ -78,16 +78,19 @@ OUTPUT FORMAT
 ═══════════════════════════════════════════════════════════════
 Respond with ONLY the JSON block below — no text before or after:
 ```json
-{{{{
+{{
   "narrative": "2-3 sentence overall assessment of the week. Specific, not generic.",
   "scores": [
-    {{{{"label": "Nutritional Balance", "score": 75, "note": "Good macro coverage but low on fiber and Vitamin D."}}}},
-    {{{{"label": "Variety", "score": 80, "note": "Decent range but eggs appeared 4 out of 5 days."}}}},
-    {{{{"label": "Health Alignment", "score": 90, "note": "Meals aligned well with iron deficiency needs."}}}},
-    {{{{"label": "Energy & Protein", "score": 65, "note": "Protein targets met but caloric intake ran low on 2 days."}}}}
+    {{"label": "Nutritional Balance", "score": 75, "note": "Good macro coverage but low on fiber and Vitamin D."}},
+    {{"label": "Variety", "score": 80, "note": "Decent range but eggs appeared 4 out of 5 days."}},
+    {{"label": "Health Alignment", "score": 90, "note": "Meals aligned well with iron deficiency needs."}},
+    {{"label": "Energy & Protein", "score": 65, "note": "Protein targets met but caloric intake ran low on 2 days."}}
   ]
-}}}}
+}}
 ```
+
+FINAL REMINDER: {lang_instruction} Write all review text in that language, even when meal names \
+are in another language. JSON keys stay as shown.
 """
 
 

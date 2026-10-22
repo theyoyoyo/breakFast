@@ -13,18 +13,18 @@ const WELCOME_MSG = { role: 'assistant', content: "Good morning! Tell me what's 
 // and advance our index so client-side fallback continues the sequence
 // if the server becomes unreachable next.
 const OFFLINE_LYRICS = [
-  "Benim aklım başımda değil~",
-  "🎶 Sana söylediklerimi kafana takma ne olursun...",
-  "🎵 Onlar ipe sapa gelir şeyler değil!",
-  "💔 Seni sevmiyorum dedim; yalandı~",
-  "🎶 İstemiyorum artık; palavra!",
-  "💐 Ellerimde çiçekler~",
-  "🌧️ Kapında sırıksıklam...",
-  "👀 Görürsen bir gün şaşırma~",
-  "🎵 Beni böyle çaresiz...",
-  "🎶 Beni böyle derbeder...",
-  "🎵 Beni böyle ortalarda bırakma!",
-  "🙈 Son zamanlar yaptıklarıma bakma ne olursun~",
+  "Benim aklım ocakta kaldı~",
+  "🎶 Dünkü menüyü kafana takma ne olursun...",
+  "🎵 Onlar çaya simide gelir şeyler değil!",
+  "💔 Menemen yapmam dedim; yalandı~",
+  "🎶 Çay istemiyorum artık; palavra!",
+  "🥯 Ellerimde simitler~",
+  "☕ Kapında demlik elimde...",
+  "👀 Ocakta görürsen şaşırma~",
+  "🎵 Beni böyle aç susuz...",
+  "🎶 Beni böyle kahvaltısız...",
+  "🍳 Beni böyle sofrada yalnız bırakma!",
+  "🙈 Son zamanlarda yediklerime bakma ne olursun~",
 ]
 let _lyricIdx = 0
 function nextLyric() {
@@ -153,8 +153,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
   const sessionIdRef = useRef(null)
   const abortedRef = useRef(false)
   const analyzeAbortRef = useRef(null)
-  const { isListening, startListening, stopListening, speak, supported: voiceSupported } = useVoice()
-  const speakRef = useRef(speak)
+  const { isListening, startListening, stopListening, supported: voiceSupported } = useVoice()
 
   // Inject a meal into chat (used by demo and favorites send-to-chat)
   const injectMealToChat = useCallback((meal, introText) => {
@@ -194,7 +193,6 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
 
   // Keep refs in sync so socket callbacks always see the latest props/functions
   useEffect(() => { onMealLoggedRef.current = onMealLogged }, [onMealLogged])
-  useEffect(() => { speakRef.current = speak }, [speak])
   useEffect(() => { sessionIdRef.current = sessionId }, [sessionId])
 
   const refreshNavState = useCallback(async (currentId) => {
@@ -531,13 +529,13 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       // Strip JSON block from analysis text for display, show as assistant message
       const displayText = result.analysis_text
         ? result.analysis_text.replace(/```json[\s\S]*?```/g, '').trim()
-        : 'Analiz sonucu alınamadı.'
+        : "Couldn't get the analysis."
       syncLyric(displayText) // keep client lyric index in sync if this was a fallback lyric
-      const analysisMsg = `📊 ${mealName} — Besin Analizi\n\n${displayText}`
+      const analysisMsg = `📊 ${mealName} — Nutrition Analysis\n\n${displayText}`
       setMessages(prev => [...prev, { role: 'assistant', content: analysisMsg }])
     } catch {
       if (abortCtrl.cancelled) return
-      setMessages(prev => [...prev, { role: 'assistant', content: `📊 ${meal.meal_name || meal.menu_name || 'Meal'} — Besin Analizi\n\n${nextLyric()}` }])
+      setMessages(prev => [...prev, { role: 'assistant', content: `📊 ${meal.meal_name || meal.menu_name || 'Meal'} — Nutrition Analysis\n\n${nextLyric()}` }])
     } finally {
       analyzeAbortRef.current = null
       if (!abortCtrl.cancelled) setAnalyzingIdx(null)
@@ -555,15 +553,16 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
         meal.steps || [],
         meal.ingredients || [],
         meal.id || null,
+        meal.menu || [],
       )
-      const text = result.formatted || 'Zamanlama oluşturulamadı.'
+      const text = result.formatted || "Couldn't build a prep plan."
       syncLyric(text) // keep client lyric index in sync if this was a fallback lyric
       const idTag = meal.id ? ` (#${meal.id})` : ''
-      const scheduleMsg = `📋 ${mealName}${idTag} — Hazırlık Planı\n\n${text}`
+      const scheduleMsg = `📋 ${mealName}${idTag} — Prep Plan\n\n${text}`
       setMessages(prev => [...prev, { role: 'assistant', content: scheduleMsg }])
     } catch {
       const idTag = meal.id ? ` (#${meal.id})` : ''
-      setMessages(prev => [...prev, { role: 'assistant', content: `📋 ${mealName}${idTag} — Hazırlık Planı\n\n${nextLyric()}` }])
+      setMessages(prev => [...prev, { role: 'assistant', content: `📋 ${mealName}${idTag} — Prep Plan\n\n${nextLyric()}` }])
     } finally {
       setSchedulingIdx(null)
     }
@@ -717,7 +716,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Canın ne çekiyor?"
+          placeholder="What are you craving?"
           rows={1}
           disabled={isBusy}
         />

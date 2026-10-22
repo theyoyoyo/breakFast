@@ -8,7 +8,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
-import pytest_asyncio
 from unittest.mock import patch, AsyncMock
 from services.llm import check_llm_availability, chat_stream, LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE, FallbackLyricCycler, FALLBACK_LYRICS, lyric_cycler
 
@@ -57,7 +56,7 @@ async def test_chat_stream_raises_when_llm_unavailable():
 @pytest.mark.asyncio
 async def test_fallback_message_content():
     """Fallback message is the expected Turkish string (first lyric line)."""
-    assert LLM_UNAVAILABLE_MESSAGE == "Benim aklım başımda değil~"
+    assert LLM_UNAVAILABLE_MESSAGE == "Benim aklım ocakta kaldı~"
 
 
 def test_lyric_cycler_cycles_through_all_lines():

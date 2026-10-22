@@ -18,7 +18,7 @@ Multiple users share one instance, each fully isolated. Auth is simple (pin/name
 
 **Health-aware, silently.** Health rules are per-user, stored in DB, injected into prompts at runtime. Never mentioned to the user. The app just makes good choices.
 
-**Prep time is kitchen time.** The scheduler treats the kitchen like a small factory — appliances are resources, food items are jobs. Goal is to minimize total wall-clock time by running things in parallel. This is a job-shop scheduling problem. Greedy earliest-start algorithm. User's configured appliances (from Kitchen Settings) are injected into all LLM prompts.
+**Everything ready at once.** The prep planner splits a menu into untimed prep (chop, slice) and timed tasks on appliances. The LLM only decomposes and estimates; `_build_plan` in `routers/scheduler.py` does the math: the longest timed task sets the total time and every other task starts at `total − duration`, so all food finishes together. User's configured appliances (from Kitchen Settings) are injected into all LLM prompts.
 
 **Local-first, free forever.** Primary LLM is Ollama on the user's own hardware. Song lyric fallback when unreachable.
 
@@ -32,11 +32,11 @@ Multiple users share one instance, each fully isolated. Auth is simple (pin/name
 |---|---|
 | Frontend | React PWA (Vite) |
 | Backend | Python / FastAPI |
-| Local LLM | Ollama + Llama 3.1 8B |
+| Local LLM | Ollama + Qwen 2.5 7B (`OLLAMA_MODEL`) |
 | LLM Fallback | Song lyric cycling |
 | Database | SQLite (aiosqlite) |
 | Voice | Web Speech API |
-| Nutrition | Open Food Facts API |
+| Nutrition | LLM Analyst persona (estimates, cached per meal) |
 | Remote Access | Tailscale |
 
 ---
@@ -64,13 +64,13 @@ Phase 1 and Phase 2 are complete. Phase 3 is in progress.
 
 ### Phase 1 + 2 (COMPLETE)
 
-Chat with Ollama, ingredient inventory, meal suggestions, meal history, multi-user auth, session persistence, voice input/output, meal blocks in chat, kitchen scheduler, ratings, preferences (favorites/dislikes/habits/avoid), suggest button with modes, "Today I ate" flow, nutrition analysis, 3-step suggestion pipeline, user profiles, supplements, health rules, weekly summary, Settings page.
+Chat with Ollama, ingredient inventory, meal suggestions, meal history, multi-user auth, session persistence, voice input, meal blocks in chat, kitchen prep planner, ratings, preferences (favorites/dislikes/habits/avoid), suggest button with modes, "Today I ate" flow, nutrition analysis, 3-step suggestion pipeline, user profiles, supplements, health rules, weekly summary, Settings page.
 
 ### Phase 3 (IN PROGRESS)
 
-**Done:** Ingredient groups (10 fixed Turkish groups), expiry tracking, favorite ingredients (staples list), shopping list, delete confirm redesign, kitchen appliances settings, multi-item menu format, shared MealEditor, unit dropdown with smart defaults, simplified suggestion text, overlay edit pattern across all panels.
+**Done:** Ingredient groups (10 fixed groups, English names), expiry tracking, favorite ingredients (staples list), shopping list, delete confirm redesign, kitchen appliances settings, multi-item menu format, shared MealEditor, unit dropdown with smart defaults, simplified suggestion text, overlay edit pattern across all panels, explore mode, shopping assistant persona, weekly nutrition review, language toggle (English default + Turkish option), chat meal blocks only from the Suggest button.
 
-**Remaining:** Habit onboarding, explore mode ("suggest something new"), shopping assistant persona, weekly nutrition summary, language toggle (English default + Turkish option), chat meal block behavior fix (blocks should only come from Suggest button), fridge constraint enforcement in suggestions.
+**Remaining:** Habit onboarding, stricter fridge constraint enforcement in suggestions, auth hardening (salted slow PIN hashing, 6+ digit PIN minimum, login rate limiting).
 
 ---
 
@@ -102,22 +102,23 @@ LLM returns a full menu, not a single dish:
 
 ## LLM Personas
 
-All in `backend/services/personas/`. Prompts are in English with "Always respond in Turkish". A language toggle (English default) is planned — don't remove the Turkish path.
+All in `backend/services/personas/`. Prompts are in English; the response language follows the user's setting (English default, Turkish option) — don't remove the Turkish path.
 
 | Persona | Job | Temp | File |
 |---|---|---|---|
 | Chat | Casual breakfast buddy | default | `chat.py` |
-| Suggestion | Creative meal designer (comfort/explore/quick modes) | 0.6/0.9 | `dietitian.py` |
+| Suggestion | Creative meal designer (favorites/explore modes) | 0.6/0.9 | `dietitian.py` |
 | Analyst | Nutrition calculator | 0.3 | `analyst.py` |
 | Pipeline Analyst | Internal reviewer for suggestion refinement | 0.3 | `pipeline_analyst.py` |
 | Shopping | Professional shopping advisor | 0.6 | `shopping.py` |
 | Scheduler | Kitchen task decomposer | 0.3 | `scheduler.py` |
+| Weekly Analyst | Holistic 7-day nutrition review (4 scores) | default | `weekly_analyst.py` |
 
-**Chat persona:** responds in free-form text. Currently appends a JSON meal block when it judges the message is meal-relevant — this is a known issue. Planned fix: meal blocks only from the Suggest button, never from chat.
+**Chat persona:** responds in plain text only. Meal blocks come only from the Suggest button, never from chat.
 
-**Suggestion persona:** outputs short Turkish text (taste tips only — no prep steps, no nutrition table, no supplement notes) + JSON meal block. Must build meals from existing fridge inventory. Small substitutes for missing items are allowed.
+**Suggestion persona:** outputs short text (taste tips only — no prep steps, no nutrition table, no supplement notes) + JSON meal block. Must build meals from existing fridge inventory. Small substitutes for missing items are allowed.
 
-**Suggestion pipeline:** Draft → Analyst review → Refine (max 2 rounds). Progress sent via WebSocket `{type: 'progress'}`.
+**Suggestion pipeline:** Draft → Analyst review → Refine (one pass). Progress sent via WebSocket `{type: 'progress'}`.
 
 **Suggestion + Analyst + Shopping** share `backend/services/knowledge.py`.
 
@@ -128,8 +129,9 @@ All in `backend/services/personas/`. Prompts are in English with "Always respond
 - **Health rules**: injected into every LLM prompt silently. Never surface them to the user.
 - **Avoid list**: hard ban. Never suggest avoided ingredients.
 - **Fridge constraint**: suggestions must use current inventory. Substitutes OK for small gaps.
-- **Nutrition API**: always set `User-Agent: "breakFAST/1.0 (personal project)"` on Open Food Facts requests.
 - **CORS**: configurable via `CORS_ORIGINS` env var (comma-separated).
+- **Demo user**: only created when `DEMO_USER=true` (empty PIN). Never enable it on a reachable instance.
+- **Language**: the UI is English only; the setting changes AI replies. User data is often Turkish and pulls a 7B model toward Turkish, so every user-facing prompt ends with a `FINAL REMINDER` restating the language directive. Code-built text in replies (e.g. prep plan labels) follows the same setting.
 - **Line endings**: `.gitattributes` normalizes to LF in repo, CRLF on Windows checkout.
 
 ---
@@ -149,11 +151,14 @@ All in `backend/services/personas/`. Prompts are in English with "Always respond
 ```
 breakFAST/
 ├── CLAUDE.md
+├── setup.bat                        ← Windows first-time setup (deps + model pull)
 ├── start.bat                        ← Windows launcher (opens backend + frontend)
+├── start-server.bat                 ← Windows production launcher (FastAPI serves the build)
+├── docs/                            ← full server setup guide + feature specs
 ├── backend/
 │   ├── main.py                      ← FastAPI entry, lifespan init_db
 │   ├── database.py                  ← SQLite schema + migrations
-│   ├── auth.py                      ← JWT auth
+│   ├── auth.py                      ← PIN hashing + in-memory bearer tokens
 │   ├── manage.py                    ← admin CLI (add/list/delete users)
 │   ├── db_helpers.py                ← reusable DB query helpers
 │   ├── routers/
@@ -164,7 +169,7 @@ breakFAST/
 │   │   ├── favorite_ingredients.py  ← /favorite-ingredients (staples)
 │   │   ├── shopping.py              ← /shopping list
 │   │   ├── analyst.py               ← /analyst/analyze
-│   │   ├── scheduler.py             ← /scheduler/plan
+│   │   ├── scheduler.py             ← /scheduler/plan (finish-together prep plan)
 │   │   ├── kitchen.py               ← /kitchen appliance config
 │   │   ├── sessions.py              ← /sessions
 │   │   ├── profile.py               ← /profile + supplements
@@ -178,9 +183,8 @@ breakFAST/
 │   │   ├── context.py               ← shared context loaders for prompts
 │   │   ├── knowledge.py             ← shared food knowledge
 │   │   ├── insights.py              ← behavioral pattern extraction
-│   │   ├── llm.py                   ← Ollama streaming + lyric fallback
-│   │   ├── scheduler.py             ← greedy job-shop scheduler
-│   │   └── nutrition.py             ← Open Food Facts integration
+│   │   ├── suggestion.py            ← stream_response + persona re-exports
+│   │   └── llm.py                   ← Ollama streaming + lyric fallback
 │   └── models/
 │       ├── ingredient.py            ← INGREDIENT_GROUPS (source of truth)
 │       ├── kitchen.py               ← KITCHEN_APPLIANCES (source of truth)
@@ -209,8 +213,8 @@ breakFAST/
 
 ## Glossary
 
-**Makespan** — total wall-clock time from first task to last in a cooking schedule.
+**Makespan** — total wall-clock time from first task to last in a cooking plan.
 
 **Warm prior** — stated habit treated as a starting assumption, updated by observed behaviour.
 
-**Comfort / Explore modes** — comfort optimises for familiar meals; explore finds novel meals adjacent to the user's taste profile.
+**Favorites / Explore modes** — favorites optimises for familiar meals; explore finds novel meals adjacent to the user's taste profile.

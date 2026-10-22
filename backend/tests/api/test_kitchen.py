@@ -1,6 +1,5 @@
 """Integration tests for the /kitchen endpoints."""
 
-import pytest
 import aiosqlite
 
 

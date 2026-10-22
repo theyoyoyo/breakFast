@@ -3,7 +3,7 @@
 This guide walks you through setting up the break FAST server on a fresh Windows
 machine from scratch. By the end, you'll have:
 
-- Ollama running locally with Llama 3.1 8B
+- Ollama running locally with Qwen 2.5 7B
 - The FastAPI backend serving the API
 - The React frontend built and served statically by FastAPI
 - A test user you can log in with
@@ -20,7 +20,7 @@ Make sure these are installed before starting. If any are missing, install them 
 | Tool | Download | Verify with |
 |---|---|---|
 | **Git** | https://git-scm.com/downloads/win | `git --version` |
-| **Python 3.14** | https://www.python.org/downloads/ | `python --version` → 3.14.x |
+| **Python 3.11+** | https://www.python.org/downloads/ | `python --version` → 3.11 or newer |
 | **Node.js 18+** | https://nodejs.org/ (LTS is fine) | `node --version` |
 | **VS Code** | https://code.visualstudio.com/ | (optional but recommended) |
 
@@ -48,10 +48,10 @@ Make sure these are installed before starting. If any are missing, install them 
 
    You should see something like `ollama version 0.x.x`.
 
-4. **Pull the Llama 3.1 8B model** — this is the brain of the app. It's ~4.7 GB:
+4. **Pull the Qwen 2.5 7B model** — this is the brain of the app. It's ~4.7 GB:
 
    ```
-   ollama pull llama3.1:8b
+   ollama pull qwen2.5:7b
    ```
 
    This will take a while depending on your internet speed. Let it finish completely.
@@ -59,10 +59,10 @@ Make sure these are installed before starting. If any are missing, install them 
 5. **Verify the model works:**
 
    ```
-   ollama run llama3.1:8b "Say hello in Turkish"
+   ollama run qwen2.5:7b "Say good morning"
    ```
 
-   You should get a Turkish response like "Merhaba!" — this confirms the model is
+   You should get a short greeting back — this confirms the model is
    loaded and Ollama is functional.
 
 6. **Verify the API is reachable:**
@@ -72,7 +72,7 @@ Make sure these are installed before starting. If any are missing, install them 
    ```
 
    (If you don't have curl, open `http://localhost:11434/api/tags` in your browser.)
-   You should see JSON listing `llama3.1:8b` in the models array.
+   You should see JSON listing `qwen2.5:7b` in the models array.
 
 > **GPU note:** Ollama automatically detects NVIDIA GPUs and uses them. If you have a
 > laptop GPU, it will use it — no extra configuration needed. You can verify with
@@ -108,14 +108,10 @@ containing `backend/`, `frontend/`, `CLAUDE.md`, etc.).
    ```
    # Ollama — these should be correct out of the box
    OLLAMA_BASE_URL=http://localhost:11434
-   OLLAMA_MODEL=llama3.1:8b
+   OLLAMA_MODEL=qwen2.5:7b
 
    # Database — stored in the backend folder
    DATABASE_PATH=./breakFAST.db
-
-   # Backend — listen on all interfaces so other devices can connect
-   BACKEND_HOST=0.0.0.0
-   BACKEND_PORT=8000
 
    # CORS — add your local IP here (find it in Step 8)
    # For now, localhost is enough for testing on this PC
@@ -160,10 +156,10 @@ one user to log in. The admin CLI handles this:
 
 ```
 cd backend
-python manage.py add-user "Onur" --pin 1234 --admin
+python manage.py add-user "Alice" --pin 1234 --admin
 ```
 
-Replace `"Onur"` and `1234` with your name and desired PIN. The `--admin` flag gives
+Replace `"Alice"` and `1234` with your name and desired PIN. The `--admin` flag gives
 you admin privileges (needed for user management).
 
 **Verify:**
@@ -207,7 +203,7 @@ Should return: `{"status":"ok"}`
 **Test authentication:**
 
 ```
-curl -X POST http://localhost:8000/auth/login -H "Content-Type: application/json" -d "{\"name\": \"Onur\", \"pin\": \"1234\"}"
+curl -X POST http://localhost:8000/auth/login -H "Content-Type: application/json" -d "{\"name\": \"Alice\", \"pin\": \"1234\"}"
 ```
 
 Should return JSON with a `token` field. Copy this token — you'll need it for the
@@ -248,8 +244,8 @@ All necessary config files are already in the repo.
    This creates a `frontend/dist/` folder with the optimized static files.
 
    > **How it works:** The repo includes `frontend/.env.production` which sets
-   > `VITE_BACKEND_URL=` (empty). This means the frontend uses relative URLs —
-   > it talks to whatever host served it. Works for localhost, LAN IP, Tailscale IP,
+   > `VITE_BACKEND_URL=` (empty). This means the frontend calls the backend on
+   > port 8000 of whatever host served it. Works for localhost, LAN IP, Tailscale IP,
    > all without rebuilding. And `SERVE_FRONTEND=true` in your `.env` tells the
    > backend to serve these files via a catch-all route.
 
@@ -276,8 +272,8 @@ land on the Chat tab.
 
 ### 8.2 — Test chat (Ollama integration)
 
-Type a message like "Merhaba!" and send it. If Ollama is running, you should get a
-Turkish response streamed word-by-word. This confirms:
+Type a message like "Good morning!" and send it. If Ollama is running, you should get a
+response streamed word-by-word (English by default; switch to Turkish in Settings). This confirms:
 
 - Backend is running
 - WebSocket connection works
@@ -285,20 +281,20 @@ Turkish response streamed word-by-word. This confirms:
 - The chat persona prompt is working
 
 If you see a song lyric instead of a real response, it means Ollama is not reachable.
-Go back to Step 1 and verify `ollama run llama3.1:8b` works.
+Go back to Step 1 and verify `ollama run qwen2.5:7b` works.
 
 ### 8.3 — Test the Fridge tab
 
-Switch to the Fridge tab. Add some ingredients (e.g., "yumurta", "beyaz peynir",
-"domates"). They should appear grouped under "Diger" by default.
+Switch to the Fridge tab. Add some ingredients (e.g., "eggs", "white cheese",
+"tomatoes"). They should appear grouped under "🍽️ Other" by default.
 
 ### 8.4 — Test meal suggestion
 
-Go back to Chat and press the "Kahvalti Oner" button (bottom of the chat). This
+Go back to Chat and press the Suggest breakfast button (bottom of the chat). This
 triggers the 3-step suggestion pipeline:
 
 1. You should see progress indicators (drafting → analyzing → finalizing)
-2. A full Turkish meal suggestion should appear with ingredients and steps
+2. A menu suggestion should appear with its ingredients
 3. A meal block should render inline in the chat
 
 This is the most demanding test — it makes 3 sequential Ollama calls. If it works,
@@ -309,7 +305,7 @@ everything is functioning correctly.
 Go to Settings. Verify:
 
 - Profile section shows empty fields (fill them in if you want)
-- Kitchen sub-page shows 9 appliances with only Ocak enabled
+- Kitchen sub-page shows 9 appliances with only Stove enabled
 - Toggle some appliances on/off — they should persist after refresh
 
 ### 8.6 — Test from another device on the same network (optional)
@@ -330,7 +326,7 @@ Go to Settings. Verify:
 
    Restart the backend.
 
-   > **No frontend rebuild needed** — the production build uses relative URLs, so it
+   > **No frontend rebuild needed** — the production build targets whichever host served it, so it
    > automatically talks to whatever host served it.
 
 3. On your phone or another PC, open `http://192.168.1.x:8000` in the browser.
@@ -341,17 +337,17 @@ Go to Settings. Verify:
 
 After logging in, go to **Settings → Kitchen**. You'll see 9 appliances:
 
-| Appliance | Turkish Name | Default |
-|---|---|---|
-| Stove | Ocak | Enabled |
-| Oven | Firin | Disabled |
-| Air Fryer | Airfryer | Disabled |
-| Toaster | Ekmek Kizartma Makinesi | Disabled |
-| Microwave | Mikrodalga | Disabled |
-| Blender | Blender | Disabled |
-| Sandwich Press | Tost Makinesi | Disabled |
-| Kettle | Su Isitici | Disabled |
-| French Press | French Press | Disabled |
+| Appliance | Default |
+|---|---|
+| Stove | Enabled |
+| Oven | Disabled |
+| Air Fryer | Disabled |
+| Toaster | Disabled |
+| Microwave | Disabled |
+| Blender | Disabled |
+| Sandwich Press | Disabled |
+| Kettle | Disabled |
+| French Press | Disabled |
 
 Enable the ones you actually own. This affects what the AI suggests — it will only
 recommend meals you can prepare with your available appliances.
@@ -392,9 +388,9 @@ This means Ollama is unreachable. Check:
    Start menu or run `ollama serve` in a terminal.
 2. Can the backend reach it? `curl http://localhost:11434/api/tags` should return
    JSON with the model list.
-3. Is the model pulled? `ollama list` should show `llama3.1:8b`.
+3. Is the model pulled? `ollama list` should show `qwen2.5:7b`.
 
-### "Kahvalti Oner" button shows progress but then gives a weird/short response
+### Suggest button shows progress but then gives a weird/short response
 
 The 3-step pipeline makes 3 sequential LLM calls. If the model is slow (no GPU or
 limited RAM), it might time out. Check:
@@ -408,13 +404,13 @@ limited RAM), it might time out. Check:
 
 - Did you build the frontend? (`cd frontend && npm run build`)
 - Does `frontend/dist/` exist and contain files?
-- Did you add the static file serving code to `backend/main.py`? (Step 7.4)
+- Is `SERVE_FRONTEND=true` set in your `.env`? Restart the backend after changing it.
 
 ### "Module not found" errors when starting the backend
 
 - Are you in the `backend/` directory when running uvicorn?
 - Did you `pip install -r requirements.txt`?
-- Are you using the right Python? `python --version` should be 3.14.x.
+- Are you using the right Python? `python --version` should be 3.11 or newer.
 
 ---
 
@@ -507,7 +503,7 @@ devices. No port forwarding, no dynamic DNS.
    Replace `100.x.x.x` with your actual Tailscale IP.
 
 2. **Restart the backend.** That's it — no frontend rebuild needed. The production
-   build uses relative URLs, so it works from any IP automatically.
+   build targets whichever host served it, so it works from any IP automatically.
 
 ### B.4 — Test from your phone
 
@@ -536,7 +532,7 @@ locally, even when a user connects via Tailscale.
 | List users | `cd backend && python manage.py list-users` |
 | Backup DB | `cd backend && python manage.py backup-db` |
 | Check Ollama | `ollama list` |
-| Test Ollama | `ollama run llama3.1:8b "Merhaba"` |
+| Test Ollama | `ollama run qwen2.5:7b "Good morning"` |
 | Health check | `curl http://localhost:8000/health` |
 | Logs | Check the terminal where uvicorn is running |
 | DB location | `backend/breakFAST.db` (or wherever DATABASE_PATH points) |

@@ -32,14 +32,6 @@ export const panelHeader = {
   flexShrink: 0,
 }
 
-export const prepTimeRow = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 4,
-  marginBottom: 10,
-  flexShrink: 0,
-}
-
 export const prepTimeLabel = {
   fontSize: 14,
 }
@@ -171,16 +163,6 @@ export const actions = {
   marginTop: 16,
   gap: 10,
   flexShrink: 0,
-}
-
-export const cancelBtn = {
-  background: 'var(--surface2)',
-  border: '1px solid var(--border)',
-  borderRadius: 10,
-  padding: '12px 24px',
-  color: 'var(--text-muted)',
-  fontSize: 15,
-  cursor: 'pointer',
 }
 
 export const backBtn = {
