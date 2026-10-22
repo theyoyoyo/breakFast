@@ -508,6 +508,41 @@ class TestSchedulerUserMessage:
 
 
 # ---------------------------------------------------------------------------
+# Language directive repeated at the end
+# ---------------------------------------------------------------------------
+
+class TestLanguageReminder:
+    @staticmethod
+    def _user_facing(language):
+        return {
+            "suggestion": build_suggestion_prompt([], [], {}, [], language=language),
+            "suggestion_favorites": build_suggestion_prompt([], [], {}, [], mode="favorites", language=language),
+            "suggestion_explore": build_suggestion_prompt([], [], {}, [], mode="explore", language=language),
+            "analyst": build_analyst_prompt([], None, None, None, language=language),
+            "weekly_analyst": build_weekly_analyst_prompt_with_meals("Mon: eggs", language=language),
+            "scheduler": build_scheduler_prompt("Menemen", [], "eggs", language=language),
+        }
+
+    def test_english_directive_is_last(self):
+        """A 7B model drifts toward the language of Turkish data, so English is restated at the very end."""
+        for name, prompt in self._user_facing("en").items():
+            tail = prompt[-400:]
+            assert "FINAL REMINDER: Always respond in English." in tail, name
+            assert "respond in Turkish" not in tail, name
+
+    def test_turkish_directive_is_last(self):
+        """The Turkish setting gets the same closing reminder."""
+        for name, prompt in self._user_facing("tr").items():
+            assert "FINAL REMINDER: Always respond in Turkish." in prompt[-400:], name
+
+    def test_menu_name_follows_response_language(self):
+        """The menu name is a title in the response language, not a dish name kept in Turkish."""
+        prompt = build_suggestion_prompt([], [], {}, [])
+        assert "`menu_name`: a short descriptive title in the response language" in prompt
+        assert "never to the menu name" in prompt
+
+
+# ---------------------------------------------------------------------------
 # JSON examples shown to the model
 # ---------------------------------------------------------------------------
 

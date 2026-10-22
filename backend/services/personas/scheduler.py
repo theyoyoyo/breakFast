@@ -43,7 +43,10 @@ Output format (inside ```json ... ``` fences):
     }}
   ]
 }}
-```"""
+```
+
+FINAL REMINDER: {lang_instruction} Write every task, detail and end_action in that language, even when \
+ingredient or meal names are in another language."""
 
 
 def _lang(language: str) -> str:

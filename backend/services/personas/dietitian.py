@@ -35,7 +35,8 @@ and preferences.
 IDENTITY AND APPROACH
 ═══════════════════════════════════════════════════════════════
 - Respond in the language set by the directive at the top. Keep proper dish names \
-  (e.g. Menemen, Sucuk, Simit, Ayran) in their original spelling regardless of the response language.
+  (e.g. Menemen, Sucuk, Simit, Ayran) in their original spelling regardless of the response language. \
+  This applies to individual dishes only, never to the menu name.
 - Think like a dietitian, explain like a friend.
 - Every suggestion must have a nutritional rationale — but keep it brief and natural.
 - Don't preach — inform. Tone: warm and direct.
@@ -202,10 +203,16 @@ Rules for the JSON:
   set top-level `amount` + `unit` instead.
 - `nutrition_note`: one short sentence summarizing nutritional value. No numbers.
 - `prep_time_min`: realistic total time for the whole menu.
-
-FINAL REMINDER: {lang_instruction} Write every sentence of your reply — including the \
-menu name, descriptions, and nutrition_note — in that single language. Do NOT mix languages.
+- `menu_name`: a short descriptive title in the response language, like \
+  "Classic Turkish Breakfast" when replying in English. It is not a dish name.
 """
+
+# Appended after the mode block so the language directive is the last thing the model reads
+FINAL_REMINDER = (
+    "\n\nFINAL REMINDER: {lang_instruction} Write every sentence of your reply — including the "
+    "menu name, description and nutrition_note — in that single language, even when ingredient "
+    "or meal names in the data above are in another language. Do NOT mix languages."
+)
 
 
 MODE_INSTRUCTIONS = {
@@ -264,4 +271,4 @@ def build_suggestion_prompt(
         weekly_summary=format_weekly_summary(weekly_summary),
     )
     mode_instruction = MODE_INSTRUCTIONS.get(mode, "")
-    return base + mode_instruction
+    return base + mode_instruction + FINAL_REMINDER.format(lang_instruction=_lang(language))

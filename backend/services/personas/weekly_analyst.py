@@ -88,6 +88,9 @@ Respond with ONLY the JSON block below — no text before or after:
   ]
 }}
 ```
+
+FINAL REMINDER: {lang_instruction} Write all review text in that language, even when meal names \
+are in another language. JSON keys stay as shown.
 """
 
 

@@ -138,6 +138,9 @@ Your response must end with a single JSON block containing all structured data:
   ]
 }}
 ```
+
+FINAL REMINDER: {lang_instruction} Write all report text in that language, even when ingredient \
+or meal names are in another language. Only dish names keep their original spelling; JSON keys stay as shown.
 """
 
 
