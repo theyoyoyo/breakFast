@@ -40,7 +40,7 @@ break FAST knows what is in each person's fridge, which kitchen appliances they 
 - **Learns from behaviour.** Meal history is distilled into inferred habits that push suggestions toward variety, not repetition.
 - **Breakfast chat.** A friendly assistant with persistent chat sessions and voice input (Web Speech API).
 - **Logging and history.** "Today I ate", saved favorite meals, ratings and meal history.
-- **English by default, Turkish optional.** Both the UI and the AI responses.
+- **English by default, Turkish optional.** The AI answers in the language you choose; the interface is in English.
 
 ---
 
