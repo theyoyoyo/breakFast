@@ -4,6 +4,7 @@ import { useVoice } from '../hooks/useVoice'
 import SuggestButton from './SuggestButton'
 import DecidePanel from './DecidePanel'
 import MealBlock from './MealBlock'
+import MarkdownText from './MarkdownText'
 import * as s from './ChatInterface.styles'
 
 const WELCOME_MSG = { role: 'assistant', content: "Good morning! Tell me what's in your fridge and I'll plan your breakfast." }
@@ -609,7 +610,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
             <div key={i} style={s.messageWrapper(m.role)}>
               {displayText && (
                 <div style={s.bubble(m.role)}>
-                  {displayText}
+                  {m.role === 'assistant' ? <MarkdownText text={displayText} /> : displayText}
                 </div>
               )}
               {hasMealBlock && (
@@ -629,7 +630,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
         })}
 
         {streamBuffer !== null && streamBuffer !== '' && (
-          <div style={s.bubble('assistant')}>{stripStreamingJsonBlock(streamBuffer)}</div>
+          <div style={s.bubble('assistant')}><MarkdownText text={stripStreamingJsonBlock(streamBuffer)} /></div>
         )}
         {streamBuffer === '' && (
           <div style={s.thinking}>{PIPELINE_STEPS[pipelineStep] || 'Thinking…'}</div>
