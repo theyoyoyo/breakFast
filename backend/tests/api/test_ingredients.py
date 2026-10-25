@@ -279,4 +279,5 @@ async def test_groups_endpoint(client):
     assert "🐄 Animal Products" in data["groups"]
     assert "🍽️ Other" in data["groups"]
     assert data["default"] == "🍽️ Other"
-    assert len(data["groups"]) == 10
+    assert "🫙 Pantry" in data["groups"]
+    assert len(data["groups"]) == 11
