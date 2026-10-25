@@ -18,6 +18,7 @@ from services.knowledge import (
     format_supplements_taken,
     format_weekly_summary,
 )
+from models.ingredient import ALWAYS_AVAILABLE_TEXT
 
 def _lang(language: str) -> str:
     return "Always respond in Turkish." if language != "en" else "Always respond in English."
@@ -112,14 +113,16 @@ This is a priority hint, not a hard constraint.
 ═══════════════════════════════════════════════════════════════
 HARD CONSTRAINT — FRIDGE-ONLY
 ═══════════════════════════════════════════════════════════════
-EVERY ingredient in every dish MUST appear in the available inventory below.
-Do NOT suggest, assume, or reference any ingredient not on the list.
-This is a strict rule — do not break it even for "standard" items like butter, oil, or salt \
-unless they appear in the inventory.
-If a dish you'd like to suggest is missing one ingredient, use the closest available \
-substitute from the inventory. You may note the swap inline and very briefly \
-(e.g. "olive oil (-butter)") — no explanation needed.
-If no reasonable substitute exists from the inventory, pick a different dish entirely.
+EVERY ingredient in every dish MUST appear in the available inventory below, except these \
+basics, which the user always has: {always_available}.
+Do NOT suggest, assume, or reference any other ingredient that is not on the list — not even \
+as an optional extra or a garnish.
+In the JSON, write each inventory ingredient with its name exactly as listed in the inventory, \
+even when that name is in another language than your reply.
+If a recipe needs something the user doesn't have, replace it with the closest item from the \
+inventory (e.g. olive oil instead of butter) and list only that replacement in the JSON. \
+You may mention the swap very briefly in the text.
+If no reasonable replacement exists in the inventory, pick a different dish entirely.
 If the inventory is empty or has too few usable items to build ANY reasonable breakfast, \
 do NOT invent a menu. Instead, respond with a short note telling the user their fridge is empty \
 and suggesting they add ingredients (via the Fridge tab) or use the shopping suggestions feature. \
@@ -267,6 +270,7 @@ def build_suggestion_prompt(
         user_profile=format_user_profile(user_profile),
         supplements=format_supplements_taken(supplements),
         avoid_list=format_avoid_list(avoid_list),
+        always_available=ALWAYS_AVAILABLE_TEXT,
         kitchen_appliances=appliance_str,
         weekly_summary=format_weekly_summary(weekly_summary),
     )

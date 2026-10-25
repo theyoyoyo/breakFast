@@ -508,6 +508,24 @@ class TestSchedulerUserMessage:
 
 
 # ---------------------------------------------------------------------------
+# Fridge-only rule with always-available basics
+# ---------------------------------------------------------------------------
+
+class TestFridgeRule:
+    # Suggestions may use the basics but nothing else outside the inventory, named as listed
+    def test_suggestion_prompt_lists_basics_and_inventory_names(self):
+        prompt = build_suggestion_prompt([{"name": "Yumurta"}], [], {}, [])
+        assert "basics, which the user always has: salt, black pepper" in prompt
+        assert "exactly as listed in the inventory" in prompt
+        assert 'even for "standard" items like butter, oil, or salt' not in prompt
+
+    # The reviewer knows about the basics, so it doesn't flag salt or oil
+    def test_pipeline_analyst_knows_basics(self):
+        prompt = build_pipeline_analyst_prompt([], ingredient_inventory=[{"name": "Yumurta"}])
+        assert "Always available, even though not listed: salt" in prompt
+
+
+# ---------------------------------------------------------------------------
 # Language directive repeated at the end
 # ---------------------------------------------------------------------------
 
