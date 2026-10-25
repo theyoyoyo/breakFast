@@ -68,7 +68,7 @@ Chat with Ollama, ingredient inventory, meal suggestions, meal history, multi-us
 
 ### Phase 3 (IN PROGRESS)
 
-**Done:** Ingredient groups (11 fixed groups incl. 🫙 Pantry, English names), fridge-only enforcement (code check + always-available basics), expiry tracking, favorite ingredients (staples list), shopping list, delete confirm redesign, kitchen appliances settings, multi-item menu format, shared MealEditor, unit dropdown with smart defaults, simplified suggestion text, overlay edit pattern across all panels, explore mode, shopping assistant persona, weekly nutrition review, language toggle (English default + Turkish option), chat meal blocks only from the Suggest button.
+**Done:** Ingredient groups (11 fixed groups incl. 🫙 Pantry, English names), fridge-only enforcement (code check after the draft), expiry tracking, favorite ingredients (staples list), shopping list, delete confirm redesign, kitchen appliances settings, multi-item menu format, shared MealEditor, unit dropdown with smart defaults, simplified suggestion text, overlay edit pattern across all panels, explore mode, shopping assistant persona, weekly nutrition review, language toggle (English default + Turkish option), chat meal blocks only from the Suggest button.
 
 **Remaining:** Habit onboarding, auth hardening (salted slow PIN hashing, 6+ digit PIN minimum, login rate limiting).
 
@@ -116,7 +116,7 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 
 **Chat persona:** responds in plain text only. Meal blocks come only from the Suggest button, never from chat.
 
-**Suggestion persona:** outputs short text (taste tips only — no prep steps, no nutrition table, no supplement notes) + JSON meal block. Must build meals from the fridge inventory plus the always-available basics; a missing recipe item may be replaced with an inventory item, never with something outside it.
+**Suggestion persona:** outputs short text (taste tips only — no prep steps, no nutrition table, no supplement notes) + JSON meal block. Must build meals from the fridge inventory only, basics like salt and oil included; a missing recipe item may be replaced with an inventory item, never with something outside it.
 
 **Suggestion pipeline:** Draft → Analyst review + code fridge check (`services/fridge.py`) → Refine (one pass). Missing ingredients go to the refine step as the first feedback point. Progress sent via WebSocket `{type: 'progress'}`.
 
@@ -128,7 +128,7 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 
 - **Health rules**: injected into every LLM prompt silently. Never surface them to the user.
 - **Avoid list**: hard ban. Never suggest avoided ingredients.
-- **Fridge constraint**: suggestions use only the inventory plus the always-available basics (salt, black pepper, water, oils, common dried spices — `ALWAYS_AVAILABLE_TEXT` / `ALWAYS_AVAILABLE_NAMES` in `models/ingredient.py`). Long-life items (flour, sesame, oats…) belong in the 🫙 Pantry group. Ingredient names in the meal JSON must match the inventory as written, so the code check can compare them.
+- **Fridge constraint**: suggestions use only the inventory. Nothing is assumed: basics (salt, oil, spices) and long-life items (flour, sesame, oats…) are logged like anything else, usually in the 🫙 Pantry group. A planned Fridge quick-add button will make logging them easy. Ingredient names in the meal JSON must match the inventory as written, so the code check can compare them.
 - **CORS**: configurable via `CORS_ORIGINS` env var (comma-separated).
 - **Demo user**: only created when `DEMO_USER=true` (empty PIN). Never enable it on a reachable instance.
 - **Language**: the UI is English only; the setting changes AI replies. User data is often Turkish and pulls a 7B model toward Turkish, so every user-facing prompt ends with a `FINAL REMINDER` restating the language directive. Code-built text in replies (e.g. prep plan labels) follows the same setting.
@@ -183,7 +183,7 @@ breakFAST/
 │   │   ├── context.py               ← shared context loaders for prompts
 │   │   ├── knowledge.py             ← shared food knowledge
 │   │   ├── insights.py              ← behavioral pattern extraction
-│   │   ├── fridge.py                ← fridge check: draft ingredients vs inventory + basics
+│   │   ├── fridge.py                ← fridge check: draft ingredients vs inventory
 │   │   ├── suggestion.py            ← stream_response + persona re-exports
 │   │   └── llm.py                   ← Ollama streaming + lyric fallback
 │   └── models/
