@@ -11,6 +11,7 @@ import aiosqlite
 from contextlib import asynccontextmanager
 
 from config import DATABASE_PATH, DEMO_USER
+from models.ingredient import DEMO_FRIDGE
 
 
 # ---------------------------------------------------------------------------
@@ -249,16 +250,6 @@ async def init_db() -> None:
         await db.execute("PRAGMA journal_mode=WAL")
         await db.executescript(_SCHEMA)
 
-        # Opt-in "demo" user with an empty PIN (DEMO_USER=true) for local try-outs
-        if DEMO_USER:
-            await db.execute(
-                """
-                INSERT OR IGNORE INTO users (name, pin_hash, is_admin)
-                VALUES (?, ?, 1)
-                """,
-                ("demo", hash_pin("")),
-            )
-
         # Migrate: add priority column to health_rules if missing
         try:
             await db.execute(
@@ -423,5 +414,21 @@ async def init_db() -> None:
         await db.execute(
             "DELETE FROM chat_sessions WHERE updated_at < datetime('now', '-8 days')"
         )
+
+        # Opt-in "demo" user with an empty PIN (DEMO_USER=true) for local try-outs.
+        # Runs after the migrations; a newly created demo account gets a starter fridge.
+        if DEMO_USER:
+            cur = await db.execute(
+                """
+                INSERT OR IGNORE INTO users (name, pin_hash, is_admin)
+                VALUES (?, ?, 1)
+                """,
+                ("demo", hash_pin("")),
+            )
+            if cur.rowcount:
+                await db.executemany(
+                    "INSERT INTO ingredient_inventory (user_id, name, group_name) VALUES (?, ?, ?)",
+                    [(cur.lastrowid, name, group) for name, group in DEMO_FRIDGE],
+                )
 
         await db.commit()
