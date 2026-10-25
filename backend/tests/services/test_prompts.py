@@ -517,13 +517,14 @@ class TestFridgeRule:
         prompt = build_suggestion_prompt([{"name": "Yumurta"}], [], {}, [])
         assert "That includes basics like salt, oil and spices" in prompt
         assert "exactly as listed in the inventory" in prompt
-        assert "always has" not in prompt
+        assert "Water is not an ingredient" in prompt
 
     # The reviewer flags salt or oil too when they aren't logged
     def test_pipeline_analyst_checks_basics_too(self):
         prompt = build_pipeline_analyst_prompt([], ingredient_inventory=[{"name": "Yumurta"}])
         assert "including basics like salt" in prompt
-        assert "Always available" not in prompt
+        assert "Water is a utility" in prompt
+        assert "never flag it" in prompt
 
 
 # ---------------------------------------------------------------------------

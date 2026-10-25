@@ -13,11 +13,24 @@ import re
 _FOLD = str.maketrans("ğĞıİşŞçÇöÖüÜâÂîÎûÛ", "gGiIsScCoOuUaAiIuU")
 
 
+# Water is a utility like electricity and gas, not a fridge item
+_WATER_WORDS = {"water", "su", "hot", "cold", "warm", "boiling", "tap", "sicak", "soguk", "ilik", "kaynar"}
+
+
+def _words(name: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+", name.translate(_FOLD).lower())
+
+
+def _is_water(name: str) -> bool:
+    """'Water', 'hot water', 'Sıcak su'… but not 'Maden suyu' or 'Sparkling water'."""
+    words = set(_words(name))
+    return bool(words & {"water", "su"}) and words <= _WATER_WORDS
+
+
 def _tokens(name: str) -> list[set[str]]:
     """Words of a name, each with its simple plural-stripped variants."""
-    words = re.findall(r"[a-z0-9]+", name.translate(_FOLD).lower())
     result = []
-    for w in words:
+    for w in _words(name):
         variants = {w}
         for suffix in ("es", "s", "ler", "lar"):
             if w.endswith(suffix) and len(w) - len(suffix) >= 3:
@@ -60,6 +73,8 @@ def find_missing_ingredients(meal: dict | None, inventory: list[dict]) -> list[s
     stock = [_tokens(i["name"]) for i in inventory if i.get("name")]
     missing = []
     for name in meal_ingredient_names(meal):
+        if _is_water(name):
+            continue
         words = _tokens(name)
         if any(_same_item(words, s) for s in stock):
             continue

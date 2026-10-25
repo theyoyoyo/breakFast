@@ -64,6 +64,15 @@ def test_flags_missing_ingredients_once():
     assert find_missing_ingredients(meal, INVENTORY) == ["Avocado", "Sourdough"]
 
 
+# Water is a utility like gas and electricity, not a fridge item; bottled waters still are
+def test_water_is_never_missing():
+    meal = _meal({"name": "Boiled eggs", "ingredients": [
+        {"name": "Yumurta"}, {"name": "Water"}, {"name": "Hot water"}, {"name": "Sıcak su"},
+        {"name": "Maden suyu"}, {"name": "Sparkling water"},
+    ]})
+    assert find_missing_ingredients(meal, INVENTORY) == ["Maden suyu", "Sparkling water"]
+
+
 # A draft without a meal JSON (e.g. "your fridge is empty") has nothing to check
 def test_no_meal_means_nothing_missing():
     assert find_missing_ingredients(None, INVENTORY) == []

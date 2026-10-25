@@ -117,6 +117,8 @@ basics like salt, oil and spices: the user logs those too (usually in the Pantry
 them only if they are listed.
 Do NOT suggest, assume, or reference any ingredient that is not on the list — not even \
 as an optional extra or a garnish.
+Water is not an ingredient: like electricity and gas, it is a utility the user always has. \
+Never list it in the JSON.
 In the JSON, write each inventory ingredient with its name exactly as listed in the inventory, \
 even when that name is in another language than your reply.
 If a recipe needs something the user doesn't have, replace it with the closest item from the \

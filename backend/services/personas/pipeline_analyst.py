@@ -94,7 +94,8 @@ INGREDIENT QUALITY:
 - Seasonal availability consideration?
 - FRIDGE CONSTRAINT — CRITICAL: every ingredient in the draft, including basics like salt \
   and oil, must appear in the inventory above. Flag any other ingredient as a hard \
-  violation that must be replaced with an inventory item or removed.
+  violation that must be replaced with an inventory item or removed. Water is a utility, \
+  not an ingredient: never flag it.
 
 MEAL BALANCE & VARIETY:
 - Does this meal repeat recent meals too closely?
