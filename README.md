@@ -133,7 +133,7 @@ To use another model, pull it and set `OLLAMA_MODEL` in `.env`. Without Ollama t
 
 ### Just trying it out?
 
-Set `DEMO_USER=true` in `.env` to get a `demo` account with an empty PIN. Keep it off on any instance other people can reach.
+Set `DEMO_USER=true` in `.env` to get a `demo` account with an empty PIN and a small starter fridge (salt, oils, butter, eggs, bread…). Keep it off on any instance other people can reach.
 
 ### Production: one server, one port
 
@@ -192,7 +192,7 @@ All backend settings are environment variables, documented in [`.env.example`](.
 | `DATABASE_PATH` | `./breakFAST.db` | SQLite file, relative to `backend/` |
 | `CORS_ORIGINS` | `*` | Comma-separated allowed origins |
 | `SERVE_FRONTEND` | `false` | Serve `frontend/dist` from FastAPI |
-| `DEMO_USER` | `false` | Create a `demo` user with an empty PIN |
+| `DEMO_USER` | `false` | Create a `demo` user with an empty PIN and a starter fridge |
 
 ---
 

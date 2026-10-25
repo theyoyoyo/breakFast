@@ -128,9 +128,9 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 
 - **Health rules**: injected into every LLM prompt silently. Never surface them to the user.
 - **Avoid list**: hard ban. Never suggest avoided ingredients.
-- **Fridge constraint**: suggestions use only the inventory. Nothing is assumed: basics (salt, oil, spices) and long-life items (flour, sesame, oats…) are logged like anything else, usually in the 🫙 Pantry group. A planned Fridge quick-add button will make logging them easy. Ingredient names in the meal JSON must match the inventory as written, so the code check can compare them.
+- **Fridge constraint**: suggestions use only the inventory. Nothing is assumed: basics (salt, oil, spices) and long-life items (flour, sesame, oats…) are logged like anything else, usually in the 🫙 Pantry group. A planned Fridge quick-add button will make logging them easy. Water is a utility like electricity and gas: never listed as an ingredient and skipped by the check. Ingredient names in the meal JSON must match the inventory as written, so the code check can compare them.
 - **CORS**: configurable via `CORS_ORIGINS` env var (comma-separated).
-- **Demo user**: only created when `DEMO_USER=true` (empty PIN). Never enable it on a reachable instance.
+- **Demo user**: only created when `DEMO_USER=true` (empty PIN). A newly created demo account gets a starter fridge (`DEMO_FRIDGE` in `models/ingredient.py`, basics included). Never enable it on a reachable instance.
 - **Language**: the UI is English only; the setting changes AI replies. User data is often Turkish and pulls a 7B model toward Turkish, so every user-facing prompt ends with a `FINAL REMINDER` restating the language directive. Code-built text in replies (e.g. prep plan labels) follows the same setting.
 - **Line endings**: `.gitattributes` normalizes to LF in repo, CRLF on Windows checkout.
 
