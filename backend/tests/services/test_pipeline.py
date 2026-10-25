@@ -307,7 +307,7 @@ class TestPipelineOrchestrator:
                 pass
         return captured[2]
 
-    # Draft ingredients outside the fridge and the basics are sent to the refine step first
+    # Draft ingredients outside the fridge, salt included, are sent to the refine step first
     @pytest.mark.asyncio
     async def test_fridge_check_flags_missing_ingredients(self):
         draft = (
@@ -317,16 +317,16 @@ class TestPipelineOrchestrator:
         )
         msg = await self._refinement_message(draft)
         fridge_line = next(line for line in msg.splitlines() if "FRIDGE CHECK" in line)
-        assert "Avocado" in fridge_line
-        assert "eggs" not in fridge_line and "Salt" not in fridge_line
+        assert "Avocado, Salt" in fridge_line
+        assert "eggs" not in fridge_line
         assert msg.index("FRIDGE CHECK") < msg.index("Add more fiber")
 
-    # A draft that only uses fridge items and basics gets no fridge feedback
+    # A draft that only uses fridge items gets no fridge feedback
     @pytest.mark.asyncio
     async def test_fridge_check_silent_when_all_available(self):
         draft = (
             '```json\n{"menu_name": "Eggs", "menu": ['
-            '{"name": "Boiled eggs", "ingredients": [{"name": "Eggs"}, {"name": "Salt"}]}'
+            '{"name": "Boiled eggs", "ingredients": [{"name": "Eggs"}]}'
             ']}\n```'
         )
         msg = await self._refinement_message(draft)

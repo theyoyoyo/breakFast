@@ -18,7 +18,6 @@ from services.knowledge import (
     format_supplements_taken,
     format_weekly_summary,
 )
-from models.ingredient import ALWAYS_AVAILABLE_TEXT
 
 def _lang(language: str) -> str:
     return "Always respond in Turkish." if language != "en" else "Always respond in English."
@@ -113,9 +112,10 @@ This is a priority hint, not a hard constraint.
 ═══════════════════════════════════════════════════════════════
 HARD CONSTRAINT — FRIDGE-ONLY
 ═══════════════════════════════════════════════════════════════
-EVERY ingredient in every dish MUST appear in the available inventory below, except these \
-basics, which the user always has: {always_available}.
-Do NOT suggest, assume, or reference any other ingredient that is not on the list — not even \
+EVERY ingredient in every dish MUST appear in the available inventory below. That includes \
+basics like salt, oil and spices: the user logs those too (usually in the Pantry group), so use \
+them only if they are listed.
+Do NOT suggest, assume, or reference any ingredient that is not on the list — not even \
 as an optional extra or a garnish.
 In the JSON, write each inventory ingredient with its name exactly as listed in the inventory, \
 even when that name is in another language than your reply.
@@ -270,7 +270,6 @@ def build_suggestion_prompt(
         user_profile=format_user_profile(user_profile),
         supplements=format_supplements_taken(supplements),
         avoid_list=format_avoid_list(avoid_list),
-        always_available=ALWAYS_AVAILABLE_TEXT,
         kitchen_appliances=appliance_str,
         weekly_summary=format_weekly_summary(weekly_summary),
     )

@@ -4,12 +4,11 @@ Fridge check — which ingredients of a suggested meal are not in the user's fri
 Plain code, not the LLM: the suggestion pipeline runs this on the draft and
 hands the result to the refine step as a hard rule. Names are compared
 loosely (case, Turkish letters, simple plurals, "Beyaz peynir" ~ "Peynir"),
-so the check only flags clear misses.
+so the check only flags clear misses. Nothing is assumed: basics like salt
+and oil count only when they are logged (usually in the Pantry group).
 """
 
 import re
-
-from models.ingredient import ALWAYS_AVAILABLE_NAMES
 
 _FOLD = str.maketrans("ğĞıİşŞçÇöÖüÜâÂîÎûÛ", "gGiIsScCoOuUaAiIuU")
 
@@ -39,9 +38,6 @@ def _same_item(a: list[set[str]], b: list[set[str]]) -> bool:
     return _contains(a, b) or _contains(b, a)
 
 
-_BASICS = [_tokens(n) for n in ALWAYS_AVAILABLE_NAMES]
-
-
 def meal_ingredient_names(meal: dict) -> list[str]:
     """Every ingredient a meal uses: dish sub-ingredients and simple served items."""
     names = []
@@ -58,14 +54,14 @@ def meal_ingredient_names(meal: dict) -> list[str]:
 
 
 def find_missing_ingredients(meal: dict | None, inventory: list[dict]) -> list[str]:
-    """Ingredients of the meal that are neither in the inventory nor always-available basics."""
+    """Ingredients of the meal that are not in the inventory."""
     if not isinstance(meal, dict):
         return []
     stock = [_tokens(i["name"]) for i in inventory if i.get("name")]
     missing = []
     for name in meal_ingredient_names(meal):
         words = _tokens(name)
-        if any(_same_item(words, s) for s in stock) or any(_contains(words, b) for b in _BASICS):
+        if any(_same_item(words, s) for s in stock):
             continue
         if name not in missing:
             missing.append(name)

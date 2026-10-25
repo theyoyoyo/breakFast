@@ -8,6 +8,7 @@ INVENTORY = [
     {"name": "Beyaz peynir"},
     {"name": "Olive"},
     {"name": "Un", "group_name": "🫙 Pantry"},
+    {"name": "Tuz", "group_name": "🫙 Pantry"},
 ]
 
 
@@ -46,28 +47,21 @@ def test_pantry_group_items_are_available():
     assert find_missing_ingredients(meal, INVENTORY) == []
 
 
-# Salt, oils and common spices are always available, in English or Turkish
-def test_basics_are_always_available():
+# Basics like salt and oil count only when logged; nothing is assumed
+def test_basics_count_only_when_logged():
     meal = _meal({"name": "Menemen", "ingredients": [
-        {"name": "Yumurta"}, {"name": "Zeytinyağı"}, {"name": "Tuz"},
-        {"name": "Pul biber"}, {"name": "Extra virgin olive oil"}, {"name": "Black pepper"},
+        {"name": "Yumurta"}, {"name": "Tuz"}, {"name": "Zeytinyağı"}, {"name": "Pul biber"},
     ]})
-    assert find_missing_ingredients(meal, INVENTORY) == []
+    assert find_missing_ingredients(meal, INVENTORY) == ["Zeytinyağı", "Pul biber"]
 
 
-# Ingredients outside the fridge and the basics are listed once, in order
+# Ingredients outside the fridge are listed once, in order
 def test_flags_missing_ingredients_once():
     meal = _meal(
         {"name": "Avocado toast", "ingredients": [{"name": "Avocado"}, {"name": "Sourdough"}, {"name": "Tuz"}]},
         {"name": "Avocado", "amount": 1, "unit": "adet", "ingredients": []},
     )
     assert find_missing_ingredients(meal, INVENTORY) == ["Avocado", "Sourdough"]
-
-
-# Produce that only shares a word with a basic is still checked
-def test_green_pepper_and_fresh_mint_are_not_basics():
-    meal = _meal({"name": "Salad", "ingredients": [{"name": "Green pepper"}, {"name": "Fresh mint"}]})
-    assert find_missing_ingredients(meal, INVENTORY) == ["Green pepper", "Fresh mint"]
 
 
 # A draft without a meal JSON (e.g. "your fridge is empty") has nothing to check

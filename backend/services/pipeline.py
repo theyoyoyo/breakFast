@@ -8,7 +8,7 @@ waiting, then the final refined meal streams normally.
 Steps:
 1. Suggestion persona drafts a meal (collected internally, not streamed to user).
 2. Pipeline Analyst reviews the draft (thorough feedback as JSON list), and plain
-   code lists any draft ingredient that isn't in the fridge or the basics.
+   code lists any draft ingredient that isn't in the fridge.
 3. Suggestion persona refines the meal using that feedback (streamed to user).
 """
 
@@ -109,9 +109,9 @@ async def run_suggestion_pipeline(
     missing = find_missing_ingredients(extract_json_block(draft_text), context["ingredients"])
     if missing:
         fridge_feedback = (
-            "- FRIDGE CHECK (hard rule, fix this first): these ingredients are not in the fridge "
-            f"or the always-available basics: {', '.join(missing)}. Replace each one with an "
-            "inventory item, writing its name exactly as listed, or drop the dish."
+            "- FRIDGE CHECK (hard rule, fix this first): these ingredients are not in the fridge: "
+            f"{', '.join(missing)}. Replace each one with an inventory item, writing its name "
+            "exactly as listed, or remove it. Drop a dish only if it can't be made without it."
         )
         feedback_formatted = f"{fridge_feedback}\n{feedback_formatted}"
 

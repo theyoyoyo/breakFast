@@ -12,7 +12,6 @@ from services.knowledge import (
     format_history_detailed,
     format_ingredients,
 )
-from models.ingredient import ALWAYS_AVAILABLE_TEXT
 
 def _lang(language: str) -> str:
     return "Always respond in Turkish." if language != "en" else "Always respond in English."
@@ -61,7 +60,6 @@ Use this to:
 AVAILABLE FRIDGE INVENTORY (authoritative — do NOT assume anything beyond this)
 ═══════════════════════════════════════════════════════════════
 {ingredient_inventory}
-Always available, even though not listed: {always_available}.
 
 ═══════════════════════════════════════════════════════════════
 HEALTH RULES
@@ -94,9 +92,9 @@ INGREDIENT QUALITY:
 - Portion sizes appropriate? (The inventory tracks only ingredient names, not quantities. \
   Assume standard healthy breakfast portions when evaluating.)
 - Seasonal availability consideration?
-- FRIDGE CONSTRAINT — CRITICAL: every ingredient in the draft must appear in the inventory \
-  above or be one of the always-available basics. Flag any other ingredient as a hard \
-  violation that must be replaced with an inventory item or dropped.
+- FRIDGE CONSTRAINT — CRITICAL: every ingredient in the draft, including basics like salt \
+  and oil, must appear in the inventory above. Flag any other ingredient as a hard \
+  violation that must be replaced with an inventory item or removed.
 
 MEAL BALANCE & VARIETY:
 - Does this meal repeat recent meals too closely?
@@ -145,5 +143,4 @@ def build_pipeline_analyst_prompt(
         recent_history=format_history_detailed(recent_meal_history, limit=5),
         health_rules=format_health_rules(health_rules or []),
         ingredient_inventory=format_ingredients(ingredient_inventory or []),
-        always_available=ALWAYS_AVAILABLE_TEXT,
     )
