@@ -1,19 +1,11 @@
-import { useState, useEffect, useMemo } from 'react'
-import { addFavorite, checkMissingIngredients } from '../services/api'
+import { useState, useMemo } from 'react'
+import { addFavorite } from '../services/api'
 import { formatIngredient } from '../utils/ingredients'
+import { pickEmoji } from '../utils/emoji'
+import { useMealReadiness } from '../hooks/useMealReadiness'
 import MealEditor from './MealEditor'
+import ReadinessIcon from './ReadinessIcon'
 import * as s from './MealBlock.styles'
-
-const BREAKFAST_EMOJIS = [
-  '🍳', '🥐', '🧀', '🥚', '🫕', '🥞', '🧇', '🥣', '🍞', '🥯', '🫖', '☕',
-  '🥗', '🥑', '🍯', '🫒', '🧈', '🥛', '🍵', '🫐', '🍓', '🍌', '🍊', '🍇',
-  '🥜', '🌰', '🥒', '🍅', '🫑', '🌿', '🌶️', '🧄', '🫘', '🥕', '🌽', '🥦',
-  '🍋', '🥝', '🍑', '🫚', '🥥', '🧆', '🥙', '🫓', '🥖', '🥨', '🥮', '🍠',
-]
-
-function pickEmoji() {
-  return BREAKFAST_EMOJIS[Math.floor(Math.random() * BREAKFAST_EMOJIS.length)]
-}
 
 /**
  * Clickable meal summary block rendered inline in chat.
@@ -26,18 +18,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
   const [panelOpen, setPanelOpen] = useState(false)
   const [emoji] = useState(pickEmoji)
 
-  // Missing ingredients for the readiness dot (null until the check answers)
-  const [missing, setMissing] = useState(null)
-  useEffect(() => {
-    if (!meal) return
-    let cancelled = false
-    checkMissingIngredients(meal)
-      .then(res => { if (!cancelled) setMissing(res?.missing || []) })
-      .catch(() => {}) // offline — show no indicator
-    return () => { cancelled = true }
-  }, [meal, fridgeCheckKey])
-  const stillMissing = missing?.filter(name => !(meal?.obtained || []).includes(name))
-  const readiness = !stillMissing ? null : stillMissing.length ? 'missing' : 'ready'
+  const { readiness, stillMissing } = useMealReadiness(meal, fridgeCheckKey)
 
   const menuItems = meal?.menu
   const isMenuFormat = menuItems && menuItems.length > 0
@@ -78,12 +59,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
     <>
       <div style={s.blockWrapper}>
         <div style={s.titleBar} onClick={() => setPanelOpen(true)}>
-          <span
-            style={s.titleIcon(readiness)}
-            title={readiness === 'missing'
-              ? `Not ready — missing: ${stillMissing.join(', ')}`
-              : readiness === 'ready' ? 'Ready — everything is in your fridge' : undefined}
-          >{emoji}</span>
+          <ReadinessIcon emoji={emoji} readiness={readiness} stillMissing={stillMissing} />
           <span style={s.titleName}>{mealName}</span>
           {meal?.prep_time_min && <span style={s.titlePrep}>⏱ {meal.prep_time_min}m</span>}
           {meal?.id && <span style={s.titleId}>#{meal.id}</span>}
