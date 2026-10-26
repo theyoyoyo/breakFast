@@ -1,20 +1,13 @@
 import {
-  panelContainer, panelHeader, panelBody, error, secondaryColor,
+  panelContainer, panelBody, error, secondaryColor, subPageHeader, subPageBackBtn,
 } from '../styles/common'
 
 export const container = panelContainer
-export const header = panelHeader
+export const header = subPageHeader
 export const body = panelBody
 export { error }
 
-export const backBtn = {
-  background: 'none',
-  border: 'none',
-  fontSize: 18,
-  color: 'var(--accent)',
-  cursor: 'pointer',
-  padding: '0 4px',
-}
+export const backBtn = subPageBackBtn
 
 export const grid = {
   display: 'grid',

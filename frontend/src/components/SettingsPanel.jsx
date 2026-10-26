@@ -387,7 +387,7 @@ export default function SettingsPanel({ visible }) {
   if (view === 'meals') {
     return (
       <div style={s.container}>
-        <div style={{ ...s.header, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={s.subPageHeader}>
           <button style={s.backBtn} onClick={() => { setPendingMealDeletes(new Set()); setLlmFallbackLyric(null); setView('settings') }}>←</button>
           <span>Meal History ({meals.length})</span>
         </div>
@@ -495,7 +495,7 @@ export default function SettingsPanel({ visible }) {
   if (view === 'health-rules') {
     return (
       <div style={s.container}>
-        <div style={{ ...s.header, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={s.subPageHeader}>
           <button style={s.backBtn} onClick={() => { setPendingRuleDeletes(new Set()); setView('settings') }}>←</button>
           <span>Health Rules ({healthRules.length})</span>
         </div>
@@ -550,7 +550,7 @@ export default function SettingsPanel({ visible }) {
   if (view === 'ratings') {
     return (
       <div style={s.container}>
-        <div style={{ ...s.header, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={s.subPageHeader}>
           <button style={s.backBtn} onClick={() => setView('settings')}>←</button>
           <span>Ratings ({ratings.length})</span>
         </div>

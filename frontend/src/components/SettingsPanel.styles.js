@@ -1,5 +1,5 @@
 import {
-  panelContainer, panelHeader, brandHeader, panelBody,
+  panelContainer, brandHeader, subPageHeader, subPageBackBtn, panelBody,
   section, sectionLabel, input, addRow, addBtn,
   tagX, empty, error, select, secondaryColor, colors,
 } from '../styles/common'
@@ -7,8 +7,7 @@ import {
 export { section, sectionLabel, tagX, empty, error, select }
 
 export const container = panelContainer
-export const header = panelHeader
-export { brandHeader }
+export { brandHeader, subPageHeader }
 export const body = panelBody
 
 export { input, addRow, addBtn }
@@ -179,14 +178,7 @@ export const dangerBtn = {
   cursor: 'pointer',
 }
 
-export const backBtn = {
-  background: 'none',
-  border: 'none',
-  fontSize: 18,
-  color: 'var(--accent)',
-  cursor: 'pointer',
-  padding: '0 4px',
-}
+export const backBtn = subPageBackBtn
 
 export const ratingRow = {
   display: 'flex',

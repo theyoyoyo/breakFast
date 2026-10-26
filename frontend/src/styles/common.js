@@ -56,6 +56,26 @@ export const brandTitle = {
 
 export const brandHeader = { ...panelHeader, ...brandTitle }
 
+// Sub-page header (← back + page name), the Weekly Summary look, shared by every sub-page
+export const subPageHeader = {
+  fontSize: 18,
+  fontWeight: 700,
+  color: 'var(--accent)',
+  padding: '16px 16px 8px',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+}
+
+export const subPageBackBtn = {
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  fontSize: 18,
+  color: 'var(--text-muted)',
+  padding: '2px 6px',
+}
+
 export const panelBody = {
   flex: 1,
   overflowY: 'auto',
@@ -71,12 +91,16 @@ export const section = {
   gap: 8,
 }
 
+// Section titles inside a tab (Preferences, Settings): accent colored with a thin rule
+// so sections separate clearly from their content
 export const sectionLabel = {
-  fontSize: 11,
+  fontSize: 12,
   fontWeight: 700,
   textTransform: 'uppercase',
   letterSpacing: '0.08em',
-  color: 'var(--text-muted)',
+  color: 'var(--accent)',
+  paddingBottom: 4,
+  borderBottom: '1px solid var(--border)',
 }
 
 export const input = {

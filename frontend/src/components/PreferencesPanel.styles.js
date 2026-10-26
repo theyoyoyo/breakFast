@@ -1,5 +1,5 @@
 import {
-  panelContainer, panelHeader, brandHeader, panelBody,
+  panelContainer, brandHeader, panelBody,
   section, sectionLabel, input, addRow, addBtn,
   tagX, empty, error,
 } from '../styles/common'
@@ -7,7 +7,6 @@ import {
 export { section, sectionLabel, tagX, empty, error }
 
 export const container = panelContainer
-export const header = panelHeader
 export { brandHeader }
 export const body = panelBody
 
