@@ -56,6 +56,11 @@ describe('SettingsPanel', () => {
     expect(screen.queryByText('Settings')).toBeNull()
   })
 
+  it('names the weekly review toggle after what it does', async () => {
+    render(<SettingsPanel visible />)
+    expect(await screen.findByText('Weekly review in suggestions')).toBeInTheDocument()
+  })
+
   it('offers all five themes', async () => {
     render(<SettingsPanel visible />)
     for (const label of ['Orange', 'Green', 'Teal', 'Blue', 'Purple']) {

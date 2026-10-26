@@ -738,7 +738,7 @@ export default function SettingsPanel({ visible }) {
             <span style={{ fontSize: 13, color: language === 'tr' ? 'var(--accent)' : 'var(--text-muted)' }}>Turkish</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
-            <span style={{ fontSize: 13, color: 'var(--text-muted)', flex: 1 }}>Suggestions based on analysis</span>
+            <span style={{ fontSize: 13, color: 'var(--text-muted)', flex: 1 }}>Weekly review in suggestions</span>
             <button
               style={{
                 width: 44, height: 24, borderRadius: 12, border: '1px solid var(--border)',
