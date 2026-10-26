@@ -194,6 +194,13 @@ export const ateOutBtn = {
   color: 'var(--text)',
 }
 
+// Ate out has nothing to do when no item is missing
+export const ateOutBtnIdle = {
+  ...ateOutBtn,
+  opacity: 0.45,
+  cursor: 'default',
+}
+
 export const confirmBtnBlocked = {
   ...confirmBtn,
   opacity: 0.45,

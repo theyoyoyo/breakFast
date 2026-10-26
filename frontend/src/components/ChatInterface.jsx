@@ -562,6 +562,10 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
 
   const [suppMenuOpen, setSuppMenuOpen] = useState(false)
   const [decideOpen, setDecideOpen] = useState(false)
+  // "Today I ate" draft: kept across close/reopen while the same chat meal stays selected.
+  // Selecting another meal (or saving the selected one) gives a different source, so the draft is dropped.
+  const decideDraftRef = useRef({ source: null, meal: null })
+  const decideDraft = decideDraftRef.current.source === checkedMeal ? decideDraftRef.current.meal : null
 
   return (
     <div style={s.container}>
@@ -608,6 +612,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
                   analyzing={analyzingIdx === i}
                   onSchedule={() => handleSchedule(i)}
                   scheduling={schedulingIdx === i}
+                  fridgeCheckKey={visible}
                 />
               )}
             </div>
@@ -630,8 +635,11 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       {decideOpen && (
         <DecidePanel
           meal={checkedMeal}
+          draft={decideDraft}
+          onDraftChange={(draftMeal) => { decideDraftRef.current = { source: checkedMeal, meal: draftMeal } }}
           onClose={() => setDecideOpen(false)}
           onConfirm={() => {
+            decideDraftRef.current = { source: null, meal: null }
             setDecideOpen(false)
             setCheckedMealIdx(null)
           }}

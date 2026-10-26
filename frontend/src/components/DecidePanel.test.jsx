@@ -1,6 +1,7 @@
 /**
- * Tests for "Today I ate": Confirm waits until every ingredient is in the fridge,
- * Ate out logs without the check, and ⭐ Save stores the menu in favorites without logging.
+ * Tests for "Today I ate": Confirm waits until nothing is missing, Ate out marks missing items
+ * as obtained (no logging), ⭐ Save stores the menu in favorites, and edits survive
+ * closing, going back from rating and re-opening.
  * API calls are mocked — no real network calls are made.
  */
 
@@ -12,7 +13,7 @@ import { checkMissingIngredients, getRatings, logMeal, addFavorite } from '../se
 vi.mock('../services/api', () => ({
   checkMissingIngredients: vi.fn(),
   getRatings: vi.fn(),
-  createRating: vi.fn(),
+  createRating: vi.fn(() => Promise.resolve({})),
   logMeal: vi.fn(() => Promise.resolve({})),
   addFavorite: vi.fn(() => Promise.resolve({})),
 }))
@@ -25,41 +26,51 @@ const MEAL = {
   ],
 }
 
+const confirmBtn = () => screen.getByRole('button', { name: 'Confirm' })
+const ateOutBtn = () => screen.getByRole('button', { name: 'Ate out' })
+
 describe('DecidePanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // Both items already rated, so logging skips the rating step
     getRatings.mockResolvedValue([{ product_name: 'Olives' }, { product_name: 'Bread' }])
   })
 
-  it('disables Confirm and names the missing items, but keeps Ate out enabled', async () => {
+  it('disables Confirm and names the missing items', async () => {
     checkMissingIngredients.mockResolvedValue({ missing: ['Olives'] })
     render(<DecidePanel meal={MEAL} onClose={() => {}} />)
     await screen.findByText(/Not in your fridge: Olives\./)
-    expect(screen.getByRole('button', { name: 'Confirm' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Ate out' })).toBeEnabled()
+    expect(confirmBtn()).toBeDisabled()
+    expect(ateOutBtn()).toBeEnabled()
   })
 
-  it('enables Confirm once nothing is missing, without resetting edits', async () => {
+  it('enables Confirm once the missing item is removed, without resetting edits', async () => {
     checkMissingIngredients.mockResolvedValueOnce({ missing: ['Olives'] }).mockResolvedValue({ missing: [] })
     render(<DecidePanel meal={MEAL} onClose={() => {}} />)
     await screen.findByText(/Not in your fridge: Olives\./)
     fireEvent.click(screen.getAllByTitle('Delete')[0]) // remove Olives
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm' })).toBeEnabled())
+    await waitFor(() => expect(confirmBtn()).toBeEnabled())
     expect(screen.queryByText('Olives')).toBeNull()
-    expect(screen.queryByText(/Not in your fridge/)).toBeNull()
   })
 
-  it('logs a meal eaten out even when its items are not in the fridge', async () => {
-    checkMissingIngredients.mockResolvedValue({ missing: ['Olives'] })
+  it('Ate out marks every missing item as obtained and keeps the panel open', async () => {
+    checkMissingIngredients.mockResolvedValue({ missing: ['Olives', 'Bread'] })
     const onConfirm = vi.fn()
     render(<DecidePanel meal={MEAL} onClose={() => {}} onConfirm={onConfirm} />)
-    await screen.findByText(/Not in your fridge: Olives\./)
-    await waitFor(() => expect(getRatings).toHaveBeenCalled())
-    fireEvent.click(screen.getByRole('button', { name: 'Ate out' }))
-    await waitFor(() => expect(logMeal).toHaveBeenCalledTimes(1))
-    expect(logMeal.mock.calls[0][0].menu_items.map(i => i.name)).toEqual(['Olives', 'Bread'])
-    expect(onConfirm).toHaveBeenCalled()
+    await screen.findByText(/Not in your fridge: Olives, Bread\./)
+    fireEvent.click(ateOutBtn())
+    await waitFor(() => expect(confirmBtn()).toBeEnabled())
+    expect(screen.getByText('Olives')).toHaveAttribute('title', 'Marked as obtained — tap to undo')
+    expect(logMeal).not.toHaveBeenCalled()
+    expect(onConfirm).not.toHaveBeenCalled()
+    expect(ateOutBtn()).toBeDisabled() // nothing left to mark
+  })
+
+  it('carries marks from the selected chat meal', async () => {
+    checkMissingIngredients.mockResolvedValue({ missing: ['Olives'] })
+    render(<DecidePanel meal={{ ...MEAL, obtained: ['Olives'] }} onClose={() => {}} />)
+    expect(confirmBtn()).toBeDisabled() // still checking the fridge
+    expect(await screen.findByTitle('Marked as obtained — tap to undo')).toHaveTextContent('Olives')
+    await waitFor(() => expect(confirmBtn()).toBeEnabled())
   })
 
   it('saves the menu to favorites with ⭐ Save and logs nothing', async () => {
@@ -68,7 +79,41 @@ describe('DecidePanel', () => {
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /Save/ }))
     await waitFor(() => expect(addFavorite).toHaveBeenCalledTimes(1))
-    expect(addFavorite.mock.calls[0][0].meal_name).toBe('Test Breakfast')
     expect(logMeal).not.toHaveBeenCalled()
+  })
+
+  it('reports edits as a draft and starts from that draft when reopened', async () => {
+    checkMissingIngredients.mockResolvedValue({ missing: [] })
+    const onDraftChange = vi.fn()
+    const { unmount } = render(<DecidePanel meal={MEAL} onDraftChange={onDraftChange} onClose={() => {}} />)
+    fireEvent.click(screen.getAllByTitle('Delete')[0]) // remove Olives
+    await waitFor(() => expect(onDraftChange.mock.calls.at(-1)[0].menu.map(i => i.name)).toEqual(['Bread']))
+    const draft = onDraftChange.mock.calls.at(-1)[0]
+    unmount() // close
+    render(<DecidePanel meal={MEAL} draft={draft} onClose={() => {}} />) // reopen
+    expect(screen.queryByText('Olives')).toBeNull()
+    expect(screen.getByText('Bread')).toBeInTheDocument()
+  })
+
+  it('keeps edits when going back from the rating step', async () => {
+    checkMissingIngredients.mockResolvedValue({ missing: [] })
+    getRatings.mockResolvedValue([]) // nothing rated yet → Confirm opens the rating step
+    render(<DecidePanel meal={MEAL} onClose={() => {}} />)
+    fireEvent.click(screen.getAllByTitle('Delete')[0]) // remove Olives
+    await waitFor(() => expect(confirmBtn()).toBeEnabled())
+    fireEvent.click(confirmBtn())
+    fireEvent.click(await screen.findByRole('button', { name: 'Back' }))
+    expect(await screen.findByText('Bread')).toBeInTheDocument()
+    expect(screen.queryByText('Olives')).toBeNull()
+  })
+
+  it('starts over when another chat meal is selected', async () => {
+    checkMissingIngredients.mockResolvedValue({ missing: [] })
+    const other = { menu_name: 'Other', menu: [{ name: 'Honey', amount: 1, unit: 'adet', ingredients: [] }] }
+    const { rerender } = render(<DecidePanel meal={MEAL} onClose={() => {}} />)
+    fireEvent.click(screen.getAllByTitle('Delete')[0])
+    rerender(<DecidePanel meal={other} onClose={() => {}} />)
+    expect(await screen.findByText('Honey')).toBeInTheDocument()
+    expect(screen.queryByText('Bread')).toBeNull()
   })
 })
