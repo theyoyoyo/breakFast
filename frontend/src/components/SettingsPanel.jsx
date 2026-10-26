@@ -16,6 +16,9 @@ import StarRating from './StarRating'
 import { THEMES, applyTheme, storedTheme } from '../utils/theme'
 import * as s from './SettingsPanel.styles'
 
+// Display names for the stored supplement frequency values
+const FREQUENCY_LABELS = { daily: 'Daily', sometimes: 'As needed' }
+
 const PRIORITY_OPTIONS = [
   { value: 'low', label: "Don't really care" },
   { value: 'high', label: 'Care a lot' },
@@ -37,7 +40,6 @@ export default function SettingsPanel({ visible }) {
   const [supplements, setSupplements] = useState([])
   const [newSuppName, setNewSuppName] = useState('')
   const [newSuppContents, setNewSuppContents] = useState('')
-  const [newSuppFreq, setNewSuppFreq] = useState('daily')
 
   // Meal history state
   const [meals, setMeals] = useState([])
@@ -209,10 +211,10 @@ export default function SettingsPanel({ visible }) {
     if (!name) return
     try {
       setError(null)
-      await createSupplement(name, newSuppContents.trim(), newSuppFreq)
+      // New supplements start as Daily; the toggle on the row switches them
+      await createSupplement(name, newSuppContents.trim(), 'daily')
       setNewSuppName('')
       setNewSuppContents('')
-      setNewSuppFreq('daily')
       load()
     } catch {
       setError('Supplement already exists or failed to save')
@@ -683,7 +685,11 @@ export default function SettingsPanel({ visible }) {
             <div key={sup.id} style={s.suppRow}>
               <span style={{ ...s.suppName, flex: sup.contents ? undefined : 1 }}>{sup.name}</span>
               {sup.contents && <span style={s.suppContents}>{sup.contents}</span>}
-              <button style={s.suppFreq(sup.frequency)} onClick={() => handleToggleFrequency(sup)} title="Click to toggle">{sup.frequency}</button>
+              <button
+                style={s.suppFreq(sup.frequency)}
+                onClick={() => handleToggleFrequency(sup)}
+                title="Tap to switch between Daily and As needed"
+              >{FREQUENCY_LABELS[sup.frequency] || sup.frequency}</button>
               <button style={s.tagX} onClick={() => handleDeleteSupplement(sup.id)}>×</button>
             </div>
           ))}
@@ -695,14 +701,6 @@ export default function SettingsPanel({ visible }) {
                 onChange={(e) => setNewSuppName(e.target.value)}
                 placeholder="Supplement name…"
               />
-              <select
-                style={{ ...s.select, width: 90, flex: 'none' }}
-                value={newSuppFreq}
-                onChange={(e) => setNewSuppFreq(e.target.value)}
-              >
-                <option value="daily">Daily</option>
-                <option value="sometimes">Sometimes</option>
-              </select>
             </div>
             <div style={s.addRow}>
               <input
