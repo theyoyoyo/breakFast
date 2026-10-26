@@ -1,6 +1,6 @@
 /**
  * Tests for Settings: supplements start as Daily with no frequency picker, and show
- * "As needed" for occasional ones; the theme picker offers all five themes.
+ * "Occasional" for occasional ones; the theme picker offers all five themes; the tab title is the app name.
  * API calls are mocked — no real network calls are made.
  */
 
@@ -40,14 +40,20 @@ describe('SettingsPanel', () => {
     await waitFor(() => expect(api.createSupplement).toHaveBeenCalledWith('Vitamin D', '', 'daily'))
   })
 
-  it('labels occasional supplements "As needed"', async () => {
+  it('labels occasional supplements "Occasional"', async () => {
     api.getSupplements.mockResolvedValue([ // Settings loads on mount and when shown
       { id: 1, name: 'Magnesium', contents: '', frequency: 'sometimes' },
       { id: 2, name: 'Omega-3', contents: '', frequency: 'daily' },
     ])
     render(<SettingsPanel visible />)
-    expect(await screen.findByRole('button', { name: 'As needed' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Occasional' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Daily' })).toBeInTheDocument()
+  })
+
+  it('titles the tab with the app name, like Chat', async () => {
+    render(<SettingsPanel visible />)
+    expect(await screen.findByText('break FAST')).toBeInTheDocument()
+    expect(screen.queryByText('Settings')).toBeNull()
   })
 
   it('offers all five themes', async () => {

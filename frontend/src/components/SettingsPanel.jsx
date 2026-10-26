@@ -17,7 +17,7 @@ import { THEMES, applyTheme, storedTheme } from '../utils/theme'
 import * as s from './SettingsPanel.styles'
 
 // Display names for the stored supplement frequency values
-const FREQUENCY_LABELS = { daily: 'Daily', sometimes: 'As needed' }
+const FREQUENCY_LABELS = { daily: 'Daily', sometimes: 'Occasional' }
 
 const PRIORITY_OPTIONS = [
   { value: 'low', label: "Don't really care" },
@@ -589,7 +589,7 @@ export default function SettingsPanel({ visible }) {
   // --- Main settings view ---
   return (
     <div style={s.container}>
-      <div style={s.header}>Settings</div>
+      <div style={s.brandHeader}>break FAST</div>
 
       <div style={s.body}>
         {error && <div style={s.error}>{error}</div>}
@@ -688,7 +688,7 @@ export default function SettingsPanel({ visible }) {
               <button
                 style={s.suppFreq(sup.frequency)}
                 onClick={() => handleToggleFrequency(sup)}
-                title="Tap to switch between Daily and As needed"
+                title="Tap to switch between Daily and Occasional"
               >{FREQUENCY_LABELS[sup.frequency] || sup.frequency}</button>
               <button style={s.tagX} onClick={() => handleDeleteSupplement(sup.id)}>×</button>
             </div>
