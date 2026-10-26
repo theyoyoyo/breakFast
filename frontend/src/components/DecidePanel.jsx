@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { getRatings, createRating, logMeal } from '../services/api'
 import MealEditor from './MealEditor'
 import StarRating from './StarRating'
@@ -10,6 +10,8 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
   const [ratings, setRatings] = useState({})
   const [existingRatings, setExistingRatings] = useState([])
   const [saving, setSaving] = useState(false)
+  // Ingredients not in the fridge, reported by MealEditor — Confirm waits until there are none
+  const [missing, setMissing] = useState([])
   // Holds the meal state captured from MealEditor when proceeding to rating
   const pendingMealRef = useRef(null)
 
@@ -30,7 +32,8 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
   // Build a menu-format meal for MealEditor (always menuMode so "+ Dish" is always available).
   // If the incoming meal already has a menu, use it. If it has flat ingredients, convert them to
   // simple menu items. If it's empty, MealEditor starts blank.
-  const editorMeal = (() => {
+  // Memoized: MealEditor resets its edits whenever it receives a new meal object
+  const editorMeal = useMemo(() => {
     const menu = meal?.menu || meal?.menu_items
     if (menu && menu.length > 0) return { ...meal, menu }
     const flat = meal?.ingredients || []
@@ -43,7 +46,11 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
         ingredients: [],
       })),
     }
-  })()
+  }, [meal])
+
+  const handleMissingChange = useCallback((names) => {
+    setMissing(prev => (prev.join('\n') === names.join('\n') ? prev : names))
+  }, [])
 
   // Core log-meal call — used by both direct save and post-rating save
   const doLogMeal = useCallback(async (updatedMeal) => {
@@ -145,16 +152,24 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
           showPrepTime={true}
           editPrepTime={true}
           menuMode={true}
+          checkFridge
+          onMissingChange={handleMissingChange}
           extraActions={(buildCurrentMeal) => (
             <button
-              style={s.confirmBtn}
+              style={missing.length ? s.confirmBtnBlocked : s.confirmBtn}
               onClick={() => handleProceedToRating(buildCurrentMeal())}
-              disabled={saving}
+              disabled={saving || missing.length > 0}
+              title={missing.length ? 'Some ingredients are not in your fridge' : undefined}
             >
               Confirm
             </button>
           )}
         />
+        {missing.length > 0 && (
+          <div style={s.missingNote}>
+            Not in your fridge: {missing.join(', ')}. Remove or replace them, or add them in the Fridge tab, to confirm.
+          </div>
+        )}
       </div>
     </div>
   )

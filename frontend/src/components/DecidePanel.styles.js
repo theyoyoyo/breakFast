@@ -1,4 +1,4 @@
-import { secondaryColor } from '../styles/common'
+import { secondaryColor, colors } from '../styles/common'
 
 export const overlay = {
   position: 'fixed',
@@ -184,6 +184,19 @@ export const confirmBtn = {
   fontSize: 15,
   fontWeight: 600,
   cursor: 'pointer',
+}
+
+export const confirmBtnBlocked = {
+  ...confirmBtn,
+  opacity: 0.45,
+  cursor: 'not-allowed',
+}
+
+export const missingNote = {
+  marginTop: 10,
+  fontSize: 13,
+  lineHeight: 1.5,
+  color: colors.goldText,
 }
 
 export const rateRow = {
