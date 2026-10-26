@@ -147,11 +147,12 @@ export const itemText = {
   color: 'var(--text)',
 }
 
-// Yellow underline for ingredients not in the fridge; dotted on a dish whose hidden sub-ingredients are missing
-export const missingName = (dotted = false) => ({
+// Underline for ingredients not in the fridge: yellow while missing, green once marked as obtained;
+// dotted on a dish whose hidden sub-ingredients are missing
+export const missingName = ({ dotted = false, obtained = false } = {}) => ({
   textDecorationLine: 'underline',
   textDecorationStyle: dotted ? 'dotted' : 'solid',
-  textDecorationColor: colors.goldText,
+  textDecorationColor: obtained ? colors.successText : colors.goldText,
   textDecorationThickness: 2,
   textUnderlineOffset: 3,
 })
