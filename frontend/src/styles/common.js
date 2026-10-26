@@ -1,7 +1,8 @@
 // Shared styles used across multiple components
 
-// Secondary button color — dark orange-red, used for all action buttons
-export const secondaryColor = '#c4533e'
+// Secondary button color, used for all action buttons. A CSS variable so the
+// theme setting can change it (index.css); use --secondary-soft for a tinted background.
+export const secondaryColor = 'var(--secondary)'
 
 // Semantic color palette — use these instead of hardcoded hex values
 export const colors = {

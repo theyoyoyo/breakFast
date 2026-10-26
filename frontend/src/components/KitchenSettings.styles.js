@@ -31,7 +31,7 @@ export const tile = (enabled) => ({
   padding: '16px 8px',
   borderRadius: 12,
   border: enabled ? `2px solid ${secondaryColor}` : '2px solid var(--border)',
-  background: enabled ? secondaryColor + '22' : 'var(--surface2)',
+  background: enabled ? 'var(--secondary-soft)' : 'var(--surface2)',
   cursor: 'pointer',
   transition: 'background 0.15s, border-color 0.15s, opacity 0.15s',
   opacity: enabled ? 1 : 0.5,
