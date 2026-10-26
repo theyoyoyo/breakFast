@@ -1,4 +1,4 @@
-import { secondaryColor, colors } from '../styles/common'
+import { secondaryColor, colors, deleteBtn as sharedDeleteBtn } from '../styles/common'
 
 export const editorContainer = {
   display: 'flex',
@@ -153,15 +153,8 @@ export const itemActions = {
   flexShrink: 0,
 }
 
-// Trash button on item rows — soft red so it reads as delete
-export const deleteBtn = {
-  background: colors.dangerSoft,
-  border: `1px solid ${colors.dangerBorder}`,
-  borderRadius: 6,
-  cursor: 'pointer',
-  fontSize: 16,
-  padding: '2px 6px',
-}
+// Trash button on item rows (shared delete look)
+export const deleteBtn = { ...sharedDeleteBtn, fontSize: 16 }
 
 export const dishBadge = {
   fontSize: 16,

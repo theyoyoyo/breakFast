@@ -1,4 +1,4 @@
-import { secondaryColor, colors, brandHeader } from '../styles/common'
+import { secondaryColor, colors, brandHeader, deleteBtn } from '../styles/common'
 
 export const container = {
   display: 'flex',
@@ -135,13 +135,5 @@ export const overlayPanel = {
   flexDirection: 'column',
 }
 
-// Remove-favorite button — soft red so it reads as delete
-export const removeBtn = {
-  background: colors.dangerSoft,
-  border: `1px solid ${colors.dangerBorder}`,
-  borderRadius: 8,
-  padding: '6px 10px',
-  fontSize: 14,
-  color: colors.danger,
-  cursor: 'pointer',
-}
+// Remove-favorite button (shared delete look, sized like its neighbours)
+export const removeBtn = { ...deleteBtn, borderRadius: 8, padding: '6px 10px' }

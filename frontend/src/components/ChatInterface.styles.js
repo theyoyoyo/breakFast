@@ -1,4 +1,4 @@
-import { secondaryColor, colors } from '../styles/common'
+import { secondaryColor, colors, deleteBtn } from '../styles/common'
 
 export const container = {
   display: 'flex',
@@ -226,7 +226,9 @@ export const newSessionBtn = {
 }
 
 export const deleteSessionBtn = {
-  ...newSessionBtn,
-  color: colors.danger,
-  border: `1px solid ${colors.dangerBorder}`,
+  ...deleteBtn,
+  borderRadius: 8,
+  padding: '4px 10px',
+  fontSize: 12,
+  marginLeft: 'auto',
 }

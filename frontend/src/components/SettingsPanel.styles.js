@@ -1,7 +1,7 @@
 import {
   panelContainer, brandHeader, subPageHeader, subPageBackBtn, panelBody,
   section, sectionLabel, input, addRow, addBtn,
-  tagX, empty, error, select, secondaryColor, colors,
+  tagX, empty, error, select, secondaryColor, colors, deleteBtn,
 } from '../styles/common'
 
 export { section, sectionLabel, tagX, empty, error, select }
@@ -37,11 +37,12 @@ export const profileInputRow = {
   gap: 4,
 }
 
+// × that clears a profile field — red like every other ×
 export const clearFieldBtn = {
   background: 'none',
   border: 'none',
   fontSize: 16,
-  color: 'var(--text-muted)',
+  color: colors.danger,
   cursor: 'pointer',
   padding: '0 2px',
   lineHeight: 1,
@@ -167,13 +168,12 @@ export const priorityBtn = (active, level) => {
   }
 }
 
+// Bulk delete ("Delete meals older than 1 year") — shared delete look, full width
 export const dangerBtn = {
+  ...deleteBtn,
   width: '100%',
   padding: '10px 16px',
-  background: 'var(--surface2)',
-  border: `1px solid ${secondaryColor}`,
   borderRadius: 8,
-  color: secondaryColor,
   fontWeight: 600,
   fontSize: 13,
   cursor: 'pointer',
@@ -253,13 +253,8 @@ export const expandIcon = {
   padding: '2px 4px',
 }
 
-export const deleteMealBtn = {
-  background: 'none',
-  border: 'none',
-  cursor: 'pointer',
-  fontSize: 16,
-  padding: '2px 4px',
-}
+// Meal history trash (shared delete look)
+export const deleteMealBtn = { ...deleteBtn, fontSize: 16 }
 
 export const editMealBtn = {
   background: 'none',

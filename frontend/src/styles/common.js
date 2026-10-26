@@ -138,6 +138,19 @@ export const addBtn = {
   justifyContent: 'center',
 }
 
+// Delete / remove buttons — one look everywhere (trash cans, Del): soft red background,
+// red border and text. Callers may only change size (padding, fontSize, radius).
+export const deleteBtn = {
+  background: colors.dangerSoft,
+  border: `1px solid ${colors.dangerBorder}`,
+  borderRadius: 6,
+  color: colors.danger,
+  cursor: 'pointer',
+  fontSize: 14,
+  padding: '2px 6px',
+  lineHeight: 1.2,
+}
+
 // × remove button on tags and list rows — red, since it deletes
 export const tagX = {
   background: 'none',

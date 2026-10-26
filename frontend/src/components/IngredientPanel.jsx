@@ -571,7 +571,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
                       </button>
                       <div style={{ position: 'relative' }}>
                         <button
-                          style={s.iconBtn}
+                          style={s.rowDeleteBtn}
                           onClick={(e) => {
                             e.stopPropagation()
                             setDeletePopup(deletePopup?.id === ing.id ? null : { id: ing.id, name: ing.name })

@@ -1,4 +1,4 @@
-import { panelContainer, secondaryColor, colors, brandTitle } from '../styles/common'
+import { panelContainer, secondaryColor, colors, brandTitle, deleteBtn } from '../styles/common'
 
 export const container = panelContainer
 
@@ -202,6 +202,9 @@ export const iconBtn = {
   display: 'flex',
   alignItems: 'center',
 }
+
+// Row trash (shared delete look, icon-sized)
+export const rowDeleteBtn = { ...deleteBtn, padding: 3, display: 'flex', alignItems: 'center' }
 
 export const favBtn = {
   background: 'none',
