@@ -128,40 +128,46 @@ export const list = {
   padding: '4px 0',
 }
 
+// Each group is a card: a theme-tinted header band (--bubble) over a darker item area,
+// with a border, so groups stand apart from each other and from the panel
 export const groupSection = {
-  marginBottom: 2,
-  borderRadius: 6,
+  margin: '6px 10px',
+  borderRadius: 8,
+  border: '1px solid var(--border)',
+  background: 'var(--bg)',
+  overflow: 'hidden',
 }
 
 export const groupHeader = {
   display: 'flex',
   alignItems: 'center',
-  padding: '7px 16px',
+  padding: '8px 14px',
+  background: 'var(--bubble)',
   cursor: 'pointer',
   userSelect: 'none',
   gap: 6,
 }
 
 export const groupHeaderText = {
-  fontWeight: 600,
-  fontSize: 11,
+  fontWeight: 700,
+  fontSize: 12,
   textTransform: 'uppercase',
   letterSpacing: '0.06em',
-  color: 'var(--text-muted)',
+  color: 'var(--accent)',
   flex: 1,
 }
 
 export const groupChevron = {
-  color: 'var(--text-muted)',
+  color: 'var(--accent)',
   fontSize: 10,
-  opacity: 0.6,
+  opacity: 0.8,
   transition: 'transform 0.15s ease',
 }
 
 export const groupCount = {
-  fontSize: 10,
-  color: 'var(--text-muted)',
-  opacity: 0.5,
+  fontSize: 11,
+  color: 'var(--accent)',
+  opacity: 0.8,
   fontWeight: 500,
 }
 
@@ -174,7 +180,7 @@ export const row = {
 
 export const name = {
   flex: 1,
-  fontSize: 13,
+  fontSize: 14,
   color: 'var(--text)',
 }
 

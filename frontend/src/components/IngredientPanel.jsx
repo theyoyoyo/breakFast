@@ -28,13 +28,6 @@ function loadCollapseState() {
 }
 
 /** Deterministic subtle background color from group name hash */
-function groupColor(name) {
-  let hash = 0
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
-  const h = Math.abs(hash) % 360
-  return `hsla(${h}, 30%, 50%, 0.06)`
-}
-
 const STORAGE_KEY = 'bf_suggestions'
 
 function loadSavedSuggestions() {
@@ -488,7 +481,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
           if (groupItems.length === 0) return null
           const isCollapsed = !!collapsed[groupName]
           return (
-            <div key={groupName} style={{ ...s.groupSection, background: groupColor(groupName) }}>
+            <div key={groupName} style={s.groupSection}>
               <div style={s.groupHeader} onClick={() => toggleCollapse(groupName)}>
                 <ChevronRight
                   size={12}
