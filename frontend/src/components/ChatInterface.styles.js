@@ -38,7 +38,7 @@ export const messageWrapper = (role) => ({
 export const bubble = (role) => ({
   maxWidth: '80%',
   alignSelf: role === 'user' ? 'flex-end' : 'flex-start',
-  background: role === 'user' ? 'var(--surface2)' : '#3d2a2a',
+  background: role === 'user' ? 'var(--surface2)' : 'var(--bubble)',
   color: 'var(--text)',
   border: 'none',
   borderRadius: role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',

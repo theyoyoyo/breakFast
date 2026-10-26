@@ -11,8 +11,17 @@ describe('theme', () => {
     delete document.documentElement.dataset.theme
   })
 
-  it('offers orange, purple and green', () => {
-    expect(THEMES.map(t => t.key)).toEqual(['orange', 'purple', 'green'])
+  it('offers five themes in color-wheel order, orange first', () => {
+    expect(THEMES.map(t => t.key)).toEqual(['orange', 'green', 'teal', 'blue', 'purple'])
+  })
+
+  it('has a stylesheet block for every theme except the default', async () => {
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    const css = fs.readFileSync(path.resolve(process.cwd(), 'src/index.css'), 'utf8')
+    for (const { key } of THEMES.slice(1)) {
+      expect(css).toContain(`:root[data-theme="${key}"]`)
+    }
   })
 
   it('sets data-theme for purple and green and remembers the choice', () => {

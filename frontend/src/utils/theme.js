@@ -1,10 +1,12 @@
-// Theme setting: orange (default), warm purple, warm green.
+// Theme setting: orange (default) plus green, teal, blue and purple, in color-wheel order.
 // The colors live in index.css under :root[data-theme=…]; only the accents change.
 
 export const THEMES = [
   { key: 'orange', label: 'Orange', swatch: '#f4a261' },
-  { key: 'purple', label: 'Purple', swatch: '#e0a3d6' },
   { key: 'green', label: 'Green', swatch: '#c3c96b' },
+  { key: 'teal', label: 'Teal', swatch: '#8fd3c1' },
+  { key: 'blue', label: 'Blue', swatch: '#a7b6f2' },
+  { key: 'purple', label: 'Purple', swatch: '#e0a3d6' },
 ]
 
 export const DEFAULT_THEME = 'orange'
