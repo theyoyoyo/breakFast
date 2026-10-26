@@ -186,6 +186,14 @@ export const confirmBtn = {
   cursor: 'pointer',
 }
 
+export const ateOutBtn = {
+  ...confirmBtn,
+  padding: '12px 16px',
+  background: 'transparent',
+  border: `1px solid ${secondaryColor}`,
+  color: 'var(--text)',
+}
+
 export const confirmBtnBlocked = {
   ...confirmBtn,
   opacity: 0.45,

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { getRatings, createRating, logMeal } from '../services/api'
+import { getRatings, createRating, logMeal, addFavorite } from '../services/api'
 import MealEditor from './MealEditor'
 import StarRating from './StarRating'
 import * as s from './DecidePanel.styles'
@@ -66,8 +66,8 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
     onConfirm?.()
   }, [onConfirm])
 
-  // MealEditor's Save button → log directly without rating
-  const handleEditorSave = useCallback(async (updatedMeal) => {
+  // Log without the rating step — used when every item is already rated
+  const logWithoutRating = useCallback(async (updatedMeal) => {
     setSaving(true)
     try {
       await doLogMeal(updatedMeal)
@@ -75,7 +75,21 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
     setSaving(false)
   }, [doLogMeal])
 
-  // MealEditor's extraActions "Confirm" button → collect ratings for unrated items, then log
+  // MealEditor's ⭐ Save → keep the menu in favorites for later; nothing is logged
+  const handleFavorite = useCallback(async (currentMeal) => {
+    await addFavorite({
+      meal_name: currentMeal.menu_name || currentMeal.meal_name || 'Breakfast',
+      description: currentMeal.description,
+      ingredients: currentMeal.ingredients || [],
+      steps: currentMeal.steps || [],
+      prep_time_min: currentMeal.prep_time_min,
+      nutrition_note: currentMeal.nutrition_note,
+      menu_items: currentMeal.menu || currentMeal.menu_items || null,
+    })
+  }, [])
+
+  // "Confirm" and "Ate out" → collect ratings for unrated items, then log
+  // (Confirm waits for the fridge check; Ate out is for meals not made from the fridge)
   const handleProceedToRating = useCallback((updatedMeal) => {
     pendingMealRef.current = updatedMeal
     const ratedNames = new Set(existingRatings.map(r => r.product_name.toLowerCase()))
@@ -84,14 +98,14 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
     const unrated = topItems.filter(item => !ratedNames.has(item.name.toLowerCase()))
     if (unrated.length === 0) {
       // All already rated — skip to save
-      handleEditorSave(updatedMeal)
+      logWithoutRating(updatedMeal)
       return
     }
     const defaults = {}
     unrated.forEach(item => { defaults[item.name] = 10 })
     setRatings(defaults)
     setPhase('rate')
-  }, [existingRatings, handleEditorSave])
+  }, [existingRatings, logWithoutRating])
 
   // Rating phase Save — persist ratings then log meal
   const handleSaveWithRatings = useCallback(async () => {
@@ -147,7 +161,7 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
         <div style={s.panelHeader}>Today I ate</div>
         <MealEditor
           meal={editorMeal}
-          onSave={handleEditorSave}
+          onFavorite={handleFavorite}
           onClose={onClose}
           showPrepTime={true}
           editPrepTime={true}
@@ -155,19 +169,29 @@ export default function DecidePanel({ meal, onClose, onConfirm }) {
           checkFridge
           onMissingChange={handleMissingChange}
           extraActions={(buildCurrentMeal) => (
-            <button
-              style={missing.length ? s.confirmBtnBlocked : s.confirmBtn}
-              onClick={() => handleProceedToRating(buildCurrentMeal())}
-              disabled={saving || missing.length > 0}
-              title={missing.length ? 'Some ingredients are not in your fridge' : undefined}
-            >
-              Confirm
-            </button>
+            <>
+              <button
+                style={s.ateOutBtn}
+                onClick={() => handleProceedToRating(buildCurrentMeal())}
+                disabled={saving}
+                title="Log a meal you didn't make from your fridge"
+              >
+                Ate out
+              </button>
+              <button
+                style={missing.length ? s.confirmBtnBlocked : s.confirmBtn}
+                onClick={() => handleProceedToRating(buildCurrentMeal())}
+                disabled={saving || missing.length > 0}
+                title={missing.length ? 'Some ingredients are not in your fridge' : undefined}
+              >
+                Confirm
+              </button>
+            </>
           )}
         />
         {missing.length > 0 && (
           <div style={s.missingNote}>
-            Not in your fridge: {missing.join(', ')}. Remove or replace them, or add them in the Fridge tab, to confirm.
+            Not in your fridge: {missing.join(', ')}. Remove or replace them, or add them in the Fridge tab, to confirm. Ate somewhere else? Use Ate out.
           </div>
         )}
       </div>

@@ -11,7 +11,7 @@ const DISH_MISSING_HINT = 'Some ingredients are not in your fridge'
  *
  * Props:
  *   meal         — meal object { meal_name, ingredients, menu, steps, prep_time_min, ... }
- *   onSave       — (updatedMeal) => void — called with the edited meal
+ *   onSave       — (updatedMeal) => void — called with the edited meal; no Save button without it
  *   onClose      — () => void — close the editor
  *   showPrepTime — boolean — whether to show prep_time_min input (default true)
  *   editPrepTime — boolean — whether prep time is editable (default true)
@@ -402,7 +402,7 @@ export default function MealEditor({
             {favSaving ? '...' : favAdded ? '✓ Saved' : '⭐ Save'}
           </button>
         )}
-        <button style={s.saveBtn} onClick={handleSave}>Save</button>
+        {onSave && <button style={s.saveBtn} onClick={handleSave}>Save</button>}
       </div>
     </div>
   )

@@ -245,6 +245,7 @@ export const addBtn = {
 
 export const actions = {
   display: 'flex',
+  flexWrap: 'wrap', // "Today I ate" has four buttons; wrap instead of overflowing at phone width
   justifyContent: 'space-between',
   marginTop: 16,
   gap: 10,
