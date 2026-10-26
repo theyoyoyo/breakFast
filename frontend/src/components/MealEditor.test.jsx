@@ -96,6 +96,24 @@ describe('MealEditor fridge check', () => {
     expect(screen.getByText('Olives')).toHaveAttribute('title', OBTAINED)
   })
 
+  it('only underlines missing items in templates (favorites), with no tap to mark', async () => {
+    checkMissingIngredients.mockResolvedValue({ missing: ['Olives'] })
+    const onMissingChange = vi.fn()
+    render(
+      <MealEditor
+        meal={{ ...MEAL, obtained: ['Olives'] }} menuMode checkFridge canMarkObtained={false}
+        onMissingChange={onMissingChange}
+      />,
+    )
+    const olives = await screen.findByTitle('Not in your fridge')
+    expect(olives).toHaveTextContent('Olives')
+    expect(olives.style.textDecorationLine).toBe('underline')
+    expect(olives).not.toHaveAttribute('role')
+    fireEvent.click(olives)
+    expect(olives).toHaveAttribute('title', 'Not in your fridge')
+    expect(onMissingChange).toHaveBeenLastCalledWith(['Olives'])
+  })
+
   it('checks again after an edit and clears the mark once the item is removed', async () => {
     checkMissingIngredients.mockResolvedValueOnce({ missing: ['Olives'] }).mockResolvedValue({ missing: [] })
     const onMissingChange = vi.fn()

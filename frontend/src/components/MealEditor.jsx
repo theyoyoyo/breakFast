@@ -5,6 +5,7 @@ import * as s from './MealEditor.styles'
 
 const MISSING_HINT = 'Not in your fridge — tap once you have it'
 const OBTAINED_HINT = 'Marked as obtained — tap to undo'
+const TEMPLATE_MISSING_HINT = 'Not in your fridge'
 const DISH_MISSING_HINT = 'Some ingredients are not in your fridge'
 const DISH_OBTAINED_HINT = 'Missing ingredients are marked as obtained'
 
@@ -22,6 +23,8 @@ const DISH_OBTAINED_HINT = 'Missing ingredients are marked as obtained'
  *   menuMode     — boolean — edit meal.menu (multi-item) instead of meal.ingredients
  *   checkFridge  — boolean — underline ingredients that aren't in the fridge (checked by the backend);
  *                  tapping one marks it as obtained for this meal (green), saved as meal.obtained
+ *   canMarkObtained — boolean — allow tapping missing items to mark them as obtained (default true);
+ *                  off for templates like favorites, where items are only underlined
  *   onMissingChange — (names) => void — missing ingredients not marked as obtained, after each check
  *   onChange     — (currentMeal) => void — called with the live editor state after each change
  *
@@ -38,6 +41,7 @@ export default function MealEditor({
   menuMode = false,
   onFavorite,        // (currentMeal) => void — called with current editor state
   checkFridge = false,
+  canMarkObtained = true,
   onMissingChange,
   onChange,
 }) {
@@ -82,23 +86,29 @@ export default function MealEditor({
 
   // Report what still blocks the meal: missing and not marked as obtained
   useEffect(() => {
-    if (missing) onMissingChange?.([...missing].filter(name => !obtained.has(name)))
+    if (missing) onMissingChange?.([...missing].filter(name => !(canMarkObtained && obtained.has(name))))
   }, [missing, obtained]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const key = (name) => (name || '').trim()
   const isMissing = (name) => !!missing?.has(key(name))
-  const isObtained = (name) => obtained.has(key(name))
+  const isObtained = (name) => canMarkObtained && obtained.has(key(name))
   const toggleObtained = (name) => setObtained(prev => {
     const next = new Set(prev)
     if (next.has(key(name))) next.delete(key(name))
     else next.add(key(name))
     return next
   })
-  const markAllObtained = () => setObtained(prev => new Set([...prev, ...(missing || [])]))
+  const markAllObtained = () => {
+    if (canMarkObtained) setObtained(prev => new Set([...prev, ...(missing || [])]))
+  }
 
   // Missing names are tappable: yellow until marked as obtained, then green
+  // (templates only show the yellow underline)
   const nameProps = (name, extraStyle = {}) => {
     if (!isMissing(name)) return { style: { ...s.itemText, ...extraStyle } }
+    if (!canMarkObtained) {
+      return { style: { ...s.itemText, ...extraStyle, ...s.missingName() }, title: TEMPLATE_MISSING_HINT }
+    }
     const got = isObtained(name)
     return {
       style: { ...s.itemText, ...extraStyle, ...s.missingName({ obtained: got }), cursor: 'pointer' },

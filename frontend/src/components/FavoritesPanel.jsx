@@ -116,6 +116,8 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
                       showPrepTime={true}
                       editPrepTime={true}
                       menuMode={isMenuFormat}
+                      checkFridge
+                      canMarkObtained={false}
                     />
                   </div>
                 </div>
