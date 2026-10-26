@@ -153,12 +153,14 @@ export const itemActions = {
   flexShrink: 0,
 }
 
+// Trash button on item rows — soft red so it reads as delete
 export const deleteBtn = {
-  background: 'none',
-  border: 'none',
+  background: colors.dangerSoft,
+  border: `1px solid ${colors.dangerBorder}`,
+  borderRadius: 6,
   cursor: 'pointer',
-  fontSize: 18,
-  padding: '4px 6px',
+  fontSize: 16,
+  padding: '2px 6px',
 }
 
 export const dishBadge = {

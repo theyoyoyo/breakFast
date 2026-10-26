@@ -135,12 +135,13 @@ export const overlayPanel = {
   flexDirection: 'column',
 }
 
+// Remove-favorite button — soft red so it reads as delete
 export const removeBtn = {
-  background: 'none',
-  border: '1px solid var(--border)',
+  background: colors.dangerSoft,
+  border: `1px solid ${colors.dangerBorder}`,
   borderRadius: 8,
   padding: '6px 10px',
   fontSize: 14,
-  color: 'var(--text-muted)',
+  color: colors.danger,
   cursor: 'pointer',
 }

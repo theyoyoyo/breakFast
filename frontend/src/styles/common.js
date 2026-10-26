@@ -15,6 +15,11 @@ export const colors = {
   goldText: '#e8c84a',
   goldStar: '#f5a623',
   error: '#e76f51',
+  // Danger (delete / remove / top priority) — semantic, never themed
+  danger: '#ec7063',
+  dangerSoft: 'rgba(231, 76, 60, 0.15)',
+  dangerBorder: 'rgba(231, 76, 60, 0.45)',
+  dangerStrong: '#b83b30',
   // Supplements
   daily: '#2d4a35',
   dailyText: '#8bc59a',
@@ -133,10 +138,11 @@ export const addBtn = {
   justifyContent: 'center',
 }
 
+// × remove button on tags and list rows — red, since it deletes
 export const tagX = {
   background: 'none',
   border: 'none',
-  color: 'var(--text-muted)',
+  color: colors.danger,
   fontSize: 14,
   cursor: 'pointer',
   padding: 0,

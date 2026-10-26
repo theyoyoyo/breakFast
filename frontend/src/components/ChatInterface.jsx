@@ -594,7 +594,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
         <button style={s.newSessionBtn} onClick={handleNewSession} title="Start a new conversation">
           ✚ New
         </button>
-        <button style={{ ...s.newSessionBtn, color: 'var(--accent)' }} onClick={handleDeleteSession} title="Delete this session">
+        <button style={s.deleteSessionBtn} onClick={handleDeleteSession} title="Delete this session">
           🗑 Del
         </button>
       </div>

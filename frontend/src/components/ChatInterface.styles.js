@@ -213,13 +213,20 @@ export const stopBtn = {
   transition: 'opacity 0.15s',
 }
 
+// Session buttons in the chat header (Back, Next, New) — accent colored; Delete is red
 export const newSessionBtn = {
   background: 'none',
   border: '1px solid var(--border)',
   borderRadius: 8,
   padding: '4px 10px',
   fontSize: 12,
-  color: 'var(--text-muted)',
+  color: 'var(--accent)',
   cursor: 'pointer',
   marginLeft: 'auto',
+}
+
+export const deleteSessionBtn = {
+  ...newSessionBtn,
+  color: colors.danger,
+  border: `1px solid ${colors.dangerBorder}`,
 }
