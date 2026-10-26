@@ -21,10 +21,17 @@ export const titleBar = {
   overflow: 'hidden',
 }
 
-export const titleIcon = {
+// Icon background doubles as a readiness dot: green = ready, yellow = something missing
+export const titleIcon = (readiness) => ({
   fontSize: 14,
   flexShrink: 0,
-}
+  borderRadius: 6,
+  padding: '1px 3px',
+  transition: 'background 0.2s',
+  background: readiness === 'ready'
+    ? 'rgba(139, 197, 154, 0.28)'
+    : readiness === 'missing' ? 'rgba(232, 200, 74, 0.28)' : 'transparent',
+})
 
 export const titleName = {
   fontSize: 12,
