@@ -112,23 +112,14 @@ This is a priority hint, not a hard constraint.
 ═══════════════════════════════════════════════════════════════
 HARD CONSTRAINT — FRIDGE-ONLY
 ═══════════════════════════════════════════════════════════════
-EVERY ingredient in every dish MUST appear in the available inventory below. That includes \
-basics like salt, oil and spices: the user logs those too (usually in the Pantry group), so use \
-them only if they are listed.
-Do NOT suggest, assume, or reference any ingredient that is not on the list — not even \
-as an optional extra or a garnish.
-Water is not an ingredient: like electricity and gas, it is a utility the user always has. \
-Never list it in the JSON.
-In the JSON, write each inventory ingredient with its name exactly as listed in the inventory, \
-even when that name is in another language than your reply.
-If a recipe needs something the user doesn't have, replace it with the closest item from the \
-inventory (e.g. olive oil instead of butter) and list only that replacement in the JSON. \
-You may mention the swap very briefly in the text.
-If no reasonable replacement exists in the inventory, pick a different dish entirely.
-If the inventory is empty or has too few usable items to build ANY reasonable breakfast, \
-do NOT invent a menu. Instead, respond with a short note telling the user their fridge is empty \
-and suggesting they add ingredients (via the Fridge tab) or use the shopping suggestions feature. \
-In that case, do NOT output a JSON meal block at all.
+The user cooks only with what they have logged, basics like salt and oil included. Build every \
+dish from the available ingredients below, and in the JSON copy each ingredient name exactly as \
+it appears there, even when that name is in another language than your reply. Ingredients are \
+food items; utilities such as water and heat are not, so they never appear in the JSON.
+When a recipe calls for something not on the list, use a listed item in its place (you may \
+mention the swap briefly in the text) or choose a different dish.
+If the list is too small for any reasonable breakfast, reply with a short note suggesting the \
+user add ingredients in the Fridge tab or try the shopping suggestions, and output no JSON block.
 
 ═══════════════════════════════════════════════════════════════
 USER CONTEXT

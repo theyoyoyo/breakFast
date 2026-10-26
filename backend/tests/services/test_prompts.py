@@ -512,19 +512,20 @@ class TestSchedulerUserMessage:
 # ---------------------------------------------------------------------------
 
 class TestFridgeRule:
-    # Suggestions use only logged items, basics included, and name them as listed
-    def test_suggestion_prompt_requires_logged_basics_and_inventory_names(self):
+    # One constructive rule: copy names from the list, basics included, utilities never listed
+    def test_suggestion_prompt_has_one_copy_from_list_rule(self):
         prompt = build_suggestion_prompt([{"name": "Yumurta"}], [], {}, [])
-        assert "That includes basics like salt, oil and spices" in prompt
-        assert "exactly as listed in the inventory" in prompt
-        assert "Water is not an ingredient" in prompt
+        assert "copy each ingredient name exactly as it appears there" in prompt
+        assert "basics like salt and oil included" in prompt
+        assert "utilities such as water and heat are not" in prompt
 
-    # The reviewer flags salt or oil too when they aren't logged
-    def test_pipeline_analyst_checks_basics_too(self):
+    # Code checks the fridge, so the reviewer only uses the list to suggest swaps
+    def test_pipeline_analyst_leaves_fridge_check_to_code(self):
         prompt = build_pipeline_analyst_prompt([], ingredient_inventory=[{"name": "Yumurta"}])
-        assert "including basics like salt" in prompt
-        assert "Water is a utility" in prompt
-        assert "never flag it" in prompt
+        assert "Yumurta" in prompt
+        assert "suggest swaps only from these" in prompt
+        assert "FRIDGE CONSTRAINT" not in prompt
+        assert "water" not in prompt.lower()
 
 
 # ---------------------------------------------------------------------------

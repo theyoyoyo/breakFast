@@ -57,7 +57,7 @@ Use this to:
 - Identify weekly nutrient gaps this meal should try to fill.
 
 ═══════════════════════════════════════════════════════════════
-AVAILABLE FRIDGE INVENTORY (authoritative — do NOT assume anything beyond this)
+AVAILABLE INGREDIENTS (everything the user has — suggest swaps only from these)
 ═══════════════════════════════════════════════════════════════
 {ingredient_inventory}
 
@@ -87,15 +87,11 @@ MICRONUTRIENTS:
 - Omega-3 sources present or absent?
 
 INGREDIENT QUALITY:
-- Are there healthier alternatives for any ingredient?
+- Are there healthier alternatives among the available ingredients?
 - Any ingredient that conflicts with health rules?
 - Portion sizes appropriate? (The inventory tracks only ingredient names, not quantities. \
   Assume standard healthy breakfast portions when evaluating.)
 - Seasonal availability consideration?
-- FRIDGE CONSTRAINT — CRITICAL: every ingredient in the draft, including basics like salt \
-  and oil, must appear in the inventory above. Flag any other ingredient as a hard \
-  violation that must be replaced with an inventory item or removed. Water is a utility, \
-  not an ingredient: never flag it.
 
 MEAL BALANCE & VARIETY:
 - Does this meal repeat recent meals too closely?
