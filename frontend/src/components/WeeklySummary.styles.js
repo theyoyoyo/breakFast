@@ -1,25 +1,9 @@
-import { panelContainer, panelBody, secondaryColor } from '../styles/common'
+import { panelContainer, panelBody, secondaryColor, subPageHeader, subPageBackBtn } from '../styles/common'
 
 export const container = panelContainer
 
-export const header = {
-  fontSize: 18,
-  fontWeight: 700,
-  color: 'var(--accent)',
-  padding: '16px 16px 8px',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-}
-
-export const backBtn = {
-  background: 'none',
-  border: 'none',
-  cursor: 'pointer',
-  fontSize: 18,
-  color: 'var(--text-muted)',
-  padding: '2px 6px',
-}
+export const header = subPageHeader
+export const backBtn = subPageBackBtn
 
 export const body = panelBody
 

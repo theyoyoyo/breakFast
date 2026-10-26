@@ -1,13 +1,13 @@
 import {
-  panelContainer, panelHeader, panelBody,
+  panelContainer, brandHeader, subPageHeader, subPageBackBtn, panelBody,
   section, sectionLabel, input, addRow, addBtn,
-  tagX, empty, error, select, secondaryColor, colors,
+  tagX, empty, error, select, secondaryColor, colors, deleteBtn,
 } from '../styles/common'
 
 export { section, sectionLabel, tagX, empty, error, select }
 
 export const container = panelContainer
-export const header = panelHeader
+export { brandHeader, subPageHeader }
 export const body = panelBody
 
 export { input, addRow, addBtn }
@@ -37,11 +37,12 @@ export const profileInputRow = {
   gap: 4,
 }
 
+// × that clears a profile field — red like every other ×
 export const clearFieldBtn = {
   background: 'none',
   border: 'none',
   fontSize: 16,
-  color: 'var(--text-muted)',
+  color: colors.danger,
   cursor: 'pointer',
   padding: '0 2px',
   lineHeight: 1,
@@ -144,10 +145,11 @@ export const priorityRow = {
   gap: 4,
 }
 
+// Traffic-light priorities: green = don't really care, yellow = care a lot, red = top priority
 const priorityColors = {
-  low: { bg: 'var(--surface)', color: 'var(--text-muted)', activeBg: 'var(--text-muted)', activeColor: '#fff' },
-  high: { bg: 'var(--surface)', color: secondaryColor, activeBg: secondaryColor, activeColor: '#fff' },
-  critical: { bg: 'var(--surface)', color: secondaryColor, activeBg: secondaryColor, activeColor: '#fff' },
+  low: { bg: 'var(--surface)', color: colors.successText, activeBg: colors.successText, activeColor: '#1a1a2e' },
+  high: { bg: 'var(--surface)', color: colors.goldText, activeBg: colors.goldText, activeColor: '#1a1a2e' },
+  critical: { bg: 'var(--surface)', color: '#f1948a', activeBg: colors.dangerStrong, activeColor: '#fff' },
 }
 
 export const priorityBtn = (active, level) => {
@@ -166,26 +168,18 @@ export const priorityBtn = (active, level) => {
   }
 }
 
+// Bulk delete ("Delete meals older than 1 year") — shared delete look, full width
 export const dangerBtn = {
+  ...deleteBtn,
   width: '100%',
   padding: '10px 16px',
-  background: 'var(--surface2)',
-  border: `1px solid ${secondaryColor}`,
   borderRadius: 8,
-  color: secondaryColor,
   fontWeight: 600,
   fontSize: 13,
   cursor: 'pointer',
 }
 
-export const backBtn = {
-  background: 'none',
-  border: 'none',
-  fontSize: 18,
-  color: 'var(--accent)',
-  cursor: 'pointer',
-  padding: '0 4px',
-}
+export const backBtn = subPageBackBtn
 
 export const ratingRow = {
   display: 'flex',
@@ -259,13 +253,8 @@ export const expandIcon = {
   padding: '2px 4px',
 }
 
-export const deleteMealBtn = {
-  background: 'none',
-  border: 'none',
-  cursor: 'pointer',
-  fontSize: 16,
-  padding: '2px 4px',
-}
+// Meal history trash (shared delete look)
+export const deleteMealBtn = { ...deleteBtn, fontSize: 16 }
 
 export const editMealBtn = {
   background: 'none',
@@ -328,3 +317,31 @@ export const analysisNarrative = {
   lineHeight: 1.5,
 }
 
+
+// Theme picker: one pill per theme with a color dot
+export const themeRow = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 8,
+  marginTop: 8,
+}
+
+export const themeBtn = (active) => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: '6px 12px',
+  borderRadius: 20,
+  border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+  background: active ? 'var(--surface2)' : 'transparent',
+  color: active ? 'var(--text)' : 'var(--text-muted)',
+  fontSize: 13,
+  cursor: 'pointer',
+})
+
+export const themeSwatch = (color) => ({
+  width: 12,
+  height: 12,
+  borderRadius: 6,
+  background: color,
+})

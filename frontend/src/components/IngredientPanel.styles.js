@@ -1,4 +1,4 @@
-import { panelContainer, secondaryColor, colors } from '../styles/common'
+import { panelContainer, secondaryColor, colors, brandTitle, deleteBtn } from '../styles/common'
 
 export const container = panelContainer
 
@@ -14,13 +14,7 @@ export const headerRow = {
   borderBottom: '1px solid var(--border)',
 }
 
-export const headerText = {
-  fontWeight: 700,
-  fontSize: 13,
-  textTransform: 'uppercase',
-  letterSpacing: '0.08em',
-  color: 'var(--text-muted)',
-}
+export const headerText = brandTitle
 
 export const headerBtns = {
   display: 'flex',
@@ -134,40 +128,46 @@ export const list = {
   padding: '4px 0',
 }
 
+// Each group is a card: a theme-tinted header band (--bubble) over a darker item area,
+// with a border, so groups stand apart from each other and from the panel
 export const groupSection = {
-  marginBottom: 2,
-  borderRadius: 6,
+  margin: '6px 10px',
+  borderRadius: 8,
+  border: '1px solid var(--border)',
+  background: 'var(--bg)',
+  overflow: 'hidden',
 }
 
 export const groupHeader = {
   display: 'flex',
   alignItems: 'center',
-  padding: '7px 16px',
+  padding: '8px 14px',
+  background: 'var(--bubble)',
   cursor: 'pointer',
   userSelect: 'none',
   gap: 6,
 }
 
 export const groupHeaderText = {
-  fontWeight: 600,
-  fontSize: 11,
+  fontWeight: 700,
+  fontSize: 12,
   textTransform: 'uppercase',
   letterSpacing: '0.06em',
-  color: 'var(--text-muted)',
+  color: 'var(--accent)',
   flex: 1,
 }
 
 export const groupChevron = {
-  color: 'var(--text-muted)',
+  color: 'var(--accent)',
   fontSize: 10,
-  opacity: 0.6,
+  opacity: 0.8,
   transition: 'transform 0.15s ease',
 }
 
 export const groupCount = {
-  fontSize: 10,
-  color: 'var(--text-muted)',
-  opacity: 0.5,
+  fontSize: 11,
+  color: 'var(--accent)',
+  opacity: 0.8,
   fontWeight: 500,
 }
 
@@ -180,7 +180,7 @@ export const row = {
 
 export const name = {
   flex: 1,
-  fontSize: 13,
+  fontSize: 14,
   color: 'var(--text)',
 }
 
@@ -202,6 +202,9 @@ export const iconBtn = {
   display: 'flex',
   alignItems: 'center',
 }
+
+// Row trash (shared delete look, icon-sized)
+export const rowDeleteBtn = { ...deleteBtn, padding: 3, display: 'flex', alignItems: 'center' }
 
 export const favBtn = {
   background: 'none',
@@ -540,7 +543,7 @@ export const suggestSection = {
 export const suggestBtn = {
   width: '100%',
   padding: '9px 16px',
-  background: 'linear-gradient(135deg, #8e44ad 0%, #9b59b6 100%)',
+  background: secondaryColor, // follows the theme
   color: '#fff',
   border: 'none',
   borderRadius: 8,
@@ -618,7 +621,7 @@ export const suggestionReason = {
 export const sendToListBtn = {
   margin: '6px 12px 10px',
   padding: '8px 16px',
-  background: '#8e44ad',
+  background: secondaryColor, // follows the theme
   color: '#fff',
   border: 'none',
   borderRadius: 8,

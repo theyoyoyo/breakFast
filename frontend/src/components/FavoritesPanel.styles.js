@@ -1,4 +1,4 @@
-import { secondaryColor, colors } from '../styles/common'
+import { secondaryColor, colors, brandHeader, deleteBtn } from '../styles/common'
 
 export const container = {
   display: 'flex',
@@ -9,13 +9,7 @@ export const container = {
   overflow: 'hidden',
 }
 
-export const header = {
-  padding: '16px 20px',
-  borderBottom: '1px solid var(--border)',
-  fontWeight: 700,
-  fontSize: 16,
-  color: 'var(--accent)',
-}
+export const header = brandHeader
 
 export const empty = {
   padding: 20,
@@ -148,12 +142,5 @@ export const overlayPanel = {
   flexDirection: 'column',
 }
 
-export const removeBtn = {
-  background: 'none',
-  border: '1px solid var(--border)',
-  borderRadius: 8,
-  padding: '6px 10px',
-  fontSize: 14,
-  color: 'var(--text-muted)',
-  cursor: 'pointer',
-}
+// Remove-favorite button (shared delete look, sized like its neighbours)
+export const removeBtn = { ...deleteBtn, borderRadius: 8, padding: '6px 10px' }

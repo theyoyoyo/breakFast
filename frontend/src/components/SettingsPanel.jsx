@@ -13,7 +13,11 @@ import WeeklySummary from './WeeklySummary'
 import KitchenSettings from './KitchenSettings'
 import MealEditor from './MealEditor'
 import StarRating from './StarRating'
+import { THEMES, applyTheme, storedTheme } from '../utils/theme'
 import * as s from './SettingsPanel.styles'
+
+// Display names for the stored supplement frequency values
+const FREQUENCY_LABELS = { daily: 'Daily', sometimes: 'Occasional' }
 
 const PRIORITY_OPTIONS = [
   { value: 'low', label: "Don't really care" },
@@ -36,7 +40,6 @@ export default function SettingsPanel({ visible }) {
   const [supplements, setSupplements] = useState([])
   const [newSuppName, setNewSuppName] = useState('')
   const [newSuppContents, setNewSuppContents] = useState('')
-  const [newSuppFreq, setNewSuppFreq] = useState('daily')
 
   // Meal history state
   const [meals, setMeals] = useState([])
@@ -55,6 +58,8 @@ export default function SettingsPanel({ visible }) {
 
   // Language preference ('tr' = Turkish, 'en' = English)
   const [language, setLanguage] = useState('en')
+  // Theme (orange / purple / green) — saved per user, cached per device
+  const [theme, setTheme] = useState(storedTheme)
 
   // Weekly summary in suggestions toggle (default off)
   const [weeklySummaryInSuggestions, setWeeklySummaryInSuggestions] = useState(false)
@@ -89,6 +94,8 @@ export default function SettingsPanel({ visible }) {
       }
       const weeklySummaryPref = prefs.find(p => p.key === 'weekly_summary_in_suggestions')
       setWeeklySummaryInSuggestions(weeklySummaryPref?.value === 'true')
+      const themePref = prefs.find(p => p.key === 'theme')
+      if (themePref) setTheme(applyTheme(themePref.value))
     } catch {
       setError('Failed to load settings')
     }
@@ -101,6 +108,16 @@ export default function SettingsPanel({ visible }) {
       await setPreference('response_language', next)
     } catch {
       setLanguage(language)
+    }
+  }
+
+  const handleThemeChange = async (key) => {
+    const previous = theme
+    setTheme(applyTheme(key))
+    try {
+      await setPreference('theme', key)
+    } catch {
+      setTheme(applyTheme(previous))
     }
   }
 
@@ -194,10 +211,10 @@ export default function SettingsPanel({ visible }) {
     if (!name) return
     try {
       setError(null)
-      await createSupplement(name, newSuppContents.trim(), newSuppFreq)
+      // New supplements start as Daily; the toggle on the row switches them
+      await createSupplement(name, newSuppContents.trim(), 'daily')
       setNewSuppName('')
       setNewSuppContents('')
-      setNewSuppFreq('daily')
       load()
     } catch {
       setError('Supplement already exists or failed to save')
@@ -370,7 +387,7 @@ export default function SettingsPanel({ visible }) {
   if (view === 'meals') {
     return (
       <div style={s.container}>
-        <div style={{ ...s.header, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={s.subPageHeader}>
           <button style={s.backBtn} onClick={() => { setPendingMealDeletes(new Set()); setLlmFallbackLyric(null); setView('settings') }}>←</button>
           <span>Meal History ({meals.length})</span>
         </div>
@@ -478,7 +495,7 @@ export default function SettingsPanel({ visible }) {
   if (view === 'health-rules') {
     return (
       <div style={s.container}>
-        <div style={{ ...s.header, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={s.subPageHeader}>
           <button style={s.backBtn} onClick={() => { setPendingRuleDeletes(new Set()); setView('settings') }}>←</button>
           <span>Health Rules ({healthRules.length})</span>
         </div>
@@ -533,7 +550,7 @@ export default function SettingsPanel({ visible }) {
   if (view === 'ratings') {
     return (
       <div style={s.container}>
-        <div style={{ ...s.header, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={s.subPageHeader}>
           <button style={s.backBtn} onClick={() => setView('settings')}>←</button>
           <span>Ratings ({ratings.length})</span>
         </div>
@@ -572,7 +589,7 @@ export default function SettingsPanel({ visible }) {
   // --- Main settings view ---
   return (
     <div style={s.container}>
-      <div style={s.header}>Settings</div>
+      <div style={s.brandHeader}>break FAST</div>
 
       <div style={s.body}>
         {error && <div style={s.error}>{error}</div>}
@@ -668,7 +685,11 @@ export default function SettingsPanel({ visible }) {
             <div key={sup.id} style={s.suppRow}>
               <span style={{ ...s.suppName, flex: sup.contents ? undefined : 1 }}>{sup.name}</span>
               {sup.contents && <span style={s.suppContents}>{sup.contents}</span>}
-              <button style={s.suppFreq(sup.frequency)} onClick={() => handleToggleFrequency(sup)} title="Click to toggle">{sup.frequency}</button>
+              <button
+                style={s.suppFreq(sup.frequency)}
+                onClick={() => handleToggleFrequency(sup)}
+                title="Tap to switch between Daily and Occasional"
+              >{FREQUENCY_LABELS[sup.frequency] || sup.frequency}</button>
               <button style={s.tagX} onClick={() => handleDeleteSupplement(sup.id)}>×</button>
             </div>
           ))}
@@ -680,14 +701,6 @@ export default function SettingsPanel({ visible }) {
                 onChange={(e) => setNewSuppName(e.target.value)}
                 placeholder="Supplement name…"
               />
-              <select
-                style={{ ...s.select, width: 90, flex: 'none' }}
-                value={newSuppFreq}
-                onChange={(e) => setNewSuppFreq(e.target.value)}
-              >
-                <option value="daily">Daily</option>
-                <option value="sometimes">Sometimes</option>
-              </select>
             </div>
             <div style={s.addRow}>
               <input
@@ -725,7 +738,7 @@ export default function SettingsPanel({ visible }) {
             <span style={{ fontSize: 13, color: language === 'tr' ? 'var(--accent)' : 'var(--text-muted)' }}>Turkish</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
-            <span style={{ fontSize: 13, color: 'var(--text-muted)', flex: 1 }}>Suggestions based on analysis</span>
+            <span style={{ fontSize: 13, color: 'var(--text-muted)', flex: 1 }}>Weekly review in suggestions</span>
             <button
               style={{
                 width: 44, height: 24, borderRadius: 12, border: '1px solid var(--border)',
@@ -741,6 +754,24 @@ export default function SettingsPanel({ visible }) {
                 left: weeklySummaryInSuggestions ? 24 : 4,
               }} />
             </button>
+          </div>
+        </div>
+
+        {/* Theme — only the accent colors change */}
+        <div style={s.section}>
+          <div style={s.sectionLabel}>Theme</div>
+          <div style={s.themeRow}>
+            {THEMES.map(t => (
+              <button
+                key={t.key}
+                style={s.themeBtn(theme === t.key)}
+                onClick={() => handleThemeChange(t.key)}
+                aria-pressed={theme === t.key}
+              >
+                <span style={s.themeSwatch(t.swatch)} />
+                {t.label}
+              </button>
+            ))}
           </div>
         </div>
 

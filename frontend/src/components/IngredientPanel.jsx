@@ -28,13 +28,6 @@ function loadCollapseState() {
 }
 
 /** Deterministic subtle background color from group name hash */
-function groupColor(name) {
-  let hash = 0
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
-  const h = Math.abs(hash) % 360
-  return `hsla(${h}, 30%, 50%, 0.06)`
-}
-
 const STORAGE_KEY = 'bf_suggestions'
 
 function loadSavedSuggestions() {
@@ -409,7 +402,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
     <div style={s.container}>
       {/* Header with expired + add buttons */}
       <div style={s.headerRow}>
-        <span style={s.headerText}>Fridge</span>
+        <span style={s.headerText}>break FAST</span>
         <div style={s.headerBtns}>
           <button
             style={expiredCount > 0 ? s.headerExpiredBtn : s.headerExpiredBtnSafe}
@@ -488,7 +481,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
           if (groupItems.length === 0) return null
           const isCollapsed = !!collapsed[groupName]
           return (
-            <div key={groupName} style={{ ...s.groupSection, background: groupColor(groupName) }}>
+            <div key={groupName} style={s.groupSection}>
               <div style={s.groupHeader} onClick={() => toggleCollapse(groupName)}>
                 <ChevronRight
                   size={12}
@@ -578,7 +571,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
                       </button>
                       <div style={{ position: 'relative' }}>
                         <button
-                          style={s.iconBtn}
+                          style={s.rowDeleteBtn}
                           onClick={(e) => {
                             e.stopPropagation()
                             setDeletePopup(deletePopup?.id === ing.id ? null : { id: ing.id, name: ing.name })

@@ -1,20 +1,13 @@
 import {
-  panelContainer, panelHeader, panelBody, error, secondaryColor,
+  panelContainer, panelBody, error, secondaryColor, subPageHeader, subPageBackBtn,
 } from '../styles/common'
 
 export const container = panelContainer
-export const header = panelHeader
+export const header = subPageHeader
 export const body = panelBody
 export { error }
 
-export const backBtn = {
-  background: 'none',
-  border: 'none',
-  fontSize: 18,
-  color: 'var(--accent)',
-  cursor: 'pointer',
-  padding: '0 4px',
-}
+export const backBtn = subPageBackBtn
 
 export const grid = {
   display: 'grid',
@@ -31,7 +24,7 @@ export const tile = (enabled) => ({
   padding: '16px 8px',
   borderRadius: 12,
   border: enabled ? `2px solid ${secondaryColor}` : '2px solid var(--border)',
-  background: enabled ? secondaryColor + '22' : 'var(--surface2)',
+  background: enabled ? 'var(--secondary-soft)' : 'var(--surface2)',
   cursor: 'pointer',
   transition: 'background 0.15s, border-color 0.15s, opacity 0.15s',
   opacity: enabled ? 1 : 0.5,

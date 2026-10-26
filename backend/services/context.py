@@ -9,6 +9,13 @@ the chat WebSocket and analyst REST endpoints.
 import asyncio
 from datetime import date as date_type
 
+# App settings stored as preferences; they're not food preferences, so prompts never see them
+SETTING_KEYS = {"response_language", "theme", "weekly_summary_in_suggestions"}
+
+
+def _food_preferences(prefs: dict) -> dict:
+    return {k: v for k, v in prefs.items() if not k.startswith("avoid:") and k not in SETTING_KEYS}
+
 
 async def fetch_kitchen_appliances(db, user_id: int) -> list[str]:
     """Return display names of enabled kitchen appliances for prompt injection."""
@@ -116,7 +123,7 @@ async def load_chat_context(db, user_id: int) -> dict:
         fetch_kitchen_appliances(db, user_id),
     )
     avoid_list = [v for k, v in prefs.items() if k.startswith("avoid:")]
-    filtered_prefs = {k: v for k, v in prefs.items() if not k.startswith("avoid:") and k != "response_language"}
+    filtered_prefs = _food_preferences(prefs)
     language = prefs.get("response_language", "en")
 
     # Only inject weekly summary into suggestions if the user has opted in
@@ -185,7 +192,7 @@ async def load_shopping_context(db, user_id: int) -> dict:
         fetch_ratings(db, user_id),
     )
     avoid_list = [v for k, v in prefs.items() if k.startswith("avoid:")]
-    filtered_prefs = {k: v for k, v in prefs.items() if not k.startswith("avoid:") and k != "response_language"}
+    filtered_prefs = _food_preferences(prefs)
     language = prefs.get("response_language", "en")
 
     return {

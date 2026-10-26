@@ -1,7 +1,8 @@
 // Shared styles used across multiple components
 
-// Secondary button color — dark orange-red, used for all action buttons
-export const secondaryColor = '#c4533e'
+// Secondary button color, used for all action buttons. A CSS variable so the
+// theme setting can change it (index.css); use --secondary-soft for a tinted background.
+export const secondaryColor = 'var(--secondary)'
 
 // Semantic color palette — use these instead of hardcoded hex values
 export const colors = {
@@ -14,6 +15,11 @@ export const colors = {
   goldText: '#e8c84a',
   goldStar: '#f5a623',
   error: '#e76f51',
+  // Danger (delete / remove / top priority) — semantic, never themed
+  danger: '#ec7063',
+  dangerSoft: 'rgba(231, 76, 60, 0.15)',
+  dangerBorder: 'rgba(231, 76, 60, 0.45)',
+  dangerStrong: '#b83b30',
   // Supplements
   daily: '#2d4a35',
   dailyText: '#8bc59a',
@@ -44,6 +50,37 @@ export const panelHeader = {
   borderBottom: '1px solid var(--border)',
 }
 
+// Main tab title: the app name in the theme's accent color, the same on every tab (like Chat)
+export const brandTitle = {
+  fontWeight: 600,
+  fontSize: 16,
+  letterSpacing: '0.02em',
+  textTransform: 'none',
+  color: 'var(--accent)',
+}
+
+export const brandHeader = { ...panelHeader, ...brandTitle }
+
+// Sub-page header (← back + page name), the Weekly Summary look, shared by every sub-page
+export const subPageHeader = {
+  fontSize: 18,
+  fontWeight: 700,
+  color: 'var(--accent)',
+  padding: '16px 16px 8px',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+}
+
+export const subPageBackBtn = {
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  fontSize: 18,
+  color: 'var(--text-muted)',
+  padding: '2px 6px',
+}
+
 export const panelBody = {
   flex: 1,
   overflowY: 'auto',
@@ -59,12 +96,16 @@ export const section = {
   gap: 8,
 }
 
+// Section titles inside a tab (Preferences, Settings): accent colored with a thin rule
+// so sections separate clearly from their content
 export const sectionLabel = {
-  fontSize: 11,
+  fontSize: 12,
   fontWeight: 700,
   textTransform: 'uppercase',
   letterSpacing: '0.08em',
-  color: 'var(--text-muted)',
+  color: 'var(--accent)',
+  paddingBottom: 4,
+  borderBottom: '1px solid var(--border)',
 }
 
 export const input = {
@@ -97,10 +138,24 @@ export const addBtn = {
   justifyContent: 'center',
 }
 
+// Delete / remove buttons — one look everywhere (trash cans, Del): soft red background,
+// red border and text. Callers may only change size (padding, fontSize, radius).
+export const deleteBtn = {
+  background: colors.dangerSoft,
+  border: `1px solid ${colors.dangerBorder}`,
+  borderRadius: 6,
+  color: colors.danger,
+  cursor: 'pointer',
+  fontSize: 14,
+  padding: '2px 6px',
+  lineHeight: 1.2,
+}
+
+// × remove button on tags and list rows — red, since it deletes
 export const tagX = {
   background: 'none',
   border: 'none',
-  color: 'var(--text-muted)',
+  color: colors.danger,
   fontSize: 14,
   cursor: 'pointer',
   padding: 0,

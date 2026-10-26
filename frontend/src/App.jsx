@@ -6,7 +6,8 @@ import PreferencesPanel from './components/PreferencesPanel'
 import FavoritesPanel from './components/FavoritesPanel'
 import SettingsPanel from './components/SettingsPanel'
 import LoginScreen from './components/LoginScreen'
-import { logout, checkAuth, NetworkError } from './services/api'
+import { logout, checkAuth, getPreferences, NetworkError } from './services/api'
+import { applyTheme } from './utils/theme'
 import * as s from './App.styles'
 
 const TABS = [
@@ -64,6 +65,15 @@ export default function App() {
       })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Apply the logged-in user's saved theme (orange if none), so a shared device follows the user
+  const userId = auth?.user?.id
+  useEffect(() => {
+    if (!userId) return
+    getPreferences()
+      .then(prefs => applyTheme(prefs.find(p => p.key === 'theme')?.value))
+      .catch(() => {}) // offline — keep this device's last theme
+  }, [userId])
+
   // Periodically check backend connectivity when offline
   useEffect(() => {
     if (!offline || !auth) return
@@ -119,16 +129,15 @@ export default function App() {
           </button>
         ))}
         <div style={s.userInfo}>
-          {isDemo ? (
-            <span
-              style={{ cursor: 'pointer' }}
-              onClick={() => chatRef.current?.injectDemoMeal()}
-              title="Demo action"
-            >{auth.user.name}</span>
-          ) : (
-            <span>{auth.user.name}</span>
-          )}
-          <button style={s.logoutBtn} onClick={handleLogout} title="Logout">
+          <span
+            style={{ ...s.userChip(narrow), ...(isDemo ? { cursor: 'pointer' } : {}) }}
+            onClick={isDemo ? () => chatRef.current?.injectDemoMeal() : undefined}
+            title={isDemo ? 'Demo action' : auth.user.name}
+          >
+            <span style={s.userAvatar}>{(auth.user.name || '?').charAt(0).toUpperCase()}</span>
+            {!narrow && <span style={s.userName}>{auth.user.name}</span>}
+          </span>
+          <button className="logout-btn" style={s.logoutBtn} onClick={handleLogout} title="Logout">
             <LogOut size={12} style={narrow ? { verticalAlign: -1 } : { marginRight: 4, verticalAlign: -1 }} />
             {!narrow && 'Logout'}
           </button>

@@ -1,4 +1,4 @@
-import { secondaryColor, colors } from '../styles/common'
+import { secondaryColor, colors, deleteBtn } from '../styles/common'
 
 export const container = {
   display: 'flex',
@@ -38,7 +38,7 @@ export const messageWrapper = (role) => ({
 export const bubble = (role) => ({
   maxWidth: '80%',
   alignSelf: role === 'user' ? 'flex-end' : 'flex-start',
-  background: role === 'user' ? 'var(--surface2)' : '#3d2a2a',
+  background: role === 'user' ? 'var(--surface2)' : 'var(--bubble)',
   color: 'var(--text)',
   border: 'none',
   borderRadius: role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
@@ -213,13 +213,22 @@ export const stopBtn = {
   transition: 'opacity 0.15s',
 }
 
+// Session buttons in the chat header (Back, Next, New) — accent colored; Delete is red
 export const newSessionBtn = {
   background: 'none',
   border: '1px solid var(--border)',
   borderRadius: 8,
   padding: '4px 10px',
   fontSize: 12,
-  color: 'var(--text-muted)',
+  color: 'var(--accent)',
   cursor: 'pointer',
+  marginLeft: 'auto',
+}
+
+export const deleteSessionBtn = {
+  ...deleteBtn,
+  borderRadius: 8,
+  padding: '4px 10px',
+  fontSize: 12,
   marginLeft: 'auto',
 }
