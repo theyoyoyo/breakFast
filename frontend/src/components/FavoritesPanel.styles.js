@@ -49,6 +49,13 @@ export const cardHeader = {
   cursor: 'pointer',
 }
 
+export const cardTitle = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  minWidth: 0,
+}
+
 export const cardName = {
   fontWeight: 600,
   fontSize: 14,
