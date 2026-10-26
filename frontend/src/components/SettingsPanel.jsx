@@ -13,6 +13,7 @@ import WeeklySummary from './WeeklySummary'
 import KitchenSettings from './KitchenSettings'
 import MealEditor from './MealEditor'
 import StarRating from './StarRating'
+import { THEMES, applyTheme, storedTheme } from '../utils/theme'
 import * as s from './SettingsPanel.styles'
 
 const PRIORITY_OPTIONS = [
@@ -55,6 +56,8 @@ export default function SettingsPanel({ visible }) {
 
   // Language preference ('tr' = Turkish, 'en' = English)
   const [language, setLanguage] = useState('en')
+  // Theme (orange / purple / green) — saved per user, cached per device
+  const [theme, setTheme] = useState(storedTheme)
 
   // Weekly summary in suggestions toggle (default off)
   const [weeklySummaryInSuggestions, setWeeklySummaryInSuggestions] = useState(false)
@@ -89,6 +92,8 @@ export default function SettingsPanel({ visible }) {
       }
       const weeklySummaryPref = prefs.find(p => p.key === 'weekly_summary_in_suggestions')
       setWeeklySummaryInSuggestions(weeklySummaryPref?.value === 'true')
+      const themePref = prefs.find(p => p.key === 'theme')
+      if (themePref) setTheme(applyTheme(themePref.value))
     } catch {
       setError('Failed to load settings')
     }
@@ -101,6 +106,16 @@ export default function SettingsPanel({ visible }) {
       await setPreference('response_language', next)
     } catch {
       setLanguage(language)
+    }
+  }
+
+  const handleThemeChange = async (key) => {
+    const previous = theme
+    setTheme(applyTheme(key))
+    try {
+      await setPreference('theme', key)
+    } catch {
+      setTheme(applyTheme(previous))
     }
   }
 
@@ -741,6 +756,24 @@ export default function SettingsPanel({ visible }) {
                 left: weeklySummaryInSuggestions ? 24 : 4,
               }} />
             </button>
+          </div>
+        </div>
+
+        {/* Theme — only the accent colors change */}
+        <div style={s.section}>
+          <div style={s.sectionLabel}>Theme</div>
+          <div style={s.themeRow}>
+            {THEMES.map(t => (
+              <button
+                key={t.key}
+                style={s.themeBtn(theme === t.key)}
+                onClick={() => handleThemeChange(t.key)}
+                aria-pressed={theme === t.key}
+              >
+                <span style={s.themeSwatch(t.swatch)} />
+                {t.label}
+              </button>
+            ))}
           </div>
         </div>
 

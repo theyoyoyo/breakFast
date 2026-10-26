@@ -6,7 +6,8 @@ import PreferencesPanel from './components/PreferencesPanel'
 import FavoritesPanel from './components/FavoritesPanel'
 import SettingsPanel from './components/SettingsPanel'
 import LoginScreen from './components/LoginScreen'
-import { logout, checkAuth, NetworkError } from './services/api'
+import { logout, checkAuth, getPreferences, NetworkError } from './services/api'
+import { applyTheme } from './utils/theme'
 import * as s from './App.styles'
 
 const TABS = [
@@ -63,6 +64,15 @@ export default function App() {
         }
       })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Apply the logged-in user's saved theme (orange if none), so a shared device follows the user
+  const userId = auth?.user?.id
+  useEffect(() => {
+    if (!userId) return
+    getPreferences()
+      .then(prefs => applyTheme(prefs.find(p => p.key === 'theme')?.value))
+      .catch(() => {}) // offline — keep this device's last theme
+  }, [userId])
 
   // Periodically check backend connectivity when offline
   useEffect(() => {

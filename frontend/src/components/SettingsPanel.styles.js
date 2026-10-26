@@ -328,3 +328,31 @@ export const analysisNarrative = {
   lineHeight: 1.5,
 }
 
+
+// Theme picker: one pill per theme with a color dot
+export const themeRow = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 8,
+  marginTop: 8,
+}
+
+export const themeBtn = (active) => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: '6px 12px',
+  borderRadius: 20,
+  border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+  background: active ? 'var(--surface2)' : 'transparent',
+  color: active ? 'var(--text)' : 'var(--text-muted)',
+  fontSize: 13,
+  cursor: 'pointer',
+})
+
+export const themeSwatch = (color) => ({
+  width: 12,
+  height: 12,
+  borderRadius: 6,
+  background: color,
+})
