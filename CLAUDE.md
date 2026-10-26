@@ -122,6 +122,8 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 
 **Suggestion + Analyst + Shopping** share `backend/services/knowledge.py`.
 
+**Prompt style:** state each rule once, in the prompt that owns it, as a positive instruction with a short reason, not a growing list of bans and special cases. Anything code can verify (fridge membership, JSON shape) is checked in code, not by asking another persona to police it.
+
 ---
 
 ## Key Rules
