@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react'
 import { normalizeItem, UNITS, resolveUnit, rememberUnit } from '../utils/ingredients'
+import { checkMissingIngredients } from '../services/api'
 import * as s from './MealEditor.styles'
+
+const MISSING_HINT = 'Not in your fridge'
+const DISH_MISSING_HINT = 'Some ingredients are not in your fridge'
 
 /**
  * Shared meal editor component used by MealBlock, FavoritesPanel, and SettingsPanel.
@@ -14,6 +18,8 @@ import * as s from './MealEditor.styles'
  *   extraActions — ReactNode — extra buttons to render in the actions row
  *   showId       — boolean — show meal ID badge (default false)
  *   menuMode     — boolean — edit meal.menu (multi-item) instead of meal.ingredients
+ *   checkFridge  — boolean — underline ingredients that aren't in the fridge (checked by the backend)
+ *   onMissingChange — (names) => void — called with the missing ingredient names after each check
  */
 export default function MealEditor({
   meal,
@@ -25,6 +31,8 @@ export default function MealEditor({
   showId = false,
   menuMode = false,
   onFavorite,        // (currentMeal) => void — called with current editor state
+  checkFridge = false,
+  onMissingChange,
 }) {
   const [items, setItems] = useState(() => initItems(meal, menuMode))
   const [mealName, setMealName] = useState(meal?.meal_name || meal?.menu_name || 'Meal')
@@ -44,6 +52,27 @@ export default function MealEditor({
     setNewSubItem('')
     setFavAdded(false)
   }, [meal, menuMode])
+
+  // Ask the backend which ingredients aren't in the fridge — on open and shortly after each edit
+  const [missing, setMissing] = useState(() => new Set())
+  useEffect(() => {
+    if (!checkFridge) return
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      let names = []
+      try {
+        const res = await checkMissingIngredients(menuMode ? { menu: items } : { ingredients: items })
+        names = res?.missing || []
+      } catch { /* offline — don't flag anything */ }
+      if (cancelled) return
+      setMissing(new Set(names))
+      onMissingChange?.(names)
+    }, 300)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [checkFridge, items, menuMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const isMissing = (name) => missing.has((name || '').trim())
+  const nameStyle = (name) => (isMissing(name) ? { ...s.itemText, ...s.missingName() } : s.itemText)
 
   // ── Top-level item handlers ──────────────────────────────────────────────
 
@@ -242,6 +271,8 @@ export default function MealEditor({
         {items.map((item, idx) => {
           const isDish = menuMode && !isSimpleItem(item)
           const isOpen = openDishIdx === idx
+          const subMissing = isDish && (item.ingredients || []).some(sub => isMissing(sub.name))
+          const dishNameMissing = isDish && isMissing(item.name)
 
           return (
             <div key={idx}>
@@ -249,7 +280,14 @@ export default function MealEditor({
                 // ── Dish row ──────────────────────────────────────────────
                 <div style={s.itemRow}>
                   <span style={s.dishBadge}>🍳</span>
-                  <span style={{ ...s.itemText, fontWeight: 500 }}>{item.name}</span>
+                  <span
+                    style={{
+                      ...s.itemText,
+                      fontWeight: 500,
+                      ...(dishNameMissing || subMissing ? s.missingName(!dishNameMissing) : {}),
+                    }}
+                    title={dishNameMissing ? MISSING_HINT : subMissing ? DISH_MISSING_HINT : undefined}
+                  >{item.name}</span>
                   <div style={s.itemActions}>
                     <button
                       style={s.expandBtn(isOpen)}
@@ -280,7 +318,7 @@ export default function MealEditor({
                     {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                     {!UNITS.includes(item.unit) && <option value={item.unit}>{item.unit}</option>}
                   </select>
-                  <span style={s.itemText}>{item.name}</span>
+                  <span style={nameStyle(item.name)} title={isMissing(item.name) ? MISSING_HINT : undefined}>{item.name}</span>
                   <div style={s.itemActions}>
                     <button style={s.deleteBtn} onClick={() => handleDelete(idx)} title="Delete">🗑️</button>
                   </div>
@@ -308,7 +346,7 @@ export default function MealEditor({
                         {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                         {sub.unit && !UNITS.includes(sub.unit) && <option value={sub.unit}>{sub.unit}</option>}
                       </select>
-                      <span style={s.itemText}>{sub.name}</span>
+                      <span style={nameStyle(sub.name)} title={isMissing(sub.name) ? MISSING_HINT : undefined}>{sub.name}</span>
                       <div style={s.itemActions}>
                         <button style={s.deleteBtn} onClick={() => handleSubDelete(idx, si)} title="Delete">🗑️</button>
                       </div>

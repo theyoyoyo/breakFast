@@ -94,6 +94,10 @@ export const updateIngredient = (id, data) =>
 export const deleteIngredient = (id) =>
   apiFetch(`${BASE_URL}/ingredients/${id}`, { method: 'DELETE' })
 
+// Which of a meal's ingredients aren't in the fridge → { missing: [names] }
+export const checkMissingIngredients = (meal) =>
+  apiFetch(`${BASE_URL}/ingredients/check`, json('POST', { meal }))
+
 export const getExpiredIngredients = () =>
   apiFetch(`${BASE_URL}/ingredients/expired`)
 

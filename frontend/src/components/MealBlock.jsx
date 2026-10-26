@@ -108,6 +108,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
               showId={true}
               menuMode={isMenuFormat}
               onFavorite={handleFavorite}
+              checkFridge
             />
           </div>
         </div>

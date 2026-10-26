@@ -147,6 +147,15 @@ export const itemText = {
   color: 'var(--text)',
 }
 
+// Yellow underline for ingredients not in the fridge; dotted on a dish whose hidden sub-ingredients are missing
+export const missingName = (dotted = false) => ({
+  textDecorationLine: 'underline',
+  textDecorationStyle: dotted ? 'dotted' : 'solid',
+  textDecorationColor: colors.goldText,
+  textDecorationThickness: 2,
+  textUnderlineOffset: 3,
+})
+
 export const itemActions = {
   display: 'flex',
   gap: 4,
