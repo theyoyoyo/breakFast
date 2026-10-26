@@ -45,6 +45,17 @@ export const panelHeader = {
   borderBottom: '1px solid var(--border)',
 }
 
+// Main tab title: the app name in the theme's accent color, the same on every tab (like Chat)
+export const brandTitle = {
+  fontWeight: 600,
+  fontSize: 16,
+  letterSpacing: '0.02em',
+  textTransform: 'none',
+  color: 'var(--accent)',
+}
+
+export const brandHeader = { ...panelHeader, ...brandTitle }
+
 export const panelBody = {
   flex: 1,
   overflowY: 'auto',

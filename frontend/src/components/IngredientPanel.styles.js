@@ -1,4 +1,4 @@
-import { panelContainer, secondaryColor, colors } from '../styles/common'
+import { panelContainer, secondaryColor, colors, brandTitle } from '../styles/common'
 
 export const container = panelContainer
 
@@ -14,13 +14,7 @@ export const headerRow = {
   borderBottom: '1px solid var(--border)',
 }
 
-export const headerText = {
-  fontWeight: 700,
-  fontSize: 13,
-  textTransform: 'uppercase',
-  letterSpacing: '0.08em',
-  color: 'var(--text-muted)',
-}
+export const headerText = brandTitle
 
 export const headerBtns = {
   display: 'flex',
@@ -540,7 +534,7 @@ export const suggestSection = {
 export const suggestBtn = {
   width: '100%',
   padding: '9px 16px',
-  background: 'linear-gradient(135deg, #8e44ad 0%, #9b59b6 100%)',
+  background: secondaryColor, // follows the theme
   color: '#fff',
   border: 'none',
   borderRadius: 8,
@@ -618,7 +612,7 @@ export const suggestionReason = {
 export const sendToListBtn = {
   margin: '6px 12px 10px',
   padding: '8px 16px',
-  background: '#8e44ad',
+  background: secondaryColor, // follows the theme
   color: '#fff',
   border: 'none',
   borderRadius: 8,

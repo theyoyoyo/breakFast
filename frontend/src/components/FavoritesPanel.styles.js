@@ -1,4 +1,4 @@
-import { secondaryColor, colors } from '../styles/common'
+import { secondaryColor, colors, brandHeader } from '../styles/common'
 
 export const container = {
   display: 'flex',
@@ -9,13 +9,7 @@ export const container = {
   overflow: 'hidden',
 }
 
-export const header = {
-  padding: '16px 20px',
-  borderBottom: '1px solid var(--border)',
-  fontWeight: 700,
-  fontSize: 16,
-  color: 'var(--accent)',
-}
+export const header = brandHeader
 
 export const empty = {
   padding: 20,

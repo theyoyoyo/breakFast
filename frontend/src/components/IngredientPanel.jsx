@@ -409,7 +409,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
     <div style={s.container}>
       {/* Header with expired + add buttons */}
       <div style={s.headerRow}>
-        <span style={s.headerText}>Fridge</span>
+        <span style={s.headerText}>break FAST</span>
         <div style={s.headerBtns}>
           <button
             style={expiredCount > 0 ? s.headerExpiredBtn : s.headerExpiredBtnSafe}

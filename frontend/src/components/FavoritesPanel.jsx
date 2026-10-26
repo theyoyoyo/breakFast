@@ -47,7 +47,7 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
   if (favorites.length === 0) {
     return (
       <div style={s.container}>
-        <div style={s.header}>Favorites</div>
+        <div style={s.header}>break FAST</div>
         <div style={s.empty}>No favorites yet. Use ⭐ Save on a meal to save it here.</div>
       </div>
     )
@@ -55,7 +55,7 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
 
   return (
     <div style={s.container}>
-      <div style={s.header}>Favorites</div>
+      <div style={s.header}>break FAST</div>
       <div style={s.list}>
         {favorites.map(fav => {
           const expanded = expandedId === fav.id
