@@ -1,19 +1,34 @@
 import { useState, useEffect } from 'react'
 import { normalizeItem, UNITS, resolveUnit, rememberUnit } from '../utils/ingredients'
+import { checkMissingIngredients } from '../services/api'
 import * as s from './MealEditor.styles'
+
+const MISSING_HINT = 'Not in your fridge — tap once you have it'
+const OBTAINED_HINT = 'Marked as obtained — tap to undo'
+const TEMPLATE_MISSING_HINT = 'Not in your fridge'
+const DISH_MISSING_HINT = 'Some ingredients are not in your fridge'
+const DISH_OBTAINED_HINT = 'Missing ingredients are marked as obtained'
 
 /**
  * Shared meal editor component used by MealBlock, FavoritesPanel, and SettingsPanel.
  *
  * Props:
  *   meal         — meal object { meal_name, ingredients, menu, steps, prep_time_min, ... }
- *   onSave       — (updatedMeal) => void — called with the edited meal
+ *   onSave       — (updatedMeal) => void — called with the edited meal; no Save button without it
  *   onClose      — () => void — close the editor
  *   showPrepTime — boolean — whether to show prep_time_min input (default true)
  *   editPrepTime — boolean — whether prep time is editable (default true)
  *   extraActions — ReactNode — extra buttons to render in the actions row
  *   showId       — boolean — show meal ID badge (default false)
  *   menuMode     — boolean — edit meal.menu (multi-item) instead of meal.ingredients
+ *   checkFridge  — boolean — underline ingredients that aren't in the fridge (checked by the backend);
+ *                  tapping one marks it as obtained for this meal (green), saved as meal.obtained
+ *   canMarkObtained — boolean — allow tapping missing items to mark them as obtained (default true);
+ *                  off for templates like favorites, where items are only underlined
+ *   onMissingChange — (names) => void — missing ingredients not marked as obtained, after each check
+ *   onChange     — (currentMeal) => void — called with the live editor state after each change
+ *
+ * extraActions may be a function: (buildCurrentMeal, { markAllObtained }) => ReactNode
  */
 export default function MealEditor({
   meal,
@@ -25,6 +40,10 @@ export default function MealEditor({
   showId = false,
   menuMode = false,
   onFavorite,        // (currentMeal) => void — called with current editor state
+  checkFridge = false,
+  canMarkObtained = true,
+  onMissingChange,
+  onChange,
 }) {
   const [items, setItems] = useState(() => initItems(meal, menuMode))
   const [mealName, setMealName] = useState(meal?.meal_name || meal?.menu_name || 'Meal')
@@ -34,6 +53,8 @@ export default function MealEditor({
   const [newSubItem, setNewSubItem] = useState('')
   const [favSaving, setFavSaving] = useState(false)
   const [favAdded, setFavAdded] = useState(false)
+  // Missing ingredients the user marked as obtained for this meal (yellow → green)
+  const [obtained, setObtained] = useState(() => new Set(meal?.obtained || []))
 
   useEffect(() => {
     setItems(initItems(meal, menuMode))
@@ -43,7 +64,59 @@ export default function MealEditor({
     setOpenDishIdx(null)
     setNewSubItem('')
     setFavAdded(false)
+    setObtained(new Set(meal?.obtained || []))
   }, [meal, menuMode])
+
+  // Ask the backend which ingredients aren't in the fridge — on open and shortly after each edit.
+  // null until the first answer, so nothing is reported (or unblocked) before the check is done.
+  const [missing, setMissing] = useState(null)
+  useEffect(() => {
+    if (!checkFridge) return
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      let names = []
+      try {
+        const res = await checkMissingIngredients(menuMode ? { menu: items } : { ingredients: items })
+        names = res?.missing || []
+      } catch { /* offline — don't flag anything */ }
+      if (!cancelled) setMissing(new Set(names))
+    }, 300)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [checkFridge, items, menuMode])
+
+  // Report what still blocks the meal: missing and not marked as obtained
+  useEffect(() => {
+    if (missing) onMissingChange?.([...missing].filter(name => !(canMarkObtained && obtained.has(name))))
+  }, [missing, obtained]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const key = (name) => (name || '').trim()
+  const isMissing = (name) => !!missing?.has(key(name))
+  const isObtained = (name) => canMarkObtained && obtained.has(key(name))
+  const toggleObtained = (name) => setObtained(prev => {
+    const next = new Set(prev)
+    if (next.has(key(name))) next.delete(key(name))
+    else next.add(key(name))
+    return next
+  })
+  const markAllObtained = () => {
+    if (canMarkObtained) setObtained(prev => new Set([...prev, ...(missing || [])]))
+  }
+
+  // Missing names are tappable: yellow until marked as obtained, then green
+  // (templates only show the yellow underline)
+  const nameProps = (name, extraStyle = {}) => {
+    if (!isMissing(name)) return { style: { ...s.itemText, ...extraStyle } }
+    if (!canMarkObtained) {
+      return { style: { ...s.itemText, ...extraStyle, ...s.missingName() }, title: TEMPLATE_MISSING_HINT }
+    }
+    const got = isObtained(name)
+    return {
+      style: { ...s.itemText, ...extraStyle, ...s.missingName({ obtained: got }), cursor: 'pointer' },
+      title: got ? OBTAINED_HINT : MISSING_HINT,
+      role: 'button',
+      onClick: () => toggleObtained(name),
+    }
+  }
 
   // ── Top-level item handlers ──────────────────────────────────────────────
 
@@ -173,6 +246,9 @@ export default function MealEditor({
   const buildCurrentMeal = () => {
     const finalPrepTime = typeof prepTime === 'number' ? prepTime : (parseInt(prepTime, 10) || null)
     const name = mealName.trim() || meal?.meal_name || meal?.menu_name || 'Meal'
+    // Keep obtained marks only for names still in the meal
+    const names = new Set(items.flatMap(item => [item.name, ...(item.ingredients || []).map(sub => sub.name)]).map(key))
+    const keptObtained = [...obtained].filter(n => names.has(n))
     if (menuMode) {
       const finalMenu = items.map(item => {
         if (isSimpleItem(item)) {
@@ -181,7 +257,7 @@ export default function MealEditor({
         }
         return item
       })
-      return { ...meal, meal_name: name, menu_name: name, menu: finalMenu, menu_items: finalMenu, prep_time_min: finalPrepTime }
+      return { ...meal, meal_name: name, menu_name: name, menu: finalMenu, menu_items: finalMenu, prep_time_min: finalPrepTime, obtained: keptObtained }
     } else {
       const finalItems = items.map(item => ({
         ...item,
@@ -190,9 +266,14 @@ export default function MealEditor({
           return (!isNaN(num) && num > 0) ? Math.round(num * 100) / 100 : 1
         })(),
       }))
-      return { ...meal, meal_name: name, ingredients: finalItems, prep_time_min: finalPrepTime }
+      return { ...meal, meal_name: name, ingredients: finalItems, prep_time_min: finalPrepTime, obtained: keptObtained }
     }
   }
+
+  // Live state for callers that keep a draft ("Today I ate")
+  useEffect(() => {
+    onChange?.(buildCurrentMeal())
+  }, [items, mealName, prepTime, obtained]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSave = () => onSave?.(buildCurrentMeal())
 
@@ -242,6 +323,11 @@ export default function MealEditor({
         {items.map((item, idx) => {
           const isDish = menuMode && !isSimpleItem(item)
           const isOpen = openDishIdx === idx
+          // A dish's mark sums up its hidden sub-ingredients: dotted yellow if any still missing,
+          // dotted green if all missing ones are marked as obtained
+          const subsMissing = isDish ? (item.ingredients || []).filter(sub => isMissing(sub.name)) : []
+          const subsResolved = subsMissing.every(sub => isObtained(sub.name))
+          const dishNameMissing = isDish && isMissing(item.name)
 
           return (
             <div key={idx}>
@@ -249,7 +335,18 @@ export default function MealEditor({
                 // ── Dish row ──────────────────────────────────────────────
                 <div style={s.itemRow}>
                   <span style={s.dishBadge}>🍳</span>
-                  <span style={{ ...s.itemText, fontWeight: 500 }}>{item.name}</span>
+                  {dishNameMissing ? (
+                    <span {...nameProps(item.name, { fontWeight: 500 })}>{item.name}</span>
+                  ) : (
+                    <span
+                      style={{
+                        ...s.itemText,
+                        fontWeight: 500,
+                        ...(subsMissing.length ? s.missingName({ dotted: true, obtained: subsResolved }) : {}),
+                      }}
+                      title={subsMissing.length ? (subsResolved ? DISH_OBTAINED_HINT : DISH_MISSING_HINT) : undefined}
+                    >{item.name}</span>
+                  )}
                   <div style={s.itemActions}>
                     <button
                       style={s.expandBtn(isOpen)}
@@ -280,7 +377,7 @@ export default function MealEditor({
                     {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                     {!UNITS.includes(item.unit) && <option value={item.unit}>{item.unit}</option>}
                   </select>
-                  <span style={s.itemText}>{item.name}</span>
+                  <span {...nameProps(item.name)}>{item.name}</span>
                   <div style={s.itemActions}>
                     <button style={s.deleteBtn} onClick={() => handleDelete(idx)} title="Delete">🗑️</button>
                   </div>
@@ -308,7 +405,7 @@ export default function MealEditor({
                         {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                         {sub.unit && !UNITS.includes(sub.unit) && <option value={sub.unit}>{sub.unit}</option>}
                       </select>
-                      <span style={s.itemText}>{sub.name}</span>
+                      <span {...nameProps(sub.name)}>{sub.name}</span>
                       <div style={s.itemActions}>
                         <button style={s.deleteBtn} onClick={() => handleSubDelete(idx, si)} title="Delete">🗑️</button>
                       </div>
@@ -353,7 +450,7 @@ export default function MealEditor({
 
       <div style={s.actions}>
         <button style={s.closeBtn} onClick={onClose}>Close</button>
-        {typeof extraActions === 'function' ? extraActions(buildCurrentMeal) : extraActions}
+        {typeof extraActions === 'function' ? extraActions(buildCurrentMeal, { markAllObtained }) : extraActions}
         {onFavorite && (
           <button
             style={favAdded ? s.copyToFavBtnDone : s.copyToFavBtn}
@@ -364,7 +461,7 @@ export default function MealEditor({
             {favSaving ? '...' : favAdded ? '✓ Saved' : '⭐ Save'}
           </button>
         )}
-        <button style={s.saveBtn} onClick={handleSave}>Save</button>
+        {onSave && <button style={s.saveBtn} onClick={handleSave}>Save</button>}
       </div>
     </div>
   )

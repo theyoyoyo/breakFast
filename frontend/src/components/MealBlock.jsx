@@ -1,28 +1,24 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { addFavorite } from '../services/api'
 import { formatIngredient } from '../utils/ingredients'
+import { pickEmoji } from '../utils/emoji'
+import { useMealReadiness } from '../hooks/useMealReadiness'
 import MealEditor from './MealEditor'
+import ReadinessIcon from './ReadinessIcon'
 import * as s from './MealBlock.styles'
-
-const BREAKFAST_EMOJIS = [
-  '🍳', '🥐', '🧀', '🥚', '🫕', '🥞', '🧇', '🥣', '🍞', '🥯', '🫖', '☕',
-  '🥗', '🥑', '🍯', '🫒', '🧈', '🥛', '🍵', '🫐', '🍓', '🍌', '🍊', '🍇',
-  '🥜', '🌰', '🥒', '🍅', '🫑', '🌿', '🌶️', '🧄', '🫘', '🥕', '🌽', '🥦',
-  '🍋', '🥝', '🍑', '🫚', '🥥', '🧆', '🥙', '🫓', '🥖', '🥨', '🥮', '🍠',
-]
-
-function pickEmoji() {
-  return BREAKFAST_EMOJIS[Math.floor(Math.random() * BREAKFAST_EMOJIS.length)]
-}
 
 /**
  * Clickable meal summary block rendered inline in chat.
  * Shows checkbox, meal names, prep time, and analysis button.
  * Click opens the shared MealEditor in an overlay.
+ * The icon's background shows readiness: green when everything is in the fridge (or marked
+ * as obtained), yellow when something is still missing. fridgeCheckKey re-runs the check.
  */
-export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, analyzing, onSchedule, scheduling }) {
+export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, analyzing, onSchedule, scheduling, fridgeCheckKey }) {
   const [panelOpen, setPanelOpen] = useState(false)
   const [emoji] = useState(pickEmoji)
+
+  const { readiness, stillMissing } = useMealReadiness(meal, fridgeCheckKey)
 
   const menuItems = meal?.menu
   const isMenuFormat = menuItems && menuItems.length > 0
@@ -34,6 +30,8 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
       : meal?.meal_name || 'Meal'
 
   const mealName = meal?.menu_name || meal?.meal_name || 'Meal'
+  // Stable object: MealEditor resets its edits whenever it receives a new meal
+  const editorMeal = useMemo(() => ({ ...meal, meal_name: mealName }), [meal, mealName])
 
   const handleOverlayClick = (e) => {
     if (e.target === e.currentTarget) setPanelOpen(false)
@@ -60,8 +58,8 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
   return (
     <>
       <div style={s.blockWrapper}>
-        <div style={s.titleBar} onClick={() => { setPanelOpen(true); setFavAdded(false) }}>
-          <span style={s.titleIcon}>{emoji}</span>
+        <div style={s.titleBar} onClick={() => setPanelOpen(true)}>
+          <ReadinessIcon emoji={emoji} readiness={readiness} stillMissing={stillMissing} />
           <span style={s.titleName}>{mealName}</span>
           {meal?.prep_time_min && <span style={s.titlePrep}>⏱ {meal.prep_time_min}m</span>}
           {meal?.id && <span style={s.titleId}>#{meal.id}</span>}
@@ -90,7 +88,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
           >
             {checked ? '☑' : '☐'}
           </button>
-          <div style={s.block} onClick={() => { setPanelOpen(true); setFavAdded(false) }}>
+          <div style={s.block} onClick={() => setPanelOpen(true)}>
             <span style={s.blockText}>{displayNames}</span>
           </div>
         </div>
@@ -100,7 +98,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
         <div style={s.overlay} onClick={handleOverlayClick}>
           <div style={s.panel}>
             <MealEditor
-              meal={{ ...meal, meal_name: mealName }}
+              meal={editorMeal}
               onSave={handleEditorSave}
               onClose={() => setPanelOpen(false)}
               showPrepTime={true}
@@ -108,6 +106,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
               showId={true}
               menuMode={isMenuFormat}
               onFavorite={handleFavorite}
+              checkFridge
             />
           </div>
         </div>

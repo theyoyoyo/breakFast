@@ -21,11 +21,6 @@ export const titleBar = {
   overflow: 'hidden',
 }
 
-export const titleIcon = {
-  fontSize: 14,
-  flexShrink: 0,
-}
-
 export const titleName = {
   fontSize: 12,
   fontWeight: 600,

@@ -512,12 +512,13 @@ class TestSchedulerUserMessage:
 # ---------------------------------------------------------------------------
 
 class TestFridgeRule:
-    # One constructive rule: copy names from the list, basics included, utilities never listed
+    # One constructive rule: copy names from the list, basics included; water listed but never required
     def test_suggestion_prompt_has_one_copy_from_list_rule(self):
         prompt = build_suggestion_prompt([{"name": "Yumurta"}], [], {}, [])
         assert "copy each ingredient name exactly as it appears there" in prompt
         assert "basics like salt and oil included" in prompt
-        assert "utilities such as water and heat are not" in prompt
+        assert "list it whenever a recipe needs it" in prompt
+        assert "never appear in the JSON" not in prompt
 
     # Code checks the fridge, so the reviewer only uses the list to suggest swaps
     def test_pipeline_analyst_leaves_fridge_check_to_code(self):

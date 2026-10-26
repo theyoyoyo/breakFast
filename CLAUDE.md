@@ -130,7 +130,7 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 
 - **Health rules**: injected into every LLM prompt silently. Never surface them to the user.
 - **Avoid list**: hard ban. Never suggest avoided ingredients.
-- **Fridge constraint**: suggestions use only the inventory. Nothing is assumed: basics (salt, oil, spices) and long-life items (flour, sesame, oats…) are logged like anything else, usually in the 🫙 Pantry group. A planned Fridge quick-add button will make logging them easy. Water is a utility like electricity and gas: never listed as an ingredient and skipped by the check. Ingredient names in the meal JSON must match the inventory as written, so the code check can compare them.
+- **Fridge constraint**: suggestions use only the inventory. Nothing is assumed: basics (salt, oil, spices) and long-life items (flour, sesame, oats…) are logged like anything else, usually in the 🫙 Pantry group. A planned Fridge quick-add button will make logging them easy. Water is a utility like electricity and gas: listed in recipes when needed, but never required in the fridge (the check skips it). Ingredient names in the meal JSON must match the inventory as written, so the code check can compare them.
 - **CORS**: configurable via `CORS_ORIGINS` env var (comma-separated).
 - **Demo user**: only created when `DEMO_USER=true` (empty PIN). A newly created demo account gets a starter fridge (`DEMO_FRIDGE` in `models/ingredient.py`, basics included). Never enable it on a reachable instance.
 - **Language**: the UI is English only; the setting changes AI replies. User data is often Turkish and pulls a 7B model toward Turkish, so every user-facing prompt ends with a `FINAL REMINDER` restating the language directive. Code-built text in replies (e.g. prep plan labels) follows the same setting.
@@ -140,7 +140,7 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 
 ## Shared Components
 
-**MealEditor** (`frontend/src/components/MealEditor.jsx`) — used everywhere (chat, favorites, meal history, "Today I ate"). Key props: `menuMode`, `onFavorite(currentMeal)`, `extraActions(buildCurrentMeal) => ReactNode`. The function form of `extraActions` gives callers access to live editor state.
+**MealEditor** (`frontend/src/components/MealEditor.jsx`) — used everywhere (chat, favorites, meal history, "Today I ate"). Key props: `menuMode`, `onFavorite(currentMeal)`, `extraActions(buildCurrentMeal) => ReactNode`. The function form of `extraActions` gives callers access to live editor state. `checkFridge` underlines ingredients that aren't in the fridge (via `POST /ingredients/check`, same matching as the pipeline) in yellow; tapping one marks it as obtained for this meal (green, stored as `meal.obtained`). `onMissingChange(names)` reports what's still missing and not obtained; `onChange(meal)` reports live state; `extraActions(build, { markAllObtained })`. On in chat meal details (marks are saved with the card and carry into "Today I ate", not back) and in "Today I ate", where Confirm waits until nothing is missing, Ate out marks every missing item as obtained (no logging), ⭐ Save keeps the menu in favorites, and the draft survives closing and Back from rating until another chat meal is selected. Chat cards and Favorites rows show readiness on their icon (`ReadinessIcon` + `hooks/useMealReadiness.js`: yellow = missing, green = ready). Favorites are templates: their editor shows the yellow underline only (`canMarkObtained={false}`). The plain Save button only appears when the caller passes `onSave`. Callers must pass a stable `meal` object: a new object resets the editor's edits.
 
 **Unit memory** (`frontend/src/utils/ingredients.js`) — `UNITS` list, `resolveUnit(name)` (localStorage memory → smart keyword default → 'adet'), `rememberUnit(name, unit)`.
 
@@ -198,6 +198,7 @@ breakFAST/
     ├── styles/common.js             ← shared styles
     ├── services/api.js              ← all REST + WebSocket calls
     ├── hooks/useVoice.js            ← Web Speech API
+    ├── hooks/useMealReadiness.js    ← fridge readiness for a meal (card + favorites badge)
     └── components/
         ├── ChatInterface.jsx        ← main chat UI
         ├── MealBlock.jsx            ← inline meal block in chat

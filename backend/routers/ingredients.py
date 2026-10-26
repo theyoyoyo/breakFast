@@ -14,6 +14,7 @@ from models.ingredient import (
     Ingredient, IngredientCreate, IngredientUpdate,
     INGREDIENT_GROUPS, DEFAULT_GROUP,
 )
+from services.fridge import find_missing_ingredients
 
 router = APIRouter(prefix="/ingredients", tags=["ingredients"])
 
@@ -180,6 +181,26 @@ async def bulk_add_ingredients(ingredients: list[IngredientCreate], user_id: int
         )
         await db.commit()
     return {"added": len(ingredients)}
+
+
+# ---------------------------------------------------------------------------
+# Missing-ingredient check (meal details highlight them, Confirm is blocked)
+# ---------------------------------------------------------------------------
+
+
+class MissingCheck(BaseModel):
+    meal: dict
+
+
+@router.post("/check")
+async def check_missing(body: MissingCheck, user_id: int = Depends(require_user)):
+    """Ingredients of a meal that aren't in the user's fridge, matched like the suggestion pipeline."""
+    async with get_db() as db:
+        async with db.execute(
+            "SELECT name FROM ingredient_inventory WHERE user_id = ?", (user_id,)
+        ) as cur:
+            inventory = [{"name": r["name"]} for r in await cur.fetchall()]
+    return {"missing": find_missing_ingredients(body.meal, inventory)}
 
 
 # ---------------------------------------------------------------------------

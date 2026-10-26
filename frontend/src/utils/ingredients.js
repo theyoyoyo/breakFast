@@ -73,3 +73,26 @@ export function rememberUnit(name, unit) {
 export function resolveUnit(name) {
   return recallUnit(name) || getSmartUnit(name)
 }
+
+// Normalize an LLM meal to always have meal_name, a clean menu and a flat ingredients list.
+// Handles both the old flat format and the menu format. A menu item with neither
+// ingredients nor an amount (e.g. "Ayran" with an empty list) becomes a simple item ×1,
+// so it never opens as an empty dish.
+export function normalizeMeal(meal) {
+  if (!meal) return meal
+  const name = meal.meal_name || meal.menu_name || 'Meal'
+  const menu = meal.menu?.map(item =>
+    !item.ingredients?.length && item.amount == null
+      ? { ...item, amount: 1, unit: item.unit || 'adet', ingredients: [] }
+      : item
+  )
+  // Derive flat ingredients from menu if not already present
+  const ingredients = meal.ingredients && meal.ingredients.length > 0
+    ? meal.ingredients
+    : (menu || []).flatMap(item =>
+        item.ingredients && item.ingredients.length > 0
+          ? item.ingredients.map(ing => ({ name: ing.name, quantity: ing.amount ?? 1, unit: ing.unit || 'adet' }))
+          : [{ name: item.name, quantity: item.amount ?? 1, unit: item.unit || 'adet' }]
+      )
+  return menu ? { ...meal, meal_name: name, menu, ingredients } : { ...meal, meal_name: name, ingredients }
+}

@@ -114,8 +114,9 @@ HARD CONSTRAINT — FRIDGE-ONLY
 ═══════════════════════════════════════════════════════════════
 The user cooks only with what they have logged, basics like salt and oil included. Build every \
 dish from the available ingredients below, and in the JSON copy each ingredient name exactly as \
-it appears there, even when that name is in another language than your reply. Ingredients are \
-food items; utilities such as water and heat are not, so they never appear in the JSON.
+it appears there, even when that name is in another language than your reply. Water is the one \
+exception: like gas and electricity it is always available, so list it whenever a recipe needs it \
+even though it is not in the inventory.
 When a recipe calls for something not on the list, use a listed item in its place (you may \
 mention the swap briefly in the text) or choose a different dish.
 If the list is too small for any reasonable breakfast, reply with a short note suggesting the \

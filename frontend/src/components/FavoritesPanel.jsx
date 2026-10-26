@@ -1,8 +1,17 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getFavorites, deleteFavorite, updateFavorite } from '../services/api'
 import { formatIngredient } from '../utils/ingredients'
+import { emojiFor } from '../utils/emoji'
+import { useMealReadiness } from '../hooks/useMealReadiness'
 import MealEditor from './MealEditor'
+import ReadinessIcon from './ReadinessIcon'
 import * as s from './FavoritesPanel.styles'
+
+// A favorite's icon with the same fridge-readiness badge as chat cards
+function FavoriteIcon({ fav, checkKey }) {
+  const { readiness, stillMissing } = useMealReadiness(fav, checkKey)
+  return <ReadinessIcon emoji={emojiFor(fav.id)} readiness={readiness} stillMissing={stillMissing} />
+}
 
 export default function FavoritesPanel({ visible, onSendToChat }) {
   const [favorites, setFavorites] = useState([])
@@ -70,7 +79,10 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
           return (
             <div key={fav.id} style={s.card}>
               <div style={s.cardHeader} onClick={() => { setExpandedId(expanded ? null : fav.id); if (editing) setEditingId(null) }}>
-                <span style={s.cardName}>{fav.meal_name}</span>
+                <span style={s.cardTitle}>
+                  <FavoriteIcon fav={fav} checkKey={visible} />
+                  <span style={s.cardName}>{fav.meal_name}</span>
+                </span>
                 <span style={s.cardMeta}>
                   {fav.prep_time_min && `⏱ ${fav.prep_time_min}m`}
                   {' '}{expanded ? '▲' : '▼'}
@@ -116,6 +128,8 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
                       showPrepTime={true}
                       editPrepTime={true}
                       menuMode={isMenuFormat}
+                      checkFridge
+                      canMarkObtained={false}
                     />
                   </div>
                 </div>

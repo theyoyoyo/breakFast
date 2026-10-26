@@ -5,6 +5,7 @@ import SuggestButton from './SuggestButton'
 import DecidePanel from './DecidePanel'
 import MealBlock from './MealBlock'
 import MarkdownText from './MarkdownText'
+import { normalizeMeal } from '../utils/ingredients'
 import * as s from './ChatInterface.styles'
 
 const WELCOME_MSG = { role: 'assistant', content: "Good morning! Tell me what's in your fridge and I'll plan your breakfast." }
@@ -65,22 +66,6 @@ function parseJsonBlock(text) {
   const match = text.match(/```json\s*([\s\S]*?)\s*```/)
   if (!match) return null
   try { return JSON.parse(match[1].trim()) } catch { return null }
-}
-
-// Normalize a meal object to always have meal_name and a flat ingredients list.
-// Handles both old flat format and new menu format from the LLM.
-function normalizeMeal(meal) {
-  if (!meal) return meal
-  const name = meal.meal_name || meal.menu_name || 'Meal'
-  // Derive flat ingredients from menu if not already present
-  const ingredients = meal.ingredients && meal.ingredients.length > 0
-    ? meal.ingredients
-    : (meal.menu || []).flatMap(item =>
-        item.ingredients && item.ingredients.length > 0
-          ? item.ingredients.map(ing => ({ name: ing.name, quantity: ing.amount ?? 1, unit: ing.unit || 'adet' }))
-          : [{ name: item.name, quantity: item.amount ?? 1, unit: item.unit || 'adet' }]
-      )
-  return { ...meal, meal_name: name, ingredients }
 }
 
 // Template meal for demo/preview without LLM
@@ -577,6 +562,10 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
 
   const [suppMenuOpen, setSuppMenuOpen] = useState(false)
   const [decideOpen, setDecideOpen] = useState(false)
+  // "Today I ate" draft: kept across close/reopen while the same chat meal stays selected.
+  // Selecting another meal (or saving the selected one) gives a different source, so the draft is dropped.
+  const decideDraftRef = useRef({ source: null, meal: null })
+  const decideDraft = decideDraftRef.current.source === checkedMeal ? decideDraftRef.current.meal : null
 
   return (
     <div style={s.container}>
@@ -623,6 +612,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
                   analyzing={analyzingIdx === i}
                   onSchedule={() => handleSchedule(i)}
                   scheduling={schedulingIdx === i}
+                  fridgeCheckKey={visible}
                 />
               )}
             </div>
@@ -645,8 +635,11 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       {decideOpen && (
         <DecidePanel
           meal={checkedMeal}
+          draft={decideDraft}
+          onDraftChange={(draftMeal) => { decideDraftRef.current = { source: checkedMeal, meal: draftMeal } }}
           onClose={() => setDecideOpen(false)}
           onConfirm={() => {
+            decideDraftRef.current = { source: null, meal: null }
             setDecideOpen(false)
             setCheckedMealIdx(null)
           }}

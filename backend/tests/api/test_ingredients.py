@@ -281,3 +281,30 @@ async def test_groups_endpoint(client):
     assert data["default"] == "🍽️ Other"
     assert "🫙 Pantry" in data["groups"]
     assert len(data["groups"]) == 11
+
+
+# The check lists only the meal's ingredients missing from the user's fridge (water never counts)
+async def test_check_lists_missing_ingredients(client):
+    await client.post("/ingredients/", json={"name": "Yumurta"})
+    await client.post("/ingredients/", json={"name": "Tuz", "group_name": "🫙 Pantry"})
+    meal = {"menu": [
+        {"name": "Menemen", "ingredients": [
+            {"name": "Yumurta"}, {"name": "Tuz"}, {"name": "Avocado"}, {"name": "Water"},
+        ]},
+        {"name": "Olives", "amount": 10, "unit": "adet", "ingredients": []},
+    ]}
+    r = await client.post("/ingredients/check", json={"meal": meal})
+    assert r.status_code == 200
+    assert r.json() == {"missing": ["Avocado", "Olives"]}
+
+
+# Another user's fridge never makes an item count as available
+async def test_check_ignores_other_users_fridge(client, db):
+    cur = await db.execute("INSERT INTO users (name, pin_hash) VALUES ('Other', 'x')")
+    await db.execute(
+        "INSERT INTO ingredient_inventory (user_id, name) VALUES (?, 'Avocado')", (cur.lastrowid,)
+    )
+    await db.commit()
+    meal = {"menu": [{"name": "Avocado", "amount": 1, "unit": "adet", "ingredients": []}]}
+    r = await client.post("/ingredients/check", json={"meal": meal})
+    assert r.json() == {"missing": ["Avocado"]}

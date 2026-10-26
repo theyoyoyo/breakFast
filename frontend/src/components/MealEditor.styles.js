@@ -147,6 +147,16 @@ export const itemText = {
   color: 'var(--text)',
 }
 
+// Underline for ingredients not in the fridge: yellow while missing, green once marked as obtained;
+// dotted on a dish whose hidden sub-ingredients are missing
+export const missingName = ({ dotted = false, obtained = false } = {}) => ({
+  textDecorationLine: 'underline',
+  textDecorationStyle: dotted ? 'dotted' : 'solid',
+  textDecorationColor: obtained ? colors.successText : colors.goldText,
+  textDecorationThickness: 2,
+  textUnderlineOffset: 3,
+})
+
 export const itemActions = {
   display: 'flex',
   gap: 4,
@@ -236,6 +246,7 @@ export const addBtn = {
 
 export const actions = {
   display: 'flex',
+  flexWrap: 'wrap', // "Today I ate" has four buttons; wrap instead of overflowing at phone width
   justifyContent: 'space-between',
   marginTop: 16,
   gap: 10,
