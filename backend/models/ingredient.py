@@ -17,9 +17,29 @@ INGREDIENT_GROUPS = [
     "🌱 Plant-Based",
     "☕ Beverages",
     "🧂 Spices",
+    "🫙 Pantry",  # long-life items and basics: flour, oil, sesame, oats…
     "🍽️ Other",
 ]
 DEFAULT_GROUP = "🍽️ Other"
+
+# Starter fridge for the opt-in demo user (DEMO_USER=true), added only when the
+# account is first created. Basics are included because suggestions assume nothing.
+DEMO_FRIDGE = [
+    ("Salt", "🫙 Pantry"),
+    ("Black pepper", "🫙 Pantry"),
+    ("Olive oil", "🫙 Pantry"),
+    ("Sunflower oil", "🫙 Pantry"),
+    ("Red pepper flakes", "🧂 Spices"),
+    ("Butter", "🐄 Animal Products"),
+    ("Eggs", "🐄 Animal Products"),
+    ("White cheese", "🐄 Animal Products"),
+    ("Tomatoes", "🥬 Produce"),
+    ("Cucumber", "🥬 Produce"),
+    ("Bread", "🍞 Breads"),
+    ("Olives", "🫒 Breakfast Staples"),
+    ("Honey", "🍯 Sweets"),
+    ("Tea", "☕ Beverages"),
+]
 
 
 class IngredientCreate(BaseModel):

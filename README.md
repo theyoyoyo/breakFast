@@ -30,12 +30,12 @@ break FAST knows what is in each person's fridge, which kitchen appliances they 
 
 ## Features
 
-- **Menus built from your fridge.** One tap on *Suggest* produces a full breakfast menu using only what you have, with small substitutions when something is missing. Long-press for *favorites* (comfort food) or *explore* (something new from world cuisines).
+- **Menus built from your fridge.** One tap on *Suggest* produces a full breakfast menu using only what you have, basics like salt and oil included. A code check catches anything else and sends it back to be replaced. Long-press for *favorites* (comfort food) or *explore* (something new from world cuisines).
 - **Draft, review, refine.** Every suggestion goes through a three-step pipeline: a draft, an internal nutrition review, then a refined final menu, with live progress streamed over a WebSocket.
 - **Prep plan where everything finishes together.** The plan uses only your appliances and is timed so the eggs, tea and toast are all ready at the same moment.
 - **Nutrition analysis per meal.** Calories, protein, fiber and micronutrients, plus a check against supplement upper limits. Results are cached per meal.
 - **Weekly nutrition review.** A holistic seven-day review with four scores and a short narrative.
-- **Fridge management.** Ingredient groups, expiry tracking, a staples list, a shopping list and AI shopping suggestions.
+- **Fridge management.** Ingredient groups (including a pantry for basics and long-life items), expiry tracking, a staples list, a shopping list and AI shopping suggestions.
 - **Health-aware, silently.** Per-user health rules with priorities, a hard *avoid* list, physical profile and supplements taken today all shape suggestions without being lectured back at you.
 - **Learns from behaviour.** Meal history is distilled into inferred habits that push suggestions toward variety, not repetition.
 - **Breakfast chat.** A friendly assistant with persistent chat sessions and voice input (Web Speech API).
@@ -133,7 +133,7 @@ To use another model, pull it and set `OLLAMA_MODEL` in `.env`. Without Ollama t
 
 ### Just trying it out?
 
-Set `DEMO_USER=true` in `.env` to get a `demo` account with an empty PIN. Keep it off on any instance other people can reach.
+Set `DEMO_USER=true` in `.env` to get a `demo` account with an empty PIN and a small starter fridge (salt, oils, butter, eggs, bread…). Keep it off on any instance other people can reach.
 
 ### Production: one server, one port
 
@@ -192,7 +192,7 @@ All backend settings are environment variables, documented in [`.env.example`](.
 | `DATABASE_PATH` | `./breakFAST.db` | SQLite file, relative to `backend/` |
 | `CORS_ORIGINS` | `*` | Comma-separated allowed origins |
 | `SERVE_FRONTEND` | `false` | Serve `frontend/dist` from FastAPI |
-| `DEMO_USER` | `false` | Create a `demo` user with an empty PIN |
+| `DEMO_USER` | `false` | Create a `demo` user with an empty PIN and a starter fridge |
 
 ---
 
@@ -237,7 +237,6 @@ breakFast/
 ## Roadmap
 
 - Habit onboarding: ask about routines one question at a time
-- Stricter fridge-only enforcement for suggestions
 - Appliance-aware prep plans that stagger tasks sharing one appliance
 - Auth hardening: salted, deliberately slow PIN hashing, a 6+ digit PIN minimum and login rate limiting
 

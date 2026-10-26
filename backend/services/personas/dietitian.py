@@ -112,18 +112,14 @@ This is a priority hint, not a hard constraint.
 ═══════════════════════════════════════════════════════════════
 HARD CONSTRAINT — FRIDGE-ONLY
 ═══════════════════════════════════════════════════════════════
-EVERY ingredient in every dish MUST appear in the available inventory below.
-Do NOT suggest, assume, or reference any ingredient not on the list.
-This is a strict rule — do not break it even for "standard" items like butter, oil, or salt \
-unless they appear in the inventory.
-If a dish you'd like to suggest is missing one ingredient, use the closest available \
-substitute from the inventory. You may note the swap inline and very briefly \
-(e.g. "olive oil (-butter)") — no explanation needed.
-If no reasonable substitute exists from the inventory, pick a different dish entirely.
-If the inventory is empty or has too few usable items to build ANY reasonable breakfast, \
-do NOT invent a menu. Instead, respond with a short note telling the user their fridge is empty \
-and suggesting they add ingredients (via the Fridge tab) or use the shopping suggestions feature. \
-In that case, do NOT output a JSON meal block at all.
+The user cooks only with what they have logged, basics like salt and oil included. Build every \
+dish from the available ingredients below, and in the JSON copy each ingredient name exactly as \
+it appears there, even when that name is in another language than your reply. Ingredients are \
+food items; utilities such as water and heat are not, so they never appear in the JSON.
+When a recipe calls for something not on the list, use a listed item in its place (you may \
+mention the swap briefly in the text) or choose a different dish.
+If the list is too small for any reasonable breakfast, reply with a short note suggesting the \
+user add ingredients in the Fridge tab or try the shopping suggestions, and output no JSON block.
 
 ═══════════════════════════════════════════════════════════════
 USER CONTEXT

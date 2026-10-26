@@ -290,3 +290,45 @@ class TestPipelineOrchestrator:
                     user_message="Öner",
                 ):
                     pass
+
+    @staticmethod
+    async def _refinement_message(draft):
+        """Run the pipeline with a fixed draft and return the message sent to the refine step."""
+        analyst = '```json\n{"feedback": ["Add more fiber"]}\n```'
+        captured = []
+
+        async def capturing_stream(system_prompt, history, message, temperature=None):
+            captured.append(message)
+            for char in [draft, analyst, "Refined"][len(captured) - 1]:
+                yield char
+
+        with patch("services.pipeline.stream_response", capturing_stream):
+            async for _ in run_suggestion_pipeline(context=SAMPLE_CONTEXT, user_message="Suggest"):
+                pass
+        return captured[2]
+
+    # Draft ingredients outside the fridge, salt included, are sent to the refine step first
+    @pytest.mark.asyncio
+    async def test_fridge_check_flags_missing_ingredients(self):
+        draft = (
+            'Try this!\n```json\n{"menu_name": "Avocado Eggs", "menu": ['
+            '{"name": "Avocado eggs", "ingredients": [{"name": "eggs"}, {"name": "Avocado"}, {"name": "Salt"}]}'
+            ']}\n```'
+        )
+        msg = await self._refinement_message(draft)
+        fridge_line = next(line for line in msg.splitlines() if "FRIDGE CHECK" in line)
+        assert "Avocado, Salt" in fridge_line
+        assert "eggs" not in fridge_line
+        assert msg.index("FRIDGE CHECK") < msg.index("Add more fiber")
+
+    # A draft that only uses fridge items gets no fridge feedback
+    @pytest.mark.asyncio
+    async def test_fridge_check_silent_when_all_available(self):
+        draft = (
+            '```json\n{"menu_name": "Eggs", "menu": ['
+            '{"name": "Boiled eggs", "ingredients": [{"name": "Eggs"}]}'
+            ']}\n```'
+        )
+        msg = await self._refinement_message(draft)
+        assert "FRIDGE CHECK" not in msg
+        assert "Add more fiber" in msg

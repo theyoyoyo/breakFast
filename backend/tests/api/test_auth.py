@@ -13,6 +13,7 @@ from httpx import AsyncClient, ASGITransport
 
 import database
 from auth import hash_pin
+from models.ingredient import DEMO_FRIDGE
 
 
 @pytest_asyncio.fixture
@@ -145,4 +146,18 @@ async def test_demo_user_created_when_enabled(unauth_client, monkeypatch):
     await database.init_db()
     r = await unauth_client.post("/auth/login", json={"name": "demo", "pin": ""})
     assert r.status_code == 200
+
+
+# A new demo account starts with the starter fridge, basics included, added only once
+async def test_demo_user_gets_starter_fridge_once(unauth_client, monkeypatch):
+    monkeypatch.setattr(database, "DEMO_USER", True)
+    await database.init_db()
+    await database.init_db()  # a restart must not add the items again
+    token = (await unauth_client.post("/auth/login", json={"name": "demo", "pin": ""})).json()["token"]
+    r = await unauth_client.get("/ingredients/", headers={"Authorization": f"Bearer {token}"})
+    items = {i["name"]: i["group_name"] for i in r.json()}
+    assert len(items) == len(r.json()) == len(DEMO_FRIDGE)
+    assert items["Salt"] == "🫙 Pantry"
+    assert items["Olive oil"] == "🫙 Pantry"
+    assert items["Butter"] == "🐄 Animal Products"
 

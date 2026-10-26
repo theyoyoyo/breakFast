@@ -68,9 +68,9 @@ Chat with Ollama, ingredient inventory, meal suggestions, meal history, multi-us
 
 ### Phase 3 (IN PROGRESS)
 
-**Done:** Ingredient groups (10 fixed groups, English names), expiry tracking, favorite ingredients (staples list), shopping list, delete confirm redesign, kitchen appliances settings, multi-item menu format, shared MealEditor, unit dropdown with smart defaults, simplified suggestion text, overlay edit pattern across all panels, explore mode, shopping assistant persona, weekly nutrition review, language toggle (English default + Turkish option), chat meal blocks only from the Suggest button.
+**Done:** Ingredient groups (11 fixed groups incl. 🫙 Pantry, English names), fridge-only enforcement (code check after the draft), expiry tracking, favorite ingredients (staples list), shopping list, delete confirm redesign, kitchen appliances settings, multi-item menu format, shared MealEditor, unit dropdown with smart defaults, simplified suggestion text, overlay edit pattern across all panels, explore mode, shopping assistant persona, weekly nutrition review, language toggle (English default + Turkish option), chat meal blocks only from the Suggest button.
 
-**Remaining:** Habit onboarding, stricter fridge constraint enforcement in suggestions, auth hardening (salted slow PIN hashing, 6+ digit PIN minimum, login rate limiting).
+**Remaining:** Habit onboarding, auth hardening (salted slow PIN hashing, 6+ digit PIN minimum, login rate limiting).
 
 ---
 
@@ -116,11 +116,13 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 
 **Chat persona:** responds in plain text only. Meal blocks come only from the Suggest button, never from chat.
 
-**Suggestion persona:** outputs short text (taste tips only — no prep steps, no nutrition table, no supplement notes) + JSON meal block. Must build meals from existing fridge inventory. Small substitutes for missing items are allowed.
+**Suggestion persona:** outputs short text (taste tips only — no prep steps, no nutrition table, no supplement notes) + JSON meal block. Must build meals from the fridge inventory only, basics like salt and oil included; a missing recipe item may be replaced with an inventory item, never with something outside it.
 
-**Suggestion pipeline:** Draft → Analyst review → Refine (one pass). Progress sent via WebSocket `{type: 'progress'}`.
+**Suggestion pipeline:** Draft → Analyst review + code fridge check (`services/fridge.py`) → Refine (one pass). Missing ingredients go to the refine step as the first feedback point. Progress sent via WebSocket `{type: 'progress'}`.
 
 **Suggestion + Analyst + Shopping** share `backend/services/knowledge.py`.
+
+**Prompt style:** state each rule once, in the prompt that owns it, as a positive instruction with a short reason, not a growing list of bans and special cases. Anything code can verify (fridge membership, JSON shape) is checked in code, not by asking another persona to police it.
 
 ---
 
@@ -128,9 +130,9 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 
 - **Health rules**: injected into every LLM prompt silently. Never surface them to the user.
 - **Avoid list**: hard ban. Never suggest avoided ingredients.
-- **Fridge constraint**: suggestions must use current inventory. Substitutes OK for small gaps.
+- **Fridge constraint**: suggestions use only the inventory. Nothing is assumed: basics (salt, oil, spices) and long-life items (flour, sesame, oats…) are logged like anything else, usually in the 🫙 Pantry group. A planned Fridge quick-add button will make logging them easy. Water is a utility like electricity and gas: never listed as an ingredient and skipped by the check. Ingredient names in the meal JSON must match the inventory as written, so the code check can compare them.
 - **CORS**: configurable via `CORS_ORIGINS` env var (comma-separated).
-- **Demo user**: only created when `DEMO_USER=true` (empty PIN). Never enable it on a reachable instance.
+- **Demo user**: only created when `DEMO_USER=true` (empty PIN). A newly created demo account gets a starter fridge (`DEMO_FRIDGE` in `models/ingredient.py`, basics included). Never enable it on a reachable instance.
 - **Language**: the UI is English only; the setting changes AI replies. User data is often Turkish and pulls a 7B model toward Turkish, so every user-facing prompt ends with a `FINAL REMINDER` restating the language directive. Code-built text in replies (e.g. prep plan labels) follows the same setting.
 - **Line endings**: `.gitattributes` normalizes to LF in repo, CRLF on Windows checkout.
 
@@ -183,6 +185,7 @@ breakFAST/
 │   │   ├── context.py               ← shared context loaders for prompts
 │   │   ├── knowledge.py             ← shared food knowledge
 │   │   ├── insights.py              ← behavioral pattern extraction
+│   │   ├── fridge.py                ← fridge check: draft ingredients vs inventory
 │   │   ├── suggestion.py            ← stream_response + persona re-exports
 │   │   └── llm.py                   ← Ollama streaming + lyric fallback
 │   └── models/

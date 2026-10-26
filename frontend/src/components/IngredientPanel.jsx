@@ -16,7 +16,7 @@ import * as s from './IngredientPanel.styles'
 const INGREDIENT_GROUPS = [
   '🐄 Animal Products', '🥬 Produce', '🍞 Breads', '🍯 Sweets',
   '🫒 Breakfast Staples', '🥜 Nuts & Seeds', '🌱 Plant-Based', '☕ Beverages',
-  '🧂 Spices', '🍽️ Other',
+  '🧂 Spices', '🫙 Pantry', '🍽️ Other',
 ]
 const DEFAULT_GROUP = '🍽️ Other'
 
