@@ -129,16 +129,15 @@ export default function App() {
           </button>
         ))}
         <div style={s.userInfo}>
-          {isDemo ? (
-            <span
-              style={{ cursor: 'pointer' }}
-              onClick={() => chatRef.current?.injectDemoMeal()}
-              title="Demo action"
-            >{auth.user.name}</span>
-          ) : (
-            <span>{auth.user.name}</span>
-          )}
-          <button style={s.logoutBtn} onClick={handleLogout} title="Logout">
+          <span
+            style={{ ...s.userChip(narrow), ...(isDemo ? { cursor: 'pointer' } : {}) }}
+            onClick={isDemo ? () => chatRef.current?.injectDemoMeal() : undefined}
+            title={isDemo ? 'Demo action' : auth.user.name}
+          >
+            <span style={s.userAvatar}>{(auth.user.name || '?').charAt(0).toUpperCase()}</span>
+            {!narrow && <span style={s.userName}>{auth.user.name}</span>}
+          </span>
+          <button className="logout-btn" style={s.logoutBtn} onClick={handleLogout} title="Logout">
             <LogOut size={12} style={narrow ? { verticalAlign: -1 } : { marginRight: 4, verticalAlign: -1 }} />
             {!narrow && 'Logout'}
           </button>
