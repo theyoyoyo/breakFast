@@ -1,16 +1,19 @@
-"""Tests for the prompt test's reply checks, runner and summary, offline with canned replies."""
+"""Tests for the prompt test's reply checks, runner, summary and history, offline with canned replies."""
 
 import json
 from unittest.mock import patch
 
-from tools.prompt_check import check_reply, describe, is_clean, suggest_once, summarize
+from services import pipeline
+from tools.prompt_check import (
+    check_reply, compare, describe, is_clean, recording_prompts, suggest_once, summarize,
+)
 from tools.prompt_samples import SAMPLES
 
 EN, TR = SAMPLES["en"], SAMPLES["tr"]
 
 
 def _reply(*menu) -> str:
-    return "Enjoy!\n```json\n" + json.dumps({"menu_name": "Test", "menu": list(menu)}) + "\n```"
+    return "Enjoy!\n```json\n" + json.dumps({"menu_name": "Test", "menu": list(menu)}, ensure_ascii=False) + "\n```"
 
 
 # A meal built only from fridge items (water needs none), in listed units, is clean
@@ -27,6 +30,7 @@ def test_clean_reply():
     result = check_reply(text, EN)
     assert is_clean(result)
     assert describe(result) == "clean"
+    assert result["dishes"] == ["menemen", "water", "white cheese"]
 
 
 # A reply without a meal JSON block fails the JSON check
@@ -66,7 +70,7 @@ def test_simple_item_counted_once_and_shorter_names_pass():
     assert result["prepared"] == []
 
 
-# Units outside the reply language's list are reported once each, ignoring case
+# Units the app can't show as a listed unit are reported once each; known spellings (gr, pieces) pass
 def test_off_list_units():
     text = _reply(
         {"name": "Menemen", "ingredients": [
@@ -74,10 +78,19 @@ def test_off_list_units():
             {"name": "Süt", "amount": 1, "unit": "cup"},
         ]},
         {"name": "Beyaz peynir", "amount": 50, "unit": "gr", "ingredients": []},
-        {"name": "Siyah zeytin", "amount": 10, "unit": "gr", "ingredients": []},
+        {"name": "Siyah zeytin", "amount": 10, "unit": "scoop", "ingredients": []},
         {"name": "Süt", "amount": 0.2, "unit": "l", "ingredients": []},
     )
-    assert check_reply(text, TR)["units"] == ["cup", "gr"]
+    assert check_reply(text, TR)["units"] == ["cup", "scoop"]
+    assert check_reply(_reply({"name": "Simit", "amount": 1, "unit": "pieces", "ingredients": []}), EN)["units"] == []
+
+
+# An English reply's words with Turkish letters are reported unless they're fridge names; Turkish replies aren't checked
+def test_turkish_words_in_english_reply():
+    text = _reply({"name": "Kaşarlı tost", "amount": 1, "unit": "pcs", "ingredients": []}) + "\nKaşar is güzel!"
+    sample = {**EN, "ingredients": EN["ingredients"] + [{"name": "Kaşar", "group_name": "🐄 Animal Products"}]}
+    assert check_reply(text, sample)["turkish"] == ["Kaşarlı", "güzel"]
+    assert check_reply(text, TR)["turkish"] == []
 
 
 # One run returns the draft and the final reply; draft-only closes the pipeline before the review
@@ -91,7 +104,7 @@ async def test_suggest_once_collects_draft_and_final():
         calls.append("reviewed")
         yield {"type": "done", "content": "F"}
 
-    with patch("tools.prompt_check.run_suggestion_pipeline", fake_pipeline):
+    with patch("services.pipeline.run_suggestion_pipeline", fake_pipeline):
         assert await suggest_once(EN, "explore", draft_only=False) == {"draft": "D", "final": "F"}
         assert await suggest_once(EN, None, draft_only=True) == {"draft": "D"}
     assert calls == [
@@ -111,15 +124,44 @@ async def test_samples_run_through_the_pipeline():
             assert await suggest_once(sample, None, draft_only=False) == {"draft": "ok", "final": "ok"}
 
 
-# The summary counts replies per sample and stage, then lists the most frequent offenders
+# The recorder keeps each distinct system prompt once, in order of use, and puts the sender back
+async def test_recording_prompts_keeps_distinct_system_prompts():
+    async def fake_stream(system_prompt, history, message, temperature=None):
+        yield "ok"
+
+    sent = {}
+    with patch("services.pipeline.stream_response", fake_stream):
+        with recording_prompts(sent):
+            await suggest_once(EN, None, draft_only=False)
+            await suggest_once(EN, None, draft_only=False)
+        assert pipeline.stream_response is fake_stream
+    prompts = list(sent)
+    assert len(prompts) == 2  # suggestion (draft and refine) and analyst
+    assert "Append a JSON block" in prompts[0]
+
+
+# The summary counts replies and distinct menus per sample and stage, then lists the most frequent offenders
 def test_summary_counts_and_offenders():
-    clean = {"json": True, "missing": [], "prepared": [], "units": []}
-    simit = {"json": True, "missing": [], "prepared": ["Simit with tahini"], "units": []}
+    clean = {"json": True, "dishes": ["menemen"], "missing": [], "prepared": [], "units": [], "turkish": []}
+    simit = {"json": True, "dishes": ["simit"], "missing": [], "prepared": ["Simit with tahini"], "units": [], "turkish": []}
     records = [
         {"sample": "en", "run": 1, "seconds": 30, "error": None, "replies": {}, "scores": {"draft": simit, "final": clean}},
         {"sample": "en", "run": 2, "seconds": 50, "error": None, "replies": {}, "scores": {"draft": simit, "final": simit}},
     ]
     lines = summarize(records).splitlines()
-    assert lines[1].split() == ["en", "draft", "2", "2", "0", "0", "2", "0", "0", "40"]
-    assert lines[2].split() == ["en", "final", "2", "2", "1", "0", "1", "0", "0", "40"]
+    assert lines[1].split() == ["en", "draft", "2", "2", "0", "1", "0", "2", "0", "0", "0", "40"]
+    assert lines[2].split() == ["en", "final", "2", "2", "1", "2", "0", "1", "0", "0", "0", "40"]
     assert "en draft prepared: Simit with tahini ×2" in lines
+
+
+# Each sample and stage is compared with its best earlier test in the same mode
+def test_compare_with_best_earlier_test():
+    old = {"date": "2026-10-27 23:21", "prompt": "aaaaaaa", "mode": "plain", "note": "baseline",
+           "results": {"en final": {"clean": 1, "scored": 2, "distinct": 1}}}
+    best = {**old, "prompt": "bbbbbbb", "note": "", "results": {"en final": {"clean": 2, "scored": 2, "distinct": 2}}}
+    explore = {**old, "mode": "explore", "results": {"en final": {"clean": 3, "scored": 3, "distinct": 3}}}
+    now = {"en final": {"clean": 1, "scored": 2, "distinct": 2}, "en draft": {"clean": 0, "scored": 2, "distinct": 1}}
+    assert compare(now, [old, best, explore], "plain") == [
+        "en final: 1/2 clean, 2 distinct ▼ best 2/2 clean, 2 distinct: prompt bbbbbbb (2026-10-27 23:21)",
+        "en draft: 0/2 clean, 1 distinct · first test",
+    ]
