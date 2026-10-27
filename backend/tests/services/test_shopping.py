@@ -47,10 +47,13 @@ def test_new_suggestions_drop_vague_names_and_dishes():
     assert [i["name"] for i in kept] == ["Spinach", "Chard", "Tomatoes"]
 
 
-# The request names the reply language, which the model follows better than the system prompt alone
-def test_shopping_request_names_the_language():
+# The request names the reply language and, for Suggest More, what was already shown
+def test_shopping_request_names_the_language_and_shown_items():
     assert shopping_request("en") == "Generate shopping suggestions for me, in English."
-    assert shopping_request("tr") == "Generate shopping suggestions for me, in Turkish."
+    assert shopping_request("tr", ["Kiwi", "Pear"]) == (
+        "Generate more shopping suggestions for me, in Turkish, all different from these, "
+        "which I've already seen: Kiwi, Pear."
+    )
 
 
 # The same item twice in one reply is kept once

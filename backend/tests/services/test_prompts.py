@@ -551,7 +551,7 @@ class TestLanguageReminder:
             "analyst": build_analyst_prompt([], None, None, None, language=language),
             "weekly_analyst": build_weekly_analyst_prompt_with_meals("Mon: eggs", language=language),
             "scheduler": build_scheduler_prompt("Menemen", [], "eggs", language=language),
-            "shopping": build_shopping_prompt([], [], {}, [], exclude_names=["Kiwi"], language=language),
+            "shopping": build_shopping_prompt([], [], {}, [], language=language),
         }
 
     def test_english_directive_is_last(self):
@@ -661,9 +661,8 @@ class TestShoppingPrompt:
 
     def test_exclusions_are_stated_once_and_positively(self):
         """Code drops repeats, so the prompt only lists what is covered, without a pile of bans."""
-        prompt = build_shopping_prompt([], [], {}, [], shopping_list=["Kiwi"], exclude_names=["Pear"])
+        prompt = build_shopping_prompt([], [], {}, [], shopping_list=["Kiwi"])
         assert "CURRENT SHOPPING LIST:\nKiwi" in prompt
-        assert "ALREADY SHOWN (the user has seen these, so suggest different items):\nPear" in prompt
         assert "Do NOT suggest" not in prompt
 
     def test_reply_is_an_items_object(self):

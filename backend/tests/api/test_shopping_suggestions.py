@@ -61,8 +61,8 @@ async def test_retries_once_when_everything_repeats(client):
         data = await _suggest(client, exclude=["Pear"])
     assert [s["name"] for s in data["suggestions"]] == ["Salmon"]
     assert llm.call_count == 2
-    retry_prompt = llm.call_args_list[1].kwargs["system_prompt"]
-    assert "so suggest different items):\nPear, Egg" in retry_prompt
+    retry_request = llm.call_args_list[1].kwargs["messages"][0]["content"]
+    assert retry_request.endswith("which I've already seen: Pear, Egg.")
 
 
 # When the retry repeats too, the reply is an empty list without an error

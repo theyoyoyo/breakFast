@@ -359,7 +359,6 @@ async def get_shopping_suggestions(
                 user_profile=ctx["user_profile"],
                 supplements=ctx["supplements"],
                 avoid_list=ctx["avoid_list"],
-                exclude_names=shown,
                 shopping_list=ctx["shopping_list"],
                 favorites=ctx["favorites"],
                 ratings=ctx["ratings"],
@@ -368,7 +367,7 @@ async def get_shopping_suggestions(
             )
             reply = await chat_json(
                 system_prompt=prompt,
-                messages=[{"role": "user", "content": shopping_request(ctx["language"])}],
+                messages=[{"role": "user", "content": shopping_request(ctx["language"], shown)}],
                 schema=SUGGESTIONS_SCHEMA,
                 temperature=0.6,
             )

@@ -51,10 +51,17 @@ def parse_suggestions(reply: str) -> list[dict] | None:
     return result
 
 
-def shopping_request(language: str) -> str:
-    """The user message for the shopping call. A 7B model writing JSON follows the language
-    named in the last message better than the system prompt's directive."""
-    return f"Generate shopping suggestions for me, in {'English' if language == 'en' else 'Turkish'}."
+def shopping_request(language: str, shown: list[str] = ()) -> str:
+    """The user message for the shopping call. A 7B model writing JSON follows the last message
+    better than the system prompt, so it names the reply language and, for Suggest More, the
+    items the user has already seen."""
+    name = "English" if language == "en" else "Turkish"
+    if not shown:
+        return f"Generate shopping suggestions for me, in {name}."
+    return (
+        f"Generate more shopping suggestions for me, in {name}, all different from these, "
+        f"which I've already seen: {', '.join(shown)}."
+    )
 
 
 # A name that is not one product: alternatives or examples ("Leafy greens (e.g. spinach)", "Milk or yogurt")

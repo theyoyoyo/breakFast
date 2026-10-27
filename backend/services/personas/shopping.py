@@ -161,7 +161,6 @@ def build_shopping_prompt(
     user_profile: dict | None = None,
     supplements: list[dict] | None = None,
     avoid_list: list[str] | None = None,
-    exclude_names: list[str] | None = None,
     shopping_list: list[str] | None = None,
     favorites: list[str] | None = None,
     ratings: list[dict] | None = None,
@@ -170,7 +169,7 @@ def build_shopping_prompt(
     today: date | None = None,
 ) -> str:
     """Build the shopping persona system prompt."""
-    base = SHOPPING_TEMPLATE.format(
+    return SHOPPING_TEMPLATE.format(
         lang_instruction=_lang(language),
         today=format_today(today, country),
         ingredient_inventory=format_ingredients(ingredient_inventory),
@@ -185,10 +184,4 @@ def build_shopping_prompt(
         shopping_list=_format_shopping_list(shopping_list),
         favorites=format_favorites(favorites or []),
         ratings=format_ratings(ratings or []),
-    )
-    if exclude_names:
-        base += (
-            "\n\nALREADY SHOWN (the user has seen these, so suggest different items):\n"
-            + ", ".join(exclude_names)
-        )
-    return base + FINAL_REMINDER.format(lang_instruction=_lang(language))
+    ) + FINAL_REMINDER.format(lang_instruction=_lang(language))

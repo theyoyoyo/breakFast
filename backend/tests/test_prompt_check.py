@@ -196,19 +196,19 @@ def test_shopping_checks():
 
 # One shopping run asks twice, the second time with the first reply's new items as already shown
 async def test_shop_once_asks_for_more_with_what_was_shown():
-    prompts = []
+    requests = []
 
     async def fake_chat_json(system_prompt, messages, schema, temperature=None):
-        prompts.append(system_prompt)
-        return _shopping_reply("Spinach", "Domates") if len(prompts) == 1 else _shopping_reply("Kale")
+        requests.append(messages[0]["content"])
+        return _shopping_reply("Spinach", "Domates") if len(requests) == 1 else _shopping_reply("Kale")
 
     sent = {}
     with patch("services.llm.chat_json", fake_chat_json):
         replies = await shop_once(SAMPLES["mixed"], sent)
     assert list(replies) == ["suggest", "more"]
-    assert "ALREADY SHOWN" not in prompts[0]
-    assert prompts[1].split("ALREADY SHOWN")[1].splitlines()[1] == "Spinach"
-    assert list(sent) == prompts
+    assert requests[0] == "Generate shopping suggestions for me, in English."
+    assert requests[1].endswith("which I've already seen: Spinach.")  # Domates is in the fridge
+    assert len(sent) == 1  # the system prompt stays the same
 
 
 # The shopping summary uses the shopping stages and problem columns

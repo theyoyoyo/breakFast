@@ -209,7 +209,7 @@ async def suggest_once(sample: dict, mode: str | None, draft_only: bool) -> dict
     return replies
 
 
-def shopping_prompt(sample: dict, shown: list[str]) -> str:
+def shopping_prompt(sample: dict) -> str:
     """The shopping system prompt, built the way routers/ingredients.py builds it."""
     return build_shopping_prompt(
         ingredient_inventory=sample["ingredients"],
@@ -221,7 +221,6 @@ def shopping_prompt(sample: dict, shown: list[str]) -> str:
         user_profile=sample["user_profile"],
         supplements=sample["supplements"],
         avoid_list=sample["avoid_list"],
-        exclude_names=shown,
         shopping_list=sample["shopping_list"],
         favorites=sample["favorites"],
         ratings=sample["ratings"],
@@ -236,11 +235,11 @@ async def shop_once(sample: dict, sent: dict) -> dict:
     replies, shown = {}, []
     known = [i["name"] for i in sample["ingredients"]] + sample["shopping_list"] + sample["avoid_list"]
     for stage in PERSONAS["shopping"]["stages"]:
-        prompt = shopping_prompt(sample, shown)
+        prompt = shopping_prompt(sample)
         sent.setdefault(prompt, None)
         replies[stage] = await llm.chat_json(
             system_prompt=prompt,
-            messages=[{"role": "user", "content": shopping_request(sample["language"])}],
+            messages=[{"role": "user", "content": shopping_request(sample["language"], shown)}],
             schema=SUGGESTIONS_SCHEMA,
             temperature=SHOPPING_TEMPERATURE,
         )
