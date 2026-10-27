@@ -2,12 +2,14 @@
 Shopping suggestions: the reply schema and the code dedupe.
 
 Ollama constrains the shopping persona's reply to SUGGESTIONS_SCHEMA, and plain
-code then keeps only new items: anything in the fridge, on the shopping list,
-already shown or on the avoid list is dropped. Product names are specific, so
-names are compared exactly (see fridge.same_name), not loosely.
+code then keeps only new products: anything in the fridge, on the shopping list,
+already shown or on the avoid list is dropped, and so are names that aren't one
+product and the user's own dishes. Product names are specific, so names are
+compared exactly (see fridge.same_name), not loosely.
 """
 
 import json
+import re
 
 from services.fridge import same_name
 
@@ -49,12 +51,26 @@ def parse_suggestions(reply: str) -> list[dict] | None:
     return result
 
 
-def new_suggestions(items: list[dict], known: list[str]) -> list[dict]:
-    """Items whose names aren't already known, each name once."""
+def shopping_request(language: str) -> str:
+    """The user message for the shopping call. A 7B model writing JSON follows the language
+    named in the last message better than the system prompt's directive."""
+    return f"Generate shopping suggestions for me, in {'English' if language == 'en' else 'Turkish'}."
+
+
+# A name that is not one product: alternatives or examples ("Leafy greens (e.g. spinach)", "Milk or yogurt")
+_NOT_ONE_PRODUCT = re.compile(r"[(/]|\be\.?g\b|\bor\b", re.IGNORECASE)
+
+
+def new_suggestions(items: list[dict], known: list[str], dishes: list[str] = ()) -> list[dict]:
+    """Items whose names aren't already known, each name once. Names that aren't one product
+    and the user's own dishes (meal names from their history, like Menemen) are left out too."""
     seen = list(known)
     result = []
     for item in items:
-        if any(same_name(item["name"], k) for k in seen):
+        name = item["name"]
+        if _NOT_ONE_PRODUCT.search(name) or any(same_name(name, d) for d in dishes):
+            continue
+        if any(same_name(name, k) for k in seen):
             continue
         seen.append(item["name"])
         result.append(item)

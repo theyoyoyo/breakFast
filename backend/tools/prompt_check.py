@@ -38,7 +38,7 @@ from services import llm, pipeline
 # The fridge check's own word matching, the other way round, to tell renamed items from missing ones
 from services.fridge import _contains, _tokens, find_missing_ingredients, same_name
 from services.personas.shopping import build_shopping_prompt
-from services.shopping import SUGGESTIONS_SCHEMA, new_suggestions, parse_suggestions
+from services.shopping import SUGGESTIONS_SCHEMA, new_suggestions, parse_suggestions, shopping_request
 from tools.prompt_samples import SAMPLES
 from utils import extract_json_block
 
@@ -59,8 +59,7 @@ SUGGEST_MESSAGES = {
     "explore": "Suggest a different breakfast from world cuisines",
 }
 
-# What Suggest Shopping asks, and at which temperature (routers/ingredients.py, get_shopping_suggestions)
-SHOPPING_MESSAGE = "Generate shopping suggestions for me."
+# Suggest Shopping's temperature (routers/ingredients.py, get_shopping_suggestions)
 SHOPPING_TEMPERATURE = 0.6
 
 # The stages each persona's runs score, and the problems its checks look for
@@ -144,7 +143,7 @@ def check_shopping(text: str, sample: dict, shown: list[str]) -> tuple[dict, lis
         return _no_json("shopping"), []
     names = [i["name"] for i in items]
     known = [i["name"] for i in sample["ingredients"]] + sample["shopping_list"] + sample["avoid_list"] + shown
-    kept = [i["name"] for i in new_suggestions(items, known)]
+    kept = [i["name"] for i in new_suggestions(items, known, _dishes(sample))]
     return {
         "json": True,
         "dishes": sorted(n.lower() for n in kept),
@@ -152,11 +151,16 @@ def check_shopping(text: str, sample: dict, shown: list[str]) -> tuple[dict, lis
             "dish": [n for n in names if looks_like_dish(n, sample)],
             "vague": [n for n in names if _VAGUE.search(n)],
             # In the fridge, on the list, avoided or shown before: the code dedupe drops these
-            "repeat": [n for n in names if n not in kept],
+            "repeat": [n for n in names if any(same_name(n, k) for k in known)],
             "turkish": turkish_words(text, sample),
         },
         "note": f"{len(kept)} of {len(names)} kept",
     }, kept
+
+
+def _dishes(sample: dict) -> list[str]:
+    """The sample's meal names, which the endpoint drops from suggestions as dishes."""
+    return [m["meal_name"] for m in sample.get("history") or [] if m.get("meal_name")]
 
 
 def score_shopping(replies: dict, sample: dict) -> dict:
@@ -236,11 +240,12 @@ async def shop_once(sample: dict, sent: dict) -> dict:
         sent.setdefault(prompt, None)
         replies[stage] = await llm.chat_json(
             system_prompt=prompt,
-            messages=[{"role": "user", "content": SHOPPING_MESSAGE}],
+            messages=[{"role": "user", "content": shopping_request(sample["language"])}],
             schema=SUGGESTIONS_SCHEMA,
             temperature=SHOPPING_TEMPERATURE,
         )
-        shown += [i["name"] for i in new_suggestions(parse_suggestions(replies[stage]) or [], known + shown)]
+        items = parse_suggestions(replies[stage]) or []
+        shown += [i["name"] for i in new_suggestions(items, known + shown, _dishes(sample))]
     return replies
 
 

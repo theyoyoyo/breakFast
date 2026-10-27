@@ -45,6 +45,15 @@ async def test_call_uses_schema_and_country(client):
     assert ", in Türkiye." in kwargs["system_prompt"]
 
 
+# Dishes from the meal history are dropped, and the request names the reply language
+async def test_drops_eaten_dishes_and_asks_in_the_reply_language(client):
+    await client.post("/meals/", json={"meal_name": "Menemen", "ingredients": []})
+    with _llm(_reply("Menemen", "Green peppers")) as llm:
+        data = await _suggest(client)
+    assert [s["name"] for s in data["suggestions"]] == ["Green peppers"]
+    assert llm.call_args.kwargs["messages"][0]["content"].endswith("in English.")
+
+
 # A reply made only of repeats is retried once, with those names listed as already shown
 async def test_retries_once_when_everything_repeats(client):
     await client.post("/ingredients/", json={"name": "Eggs"})

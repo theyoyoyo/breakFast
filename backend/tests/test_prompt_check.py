@@ -188,7 +188,7 @@ def test_shopping_checks():
     assert scores["suggest"]["issues"]["dish"] == ["Menemen"]
     assert scores["suggest"]["issues"]["vague"] == ["Leafy greens (e.g. spinach)", "Fresh basil"]
     assert scores["suggest"]["issues"]["repeat"] == ["Domates", "Süt"]  # in the fridge, on the shopping list
-    assert scores["suggest"]["note"] == "4 of 6 kept"
+    assert scores["suggest"]["note"] == "2 of 6 kept"  # the endpoint also drops the dish and the vague name
     assert scores["more"]["issues"]["repeat"] == ["Spinach"]  # shown by the first reply
     assert scores["more"]["issues"]["dish"] == ["Whole wheat toast"]
     assert describe(score_shopping({"suggest": "not json"}, mixed)["suggest"]) == "no JSON"

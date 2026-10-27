@@ -331,7 +331,7 @@ async def get_shopping_suggestions(
     from services.context import load_shopping_context
     from services.suggestion import build_shopping_prompt
     from services.llm import chat_json, LLMUnavailableError, lyric_cycler
-    from services.shopping import SUGGESTIONS_SCHEMA, new_suggestions, parse_suggestions
+    from services.shopping import SUGGESTIONS_SCHEMA, new_suggestions, parse_suggestions, shopping_request
 
     shown = list(body.exclude) if body else []
 
@@ -344,6 +344,8 @@ async def get_shopping_suggestions(
 
     # The avoid list is a hard ban, so code enforces it beside the prompt rule
     known = [i["name"] for i in ctx["ingredients"]] + ctx["shopping_list"] + ctx["avoid_list"]
+    # Meals the user has eaten are dishes, not products; their ingredients are what to suggest
+    dishes = [m["meal_name"] for m in ctx["history"] if m.get("meal_name")]
 
     for _ in range(2):
         try:
@@ -366,7 +368,7 @@ async def get_shopping_suggestions(
             )
             reply = await chat_json(
                 system_prompt=prompt,
-                messages=[{"role": "user", "content": "Generate shopping suggestions for me."}],
+                messages=[{"role": "user", "content": shopping_request(ctx["language"])}],
                 schema=SUGGESTIONS_SCHEMA,
                 temperature=0.6,
             )
@@ -381,7 +383,7 @@ async def get_shopping_suggestions(
             logging.warning("Shopping suggestions: could not parse the reply: %r", reply)
             return {"suggestions": [], "lyric": None, "error": "Could not read the AI reply. Please try again."}
 
-        fresh = new_suggestions(items, known + shown)
+        fresh = new_suggestions(items, known + shown, dishes)
         if fresh:
             return {"suggestions": fresh, "lyric": None}
         shown += [i["name"] for i in items]

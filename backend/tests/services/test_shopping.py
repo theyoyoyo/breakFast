@@ -1,6 +1,6 @@
 """Tests for the shopping suggestion reply parsing and the code dedupe."""
 
-from services.shopping import new_suggestions, parse_suggestions
+from services.shopping import new_suggestions, parse_suggestions, shopping_request
 
 
 # A schema-shaped reply gives its items, names and reasons trimmed
@@ -36,6 +36,21 @@ def test_new_suggestions_drop_exact_matches_only():
     ]
     known = ["Strawberry", "Milk", "Egg"]
     assert [i["name"] for i in new_suggestions(items, known)] == ["Frozen strawberries", "Almond milk"]
+
+
+# Names that aren't one product and the user's own dishes are left out, so alternatives come as separate items
+def test_new_suggestions_drop_vague_names_and_dishes():
+    items = [{"name": n, "reason": ""} for n in (
+        "Leafy greens (e.g. spinach)", "Milk or yogurt", "Spinach", "Chard", "Menemen", "Tomatoes",
+    )]
+    kept = new_suggestions(items, [], dishes=["Menemen", "Sucuklu tost"])
+    assert [i["name"] for i in kept] == ["Spinach", "Chard", "Tomatoes"]
+
+
+# The request names the reply language, which the model follows better than the system prompt alone
+def test_shopping_request_names_the_language():
+    assert shopping_request("en") == "Generate shopping suggestions for me, in English."
+    assert shopping_request("tr") == "Generate shopping suggestions for me, in Turkish."
 
 
 # The same item twice in one reply is kept once
