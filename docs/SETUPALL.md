@@ -549,12 +549,15 @@ The backend on the server keeps using `localhost:11434`; nothing else changes.
 In an **administrator** PowerShell:
 
 ```powershell
-New-NetFirewallRule -DisplayName "Ollama (Tailscale only)" -Direction Inbound -Protocol TCP -LocalPort 11434 -RemoteAddress 100.64.0.0/10 -Action Allow
+New-NetFirewallRule -DisplayName "Ollama (Tailscale only)" -Direction Inbound -Protocol TCP -LocalPort 11434 -RemoteAddress 100.64.0.0/10 -InterfaceAlias "Tailscale" -Action Allow
 ```
 
-`100.64.0.0/10` is the address range Tailscale gives your devices, so other devices on
-your home network still can't reach Ollama. If Windows asks whether to allow Ollama on
-networks, choose **Cancel**: the rule above is all it needs.
+The rule only lets in traffic that arrives through the Tailscale adapter from a Tailscale
+address (`100.64.0.0/10`), so other devices on your home network can't reach Ollama, not
+even by giving themselves a 100.x address. `Get-NetAdapter` shows the adapter's name if
+yours isn't `Tailscale`. If Windows asks whether to allow Ollama on networks, choose
+**Cancel**: the rule above is all it needs. Keep Ollama updated, since it is now
+reachable from your other devices.
 
 ### C.3 — Run the prompt test (development PC)
 
