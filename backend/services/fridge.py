@@ -51,6 +51,19 @@ def _same_item(a: list[set[str]], b: list[set[str]]) -> bool:
     return _contains(a, b) or _contains(b, a)
 
 
+def same_name(a: str, b: str) -> bool:
+    """Exact match: the same words in order, ignoring case, Turkish letters and plurals.
+
+    Every word of a product name carries meaning, so "Frozen strawberries" and
+    "Strawberries" are different items while "Strawberry" and "strawberries" are not.
+    """
+    wa, wb = _tokens(a), _tokens(b)
+    for words in (wa, wb):
+        for variants in words:
+            variants |= {w[:-3] + "y" for w in list(variants) if w.endswith("ies") and len(w) > 4}
+    return len(wa) == len(wb) > 0 and all(x & y for x, y in zip(wa, wb))
+
+
 def meal_ingredient_names(meal: dict) -> list[str]:
     """Every ingredient a meal uses: dish sub-ingredients and simple served items."""
     names = []
