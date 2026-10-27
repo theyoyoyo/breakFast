@@ -1,6 +1,7 @@
 /**
  * Tests for Settings: supplements start as Daily with no frequency picker, and show
- * "Occasional" for occasional ones; the theme picker offers all five themes; the tab title is the app name.
+ * "Occasional" for occasional ones; the theme picker offers all five themes; the tab title is the app name;
+ * the optional country saves with the profile.
  * API calls are mocked — no real network calls are made.
  */
 
@@ -29,6 +30,7 @@ describe('SettingsPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     api.getSupplements.mockResolvedValue([])
+    api.getProfile.mockResolvedValue(null)
   })
 
   it('adds a supplement as Daily without asking for a frequency', async () => {
@@ -59,6 +61,26 @@ describe('SettingsPanel', () => {
   it('names the weekly review toggle after what it does', async () => {
     render(<SettingsPanel visible />)
     expect(await screen.findByText('Weekly review in suggestions')).toBeInTheDocument()
+  })
+
+  it('saves the optional country with the profile', async () => {
+    render(<SettingsPanel visible />)
+    const country = await screen.findByLabelText('Country')
+    fireEvent.change(country, { target: { value: 'Türkiye' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Profile' }))
+    await waitFor(() => expect(api.upsertProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ country: 'Türkiye' }),
+    ))
+  })
+
+  it('does not mark a profile without a country as incomplete', async () => {
+    api.getProfile.mockResolvedValue({
+      age: 30, gender: 'male', height_cm: 180, weight_kg: 80, activity_level: 'moderate', country: null,
+    })
+    render(<SettingsPanel visible />)
+    expect(await screen.findByLabelText('Country')).toHaveValue('')
+    await waitFor(() => expect(screen.getByDisplayValue('30')).toBeInTheDocument())
+    expect(screen.queryByText('●')).toBeNull()
   })
 
   it('offers all five themes', async () => {
