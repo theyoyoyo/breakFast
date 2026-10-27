@@ -8,6 +8,7 @@ import SettingsPanel from './components/SettingsPanel'
 import LoginScreen from './components/LoginScreen'
 import { logout, checkAuth, getPreferences, NetworkError } from './services/api'
 import { applyTheme } from './utils/theme'
+import { applyLanguage } from './utils/language'
 import * as s from './App.styles'
 
 const TABS = [
@@ -65,13 +66,17 @@ export default function App() {
       })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Apply the logged-in user's saved theme (orange if none), so a shared device follows the user
+  // Apply the logged-in user's saved theme (orange if none) and AI language (English if none),
+  // so a shared device follows the user
   const userId = auth?.user?.id
   useEffect(() => {
     if (!userId) return
     getPreferences()
-      .then(prefs => applyTheme(prefs.find(p => p.key === 'theme')?.value))
-      .catch(() => {}) // offline — keep this device's last theme
+      .then(prefs => {
+        applyTheme(prefs.find(p => p.key === 'theme')?.value)
+        applyLanguage(prefs.find(p => p.key === 'response_language')?.value)
+      })
+      .catch(() => {}) // offline — keep this device's last theme and language
   }, [userId])
 
   // Periodically check backend connectivity when offline
