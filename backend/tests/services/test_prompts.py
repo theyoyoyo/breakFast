@@ -495,10 +495,17 @@ class TestSchedulerUserMessage:
     def test_menu_without_steps_lists_every_dish(self):
         """A menu-format meal sends its dishes and amounts, with no empty Steps section."""
         msg = build_scheduler_user_message("Classic Breakfast", [], "Egg, Tomato", menu=self.MENU)
-        assert "- Menemen: Egg (2 adet), Tomato (1 adet)" in msg
+        assert "- Menemen: Egg (2 pcs), Tomato (1 pcs)" in msg
         assert "- White cheese (50 g)" in msg
         assert "Steps:" not in msg
         assert "Ingredients:" not in msg
+
+    def test_units_follow_the_reply_language(self):
+        """Known units are sent in the reply language; unknown ones as written."""
+        menu = [*self.MENU, {"name": "Protein powder", "amount": 1, "unit": "scoop", "ingredients": []}]
+        msg = build_scheduler_user_message("Kahvaltı", [], "", menu=menu, language="tr")
+        assert "- Menemen: Egg (2 adet), Tomato (1 adet)" in msg
+        assert "- Protein powder (1 scoop)" in msg
 
     def test_steps_still_included(self):
         """Older meals with recipe steps keep sending them, numbered."""
@@ -595,3 +602,36 @@ class TestJsonExamples:
                 except json.JSONDecodeError as e:
                     raise AssertionError(f"{name}: invalid JSON example ({e})") from e
 
+
+
+# ---------------------------------------------------------------------------
+# Units follow the response language
+# ---------------------------------------------------------------------------
+
+class TestSuggestionUnits:
+    def test_english_example_and_rule_use_english_units(self):
+        """In English mode the JSON example and the unit rule use pcs, tbsp…"""
+        prompt = build_suggestion_prompt([], [], {}, [], language="en")
+        assert '"unit": "pcs"' in prompt
+        assert "`unit`: one of pcs, g, kg, ml, l, tsp, dsp, tbsp" in prompt
+        assert "adet" not in prompt
+
+    def test_turkish_example_and_rule_use_turkish_units(self):
+        """In Turkish mode the same places use adet, yemek kaşığı…"""
+        prompt = build_suggestion_prompt([], [], {}, [], language="tr")
+        assert '"unit": "adet"' in prompt
+        assert "`unit`: one of adet, g, kg, ml, L, çay kaşığı, tatlı kaşığı, yemek kaşığı" in prompt
+        assert '"unit": "pcs"' not in prompt
+
+    def test_spoon_and_glass_sizes_in_reply_language(self):
+        """The unit rule gives the fixed spoon and glass sizes, named in the reply language."""
+        english = build_suggestion_prompt([], [], {}, [], language="en")
+        turkish = build_suggestion_prompt([], [], {}, [], language="tr")
+        assert "(tsp 5 ml, dsp 10 ml, tbsp 15 ml, tea glass 100 ml, glass 200 ml)" in english
+        assert "çay bardağı 100 ml, su bardağı 200 ml)" in turkish
+
+    def test_example_uses_listed_grams(self):
+        """The example writes grams as "g", the listed unit, not "gr"."""
+        prompt = build_suggestion_prompt([], [], {}, [])
+        assert '"unit": "gr"' not in prompt
+        assert '"unit": "g"' in prompt

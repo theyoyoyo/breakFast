@@ -14,6 +14,8 @@ import KitchenSettings from './KitchenSettings'
 import MealEditor from './MealEditor'
 import StarRating from './StarRating'
 import { THEMES, applyTheme, storedTheme } from '../utils/theme'
+import { applyLanguage } from '../utils/language'
+import { useLanguage } from '../hooks/useLanguage'
 import * as s from './SettingsPanel.styles'
 
 // Display names for the stored supplement frequency values
@@ -56,8 +58,8 @@ export default function SettingsPanel({ visible }) {
   // Meal pending deletes
   const [pendingMealDeletes, setPendingMealDeletes] = useState(new Set())
 
-  // Language preference ('tr' = Turkish, 'en' = English)
-  const [language, setLanguage] = useState('en')
+  // AI response language ('tr' = Turkish, 'en' = English) — saved per user, cached per device; units follow it
+  const language = useLanguage()
   // Theme (orange / purple / green) — saved per user, cached per device
   const [theme, setTheme] = useState(storedTheme)
 
@@ -86,9 +88,8 @@ export default function SettingsPanel({ visible }) {
       setProfileDirty(false)
       setProfileLoaded(true)
       const langPref = prefs.find(p => p.key === 'response_language')
-      if (langPref) {
-        setLanguage(langPref.value)
-      } else {
+      applyLanguage(langPref?.value)
+      if (!langPref) {
         // No preference stored yet — persist the default so the backend uses it
         setPreference('response_language', 'en').catch(() => {})
       }
@@ -103,11 +104,11 @@ export default function SettingsPanel({ visible }) {
 
   const handleLanguageToggle = async () => {
     const next = language === 'tr' ? 'en' : 'tr'
-    setLanguage(next)
+    applyLanguage(next)
     try {
       await setPreference('response_language', next)
     } catch {
-      setLanguage(language)
+      applyLanguage(language)
     }
   }
 

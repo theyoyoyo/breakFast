@@ -14,12 +14,13 @@ from services.llm import LLMUnavailableError, lyric_cycler
 from services.suggestion import build_chat_prompt, stream_response
 from services.pipeline import run_suggestion_pipeline
 from services.context import load_chat_context
+from models.units import count_unit
 from utils import extract_json_block
 
 router = APIRouter()
 
 
-async def _save_suggestion(db, user_id: int, session_id: str, meal_data: dict) -> int:
+async def _save_suggestion(db, user_id: int, session_id: str, meal_data: dict, language: str = "en") -> int:
     """Insert a suggested meal into suggested_meals. Returns the new suggestion's id."""
     # Support both old flat format and new menu format
     menu_items = meal_data.get("menu")
@@ -32,7 +33,7 @@ async def _save_suggestion(db, user_id: int, session_id: str, meal_data: dict) -
             if sub:
                 flat_ingredients.extend(sub)
             else:
-                flat_ingredients.append({"name": item.get("name", ""), "amount": item.get("amount", 1), "unit": item.get("unit", "adet")})
+                flat_ingredients.append({"name": item.get("name", ""), "amount": item.get("amount", 1), "unit": item.get("unit", count_unit(language))})
     else:
         flat_ingredients = meal_data.get("ingredients", [])
 
@@ -218,7 +219,7 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
             saved_text = response_text
             if meal_data and prompt_type == "suggest":
                 async with get_db() as db:
-                    suggestion_id = await _save_suggestion(db, user_id, session_id, meal_data)
+                    suggestion_id = await _save_suggestion(db, user_id, session_id, meal_data, cached_context.get("language", "en"))
                 meal_data["id"] = suggestion_id
                 # Normalize: ensure meal_name is always set (may come as menu_name)
                 if "menu_name" in meal_data and "meal_name" not in meal_data:

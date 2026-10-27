@@ -68,7 +68,7 @@ Chat with Ollama, ingredient inventory, meal suggestions, meal history, multi-us
 
 ### Phase 3 (IN PROGRESS)
 
-**Done:** Ingredient groups (11 fixed groups incl. 🫙 Pantry, English names), fridge-only enforcement (code check after the draft), expiry tracking, favorite ingredients (staples list), shopping list, delete confirm redesign, kitchen appliances settings, multi-item menu format, shared MealEditor, unit dropdown with smart defaults, simplified suggestion text, overlay edit pattern across all panels, explore mode, shopping assistant persona, weekly nutrition review, language toggle (English default + Turkish option), chat meal blocks only from the Suggest button.
+**Done:** Ingredient groups (11 fixed groups incl. 🫙 Pantry, English names), fridge-only enforcement (code check after the draft), expiry tracking, favorite ingredients (staples list), shopping list, delete confirm redesign, kitchen appliances settings, multi-item menu format, shared MealEditor, unit dropdown with smart defaults, simplified suggestion text, overlay edit pattern across all panels, explore mode, shopping assistant persona, weekly nutrition review, language toggle (English default + Turkish option), chat meal blocks only from the Suggest button, five color themes, Markdown in chat replies, fridge readiness badges on chat cards and favorites, "Today I ate" rework (Confirm waits until nothing is missing, Ate out, ⭐ Save, kept draft), units that follow the language setting.
 
 **Remaining:** Habit onboarding, auth hardening (salted slow PIN hashing, 6+ digit PIN minimum, login rate limiting).
 
@@ -133,7 +133,7 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 - **Fridge constraint**: suggestions use only the inventory. Nothing is assumed: basics (salt, oil, spices) and long-life items (flour, sesame, oats…) are logged like anything else, usually in the 🫙 Pantry group. A planned Fridge quick-add button will make logging them easy. Water is a utility like electricity and gas: listed in recipes when needed, but never required in the fridge (the check skips it). Ingredient names in the meal JSON must match the inventory as written, so the code check can compare them.
 - **CORS**: configurable via `CORS_ORIGINS` env var (comma-separated).
 - **Demo user**: only created when `DEMO_USER=true` (empty PIN). A newly created demo account gets a starter fridge (`DEMO_FRIDGE` in `models/ingredient.py`, basics included). Never enable it on a reachable instance.
-- **Language**: the UI is English only; the setting changes AI replies. User data is often Turkish and pulls a 7B model toward Turkish, so every user-facing prompt ends with a `FINAL REMINDER` restating the language directive. Code-built text in replies (e.g. prep plan labels) follows the same setting.
+- **Language**: the UI is English only; the setting changes AI replies. User data is often Turkish and pulls a 7B model toward Turkish, so every user-facing prompt ends with a `FINAL REMINDER` restating the language directive. Code-built text in replies (e.g. prep plan labels) follows the same setting, and so do units.
 - **Theme**: Settings → Theme (orange default, then green, teal, blue, purple: hues spread around the wheel, each nudged warm, all WCAG AA) changes only `--accent`, `--accent2`, `--secondary` / `--secondary-soft` and the assistant bubble `--bubble` (`index.css`, `:root[data-theme=…]`). Use those variables or `secondaryColor`, never a hard-coded accent hex. Semantic colors never follow the theme: red (`colors.danger*`) means delete/remove, health-rule priorities are a traffic light (red top priority, yellow care a lot, green don't really care), plus expiry warnings and stars. Saved as the `theme` preference and cached in `localStorage` (`utils/theme.js`).
 - **App settings vs food preferences**: settings stored as preferences (`SETTING_KEYS` in `services/context.py`: language, theme, weekly-summary toggle) are kept out of prompts.
 - **Line endings**: `.gitattributes` normalizes to LF in repo, CRLF on Windows checkout.
@@ -144,7 +144,9 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 
 **MealEditor** (`frontend/src/components/MealEditor.jsx`) — used everywhere (chat, favorites, meal history, "Today I ate"). Key props: `menuMode`, `onFavorite(currentMeal)`, `extraActions(buildCurrentMeal) => ReactNode`. The function form of `extraActions` gives callers access to live editor state. `checkFridge` underlines ingredients that aren't in the fridge (via `POST /ingredients/check`, same matching as the pipeline) in yellow; tapping one marks it as obtained for this meal (green, stored as `meal.obtained`). `onMissingChange(names)` reports what's still missing and not obtained; `onChange(meal)` reports live state; `extraActions(build, { markAllObtained })`. On in chat meal details (marks are saved with the card and carry into "Today I ate", not back) and in "Today I ate", where Confirm waits until nothing is missing, Ate out marks every missing item as obtained (no logging), ⭐ Save keeps the menu in favorites, and the draft survives closing and Back from rating until another chat meal is selected. Chat cards and Favorites rows show readiness on their icon (`ReadinessIcon` + `hooks/useMealReadiness.js`: yellow = missing, green = ready). Favorites are templates: their editor shows the yellow underline only (`canMarkObtained={false}`). The plain Save button only appears when the caller passes `onSave`. Callers must pass a stable `meal` object: a new object resets the editor's edits.
 
-**Unit memory** (`frontend/src/utils/ingredients.js`) — `UNITS` list, `resolveUnit(name)` (localStorage memory → smart keyword default → 'adet'), `rememberUnit(name, unit)`.
+**Units** — source of truth: `backend/models/units.py` (`UNIT_PAIRS`: each English unit paired 1-1 with its Turkish match, plus `UNIT_ALIASES` like "gr" → g), mirrored in `frontend/src/utils/ingredients.js`. Edit both locations. Spoons and glasses have one fixed size in both languages (`UNIT_ML`: tsp 5 ml … glass / su bardağı 200 ml), stated in the suggestion prompt and shown only in the editor's open unit list, so an amount means the same in either language; "cup" is deliberately not a unit (a US cup is 240 ml). Units follow the AI language (English list by default, Turkish in Turkish mode): the suggestion prompt lists them, and stored meals keep their units as written while known ones are shown in the current language (`localizeUnit`; the prep-plan input does the same). The frontend reads the language from `utils/language.js` via `useLanguage()`, set at login and by the Settings toggle.
+
+**Unit memory** (`frontend/src/utils/ingredients.js`) — `unitsFor(language)`, `resolveUnit(name)` (localStorage memory → smart keyword default from Turkish or English names → pcs / adet, shown in the current language), `rememberUnit(name, unit)`.
 
 **Ingredient groups** — source of truth: `backend/models/ingredient.py` (INGREDIENT_GROUPS), mirrored in `IngredientPanel.jsx`. Edit both locations to change groups.
 
@@ -193,13 +195,16 @@ breakFAST/
 │   └── models/
 │       ├── ingredient.py            ← INGREDIENT_GROUPS (source of truth)
 │       ├── kitchen.py               ← KITCHEN_APPLIANCES (source of truth)
+│       ├── units.py                 ← UNIT_PAIRS English ↔ Turkish (source of truth)
 │       └── meal.py                  ← MealLog, Meal (includes menu_items)
 └── frontend/src/
     ├── App.jsx                      ← tab nav (Chat, Fridge, Preferences, Settings)
-    ├── utils/ingredients.js         ← ingredient helpers + unit memory
+    ├── utils/ingredients.js         ← ingredient helpers, units per language + unit memory
+    ├── utils/language.js            ← AI language store (cached per device, like the theme)
     ├── styles/common.js             ← shared styles
     ├── services/api.js              ← all REST + WebSocket calls
     ├── hooks/useVoice.js            ← Web Speech API
+    ├── hooks/useLanguage.js         ← current AI language, re-renders on change
     ├── hooks/useMealReadiness.js    ← fridge readiness for a meal (card + favorites badge)
     └── components/
         ├── ChatInterface.jsx        ← main chat UI

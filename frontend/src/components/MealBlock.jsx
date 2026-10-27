@@ -3,6 +3,7 @@ import { addFavorite } from '../services/api'
 import { formatIngredient } from '../utils/ingredients'
 import { pickEmoji } from '../utils/emoji'
 import { useMealReadiness } from '../hooks/useMealReadiness'
+import { useLanguage } from '../hooks/useLanguage'
 import MealEditor from './MealEditor'
 import ReadinessIcon from './ReadinessIcon'
 import * as s from './MealBlock.styles'
@@ -19,6 +20,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
   const [emoji] = useState(pickEmoji)
 
   const { readiness, stillMissing } = useMealReadiness(meal, fridgeCheckKey)
+  const language = useLanguage()
 
   const menuItems = meal?.menu
   const isMenuFormat = menuItems && menuItems.length > 0
@@ -26,7 +28,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
   const displayNames = isMenuFormat
     ? menuItems.map(i => i.name).join(', ')
     : (meal?.ingredients || []).length > 0
-      ? meal.ingredients.map(formatIngredient).join(', ')
+      ? meal.ingredients.map(ing => formatIngredient(ing, language)).join(', ')
       : meal?.meal_name || 'Meal'
 
   const mealName = meal?.menu_name || meal?.meal_name || 'Meal'

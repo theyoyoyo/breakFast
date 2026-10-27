@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getFavorites, deleteFavorite, updateFavorite } from '../services/api'
-import { formatIngredient } from '../utils/ingredients'
+import { formatIngredient, localizeUnit } from '../utils/ingredients'
 import { emojiFor } from '../utils/emoji'
 import { useMealReadiness } from '../hooks/useMealReadiness'
+import { useLanguage } from '../hooks/useLanguage'
 import MealEditor from './MealEditor'
 import ReadinessIcon from './ReadinessIcon'
 import * as s from './FavoritesPanel.styles'
@@ -17,6 +18,7 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
   const [favorites, setFavorites] = useState([])
   const [expandedId, setExpandedId] = useState(null)
   const [editingId, setEditingId] = useState(null)
+  const language = useLanguage()
 
   const load = useCallback(async () => {
     try {
@@ -96,11 +98,11 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
                     {isMenuFormat
                       ? menuItems.map((item, i) => (
                           <span key={i} style={s.ingredientChip}>
-                            {item.amount != null ? `${item.amount} ${item.unit || ''} ` : '🍳 '}{item.name}
+                            {item.amount != null ? `${item.amount} ${localizeUnit(item.unit || '', language)} ` : '🍳 '}{item.name}
                           </span>
                         ))
                       : displayItems.map((ing, i) => (
-                          <span key={i} style={s.ingredientChip}>{formatIngredient(ing)}</span>
+                          <span key={i} style={s.ingredientChip}>{formatIngredient(ing, language)}</span>
                         ))
                     }
                   </div>

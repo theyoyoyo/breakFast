@@ -200,3 +200,19 @@ async def test_websocket_suggest_with_mode_passes_mode(ws_setup):
             mock_fn.assert_called_once()
             call_kwargs = mock_fn.call_args
             assert call_kwargs.kwargs.get("mode") == "favorites"
+
+
+@pytest.mark.asyncio
+async def test_save_suggestion_defaults_unit_by_language(ws_setup):
+    """A simple menu item saved without a unit gets the count unit of the reply language."""
+    _, _, user_id = ws_setup
+    from routers.chat import _save_suggestion
+
+    meal = {"menu_name": "Kahvaltı", "menu": [{"name": "Ayran", "amount": 1, "ingredients": []}]}
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        await db.execute("INSERT INTO chat_sessions (id, user_id) VALUES (?, ?)", ("s1", user_id))
+        en_id = await _save_suggestion(db, user_id, "s1", meal, "en")
+        tr_id = await _save_suggestion(db, user_id, "s1", meal, "tr")
+        async with db.execute("SELECT id, ingredients FROM suggested_meals ORDER BY id") as cur:
+            units = {row[0]: json.loads(row[1])[0]["unit"] for row in await cur.fetchall()}
+    assert units == {en_id: "pcs", tr_id: "adet"}

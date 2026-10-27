@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { normalizeItem, UNITS, resolveUnit, rememberUnit } from '../utils/ingredients'
+import { normalizeItem, unitsFor, countUnit, localizeUnit, unitWithSize, resolveUnit, rememberUnit } from '../utils/ingredients'
 import { checkMissingIngredients } from '../services/api'
+import { useLanguage } from '../hooks/useLanguage'
 import * as s from './MealEditor.styles'
 
 const MISSING_HINT = 'Not in your fridge — tap once you have it'
@@ -55,6 +56,9 @@ export default function MealEditor({
   const [favAdded, setFavAdded] = useState(false)
   // Missing ingredients the user marked as obtained for this meal (yellow → green)
   const [obtained, setObtained] = useState(() => new Set(meal?.obtained || []))
+  // Units follow the AI language: known ones are shown in it, unknown ones as written
+  const language = useLanguage()
+  const units = unitsFor(language)
 
   useEffect(() => {
     setItems(initItems(meal, menuMode))
@@ -160,8 +164,8 @@ export default function MealEditor({
     const entry = menuMode
       ? (isDish
         ? { name: v, ingredients: [] }
-        : { name: v, amount: 1, unit: resolveUnit(v), ingredients: [] })
-      : { name: v, quantity: 1, unit: resolveUnit(v) }
+        : { name: v, amount: 1, unit: resolveUnit(v, language), ingredients: [] })
+      : { name: v, quantity: 1, unit: resolveUnit(v, language) }
     setItems(prev => [...prev, entry])
     setNewItem('')
   }
@@ -210,7 +214,7 @@ export default function MealEditor({
     if (!v) return
     updateSubs(dishIdx, subs => {
       if (subs.some(s => s.name.toLowerCase() === v.toLowerCase())) return subs
-      return [...subs, { name: v, amount: 1, unit: resolveUnit(v) }]
+      return [...subs, { name: v, amount: 1, unit: resolveUnit(v, language) }]
     })
     setNewSubItem('')
   }
@@ -373,10 +377,7 @@ export default function MealEditor({
                     />
                     <button style={s.arrowBtn} onClick={() => handleQtyStep(idx, 1)}>▲</button>
                   </div>
-                  <select style={s.unitSelect} value={item.unit} onChange={(e) => handleUnitChange(idx, e.target.value)}>
-                    {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                    {!UNITS.includes(item.unit) && <option value={item.unit}>{item.unit}</option>}
-                  </select>
+                  <UnitSelect unit={item.unit} units={units} language={language} onChange={(unit) => handleUnitChange(idx, unit)} />
                   <span {...nameProps(item.name)}>{item.name}</span>
                   <div style={s.itemActions}>
                     <button style={s.deleteBtn} onClick={() => handleDelete(idx)} title="Delete">🗑️</button>
@@ -401,10 +402,7 @@ export default function MealEditor({
                         />
                         <button style={s.arrowBtn} onClick={() => handleSubQtyStep(idx, si, 1)}>▲</button>
                       </div>
-                      <select style={s.unitSelect} value={sub.unit || 'adet'} onChange={(e) => handleSubUnitChange(idx, si, e.target.value)}>
-                        {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                        {sub.unit && !UNITS.includes(sub.unit) && <option value={sub.unit}>{sub.unit}</option>}
-                      </select>
+                      <UnitSelect unit={sub.unit} units={units} language={language} onChange={(unit) => handleSubUnitChange(idx, si, unit)} />
                       <span {...nameProps(sub.name)}>{sub.name}</span>
                       <div style={s.itemActions}>
                         <button style={s.deleteBtn} onClick={() => handleSubDelete(idx, si)} title="Delete">🗑️</button>
@@ -468,6 +466,24 @@ export default function MealEditor({
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+
+// Unit dropdown in the AI language; a unit outside the list stays selectable as written.
+// The box shows the plain unit and only the open list shows spoon and glass sizes, so the
+// select lies invisibly over a label as wide as the longest unit, like a native select.
+function UnitSelect({ unit, units, language, onChange }) {
+  const value = localizeUnit(unit || countUnit(language), language)
+  const options = units.includes(value) ? units : [...units, value]
+  const width = `${Math.max(...options.map(u => u.length)) + 2}ch`
+  return (
+    <span style={{ ...s.unitPicker, width }}>
+      <span style={s.unitText} aria-hidden="true">{value}</span>
+      <span aria-hidden="true">▾</span>
+      <select style={s.unitSelect} value={value} onChange={(e) => onChange(e.target.value)}>
+        {options.map(u => <option key={u} value={u}>{unitWithSize(u)}</option>)}
+      </select>
+    </span>
+  )
+}
 
 function initItems(meal, menuMode) {
   if (menuMode) {

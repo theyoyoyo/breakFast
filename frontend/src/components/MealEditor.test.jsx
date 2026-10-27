@@ -1,13 +1,14 @@
 /**
  * Tests for MealEditor's fridge check: missing ingredients are underlined, never removed,
- * and can be marked as obtained for the meal (yellow → green).
+ * and can be marked as obtained for the meal (yellow → green). Also units that follow the AI language.
  * The backend check is mocked — no real network calls are made.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, waitFor, fireEvent, within, act } from '@testing-library/react'
 import MealEditor from './MealEditor'
 import { checkMissingIngredients } from '../services/api'
+import { applyLanguage } from '../utils/language'
 
 vi.mock('../services/api', () => ({ checkMissingIngredients: vi.fn() }))
 
@@ -129,5 +130,52 @@ describe('MealEditor fridge check', () => {
     render(<MealEditor meal={MEAL} menuMode />)
     await new Promise(resolve => setTimeout(resolve, 400))
     expect(checkMissingIngredients).not.toHaveBeenCalled()
+  })
+})
+
+describe('MealEditor units', () => {
+  afterEach(() => applyLanguage('en'))
+
+  const UNIT_MEAL = {
+    menu_name: 'Test Breakfast',
+    menu: [
+      { name: 'Olives', amount: 10, unit: 'adet', ingredients: [] },
+      { name: 'Protein powder', amount: 1, unit: 'scoop', ingredients: [] },
+    ],
+  }
+
+  it('shows known units and the dropdown in English by default', () => {
+    render(<MealEditor meal={UNIT_MEAL} menuMode />)
+    const [olives, powder] = screen.getAllByRole('combobox')
+    expect(olives).toHaveValue('pcs')
+    expect(within(olives).getAllByRole('option').map(o => o.value)).toContain('tbsp')
+    expect(within(olives).queryByRole('option', { name: 'adet' })).toBeNull()
+    expect(powder).toHaveValue('scoop')
+  })
+
+  it('switches the dropdowns to Turkish when the language changes', () => {
+    render(<MealEditor meal={UNIT_MEAL} menuMode />)
+    act(() => { applyLanguage('tr') })
+    const [olives] = screen.getAllByRole('combobox')
+    expect(olives).toHaveValue('adet')
+    expect(within(olives).getAllByRole('option').map(o => o.value)).toContain('yemek kaşığı')
+  })
+
+  it('shows spoon and glass sizes in the open list only, the box keeps the plain unit', () => {
+    const meal = { menu_name: 'Test', menu: [{ name: 'Honey', amount: 1, unit: 'yemek kaşığı', ingredients: [] }] }
+    render(<MealEditor meal={meal} menuMode />)
+    const picker = screen.getByRole('combobox')
+    expect(picker).toHaveValue('tbsp')
+    expect(within(picker).getByRole('option', { name: 'tbsp (15 ml)' })).toHaveValue('tbsp')
+    expect(within(picker).getByRole('option', { name: 'g' })).toBeInTheDocument()
+    expect(screen.getByText('tbsp')).toBeInTheDocument()
+  })
+
+  it('saves stored units as written and a picked unit as picked', () => {
+    const onSave = vi.fn()
+    render(<MealEditor meal={UNIT_MEAL} menuMode onSave={onSave} />)
+    fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'tbsp' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(onSave.mock.calls[0][0].menu.map(item => item.unit)).toEqual(['adet', 'tbsp'])
   })
 })

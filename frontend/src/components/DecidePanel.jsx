@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { getRatings, createRating, logMeal, addFavorite } from '../services/api'
+import { countUnit } from '../utils/ingredients'
 import MealEditor from './MealEditor'
 import StarRating from './StarRating'
 import * as s from './DecidePanel.styles'
@@ -59,7 +60,7 @@ export default function DecidePanel({ meal, draft, onDraftChange, onClose, onCon
       menu: flat.map(ing => ({
         name: ing.name,
         amount: ing.quantity ?? ing.amount ?? 1,
-        unit: ing.unit || 'adet',
+        unit: ing.unit || countUnit(),
         ingredients: [],
       })),
     }
