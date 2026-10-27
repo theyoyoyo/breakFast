@@ -22,7 +22,7 @@ from services.suggestion import (
     build_pipeline_analyst_prompt,
     stream_response,
 )
-from utils import extract_json_block
+from utils import extract_json_block, repair_json_block
 
 
 def _meal_problems(text: str, context: dict) -> float:
@@ -153,6 +153,7 @@ async def run_suggestion_pipeline(
     # The review may only improve the meal: when code finds more problems after it, keep the draft
     if _meal_problems(final_text, context) > _meal_problems(draft_text, context):
         final_text = draft_text
+    final_text = repair_json_block(final_text)
 
     yield {"type": "token", "content": final_text}
     yield {"type": "done", "content": final_text}

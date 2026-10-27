@@ -200,6 +200,12 @@ class TestPipelineOrchestrator:
         worse = _meal_reply('{"name": "Poached eggs", "amount": 2, "unit": "cup"}')
         assert await _final_text([GOOD_MEAL, FEEDBACK, worse]) == GOOD_MEAL
 
+    # A meal JSON with fractions ("amount": 1/2) reaches the user with decimals, so the chat can read it again
+    @pytest.mark.asyncio
+    async def test_final_fractions_become_decimals(self):
+        halves = _meal_reply('{"name": "eggs", "amount": 1/2, "unit": "pcs"}')
+        assert await _final_text([GOOD_MEAL, FEEDBACK, halves]) == halves.replace("1/2", "0.5")
+
     # A final with no more problems than the draft is kept, also when the draft had no meal
     @pytest.mark.asyncio
     async def test_keeps_final_when_not_worse(self):
