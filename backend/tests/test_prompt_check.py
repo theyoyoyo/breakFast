@@ -126,7 +126,7 @@ async def test_samples_run_through_the_pipeline():
 
     with patch("services.pipeline.stream_response", fake_stream):
         for sample in SAMPLES.values():
-            assert await suggest_once(sample, None, draft_only=False) == {"draft": "ok", "final": "ok"}
+            assert await suggest_once(sample, None, draft_only=False) == {"draft": "ok", "review": "ok", "final": "ok"}
 
 
 # The recorder keeps each distinct system prompt once, in order of use, and puts the sender back

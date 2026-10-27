@@ -28,7 +28,7 @@ from contextlib import aclosing, contextmanager
 from datetime import datetime
 from pathlib import Path
 
-from models.units import localize_unit, units_for
+from models.units import unknown_units
 from routers.chat import SUGGEST_TEMPERATURES
 from services import llm, pipeline
 # The fridge check's own word matching, the other way round, to tell renamed items from missing ones
@@ -67,22 +67,6 @@ def renamed_items(names: list[str], inventory: list[dict]) -> list[str]:
     return [n for n in names if any(_contains(_tokens(n), s) for s in stock)]
 
 
-def off_list_units(meal: dict, language: str) -> list[str]:
-    """Units the app can't show as one of the language's units (known spellings like "gr" pass)."""
-    allowed = {u.lower() for u in units_for(language)}
-    found = []
-    for item in meal.get("menu") or []:
-        if not isinstance(item, dict):
-            continue
-        for row in item.get("ingredients") or [item]:
-            unit = row.get("unit") if isinstance(row, dict) else None
-            if not isinstance(unit, str) or not unit.strip() or unit in found:
-                continue
-            if localize_unit(unit, language).strip().lower() not in allowed:
-                found.append(unit)
-    return found
-
-
 def turkish_words(text: str, sample: dict) -> list[str]:
     """Words with Turkish letters in an English reply, other than words of fridge names and the country."""
     if sample["language"] != "en":
@@ -109,7 +93,7 @@ def check_reply(text: str, sample: dict) -> dict:
         "dishes": sorted(str(i.get("name", "")).strip().lower() for i in meal["menu"] if isinstance(i, dict)),
         "missing": [n for n in flagged if n not in renamed],
         "renamed": renamed,
-        "units": off_list_units(meal, sample["language"]),
+        "units": unknown_units(meal, sample["language"]),
         "turkish": turkish_words(text, sample),
     }
 
@@ -128,7 +112,7 @@ def describe(result: dict) -> str:
 # ── Runs ────────────────────────────────────────────────────────────────────
 
 async def suggest_once(sample: dict, mode: str | None, draft_only: bool) -> dict:
-    """One Suggest press through the real pipeline: {"draft": text, "final": text}."""
+    """One Suggest press through the real pipeline: {"draft": text, "review": feedback, "final": text}."""
     replies = {}
     events = pipeline.run_suggestion_pipeline(
         context=sample,
@@ -142,6 +126,8 @@ async def suggest_once(sample: dict, mode: str | None, draft_only: bool) -> dict
                 replies["draft"] = event["content"]
                 if draft_only:
                     break
+            elif event["type"] == "review":
+                replies["review"] = event["content"]
             elif event["type"] == "done":
                 replies["final"] = event["content"]
     return replies
@@ -182,10 +168,12 @@ async def run(samples: list[str], runs: int, mode: str | None, draft_only: bool)
                     "seconds": time.monotonic() - start,
                     "error": error,
                     "replies": replies,
-                    "scores": {stage: check_reply(text, SAMPLES[key]) for stage, text in replies.items()},
+                    "scores": {s: check_reply(replies[s], SAMPLES[key]) for s in STAGES if s in replies},
                 }
                 records.append(record)
                 outcome = error or "  |  ".join(f"{s}: {describe(r)}" for s, r in record["scores"].items())
+                if replies.get("final") is not None and replies["final"] == replies.get("draft"):
+                    outcome += " (draft kept)"
                 print(f"{key:<4}{i:>3}/{runs}  {record['seconds']:>4.0f} s  {outcome}", flush=True)
         prompts[key] = list(sent)
     return records, prompts
@@ -330,7 +318,8 @@ def save_log(records: list[dict], prompts: dict, header: str, report: str, diff:
         if r["error"]:
             out += ["", f"**Error:** {r['error']}"]
         for stage, text in r["replies"].items():
-            out += ["", f"### {stage.capitalize()}: {describe(r['scores'][stage])}", "", "````text", text, "````"]
+            title = f"{stage.capitalize()}: {describe(r['scores'][stage])}" if stage in r["scores"] else "Review feedback"
+            out += ["", f"### {title}", "", "````text", text, "````"]
     out += ["", "## Prompts sent"]
     for key, sent in prompts.items():
         for i, prompt in enumerate(sent, 1):
