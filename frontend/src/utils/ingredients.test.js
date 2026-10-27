@@ -51,7 +51,9 @@ describe('units', () => {
     expect(localizeUnit('adet', 'en')).toBe('pcs')
     expect(localizeUnit('tbsp', 'tr')).toBe('yemek kaşığı')
     expect(localizeUnit('Çay bardağı', 'en')).toBe('tea glass')
+    expect(localizeUnit('su bardağı', 'en')).toBe('glass')
     expect(localizeUnit('scoop', 'tr')).toBe('scoop')
+    expect(localizeUnit('cup', 'tr')).toBe('cup')
   })
 
   it('treats other spellings of a listed unit (old "gr", plurals) as that unit', () => {

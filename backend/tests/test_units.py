@@ -1,6 +1,6 @@
 """Unit tests for the per-language unit lists and the 1-1 mapping between them."""
 
-from models.units import UNIT_PAIRS, UNITS, count_unit, localize_unit, units_for
+from models.units import UNIT_ML, UNIT_PAIRS, UNITS, count_unit, localize_unit, unit_sizes, units_for
 
 
 # Every unit has exactly one match in the other language, so both lists line up
@@ -26,6 +26,22 @@ def test_localize_known_units():
     assert localize_unit("tea glass", "tr") == "çay bardağı"
     assert localize_unit("l", "tr") == "L"
     assert localize_unit("g", "tr") == "g"
+
+
+# Su bardağı is a 200 ml glass, and "cup" (a 240 ml US cup) isn't treated as one
+def test_glass_is_su_bardagi_and_cup_is_unknown():
+    assert localize_unit("su bardağı", "en") == "glass"
+    assert localize_unit("Glasses", "tr") == "su bardağı"
+    assert localize_unit("cup", "tr") == "cup"
+
+
+# Every sized unit is a listed one, and its size reads the same in both languages
+def test_unit_sizes_per_language():
+    assert set(UNIT_ML) <= set(UNITS["en"])
+    assert unit_sizes("en") == "tsp 5 ml, dsp 10 ml, tbsp 15 ml, tea glass 100 ml, glass 200 ml"
+    assert unit_sizes("tr") == (
+        "çay kaşığı 5 ml, tatlı kaşığı 10 ml, yemek kaşığı 15 ml, çay bardağı 100 ml, su bardağı 200 ml"
+    )
 
 
 # Other spellings of a listed unit (old "gr", plurals) count as that unit

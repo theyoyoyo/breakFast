@@ -42,7 +42,7 @@ export const UNIT_PAIRS = [
   ['dsp', 'tatlı kaşığı'],
   ['tbsp', 'yemek kaşığı'],
   ['tea glass', 'çay bardağı'],
-  ['cup', 'su bardağı'],
+  ['glass', 'su bardağı'],
   ['slice', 'dilim'],
   ['bunch', 'demet'],
   ['pinch', 'tutam'],
@@ -64,7 +64,7 @@ const UNIT_ALIASES = {
   liter: 'l', litre: 'l', lt: 'l',
   teaspoon: 'tsp', teaspoons: 'tsp',
   tablespoon: 'tbsp', tablespoons: 'tbsp',
-  cups: 'cup', slices: 'slice', bunches: 'bunch', pinches: 'pinch',
+  glasses: 'glass', slices: 'slice', bunches: 'bunch', pinches: 'pinch',
   handfuls: 'handful', cloves: 'clove', sprigs: 'sprig', packs: 'pack',
 }
 

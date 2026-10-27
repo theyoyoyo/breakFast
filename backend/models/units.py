@@ -14,7 +14,7 @@ UNIT_PAIRS = [
     ("dsp", "tatlı kaşığı"),
     ("tbsp", "yemek kaşığı"),
     ("tea glass", "çay bardağı"),
-    ("cup", "su bardağı"),
+    ("glass", "su bardağı"),
     ("slice", "dilim"),
     ("bunch", "demet"),
     ("pinch", "tutam"),
@@ -29,6 +29,10 @@ UNITS = {
     "tr": [tr for _, tr in UNIT_PAIRS],
 }
 
+# Spoons and glasses have one fixed size, the same in both languages, so an amount
+# means the same whichever language shows it (stated in the suggestion prompt)
+UNIT_ML = {"tsp": 5, "dsp": 10, "tbsp": 15, "tea glass": 100, "glass": 200}
+
 # Other spellings of a listed unit, from older meals (the prompt example once said "gr") and the model
 UNIT_ALIASES = {
     "gr": "g", "gram": "g", "grams": "g",
@@ -36,7 +40,7 @@ UNIT_ALIASES = {
     "liter": "l", "litre": "l", "lt": "l",
     "teaspoon": "tsp", "teaspoons": "tsp",
     "tablespoon": "tbsp", "tablespoons": "tbsp",
-    "cups": "cup", "slices": "slice", "bunches": "bunch", "pinches": "pinch",
+    "glasses": "glass", "slices": "slice", "bunches": "bunch", "pinches": "pinch",
     "handfuls": "handful", "cloves": "clove", "sprigs": "sprig", "packs": "pack",
 }
 
@@ -63,3 +67,8 @@ def localize_unit(unit, language: str):
     if row is None:
         return unit
     return UNIT_PAIRS[row][0 if language == "en" else 1]
+
+
+def unit_sizes(language: str) -> str:
+    """Spoon and glass sizes with the language's unit names, e.g. "tsp 5 ml, …, glass 200 ml"."""
+    return ", ".join(f"{localize_unit(unit, language)} {ml} ml" for unit, ml in UNIT_ML.items())
