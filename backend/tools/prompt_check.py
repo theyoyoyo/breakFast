@@ -4,7 +4,7 @@ every reply in code, so a prompt change gets a before and after number (#116).
 
 Run from backend/, with the server's Ollama reachable (docs/SETUPALL.md, BONUS C):
     python -m tools.prompt_check --url http://100.x.x.x:11434 --note "what changed"
-    python -m tools.prompt_check --samples en,tr --runs 5 --draft
+    python -m tools.prompt_check --samples en,tr --runs 3 --draft
     python -m tools.prompt_check --history
 
 Each run is one Suggest press for a sample user (tools/prompt_samples.py) through the
@@ -333,7 +333,7 @@ def save_log(records: list[dict], prompts: dict, header: str, report: str, diff:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Score the suggestion prompts against an Ollama server.")
     parser.add_argument("--url", default=llm.OLLAMA_BASE_URL, help="Ollama address (default: OLLAMA_BASE_URL)")
-    parser.add_argument("--runs", type=int, default=3, help="Suggest presses per sample (default: 3)")
+    parser.add_argument("--runs", type=int, default=1, help="Suggest presses per sample (default: 1)")
     parser.add_argument("--samples", default="en", help=f"comma-separated, from: {', '.join(SAMPLES)} (default: en)")
     parser.add_argument("--mode", choices=["favorites", "explore"], help="Suggest mode (default: plain Suggest)")
     parser.add_argument("--draft", action="store_true", help="stop each run after the draft")

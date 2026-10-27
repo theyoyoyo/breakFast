@@ -573,7 +573,7 @@ reachable from your other devices.
    python -m tools.prompt_check --url http://100.x.x.x:11434 --note "what changed"
    ```
 
-   It runs 3 Suggest presses for the English sample by default. Options: `--runs 5`,
+   It runs 1 Suggest press for the English sample by default. Options: `--runs 3`,
    `--samples en,tr`, `--mode explore`, `--draft` (stop after the draft: one model call
    instead of three). Setting `OLLAMA_BASE_URL` in the development PC's `backend/.env`
    saves the `--url`.
