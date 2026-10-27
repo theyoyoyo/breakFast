@@ -29,8 +29,20 @@ UNITS = {
     "tr": [tr for _, tr in UNIT_PAIRS],
 }
 
+# Other spellings of a listed unit, from older meals (the prompt example once said "gr") and the model
+UNIT_ALIASES = {
+    "gr": "g", "gram": "g", "grams": "g",
+    "pc": "pcs", "piece": "pcs", "pieces": "pcs", "tane": "pcs",
+    "liter": "l", "litre": "l", "lt": "l",
+    "teaspoon": "tsp", "teaspoons": "tsp",
+    "tablespoon": "tbsp", "tablespoons": "tbsp",
+    "cups": "cup", "slices": "slice", "bunches": "bunch", "pinches": "pinch",
+    "handfuls": "handful", "cloves": "clove", "sprigs": "sprig", "packs": "pack",
+}
+
 # Row index for every known spelling, in either language
 _ROW = {name.lower(): i for i, pair in enumerate(UNIT_PAIRS) for name in pair}
+_ROW.update({alias: _ROW[unit] for alias, unit in UNIT_ALIASES.items()})
 
 
 def units_for(language: str) -> list[str]:

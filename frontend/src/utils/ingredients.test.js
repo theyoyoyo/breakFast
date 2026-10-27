@@ -54,6 +54,12 @@ describe('units', () => {
     expect(localizeUnit('scoop', 'tr')).toBe('scoop')
   })
 
+  it('treats other spellings of a listed unit (old "gr", plurals) as that unit', () => {
+    expect(localizeUnit('gr', 'en')).toBe('g')
+    expect(localizeUnit('Slices', 'tr')).toBe('dilim')
+    expect(localizeUnit('pieces', 'en')).toBe('pcs')
+  })
+
   it('formats an ingredient with its unit in the current language', () => {
     expect(formatIngredient({ name: 'Egg', quantity: 2, unit: 'adet' })).toBe('2 pcs Egg')
     applyLanguage('tr')

@@ -57,8 +57,20 @@ export const UNITS = {
   tr: UNIT_PAIRS.map(([, tr]) => tr),
 }
 
+// Other spellings of a listed unit, from older meals (the prompt example once said "gr") and the model
+const UNIT_ALIASES = {
+  gr: 'g', gram: 'g', grams: 'g',
+  pc: 'pcs', piece: 'pcs', pieces: 'pcs', tane: 'pcs',
+  liter: 'l', litre: 'l', lt: 'l',
+  teaspoon: 'tsp', teaspoons: 'tsp',
+  tablespoon: 'tbsp', tablespoons: 'tbsp',
+  cups: 'cup', slices: 'slice', bunches: 'bunch', pinches: 'pinch',
+  handfuls: 'handful', cloves: 'clove', sprigs: 'sprig', packs: 'pack',
+}
+
 // Row index for every known spelling, in either language
 const UNIT_ROW = new Map(UNIT_PAIRS.flatMap((pair, i) => pair.map(name => [name.toLowerCase(), i])))
+for (const [alias, unit] of Object.entries(UNIT_ALIASES)) UNIT_ROW.set(alias, UNIT_ROW.get(unit))
 
 /** The unit list of the AI language (Turkish unless it's English, like the prompts). */
 export function unitsFor(language = currentLanguage()) {

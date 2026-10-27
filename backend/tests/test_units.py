@@ -28,6 +28,14 @@ def test_localize_known_units():
     assert localize_unit("g", "tr") == "g"
 
 
+# Other spellings of a listed unit (old "gr", plurals) count as that unit
+def test_localize_aliases():
+    assert localize_unit("gr", "en") == "g"
+    assert localize_unit("Slices", "tr") == "dilim"
+    assert localize_unit("pieces", "en") == "pcs"
+    assert localize_unit("tane", "en") == "pcs"
+
+
 # Unknown units and missing values come back as written
 def test_localize_unknown_units_unchanged():
     assert localize_unit("scoop", "tr") == "scoop"
