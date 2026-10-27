@@ -6,6 +6,7 @@ Verifies template rendering, context injection, and health rules.
 import json
 import re
 import sys
+from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -550,6 +551,7 @@ class TestLanguageReminder:
             "analyst": build_analyst_prompt([], None, None, None, language=language),
             "weekly_analyst": build_weekly_analyst_prompt_with_meals("Mon: eggs", language=language),
             "scheduler": build_scheduler_prompt("Menemen", [], "eggs", language=language),
+            "shopping": build_shopping_prompt([], [], {}, [], exclude_names=["Kiwi"], language=language),
         }
 
     def test_english_directive_is_last(self):
@@ -635,3 +637,52 @@ class TestSuggestionUnits:
         prompt = build_suggestion_prompt([], [], {}, [])
         assert '"unit": "gr"' not in prompt
         assert '"unit": "g"' in prompt
+
+
+
+# ---------------------------------------------------------------------------
+# Shopping: buyable products, date and country
+# ---------------------------------------------------------------------------
+
+class TestShoppingPrompt:
+    DAY = date(2026, 10, 27)
+
+    def test_items_are_specific_products_not_dishes(self):
+        """One rule asks for plain, specific product names and turns a dish into its missing ingredients."""
+        prompt = build_shopping_prompt([], [], {}, [])
+        assert '"Salmon", not "Fatty fish"' in prompt
+        assert "never a filler like fresh" in prompt
+        assert "A dish is not a product" in prompt
+        assert "suggest the ingredients it needs that are not in the inventory" in prompt
+
+    def test_no_dish_in_naming_examples(self):
+        """Menemen is a dish, so it no longer appears as a naming example."""
+        assert "Menemen" not in build_shopping_prompt([], [], {}, [])
+
+    def test_exclusions_are_stated_once_and_positively(self):
+        """Code drops repeats, so the prompt only lists what is covered, without a pile of bans."""
+        prompt = build_shopping_prompt([], [], {}, [], shopping_list=["Kiwi"], exclude_names=["Pear"])
+        assert "CURRENT SHOPPING LIST:\nKiwi" in prompt
+        assert "ALREADY SHOWN (the user has seen these, so suggest different items):\nPear" in prompt
+        assert "Do NOT suggest" not in prompt
+
+    def test_reply_is_an_items_object(self):
+        """The reply shape matches the schema Ollama enforces: an object with an items list."""
+        prompt = build_shopping_prompt([], [], {}, [])
+        assert 'Reply with a JSON object whose "items" list holds 15-25 products' in prompt
+
+    def test_date_and_country(self):
+        """Today's date and the user's country tell the model what is in season."""
+        prompt = build_shopping_prompt([], [], {}, [], country="Türkiye", today=self.DAY)
+        assert "Today is Tuesday, 27 October 2026, in Türkiye." in prompt
+        assert "in season at this time and place" in prompt
+
+    def test_date_without_country(self):
+        """Without a country the prompt still gets the date."""
+        prompt = build_shopping_prompt([], [], {}, [], today=self.DAY)
+        assert "Today is Tuesday, 27 October 2026." in prompt
+
+    def test_suggestion_prompt_gets_date_and_country(self):
+        """The suggestion prompt's seasonality hint uses the same date and country."""
+        prompt = build_suggestion_prompt([], [], {}, [], country="Türkiye", today=self.DAY)
+        assert "Today is Tuesday, 27 October 2026, in Türkiye. Prefer fruits and vegetables in season" in prompt
