@@ -595,3 +595,29 @@ class TestJsonExamples:
                 except json.JSONDecodeError as e:
                     raise AssertionError(f"{name}: invalid JSON example ({e})") from e
 
+
+
+# ---------------------------------------------------------------------------
+# Units follow the response language
+# ---------------------------------------------------------------------------
+
+class TestSuggestionUnits:
+    def test_english_example_and_rule_use_english_units(self):
+        """In English mode the JSON example and the unit rule use pcs, tbsp…"""
+        prompt = build_suggestion_prompt([], [], {}, [], language="en")
+        assert '"unit": "pcs"' in prompt
+        assert "`unit`: one of pcs, g, kg, ml, l, tsp, dsp, tbsp" in prompt
+        assert "adet" not in prompt
+
+    def test_turkish_example_and_rule_use_turkish_units(self):
+        """In Turkish mode the same places use adet, yemek kaşığı…"""
+        prompt = build_suggestion_prompt([], [], {}, [], language="tr")
+        assert '"unit": "adet"' in prompt
+        assert "`unit`: one of adet, g, kg, ml, L, çay kaşığı, tatlı kaşığı, yemek kaşığı" in prompt
+        assert '"unit": "pcs"' not in prompt
+
+    def test_example_uses_listed_grams(self):
+        """The example writes grams as "g", the listed unit, not "gr"."""
+        prompt = build_suggestion_prompt([], [], {}, [])
+        assert '"unit": "gr"' not in prompt
+        assert '"unit": "g"' in prompt

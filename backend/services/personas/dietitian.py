@@ -18,6 +18,7 @@ from services.knowledge import (
     format_supplements_taken,
     format_weekly_summary,
 )
+from models.units import count_unit, units_for
 
 def _lang(language: str) -> str:
     return "Always respond in Turkish." if language != "en" else "Always respond in English."
@@ -170,21 +171,21 @@ Append a JSON block at the end of your response:
     {{
       "name": "Menemen",
       "ingredients": [
-        {{"name": "Egg", "amount": 2, "unit": "adet"}},
-        {{"name": "Tomato", "amount": 1, "unit": "adet"}},
-        {{"name": "Green pepper", "amount": 1, "unit": "adet"}}
+        {{"name": "Egg", "amount": 2, "unit": "{unit_count}"}},
+        {{"name": "Tomato", "amount": 1, "unit": "{unit_count}"}},
+        {{"name": "Green pepper", "amount": 1, "unit": "{unit_count}"}}
       ]
     }},
     {{
       "name": "White cheese",
       "amount": 50,
-      "unit": "gr",
+      "unit": "g",
       "ingredients": []
     }},
     {{
       "name": "Olives",
       "amount": 10,
-      "unit": "adet",
+      "unit": "{unit_count}",
       "ingredients": []
     }}
   ],
@@ -198,6 +199,8 @@ Rules for the JSON:
   (each with name, amount, unit). Leave out top-level amount/unit for these.
 - Simple items served as-is (cheese, olives, fruit, bread): `ingredients: []`, \
   set top-level `amount` + `unit` instead.
+- `unit`: one of {unit_list}. These are the units of the response language, so the \
+  app can show and edit them.
 - `nutrition_note`: one short sentence summarizing nutritional value. No numbers.
 - `prep_time_min`: realistic total time for the whole menu.
 - `menu_name`: a short descriptive title in the response language, like \
@@ -255,6 +258,8 @@ def build_suggestion_prompt(
     appliance_str = ", ".join(kitchen_appliances) if kitchen_appliances else "Not configured"
     base = SUGGESTION_TEMPLATE.format(
         lang_instruction=_lang(language),
+        unit_count=count_unit(language),
+        unit_list=", ".join(units_for(language)),
         ingredient_inventory=format_ingredients(ingredient_inventory),
         recent_meal_history=format_history(recent_meal_history, limit=4),
         user_preferences=format_preferences(user_preferences),
