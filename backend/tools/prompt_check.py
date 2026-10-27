@@ -328,12 +328,11 @@ def history_lines(history: list[dict]) -> list[str]:
     return lines or ["No tests yet."]
 
 
-def save_log(records: list[dict], prompts: dict, header: str, report: str) -> Path:
-    """Write the report, any uncommitted prompt changes, every reply and the prompts sent to tools/runs/."""
+def save_log(records: list[dict], prompts: dict, header: str, report: str, diff: str) -> Path:
+    """Write the report, uncommitted prompt changes, every reply and the prompts sent to tools/runs/."""
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
     path = RUNS_DIR / f"{datetime.now():%Y-%m-%d_%H%M%S}.md"
     out = ["# Prompt test", "", header, "", "```", report, "```"]
-    diff = _git("diff", "HEAD", "--", *PROMPT_SOURCES)
     if diff:
         out += ["", "## Uncommitted prompt changes", "", "```diff", diff, "```"]
     for r in records:
@@ -378,19 +377,21 @@ async def main(argv: list[str] | None = None) -> int:
     if not await llm.check_llm_availability():
         print(f"Ollama isn't reachable at {args.url}. See docs/SETUPALL.md, BONUS C.")
         return 1
-    mode, prompt = args.mode or "plain", prompt_id()
+    # The code under test as it is now; later edits during the run don't belong to this test
+    mode, prompt, commit = args.mode or "plain", prompt_id(), _commit()
+    diff = _git("diff", "HEAD", "--", *PROMPT_SOURCES)
     header = (
-        f"Prompt {prompt} · commit {_commit()} · {llm.OLLAMA_MODEL} at {args.url} · mode {mode} · "
+        f"Prompt {prompt} · commit {commit} · {llm.OLLAMA_MODEL} at {args.url} · mode {mode} · "
         f"{args.runs} runs per sample" + (" · draft only" if args.draft else "") + (f' · "{args.note}"' if args.note else "")
     )
     print(header, flush=True)
     records, prompts = await run(args.samples, args.runs, args.mode, args.draft)
     results = stage_results(records)
     report = summarize(records) + "\n\n" + "\n".join(compare(results, load_history(), mode))
-    log = save_log(records, prompts, header, report)
+    log = save_log(records, prompts, header, report, diff)
     if results:
         entry = {
-            "date": f"{datetime.now():%Y-%m-%d %H:%M}", "prompt": prompt, "commit": _commit(), "mode": mode,
+            "date": f"{datetime.now():%Y-%m-%d %H:%M}", "prompt": prompt, "commit": commit, "mode": mode,
             "draft_only": args.draft, "runs": args.runs, "note": args.note, "log": log.name, "results": results,
         }
         with HISTORY.open("a", encoding="utf-8") as f:
