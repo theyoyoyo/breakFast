@@ -92,6 +92,20 @@ async def test_clear_individual_field(client):
     assert data["weight_kg"] == 75
 
 
+async def test_country_saved_and_cleared(client):
+    """The optional country is saved with the profile; a blank value clears it."""
+    r = await client.put("/profile/", json={"age": 30, "country": " Türkiye "})
+    assert r.json()["country"] == "Türkiye"
+    r = await client.put("/profile/", json={"age": 30, "country": ""})
+    assert r.json()["country"] is None
+
+
+async def test_country_too_long_rejected(client):
+    """A country name over 60 characters is rejected."""
+    r = await client.put("/profile/", json={"country": "x" * 61})
+    assert r.status_code == 422
+
+
 # ---------------------------------------------------------------------------
 # Supplements CRUD
 # ---------------------------------------------------------------------------
