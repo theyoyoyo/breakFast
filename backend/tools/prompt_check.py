@@ -94,10 +94,11 @@ def off_list_units(meal: dict, language: str) -> list[str]:
 
 
 def turkish_words(text: str, sample: dict) -> list[str]:
-    """Words with Turkish letters in an English reply, other than words of the fridge's names."""
+    """Words with Turkish letters in an English reply, other than words of fridge names and the country."""
     if sample["language"] != "en":
         return []
-    fridge = {w.lower() for i in sample["ingredients"] for w in re.findall(r"\w+", i["name"])}
+    names = [i["name"] for i in sample["ingredients"]] + [sample.get("country") or ""]
+    fridge = {w.lower() for name in names for w in re.findall(r"\w+", name)}
     found = []
     for word in re.findall(r"\w+", text):
         if _TURKISH_LETTERS & set(word) and word.lower() not in fridge and word not in found:

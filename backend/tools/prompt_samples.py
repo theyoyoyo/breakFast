@@ -11,6 +11,7 @@ def _fridge(groups: dict[str, list[str]]) -> list[dict]:
 
 # What every sample shares: no preferences, habits, rules or supplements, a basic kitchen
 _BASE = {
+    "country": "Türkiye",
     "preferences": {},
     "stated_habits": [],
     "inferred_habits": [],

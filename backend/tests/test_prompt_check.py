@@ -85,9 +85,10 @@ def test_off_list_units():
     assert check_reply(_reply({"name": "Simit", "amount": 1, "unit": "pieces", "ingredients": []}), EN)["units"] == []
 
 
-# An English reply's words with Turkish letters are reported unless they're fridge names; Turkish replies aren't checked
+# An English reply's words with Turkish letters are reported unless they name a fridge item or the country;
+# Turkish replies aren't checked
 def test_turkish_words_in_english_reply():
-    text = _reply({"name": "Kaşarlı tost", "amount": 1, "unit": "pcs", "ingredients": []}) + "\nKaşar is güzel!"
+    text = _reply({"name": "Kaşarlı tost", "amount": 1, "unit": "pcs", "ingredients": []}) + "\nKaşar in Türkiye is güzel!"
     sample = {**EN, "ingredients": EN["ingredients"] + [{"name": "Kaşar", "group_name": "🐄 Animal Products"}]}
     assert check_reply(text, sample)["turkish"] == ["Kaşarlı", "güzel"]
     assert check_reply(text, TR)["turkish"] == []
