@@ -126,20 +126,38 @@ export const unitLabel = {
   marginRight: 8,
 }
 
-// Styled to look like the static unitLabel — blends in, no border chrome
-export const unitSelect = {
+// Styled to look like the static unitLabel — blends in, no border chrome.
+// The plain unit and a chevron; the real select lies invisibly on top.
+export const unitPicker = {
+  position: 'relative',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 2,
   fontSize: 13,
   color: 'var(--text-muted)',
-  background: 'none',
-  border: 'none',
-  outline: 'none',
   cursor: 'pointer',
   flexShrink: 0,
   minWidth: 30,
   maxWidth: 110,
   marginLeft: 8,
   marginRight: 8,
-  padding: 0,
+}
+
+export const unitText = {
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+}
+
+// Covers the picker so a tap opens the native list, which shows spoon and glass sizes
+export const unitSelect = {
+  position: 'absolute',
+  inset: 0,
+  width: '100%',
+  opacity: 0,
+  fontSize: 13,
+  cursor: 'pointer',
 }
 
 export const itemText = {

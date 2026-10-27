@@ -161,6 +161,16 @@ describe('MealEditor units', () => {
     expect(within(olives).getAllByRole('option').map(o => o.value)).toContain('yemek kaşığı')
   })
 
+  it('shows spoon and glass sizes in the open list only, the box keeps the plain unit', () => {
+    const meal = { menu_name: 'Test', menu: [{ name: 'Honey', amount: 1, unit: 'yemek kaşığı', ingredients: [] }] }
+    render(<MealEditor meal={meal} menuMode />)
+    const picker = screen.getByRole('combobox')
+    expect(picker).toHaveValue('tbsp')
+    expect(within(picker).getByRole('option', { name: 'tbsp (15 ml)' })).toHaveValue('tbsp')
+    expect(within(picker).getByRole('option', { name: 'g' })).toBeInTheDocument()
+    expect(screen.getByText('tbsp')).toBeInTheDocument()
+  })
+
   it('saves stored units as written and a picked unit as picked', () => {
     const onSave = vi.fn()
     render(<MealEditor meal={UNIT_MEAL} menuMode onSave={onSave} />)

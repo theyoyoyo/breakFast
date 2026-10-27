@@ -57,6 +57,9 @@ export const UNITS = {
   tr: UNIT_PAIRS.map(([, tr]) => tr),
 }
 
+// Mirrors UNIT_ML: spoons and glasses have one fixed size, the same in both languages
+export const UNIT_ML = { tsp: 5, dsp: 10, tbsp: 15, 'tea glass': 100, glass: 200 }
+
 // Other spellings of a listed unit, from older meals (the prompt example once said "gr") and the model
 const UNIT_ALIASES = {
   gr: 'g', gram: 'g', grams: 'g',
@@ -87,6 +90,12 @@ export function localizeUnit(unit, language = currentLanguage()) {
   if (typeof unit !== 'string') return unit
   const row = UNIT_ROW.get(unit.trim().toLowerCase())
   return row == null ? unit : UNIT_PAIRS[row][language === 'en' ? 0 : 1]
+}
+
+/** A spoon or glass with its fixed size ("tbsp (15 ml)"), any other unit as is; for the open unit list. */
+export function unitWithSize(unit) {
+  const ml = UNIT_ML[localizeUnit(unit, 'en')]
+  return ml ? `${unit} (${ml} ml)` : unit
 }
 
 /** Infer a sensible default unit from a Turkish or English ingredient name, in the given language. */

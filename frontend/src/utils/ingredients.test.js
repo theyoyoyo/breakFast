@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import {
-  normalizeMeal, formatIngredient, localizeUnit, unitsFor, countUnit, getSmartUnit, resolveUnit, rememberUnit,
+  normalizeMeal, formatIngredient, localizeUnit, unitWithSize, unitsFor, countUnit, getSmartUnit, resolveUnit, rememberUnit,
 } from './ingredients'
 import { applyLanguage } from './language'
 
@@ -60,6 +60,13 @@ describe('units', () => {
     expect(localizeUnit('gr', 'en')).toBe('g')
     expect(localizeUnit('Slices', 'tr')).toBe('dilim')
     expect(localizeUnit('pieces', 'en')).toBe('pcs')
+  })
+
+  it('adds the fixed size to spoons and glasses in either language, nothing to other units', () => {
+    expect(unitWithSize('tbsp')).toBe('tbsp (15 ml)')
+    expect(unitWithSize('su bardağı')).toBe('su bardağı (200 ml)')
+    expect(unitWithSize('g')).toBe('g')
+    expect(unitWithSize('scoop')).toBe('scoop')
   })
 
   it('formats an ingredient with its unit in the current language', () => {

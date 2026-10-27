@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { normalizeItem, unitsFor, countUnit, localizeUnit, resolveUnit, rememberUnit } from '../utils/ingredients'
+import { normalizeItem, unitsFor, countUnit, localizeUnit, unitWithSize, resolveUnit, rememberUnit } from '../utils/ingredients'
 import { checkMissingIngredients } from '../services/api'
 import { useLanguage } from '../hooks/useLanguage'
 import * as s from './MealEditor.styles'
@@ -467,14 +467,21 @@ export default function MealEditor({
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-// Unit dropdown in the AI language; a unit outside the list stays selectable as written
+// Unit dropdown in the AI language; a unit outside the list stays selectable as written.
+// The box shows the plain unit and only the open list shows spoon and glass sizes, so the
+// select lies invisibly over a label as wide as the longest unit, like a native select.
 function UnitSelect({ unit, units, language, onChange }) {
   const value = localizeUnit(unit || countUnit(language), language)
+  const options = units.includes(value) ? units : [...units, value]
+  const width = `${Math.max(...options.map(u => u.length)) + 2}ch`
   return (
-    <select style={s.unitSelect} value={value} onChange={(e) => onChange(e.target.value)}>
-      {units.map(u => <option key={u} value={u}>{u}</option>)}
-      {!units.includes(value) && <option value={value}>{value}</option>}
-    </select>
+    <span style={{ ...s.unitPicker, width }}>
+      <span style={s.unitText} aria-hidden="true">{value}</span>
+      <span aria-hidden="true">▾</span>
+      <select style={s.unitSelect} value={value} onChange={(e) => onChange(e.target.value)}>
+        {options.map(u => <option key={u} value={u}>{unitWithSize(u)}</option>)}
+      </select>
+    </span>
   )
 }
 
