@@ -58,6 +58,7 @@ async def run_suggestion_pipeline(
         kitchen_appliances=context.get("kitchen_appliances"),
         weekly_summary=context.get("weekly_summary"),
         language=language,
+        country=context.get("country"),
     )
 
     analyst_prompt = build_pipeline_analyst_prompt(

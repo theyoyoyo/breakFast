@@ -8,11 +8,19 @@ ingredient databases, and Turkish food context as needed.
 """
 
 import json
+from datetime import date
 
 
 # ---------------------------------------------------------------------------
 # Context formatters
 # ---------------------------------------------------------------------------
+
+def format_today(today: date | None = None, country: str | None = None) -> str:
+    """Today's date, plus the user's country when set, so "in season" means something."""
+    today = today or date.today()
+    day = f"{today:%A}, {today.day} {today:%B %Y}"
+    return f"{day}, in {country}" if country else day
+
 
 def format_ingredients(ingredients: list[dict]) -> str:
     if not ingredients:
