@@ -160,7 +160,7 @@ async def get_schedule(body: ScheduleRequest, user_id: int = Depends(require_use
     language = prefs.get("response_language", "en")
 
     system_prompt = build_scheduler_prompt(body.meal_name, body.steps, ingredients_str, kitchen_appliances=kitchen_appliances, language=language)
-    user_message = build_scheduler_user_message(body.meal_name, body.steps, ingredients_str, menu=body.menu)
+    user_message = build_scheduler_user_message(body.meal_name, body.steps, ingredients_str, menu=body.menu, language=language)
 
     # Collect full LLM response
     full_response = []

@@ -495,10 +495,17 @@ class TestSchedulerUserMessage:
     def test_menu_without_steps_lists_every_dish(self):
         """A menu-format meal sends its dishes and amounts, with no empty Steps section."""
         msg = build_scheduler_user_message("Classic Breakfast", [], "Egg, Tomato", menu=self.MENU)
-        assert "- Menemen: Egg (2 adet), Tomato (1 adet)" in msg
+        assert "- Menemen: Egg (2 pcs), Tomato (1 pcs)" in msg
         assert "- White cheese (50 g)" in msg
         assert "Steps:" not in msg
         assert "Ingredients:" not in msg
+
+    def test_units_follow_the_reply_language(self):
+        """Known units are sent in the reply language; unknown ones as written."""
+        menu = [*self.MENU, {"name": "Protein powder", "amount": 1, "unit": "scoop", "ingredients": []}]
+        msg = build_scheduler_user_message("Kahvaltı", [], "", menu=menu, language="tr")
+        assert "- Menemen: Egg (2 adet), Tomato (1 adet)" in msg
+        assert "- Protein powder (1 scoop)" in msg
 
     def test_steps_still_included(self):
         """Older meals with recipe steps keep sending them, numbered."""

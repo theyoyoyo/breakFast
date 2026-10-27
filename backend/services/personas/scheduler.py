@@ -8,6 +8,8 @@ The LLM focuses on producing a detailed, clear plan. It splits tasks into:
 All scheduling math (parallel execution, backward timing) is handled by our code.
 """
 
+from models.units import localize_unit
+
 SCHEDULER_TEMPLATE = """You are a kitchen workflow expert. Your job is to turn a breakfast menu (its dishes and ingredients, plus any recipe steps given) into a detailed, structured cooking plan.
 {lang_instruction}
 All `task`, `detail`, and `end_action` strings in the JSON output MUST be written in that language — do not mix languages.
@@ -59,32 +61,33 @@ def build_scheduler_prompt(meal_name: str, steps: list[str], ingredients_str: st
     return SCHEDULER_TEMPLATE.format(kitchen_appliances=appliance_str, lang_instruction=_lang(language))
 
 
-def _with_amount(item) -> str:
-    """'Egg (2 adet)' for a dict with amount/unit, the plain name otherwise."""
+def _with_amount(item, language: str = "en") -> str:
+    """'Egg (2 pcs)' for a dict with amount/unit, the plain name otherwise. Units follow the language."""
     if not isinstance(item, dict):
         return str(item)
     name = item.get("name", "?")
-    qty = " ".join(str(v) for v in (item.get("amount"), item.get("unit")) if v not in (None, ""))
+    unit = localize_unit(item.get("unit"), language)
+    qty = " ".join(str(v) for v in (item.get("amount"), unit) if v not in (None, ""))
     return f"{name} ({qty})" if qty else name
 
 
-def format_menu(menu: list) -> str:
+def format_menu(menu: list, language: str = "en") -> str:
     """One line per menu item: cooked dishes with their ingredients, simple items with their amount."""
     lines = []
     for item in menu:
         subs = item.get("ingredients") if isinstance(item, dict) else None
         if subs:
-            lines.append(f"- {item.get('name', '?')}: {', '.join(_with_amount(s) for s in subs)}")
+            lines.append(f"- {item.get('name', '?')}: {', '.join(_with_amount(s, language) for s in subs)}")
         else:
-            lines.append(f"- {_with_amount(item)}")
+            lines.append(f"- {_with_amount(item, language)}")
     return "\n".join(lines)
 
 
-def build_scheduler_user_message(meal_name: str, steps: list[str], ingredients_str: str, menu: list | None = None) -> str:
+def build_scheduler_user_message(meal_name: str, steps: list[str], ingredients_str: str, menu: list | None = None, language: str = "en") -> str:
     """Build the user message with meal details. Menu-format meals usually have no steps."""
     parts = [f"Meal: {meal_name}"]
     if menu:
-        parts.append(f"Menu:\n{format_menu(menu)}")
+        parts.append(f"Menu:\n{format_menu(menu, language)}")
     else:
         parts.append(f"Ingredients: {ingredients_str}")
     if steps:

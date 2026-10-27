@@ -26,7 +26,7 @@ async def test_plan_no_steps(client):
 
 
 async def test_plan_from_menu_without_steps(client):
-    """A menu-format meal with no steps still gets a plan from the LLM."""
+    """A menu-format meal with no steps still gets a plan from the LLM, its units in the reply language."""
     reply = (
         '```json\n{"prep": [{"task": "Slice cheese"}], "timed": [{"task": "Cook menemen", '
         '"duration_min": 10, "resource": "Stove", "end_action": "Serve"}]}\n```'
@@ -45,7 +45,7 @@ async def test_plan_from_menu_without_steps(client):
     assert data["makespan_min"] == 10
     assert data["timeline"][0]["task"] == "Cook menemen"
     user_message = llm.call_args.args[2]
-    assert "Menemen: Egg (2 adet)" in user_message
+    assert "Menemen: Egg (2 pcs)" in user_message
 
 
 async def test_plan_with_cached_schedule(client, db):
