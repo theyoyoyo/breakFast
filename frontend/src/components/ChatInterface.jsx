@@ -86,7 +86,7 @@ const DEMO_MEAL = {
     { name: 'White cheese', amount: 50, unit: 'g', ingredients: [] },
     { name: 'Olives', amount: 6, unit: 'pcs', ingredients: [] },
     { name: 'Cucumber', amount: 1, unit: 'pcs', ingredients: [] },
-    { name: 'Bread', amount: 3, unit: 'slices', ingredients: [] },
+    { name: 'Bread', amount: 3, unit: 'slice', ingredients: [] },
     { name: 'Honey', amount: 1, unit: 'tbsp', ingredients: [] },
   ],
   prep_time_min: 12,
