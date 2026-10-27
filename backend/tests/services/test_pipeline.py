@@ -117,6 +117,24 @@ def _make_fake_stream(responses):
     return fake_stream
 
 
+def _meal_reply(ingredient: str) -> str:
+    """A reply whose meal is one dish with the given ingredient JSON."""
+    return f'Enjoy!\n```json\n{{"menu_name": "Eggs", "menu": [{{"name": "Boiled eggs", "ingredients": [{ingredient}]}}]}}\n```'
+
+
+GOOD_MEAL = _meal_reply('{"name": "eggs", "amount": 2, "unit": "pcs"}')
+FEEDBACK = '```json\n{"feedback": ["Change something"]}\n```'
+
+
+async def _final_text(responses: list[str]) -> str:
+    """Run the pipeline on canned replies; the text the user gets (sent as tokens, then done)."""
+    with patch("services.pipeline.stream_response", _make_fake_stream(responses)):
+        events = [e async for e in run_suggestion_pipeline(context=SAMPLE_CONTEXT, user_message="Suggest")]
+    done = next(e["content"] for e in events if e["type"] == "done")
+    assert "".join(e["content"] for e in events if e["type"] == "token") == done
+    return done
+
+
 class TestPipelineOrchestrator:
     # Pipeline yields progress events in correct order
     @pytest.mark.asyncio
@@ -163,17 +181,31 @@ class TestPipelineOrchestrator:
         # Each character of "Hello" should be a token event
         assert "".join(token_events) == "Hello"
 
-    # Pipeline yields the full draft once, before the analyst review starts
+    # Pipeline yields the full draft before the review, and the review's feedback before the refine
     @pytest.mark.asyncio
-    async def test_yields_draft_before_review(self):
-        fake_stream = _make_fake_stream(["Draft meal", '```json\n{"feedback": ["OK"]}\n```', "Final"])
+    async def test_yields_draft_and_review(self):
+        fake_stream = _make_fake_stream(["Draft meal", '```json\n{"feedback": ["Add fiber"]}\n```', "Final"])
 
         with patch("services.pipeline.stream_response", fake_stream):
             events = [e async for e in run_suggestion_pipeline(context=SAMPLE_CONTEXT, user_message="Suggest")]
 
-        kinds = [e.get("step", e["type"]) for e in events if e["type"] in ("progress", "draft")]
-        assert kinds == ["drafting", "draft", "analyzing", "finalizing"]
+        kinds = [e.get("step", e["type"]) for e in events if e["type"] in ("progress", "draft", "review")]
+        assert kinds == ["drafting", "draft", "analyzing", "review", "finalizing"]
         assert [e["content"] for e in events if e["type"] == "draft"] == ["Draft meal"]
+        assert [e["content"] for e in events if e["type"] == "review"] == ["- Add fiber"]
+
+    # A final with more fridge or unit problems than the draft is replaced by the draft
+    @pytest.mark.asyncio
+    async def test_falls_back_to_draft_when_final_is_worse(self):
+        worse = _meal_reply('{"name": "Poached eggs", "amount": 2, "unit": "cup"}')
+        assert await _final_text([GOOD_MEAL, FEEDBACK, worse]) == GOOD_MEAL
+
+    # A final with no more problems than the draft is kept, also when the draft had no meal
+    @pytest.mark.asyncio
+    async def test_keeps_final_when_not_worse(self):
+        bigger = _meal_reply('{"name": "eggs", "amount": 3, "unit": "pcs"}')
+        assert await _final_text([GOOD_MEAL, FEEDBACK, bigger]) == bigger
+        assert await _final_text(["Your fridge is nearly empty.", FEEDBACK, GOOD_MEAL]) == GOOD_MEAL
 
     # Pipeline yields a done event with the full final text
     @pytest.mark.asyncio

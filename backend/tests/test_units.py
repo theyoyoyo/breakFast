@@ -1,6 +1,8 @@
 """Unit tests for the per-language unit lists and the 1-1 mapping between them."""
 
-from models.units import UNIT_ML, UNIT_PAIRS, UNITS, count_unit, localize_unit, unit_sizes, units_for
+from models.units import (
+    UNIT_ML, UNIT_PAIRS, UNITS, count_unit, localize_unit, unit_sizes, units_for, unknown_units,
+)
 
 
 # Every unit has exactly one match in the other language, so both lists line up
@@ -42,6 +44,18 @@ def test_unit_sizes_per_language():
     assert unit_sizes("tr") == (
         "çay kaşığı 5 ml, tatlı kaşığı 10 ml, yemek kaşığı 15 ml, çay bardağı 100 ml, su bardağı 200 ml"
     )
+
+
+# A meal's units the app can't show are listed once each; listed units and known spellings pass
+def test_unknown_units_in_a_meal():
+    meal = {"menu": [
+        {"name": "Menemen", "ingredients": [{"name": "Yumurta", "unit": "adet"}, {"name": "Süt", "unit": "cup"}]},
+        {"name": "Beyaz peynir", "amount": 50, "unit": "gr", "ingredients": []},
+        {"name": "Zeytin", "amount": 10, "unit": "scoop", "ingredients": []},
+        {"name": "Bal", "amount": 1, "unit": "cup", "ingredients": []},
+    ]}
+    assert unknown_units(meal, "tr") == ["cup", "scoop"]
+    assert unknown_units({"menu": [{"name": "Simit", "amount": 1, "unit": "pieces"}]}, "en") == []
 
 
 # Other spellings of a listed unit (old "gr", plurals) count as that unit

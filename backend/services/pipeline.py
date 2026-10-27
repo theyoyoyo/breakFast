@@ -3,17 +3,19 @@
 
 Orchestrates the Suggestion and Pipeline Analyst personas to produce
 a higher-quality meal suggestion. The user sees progress updates while
-waiting, then the final refined meal streams normally.
+waiting, then the final meal.
 
 Steps:
 1. Suggestion persona drafts a meal (collected internally, not streamed to user).
-2. Pipeline Analyst reviews the draft (thorough feedback as JSON list), and plain
+2. Pipeline Analyst reviews the draft (a few changes as a JSON list), and plain
    code lists any draft ingredient that isn't in the fridge.
-3. Suggestion persona refines the meal using that feedback (streamed to user).
+3. Suggestion persona refines the meal using that feedback. If code finds more
+   problems in the refined meal than in the draft, the user gets the draft.
 """
 
 from typing import AsyncGenerator
 
+from models.units import unknown_units
 from services.fridge import find_missing_ingredients
 from services.suggestion import (
     build_suggestion_prompt,
@@ -21,6 +23,16 @@ from services.suggestion import (
     stream_response,
 )
 from utils import extract_json_block
+
+
+def _meal_problems(text: str, context: dict) -> float:
+    """Code-checked problems in a reply's meal: fridge misses and units the app can't show.
+    A reply without a meal counts as the worst."""
+    meal = extract_json_block(text)
+    if not isinstance(meal, dict) or not isinstance(meal.get("menu"), list):
+        return float("inf")
+    missing = find_missing_ingredients(meal, context["ingredients"])
+    return len(missing) + len(unknown_units(meal, context.get("language", "en")))
 
 
 async def run_suggestion_pipeline(
@@ -36,7 +48,8 @@ async def run_suggestion_pipeline(
     Yields dicts with:
       {"type": "progress", "step": "drafting"|"analyzing"|"finalizing"}
       {"type": "draft", "content": "..."}   — the full draft (for the prompt test; chat ignores it)
-      {"type": "token", "content": "..."}   — final streamed tokens
+      {"type": "review", "content": "..."}  — the feedback the refine step gets (same)
+      {"type": "token", "content": "..."}   — the final text, sent once the fallback check is done
       {"type": "done", "content": "..."}    — full final response
 
     context: the full context dict from _load_context() in chat.py
@@ -117,14 +130,17 @@ async def run_suggestion_pipeline(
             "exactly as listed, or remove it. Drop a dish only if it can't be made without it."
         )
         feedback_formatted = f"{fridge_feedback}\n{feedback_formatted}"
+    yield {"type": "review", "content": feedback_formatted}
 
     # --- Step 3: Refine ---
     yield {"type": "progress", "step": "finalizing"}
 
     refinement_message = (
-        f"Below is the draft breakfast suggestion you prepared, along with detailed feedback "
-        f"from the nutrition analyst. Revise and improve the suggestion by addressing every "
-        f"feedback point. Write the result as you would present it to the user.\n\n"
+        f"Below is the draft breakfast suggestion you prepared, along with feedback from the "
+        f"nutrition analyst. Make the changes the feedback asks for that work with the available "
+        f"ingredients, and keep everything else exactly as in the draft (items, names, amounts, "
+        f"wording), so the review only improves the meal. Write the result as you would present "
+        f"it to the user.\n\n"
         f"═══ DRAFT SUGGESTION ═══\n{draft_text}\n\n"
         f"═══ ANALYST FEEDBACK ═══\n{feedback_formatted}"
     )
@@ -132,7 +148,11 @@ async def run_suggestion_pipeline(
     final_chunks = []
     async for chunk in stream_response(suggestion_prompt, [], refinement_message, temperature=temperature):
         final_chunks.append(chunk)
-        yield {"type": "token", "content": chunk}
-
     final_text = "".join(final_chunks)
+
+    # The review may only improve the meal: when code finds more problems after it, keep the draft
+    if _meal_problems(final_text, context) > _meal_problems(draft_text, context):
+        final_text = draft_text
+
+    yield {"type": "token", "content": final_text}
     yield {"type": "done", "content": final_text}
