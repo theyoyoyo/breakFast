@@ -21,7 +21,7 @@ from services.knowledge import (
     format_weekly_summary,
     format_today,
 )
-from models.units import count_unit, unit_sizes, units_for
+from models.units import count_unit, localize_unit, unit_sizes, units_for
 
 def _lang(language: str) -> str:
     return "Always respond in Turkish." if language != "en" else "Always respond in English."
@@ -117,8 +117,9 @@ This is a priority hint, not a hard constraint.
 HARD CONSTRAINT — FRIDGE-ONLY
 ═══════════════════════════════════════════════════════════════
 The user cooks only with what they have logged, basics like salt and oil included. Build every \
-dish from the available ingredients below, and in the JSON copy each ingredient name exactly as \
-it appears there, even when that name is in another language than your reply. Water is the one \
+dish from the available ingredients below. In the JSON each ingredient is one of them, its name \
+copied exactly as listed (no alternatives like "X or Y", translations or notes), even when that \
+name is in another language than your reply, so the app can find it in the fridge. Water is the one \
 exception: like gas and electricity it is always available, so list it whenever a recipe needs it \
 even though it is not in the inventory.
 When a recipe calls for something not on the list, use a listed item in its place (you may \
@@ -150,8 +151,8 @@ Keep your response short and warm. Structure:
 
 1. Menu name + one sentence description (what makes this menu great today)
 2. Menu items — list each item with a brief note if it needs one:
-   - Complex dishes (menemen, omlet, etc.): mention key ingredients naturally
-   - Simple items (peynir, zeytin, meyve): just list them
+   - Dishes (an omelette, a porridge): mention key ingredients naturally
+   - Simple items (cheese, olives, fruit): just list them
 3. Optional tip: only a taste/texture tip if genuinely useful (e.g., pairing advice, \
    ripeness note). No prep steps. No timing. No nutritional lectures.
 
@@ -165,50 +166,43 @@ IMPORTANT: The ingredient inventory only lists names — no quantities are track
 Assume the user has enough of each ingredient. Decide healthy, balanced portions \
 based on standard breakfast servings and the user's profile.
 
-Append a JSON block at the end of your response:
+Append a JSON block at the end of your response. This shows the format only; the \
+<…> parts are yours to fill:
 ```json
 {{
-  "menu_name": "Classic Turkish Breakfast",
-  "description": "...",
+  "menu_name": "<short title for the whole menu>",
+  "description": "<one sentence>",
   "menu": [
     {{
-      "name": "Menemen",
+      "name": "<dish name>",
       "ingredients": [
-        {{"name": "Egg", "amount": 2, "unit": "{unit_count}"}},
-        {{"name": "Tomato", "amount": 1, "unit": "{unit_count}"}},
-        {{"name": "Green pepper", "amount": 1, "unit": "{unit_count}"}}
+        {{"name": "<inventory item>", "amount": 2, "unit": "{unit_count}"}},
+        {{"name": "<inventory item>", "amount": 1, "unit": "{unit_spoon}"}}
       ]
     }},
     {{
-      "name": "White cheese",
+      "name": "<inventory item served as it is>",
       "amount": 50,
       "unit": "g",
-      "ingredients": []
-    }},
-    {{
-      "name": "Olives",
-      "amount": 10,
-      "unit": "{unit_count}",
       "ingredients": []
     }}
   ],
   "prep_time_min": 15,
-  "nutrition_note": "Balanced protein and healthy fats, high fiber."
+  "nutrition_note": "<one short sentence>"
 }}
 ```
 
 Rules for the JSON:
-- Complex dishes (cooked/mixed): fill `ingredients` array with sub-ingredients \
-  (each with name, amount, unit). Leave out top-level amount/unit for these.
-- Simple items served as-is (cheese, olives, fruit, bread): `ingredients: []`, \
-  set top-level `amount` + `unit` instead.
+- A simple item is one inventory item served as it is: `ingredients: []` with a \
+  top-level `amount` + `unit`. Anything cooked, combined or served with a sauce or \
+  topping is a dish: list each of its ingredients (name, amount, unit) and leave out \
+  the top-level amount and unit.
 - `unit`: one of {unit_list}. These are the units of the response language, so the \
   app can show and edit them. Spoons and glasses are the fixed sizes the user \
   measures with ({unit_sizes}), so pick amounts for those sizes.
 - `nutrition_note`: one short sentence summarizing nutritional value. No numbers.
 - `prep_time_min`: realistic total time for the whole menu.
-- `menu_name`: a short descriptive title in the response language, like \
-  "Classic Turkish Breakfast" when replying in English. It is not a dish name.
+- `menu_name`: a short title for the whole menu in the response language, not a dish name.
 """
 
 # Appended after the mode block so the language directive is the last thing the model reads
@@ -265,6 +259,7 @@ def build_suggestion_prompt(
     base = SUGGESTION_TEMPLATE.format(
         lang_instruction=_lang(language),
         unit_count=count_unit(language),
+        unit_spoon=localize_unit("tbsp", language),
         unit_list=", ".join(units_for(language)),
         unit_sizes=unit_sizes(language),
         ingredient_inventory=format_ingredients(ingredient_inventory),

@@ -523,7 +523,7 @@ class TestFridgeRule:
     # One constructive rule: copy names from the list, basics included; water listed but never required
     def test_suggestion_prompt_has_one_copy_from_list_rule(self):
         prompt = build_suggestion_prompt([{"name": "Yumurta"}], [], {}, [])
-        assert "copy each ingredient name exactly as it appears there" in prompt
+        assert "copied exactly as listed (no alternatives like \"X or Y\", translations or notes)" in prompt
         assert "basics like salt and oil included" in prompt
         assert "list it whenever a recipe needs it" in prompt
         assert "never appear in the JSON" not in prompt
@@ -569,7 +569,7 @@ class TestLanguageReminder:
     def test_menu_name_follows_response_language(self):
         """The menu name is a title in the response language, not a dish name kept in Turkish."""
         prompt = build_suggestion_prompt([], [], {}, [])
-        assert "`menu_name`: a short descriptive title in the response language" in prompt
+        assert "`menu_name`: a short title for the whole menu in the response language" in prompt
         assert "never to the menu name" in prompt
 
 
