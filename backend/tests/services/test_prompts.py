@@ -623,6 +623,13 @@ class TestSuggestionUnits:
         assert "`unit`: one of adet, g, kg, ml, L, çay kaşığı, tatlı kaşığı, yemek kaşığı" in prompt
         assert '"unit": "pcs"' not in prompt
 
+    def test_spoon_and_glass_sizes_in_reply_language(self):
+        """The unit rule gives the fixed spoon and glass sizes, named in the reply language."""
+        english = build_suggestion_prompt([], [], {}, [], language="en")
+        turkish = build_suggestion_prompt([], [], {}, [], language="tr")
+        assert "(tsp 5 ml, dsp 10 ml, tbsp 15 ml, tea glass 100 ml, glass 200 ml)" in english
+        assert "çay bardağı 100 ml, su bardağı 200 ml)" in turkish
+
     def test_example_uses_listed_grams(self):
         """The example writes grams as "g", the listed unit, not "gr"."""
         prompt = build_suggestion_prompt([], [], {}, [])
