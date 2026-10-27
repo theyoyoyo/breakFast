@@ -31,8 +31,8 @@ from pathlib import Path
 from models.units import localize_unit, units_for
 from routers.chat import SUGGEST_TEMPERATURES
 from services import llm, pipeline
-# The fridge check's own word matching, used one way round for prepared items
-from services.fridge import _contains, _is_water, _tokens, find_missing_ingredients
+# The fridge check's own word matching, the other way round, to tell renamed items from missing ones
+from services.fridge import _contains, _tokens, find_missing_ingredients
 from tools.prompt_samples import SAMPLES
 from utils import extract_json_block
 
@@ -54,27 +54,17 @@ SUGGEST_MESSAGES = {
 }
 
 STAGES = ("draft", "final")
-PROBLEMS = ("missing", "prepared", "units", "turkish")
+PROBLEMS = ("missing", "renamed", "units", "turkish")
 _TURKISH_LETTERS = set("çğıöşüÇĞİÖŞÜ")
 
 
 # ── Checks ──────────────────────────────────────────────────────────────────
 
-def prepared_items(meal: dict, inventory: list[dict]) -> list[str]:
-    """Simple items (served as-is) whose name doesn't sit inside one fridge name.
-
-    Stricter than the fridge check, which matches both ways round: "Simit with
-    tahini dipping sauce" passes there because it contains "Simit" (#115).
-    """
+def renamed_items(names: list[str], inventory: list[dict]) -> list[str]:
+    """Names the fridge check flags although they contain a fridge item: prepared, combined or
+    renamed items ("Simit with tahini dipping sauce", "White cheese (peynir)", "Yogurt or milk")."""
     stock = [_tokens(i["name"]) for i in inventory if i.get("name")]
-    found = []
-    for item in meal.get("menu") or []:
-        if not isinstance(item, dict) or item.get("ingredients"):
-            continue
-        name = str(item.get("name") or "").strip()
-        if name and not _is_water(name) and not any(_contains(s, _tokens(name)) for s in stock):
-            found.append(name)
-    return found
+    return [n for n in names if any(_contains(_tokens(n), s) for s in stock)]
 
 
 def off_list_units(meal: dict, language: str) -> list[str]:
@@ -111,14 +101,14 @@ def check_reply(text: str, sample: dict) -> dict:
     meal = extract_json_block(text or "")
     if not isinstance(meal, dict) or not isinstance(meal.get("menu"), list):
         return {"json": False, "dishes": [], **{p: [] for p in PROBLEMS}}
-    missing = find_missing_ingredients(meal, sample["ingredients"])
+    flagged = find_missing_ingredients(meal, sample["ingredients"])
+    renamed = renamed_items(flagged, sample["ingredients"])
     return {
         "json": True,
         # The menu's dish and item names, to count distinct menus across runs
         "dishes": sorted(str(i.get("name", "")).strip().lower() for i in meal["menu"] if isinstance(i, dict)),
-        "missing": missing,
-        # A simple item that isn't in the fridge at all counts once, as missing
-        "prepared": [n for n in prepared_items(meal, sample["ingredients"]) if n not in missing],
+        "missing": [n for n in flagged if n not in renamed],
+        "renamed": renamed,
         "units": off_list_units(meal, sample["language"]),
         "turkish": turkish_words(text, sample),
     }
@@ -205,7 +195,7 @@ async def run(samples: list[str], runs: int, mode: str | None, draft_only: bool)
 
 _COLUMNS = [
     ("Sample", "<7"), ("Stage", "<7"), ("Runs", ">5"), ("JSON", ">6"), ("Clean", ">7"), ("Distinct", ">10"),
-    ("Missing", ">9"), ("Prepared", ">10"), ("Units", ">7"), ("Turkish", ">9"), ("Errors", ">8"), ("Avg s", ">7"),
+    ("Missing", ">9"), ("Renamed", ">9"), ("Units", ">7"), ("Turkish", ">9"), ("Errors", ">8"), ("Avg s", ">7"),
 ]
 
 

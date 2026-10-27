@@ -50,24 +50,28 @@ def test_missing_ingredient():
     assert check_reply(text, EN)["missing"] == ["Avocado"]
 
 
-# A prepared item served as one simple item passes the fridge check but is caught here (#115)
-def test_prepared_item_caught():
-    text = _reply({"name": "Simit with tahini dipping sauce", "amount": 1, "unit": "pcs", "ingredients": []})
-    result = check_reply(text, EN)
-    assert result["missing"] == []
-    assert result["prepared"] == ["Simit with tahini dipping sauce"]
-    assert describe(result) == "prepared: Simit with tahini dipping sauce"
-
-
-# A simple item missing from the fridge counts once, as missing; a shorter fridge name is fine
-def test_simple_item_counted_once_and_shorter_names_pass():
+# Flagged names that contain a fridge item count as renamed, not missing: prepared, combined or translated items
+def test_renamed_items_told_from_missing_ones():
     text = _reply(
-        {"name": "Avokado", "amount": 1, "unit": "adet", "ingredients": []},
-        {"name": "Peynir", "amount": 50, "unit": "g", "ingredients": []},
+        {"name": "Simit with tahini dipping sauce", "amount": 1, "unit": "pcs", "ingredients": []},
+        {"name": "Plate", "ingredients": [
+            {"name": "White cheese (peynir)", "amount": 50, "unit": "g"},
+            {"name": "Yogurt or milk", "amount": 100, "unit": "ml"},
+            {"name": "Avocado", "amount": 1, "unit": "pcs"},
+        ]},
     )
-    result = check_reply(text, TR)
-    assert result["missing"] == ["Avokado"]
-    assert result["prepared"] == []
+    result = check_reply(text, EN)
+    assert result["renamed"] == ["Simit with tahini dipping sauce", "White cheese (peynir)", "Yogurt or milk"]
+    assert result["missing"] == ["Avocado"]
+    assert describe(result) == (
+        "missing: Avocado; renamed: Simit with tahini dipping sauce, White cheese (peynir), Yogurt or milk"
+    )
+
+
+# A name shorter than its fridge name is that item
+def test_shorter_names_pass():
+    text = _reply({"name": "Peynir", "amount": 50, "unit": "g", "ingredients": []})
+    assert is_clean(check_reply(text, TR))
 
 
 # Units the app can't show as a listed unit are reported once each; known spellings (gr, pieces) pass
@@ -143,8 +147,8 @@ async def test_recording_prompts_keeps_distinct_system_prompts():
 
 # The summary counts replies and distinct menus per sample and stage, then lists the most frequent offenders
 def test_summary_counts_and_offenders():
-    clean = {"json": True, "dishes": ["menemen"], "missing": [], "prepared": [], "units": [], "turkish": []}
-    simit = {"json": True, "dishes": ["simit"], "missing": [], "prepared": ["Simit with tahini"], "units": [], "turkish": []}
+    clean = {"json": True, "dishes": ["menemen"], "missing": [], "renamed": [], "units": [], "turkish": []}
+    simit = {"json": True, "dishes": ["simit"], "missing": [], "renamed": ["Simit with tahini"], "units": [], "turkish": []}
     records = [
         {"sample": "en", "run": 1, "seconds": 30, "error": None, "replies": {}, "scores": {"draft": simit, "final": clean}},
         {"sample": "en", "run": 2, "seconds": 50, "error": None, "replies": {}, "scores": {"draft": simit, "final": simit}},
@@ -152,7 +156,7 @@ def test_summary_counts_and_offenders():
     lines = summarize(records).splitlines()
     assert lines[1].split() == ["en", "draft", "2", "2", "0", "1", "0", "2", "0", "0", "0", "40"]
     assert lines[2].split() == ["en", "final", "2", "2", "1", "2", "0", "1", "0", "0", "0", "40"]
-    assert "en draft prepared: Simit with tahini ×2" in lines
+    assert "en draft renamed: Simit with tahini ×2" in lines
 
 
 # Each sample and stage is compared with its best earlier test in the same mode
