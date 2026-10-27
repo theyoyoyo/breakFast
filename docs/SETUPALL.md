@@ -522,6 +522,69 @@ locally, even when a user connects via Tailscale.
 
 ---
 
+## BONUS C — Test Prompts from Another PC (optional, for development)
+
+`backend/tools/prompt_check.py` runs the real suggestion prompts from a development PC
+against the server's Ollama and scores every reply in code. For that, Ollama on the
+server has to accept connections from your Tailscale devices.
+
+> **Ollama has no login.** Anyone who can reach port 11434 can use the model, and also
+> pull or delete models. Open it to your Tailscale network only. Never forward the
+> port on your router.
+
+### C.1 — Let Ollama listen beyond localhost (server)
+
+1. Set the environment variable `OLLAMA_HOST` to `0.0.0.0:11434`, in a terminal:
+
+   ```
+   setx OLLAMA_HOST 0.0.0.0:11434
+   ```
+
+2. Quit Ollama from the tray icon and start it again (or restart the PC).
+
+The backend on the server keeps using `localhost:11434`; nothing else changes.
+
+### C.2 — Allow the port from Tailscale only (server)
+
+In an **administrator** PowerShell:
+
+```powershell
+New-NetFirewallRule -DisplayName "Ollama (Tailscale only)" -Direction Inbound -Protocol TCP -LocalPort 11434 -RemoteAddress 100.64.0.0/10 -Action Allow
+```
+
+`100.64.0.0/10` is the address range Tailscale gives your devices, so other devices on
+your home network still can't reach Ollama. If Windows asks whether to allow Ollama on
+networks, choose **Cancel**: the rule above is all it needs.
+
+### C.3 — Run the prompt test (development PC)
+
+1. Check the connection; it should list `qwen2.5:7b`:
+
+   ```
+   curl http://100.x.x.x:11434/api/tags
+   ```
+
+2. From `backend/`:
+
+   ```
+   python -m tools.prompt_check --url http://100.x.x.x:11434
+   ```
+
+   Options: `--runs 5`, `--samples tr`, `--mode explore`, `--draft` (stop after the
+   draft). Setting `OLLAMA_BASE_URL` in the development PC's `backend/.env` saves the `--url`.
+
+3. Each run is one Suggest press for a sample user (`tools/prompt_samples.py`). The
+   table counts, for the draft and the final reply, how many replies were clean (meal
+   JSON parses, nothing missing from the fridge, no prepared item served as one fridge
+   item, only listed units), then lists the most frequent problems. The replies are saved
+   to `backend/tools/runs/` with the commit they ran on, so run it before and after a
+   prompt change.
+
+Runs share the server's GPU, so the app is slower meanwhile; 10 runs per sample take
+several minutes.
+
+---
+
 ## Quick Reference
 
 | What | Command / URL |
@@ -533,6 +596,7 @@ locally, even when a user connects via Tailscale.
 | Backup DB | `cd backend && python manage.py backup-db` |
 | Check Ollama | `ollama list` |
 | Test Ollama | `ollama run qwen2.5:7b "Good morning"` |
+| Prompt test (dev PC) | `cd backend && python -m tools.prompt_check --url http://100.x.x.x:11434` |
 | Health check | `curl http://localhost:8000/health` |
 | Logs | Check the terminal where uvicorn is running |
 | DB location | `backend/breakFAST.db` (or wherever DATABASE_PATH points) |
