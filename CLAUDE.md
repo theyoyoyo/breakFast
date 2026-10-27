@@ -124,7 +124,7 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 
 **Prompt style:** state each rule once, in the prompt that owns it, as a positive instruction with a short reason, not a growing list of bans and special cases. Anything code can verify (fridge membership, JSON shape) is checked in code, not by asking another persona to police it.
 
-**Prompt test:** `backend/tools/prompt_check.py` runs the real suggestion pipeline for the sample users in `tools/prompt_samples.py` against an Ollama server and scores the draft and final replies in code (meal JSON, missing fridge items, prepared items served as one fridge item, off-list units). Run it before and after a prompt change (`docs/SETUPALL.md`, BONUS C); the pipeline yields a `draft` event for it, which chat ignores. When the suggestion context gains a field, add it to the samples (a test runs every sample through the pipeline).
+**Prompt test:** `backend/tools/prompt_check.py` runs the real suggestion pipeline for the sample users in `tools/prompt_samples.py` against an Ollama server and scores the draft and final replies in code (meal JSON, missing fridge items, prepared items served as one fridge item, units the app can't show, Turkish words in English replies, distinct menus). Run it before and after a prompt change with a `--note` (`docs/SETUPALL.md`, BONUS C): every test is logged in the git-ignored `tools/runs/` (replies, prompts sent, `history.jsonl`) and compared with the best earlier one, so keep a change only when it doesn't score worse. The pipeline yields a `draft` event for it, which chat ignores. When the suggestion context gains a field, add it to the samples (a test runs every sample through the pipeline).
 
 ---
 

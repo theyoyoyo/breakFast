@@ -570,21 +570,28 @@ reachable from your other devices.
 2. From `backend/`:
 
    ```
-   python -m tools.prompt_check --url http://100.x.x.x:11434
+   python -m tools.prompt_check --url http://100.x.x.x:11434 --note "what changed"
    ```
 
-   Options: `--runs 5`, `--samples tr`, `--mode explore`, `--draft` (stop after the
-   draft). Setting `OLLAMA_BASE_URL` in the development PC's `backend/.env` saves the `--url`.
+   It runs 3 Suggest presses for the English sample by default. Options: `--runs 5`,
+   `--samples en,tr`, `--mode explore`, `--draft` (stop after the draft: one model call
+   instead of three). Setting `OLLAMA_BASE_URL` in the development PC's `backend/.env`
+   saves the `--url`.
 
 3. Each run is one Suggest press for a sample user (`tools/prompt_samples.py`). The
    table counts, for the draft and the final reply, how many replies were clean (meal
    JSON parses, nothing missing from the fridge, no prepared item served as one fridge
-   item, only listed units), then lists the most frequent problems. The replies are saved
-   to `backend/tools/runs/` with the commit they ran on, so run it before and after a
-   prompt change.
+   item, units the app knows, no Turkish words in an English reply) and how many
+   different menus came back, then lists the most frequent problems.
 
-Runs share the server's GPU, so the app is slower meanwhile; 10 runs per sample take
-several minutes.
+4. Every test is kept on the development PC in `backend/tools/runs/` (git-ignored): a log
+   with the replies and the exact prompts sent, and a line in `history.jsonl` with the
+   prompt id (a hash of the prompt code, committed or not) and your note. Each test is
+   compared with the best earlier one (▲ better, ▼ worse), so a prompt change can't
+   quietly make things worse. `--history` lists them all.
+
+Runs share the server's GPU, so the app is slower meanwhile; a full run takes about a
+minute, a `--draft` run about 15 seconds.
 
 ---
 
