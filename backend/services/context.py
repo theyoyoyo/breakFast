@@ -9,6 +9,9 @@ the chat WebSocket and analyst REST endpoints.
 import asyncio
 from datetime import date as date_type
 
+from db_helpers import parse_json_field
+from services.shopping import dish_names
+
 # App settings stored as preferences; they're not food preferences, so prompts never see them
 SETTING_KEYS = {"response_language", "theme", "weekly_summary_in_suggestions"}
 
@@ -173,13 +176,32 @@ async def fetch_shopping_list(db, user_id: int) -> list[str]:
         return [r["item_name"] for r in await cur.fetchall()]
 
 
+async def fetch_dishes(db, user_id: int) -> list[str]:
+    """The user's own dishes from all their logged and favorite meals (shopping drops these)."""
+    meals = []
+    for table in ("meal_history", "favorite_meals"):
+        async with db.execute(
+            f"SELECT meal_name, ingredients, menu_items FROM {table} WHERE user_id = ?",
+            (user_id,),
+        ) as cur:
+            meals += [
+                {
+                    "meal_name": r["meal_name"],
+                    "ingredients": parse_json_field(r["ingredients"], []),
+                    "menu_items": parse_json_field(r["menu_items"], []),
+                }
+                for r in await cur.fetchall()
+            ]
+    return dish_names(meals)
+
+
 async def load_shopping_context(db, user_id: int) -> dict:
     """Load full context for the shopping persona."""
     (
         ingredients, history, prefs,
         (stated_habits, inferred_habits),
         health_rules, user_profile, supplements,
-        shopping_list, favorites, ratings,
+        shopping_list, favorites, ratings, dishes,
     ) = await asyncio.gather(
         fetch_ingredients(db, user_id),
         fetch_history(db, user_id, limit=10, include_ingredients=True),
@@ -191,6 +213,7 @@ async def load_shopping_context(db, user_id: int) -> dict:
         fetch_shopping_list(db, user_id),
         fetch_favorite_ingredients(db, user_id),
         fetch_ratings(db, user_id),
+        fetch_dishes(db, user_id),
     )
     avoid_list = [v for k, v in prefs.items() if k.startswith("avoid:")]
     filtered_prefs = _food_preferences(prefs)
@@ -199,6 +222,7 @@ async def load_shopping_context(db, user_id: int) -> dict:
     return {
         "ingredients": ingredients,
         "history": history,
+        "dishes": dishes,
         "preferences": filtered_prefs,
         "stated_habits": stated_habits,
         "inferred_habits": inferred_habits,

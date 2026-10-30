@@ -4,7 +4,8 @@ Shopping suggestions: the reply schema and the code dedupe.
 Ollama constrains the shopping persona's reply to SUGGESTIONS_SCHEMA, and plain
 code then keeps only new products: anything in the fridge, on the shopping list,
 already shown or on the avoid list is dropped, and so are names that aren't one
-product and the user's own dishes. Product names are specific, so names are
+product and the user's own dishes (a safety net: the prompt asks for a dish's
+ingredients instead of the dish). Product names are specific, so names are
 compared exactly (see fridge.same_name), not loosely.
 """
 
@@ -68,9 +69,30 @@ def shopping_request(language: str, shown: list[str] = ()) -> str:
 _NOT_ONE_PRODUCT = re.compile(r"[(/]|\be\.?g\b|\bor\b", re.IGNORECASE)
 
 
+def _names(items) -> list[str]:
+    return [str(i.get("name") or "") if isinstance(i, dict) else str(i) for i in items or []]
+
+
+def dish_names(meals: list[dict]) -> list[str]:
+    """The user's own dishes, from their logged and favorite meals: each meal's name and every
+    menu item made with ingredients (Menemen). A simple item is one product served as it is, so
+    it stays a product, and so does a name that is one of its own ingredients (a meal called Simit)."""
+    dishes = []
+    for meal in meals:
+        menu = [i for i in meal.get("menu_items") or [] if isinstance(i, dict)]
+        parts = _names(meal.get("ingredients")) + _names(menu) + [n for i in menu for n in _names(i.get("ingredients"))]
+        candidates = [(meal.get("meal_name"), parts)]
+        candidates += [(i.get("name"), _names(i["ingredients"])) for i in menu if i.get("ingredients")]
+        for name, own in candidates:
+            name = str(name or "").strip()
+            if name and name not in dishes and not any(same_name(name, p) for p in own):
+                dishes.append(name)
+    return dishes
+
+
 def new_suggestions(items: list[dict], known: list[str], dishes: list[str] = ()) -> list[dict]:
     """Items whose names aren't already known, each name once. Names that aren't one product
-    and the user's own dishes (meal names from their history, like Menemen) are left out too."""
+    and the user's own dishes (see dish_names) are left out too."""
     seen = list(known)
     result = []
     for item in items:

@@ -1,6 +1,6 @@
 """Tests for the shopping suggestion reply parsing and the code dedupe."""
 
-from services.shopping import new_suggestions, parse_suggestions, shopping_request
+from services.shopping import dish_names, new_suggestions, parse_suggestions, shopping_request
 
 
 # A schema-shaped reply gives its items, names and reasons trimmed
@@ -45,6 +45,21 @@ def test_new_suggestions_drop_vague_names_and_dishes():
     )]
     kept = new_suggestions(items, [], dishes=["Menemen", "Sucuklu tost"])
     assert [i["name"] for i in kept] == ["Spinach", "Chard", "Tomatoes"]
+
+
+# Dishes are meal names and menu items made with ingredients; simple items and meals named after
+# one of their own ingredients stay products
+def test_dish_names_come_from_meals_and_their_menus():
+    meals = [
+        {"meal_name": "Weekend breakfast", "menu_items": [
+            {"name": "Menemen", "ingredients": [{"name": "Eggs"}, {"name": "Tomatoes"}]},
+            {"name": "Beyaz peynir", "amount": 50, "unit": "g", "ingredients": []},
+            {"name": "Yogurt", "ingredients": [{"name": "Yogurt"}, {"name": "Honey"}]},
+        ]},
+        {"meal_name": "Simit", "ingredients": ["Simit", "Tea"]},
+        {"meal_name": "Menemen", "ingredients": [{"name": "Eggs"}]},
+    ]
+    assert dish_names(meals) == ["Weekend breakfast", "Menemen"]
 
 
 # The request names the reply language and, for Suggest More, what was already shown

@@ -344,8 +344,6 @@ async def get_shopping_suggestions(
 
     # The avoid list is a hard ban, so code enforces it beside the prompt rule
     known = [i["name"] for i in ctx["ingredients"]] + ctx["shopping_list"] + ctx["avoid_list"]
-    # Meals the user has eaten are dishes, not products; their ingredients are what to suggest
-    dishes = [m["meal_name"] for m in ctx["history"] if m.get("meal_name")]
 
     for _ in range(2):
         try:
@@ -382,7 +380,7 @@ async def get_shopping_suggestions(
             logging.warning("Shopping suggestions: could not parse the reply: %r", reply)
             return {"suggestions": [], "lyric": None, "error": "Could not read the AI reply. Please try again."}
 
-        fresh = new_suggestions(items, known + shown, dishes)
+        fresh = new_suggestions(items, known + shown, ctx["dishes"])
         if fresh:
             return {"suggestions": fresh, "lyric": None}
         shown += [i["name"] for i in items]

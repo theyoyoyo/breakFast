@@ -54,6 +54,18 @@ async def test_drops_eaten_dishes_and_asks_in_the_reply_language(client):
     assert llm.call_args.kwargs["messages"][0]["content"].endswith("in English.")
 
 
+# Dishes inside logged menus and favorite meals are dropped too, while their simple items stay products
+async def test_drops_dishes_inside_menus_and_favorites(client):
+    menemen = {"name": "Menemen", "ingredients": [{"name": "Eggs", "amount": 2, "unit": "pcs"}]}
+    cheese = {"name": "White cheese", "amount": 50, "unit": "g", "ingredients": []}
+    await client.post("/meals/", json={"meal_name": "Weekend breakfast", "menu_items": [menemen, cheese]})
+    pancakes = {"name": "Pancakes", "ingredients": [{"name": "Flour", "amount": 100, "unit": "g"}]}
+    await client.post("/favorites/", json={"meal_name": "Sunday plate", "menu_items": [pancakes]})
+    with _llm(_reply("Menemen", "Pancakes", "White cheese", "Green peppers")):
+        data = await _suggest(client)
+    assert [s["name"] for s in data["suggestions"]] == ["White cheese", "Green peppers"]
+
+
 # A reply made only of repeats is retried once, with those names listed as already shown
 async def test_retries_once_when_everything_repeats(client):
     await client.post("/ingredients/", json={"name": "Eggs"})

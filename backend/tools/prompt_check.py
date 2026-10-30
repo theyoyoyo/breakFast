@@ -38,7 +38,9 @@ from services import llm, pipeline
 # The fridge check's own word matching, the other way round, to tell renamed items from missing ones
 from services.fridge import _contains, _tokens, find_missing_ingredients, same_name
 from services.personas.shopping import build_shopping_prompt
-from services.shopping import SUGGESTIONS_SCHEMA, new_suggestions, parse_suggestions, shopping_request
+from services.shopping import (
+    SUGGESTIONS_SCHEMA, dish_names, new_suggestions, parse_suggestions, shopping_request,
+)
 from tools.prompt_samples import SAMPLES
 from utils import extract_json_block
 
@@ -126,13 +128,12 @@ def check_reply(text: str, sample: dict) -> dict:
 
 
 def looks_like_dish(name: str, sample: dict) -> bool:
-    """A meal from the sample's history, a name "with" something, or a dish word (a heuristic)."""
+    """One of the sample's own dishes, a name "with" something, or a dish word (a heuristic)."""
     lowered = name.lower()
-    meals = [m["meal_name"] for m in sample.get("history") or []]
     return (
         " with " in f" {lowered} "
         or bool(set(re.findall(r"\w+", lowered)) & _DISH_WORDS)
-        or any(same_name(name, meal) for meal in meals)
+        or any(same_name(name, dish) for dish in _dishes(sample))
     )
 
 
@@ -159,8 +160,8 @@ def check_shopping(text: str, sample: dict, shown: list[str]) -> tuple[dict, lis
 
 
 def _dishes(sample: dict) -> list[str]:
-    """The sample's meal names, which the endpoint drops from suggestions as dishes."""
-    return [m["meal_name"] for m in sample.get("history") or [] if m.get("meal_name")]
+    """The sample's own dishes, which the endpoint drops from suggestions."""
+    return dish_names(sample.get("history") or [])
 
 
 def score_shopping(replies: dict, sample: dict) -> dict:
