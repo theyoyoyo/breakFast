@@ -312,6 +312,13 @@ class TestSuggestionPrompt:
         assert '"prep_time_min"' in prompt
         assert '"nutrition_detail"' not in prompt
 
+    def test_dishes_carry_a_method_line(self):
+        """Each dish carries its method as one short line with a placeholder, so the prep plan makes it as designed."""
+        prompt = build_suggestion_prompt([], [], {}, [])
+        assert '"method": "<main steps in one short line>"' in prompt
+        assert "`method` (dishes only)" in prompt
+        assert "so the prep plan makes it the way you meant" in prompt
+
     def test_includes_user_profile(self):
         """Suggestion prompt should render user physical profile."""
         prompt = build_suggestion_prompt(
