@@ -234,9 +234,11 @@ export const dishBadge = {
   marginRight: 6,
 }
 
+// ▶ Ingredients: --border nearly matches the row, so the outline is the muted text color at 70%
+// (3.5:1 on --surface2, was 1.1:1; text colors are the same in every theme)
 export const expandBtn = (isOpen) => ({
   background: 'none',
-  border: '1px solid var(--border)',
+  border: '1px solid color-mix(in srgb, var(--text-muted) 70%, transparent)',
   borderRadius: 4,
   cursor: 'pointer',
   fontSize: 10,
