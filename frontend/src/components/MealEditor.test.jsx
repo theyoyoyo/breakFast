@@ -172,6 +172,13 @@ describe('MealEditor dish rows', () => {
     expect(screen.queryByText('Oats')).toBeNull()
   })
 
+  // On a phone a focused box brings up the keyboard over the editor, so opening a dish focuses nothing
+  it('opens a dish without focusing its add box', () => {
+    render(<MealEditor meal={MEAL} menuMode />)
+    fireEvent.click(screen.getByText('Menemen'))
+    expect(screen.getByPlaceholderText('Add ingredient…')).not.toHaveFocus()
+  })
+
   // A missing dish name is its own button: the tap marks it as obtained and leaves the dish closed
   it('marks a missing dish name as obtained without opening the dish', async () => {
     checkMissingIngredients.mockResolvedValue({ missing: ['Menemen'] })
@@ -287,6 +294,15 @@ describe('MealEditor units', () => {
     expect(within(picker).getByRole('option', { name: 'tbsp (15 ml)' })).toHaveValue('tbsp')
     expect(within(picker).getByRole('option', { name: 'g' })).toBeInTheDocument()
     expect(screen.getByText('tbsp')).toBeInTheDocument()
+  })
+
+  // Two-word units wrap, so the column is only as wide as the longest single word ("handful", "bardağı")
+  it('keeps the unit column as wide as the longest word of any unit, in both languages', () => {
+    render(<MealEditor meal={UNIT_MEAL} menuMode />)
+    const widths = () => screen.getAllByRole('combobox').map(select => select.parentElement.style.width)
+    expect(widths()).toEqual(['9ch', '9ch'])
+    act(() => { applyLanguage('tr') })
+    expect(widths()).toEqual(['9ch', '9ch'])
   })
 
   it('saves stored units as written and a picked unit as picked', () => {
