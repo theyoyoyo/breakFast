@@ -144,16 +144,30 @@ describe('MealEditor prep words', () => {
     ] }],
   }
 
-  it('shows an ingredient\'s prep words on hover, before the fridge hint, and keeps them through edits', async () => {
+  it('shows the prep words per dish behind the info button, not on the item names', async () => {
     checkMissingIngredients.mockResolvedValue({ missing: ['Banana'] })
-    const onChange = vi.fn()
-    render(<MealEditor meal={PREP_MEAL} menuMode checkFridge onChange={onChange} />)
+    render(<MealEditor meal={PREP_MEAL} menuMode checkFridge />)
+    const info = screen.getByTitle('Preparation details')
+    expect(screen.queryByText('Oats: rolled')).toBeNull()
+    fireEvent.click(info)
+    expect(info).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('Oats: rolled')).toBeInTheDocument()
+    expect(screen.getByText('Banana: sliced')).toBeInTheDocument()
     fireEvent.click(screen.getByText('▶ Ingredients'))
-    expect(screen.getByText('Oats')).toHaveAttribute('title', 'rolled')
-    await waitFor(() => expect(screen.getByText('Banana')).toHaveAttribute('title', `sliced · ${MISSING}`))
+    expect(screen.getByText('Oats')).not.toHaveAttribute('title')
+    await waitFor(() => expect(screen.getByText('Banana')).toHaveAttribute('title', MISSING))
+  })
+
+  it('keeps prep words through edits, and has no info button when there are none', () => {
+    const onChange = vi.fn()
+    const { unmount } = render(<MealEditor meal={PREP_MEAL} menuMode onChange={onChange} />)
+    fireEvent.click(screen.getByText('▶ Ingredients'))
     fireEvent.click(screen.getAllByText('▲')[0])
     const oats = onChange.mock.lastCall[0].menu[0].ingredients[0]
     expect(oats).toMatchObject({ name: 'Oats', amount: 2, prep: 'rolled' })
+    unmount()
+    render(<MealEditor meal={MEAL} menuMode />)
+    expect(screen.queryByTitle('Preparation details')).toBeNull()
   })
 })
 
