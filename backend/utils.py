@@ -33,6 +33,14 @@ def repair_json_block(text: str) -> str:
     return text[:match.start(1)] + _FRACTION_RE.sub(_decimal, match.group(1)) + text[match.end(1):]
 
 
+def replace_json_block(text: str, data: dict) -> str:
+    """The text with its ```json block holding data instead."""
+    match = _JSON_BLOCK_RE.search(text)
+    if not match:
+        return text
+    return text[:match.start(1)] + json.dumps(data, ensure_ascii=False, indent=2) + text[match.end(1):]
+
+
 def extract_json_block(text: str) -> Optional[dict]:
     """
     Extract and parse the first ```json ... ``` block from an LLM response.

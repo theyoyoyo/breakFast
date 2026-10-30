@@ -11,18 +11,20 @@ Steps:
    code lists any draft ingredient that isn't in the fridge.
 3. Suggestion persona refines the meal using that feedback. If code finds more
    problems in the refined meal than in the draft, the user gets the draft.
+   Code then takes water and any simple item that isn't in the fridge off the menu.
 """
 
+import re
 from typing import AsyncGenerator
 
 from models.units import unknown_units
-from services.fridge import find_missing_ingredients
+from services.fridge import find_missing_ingredients, unservable_items
 from services.suggestion import (
     build_suggestion_prompt,
     build_pipeline_analyst_prompt,
     stream_response,
 )
-from utils import extract_json_block, repair_json_block
+from utils import extract_json_block, repair_json_block, replace_json_block
 
 
 def _meal_problems(text: str, context: dict) -> float:
@@ -33,6 +35,20 @@ def _meal_problems(text: str, context: dict) -> float:
         return float("inf")
     missing = find_missing_ingredients(meal, context["ingredients"])
     return len(missing) + len(unknown_units(meal, context.get("language", "en")))
+
+
+def _serve_available(text: str, inventory: list[dict]) -> str:
+    """The reply without simple items the user can't be served (water, or not in the fridge):
+    out of the meal's menu and off the text's item list. A menu that would be left empty stays."""
+    meal = extract_json_block(text)
+    drop = unservable_items(meal, inventory)
+    kept = [i for i in meal["menu"] if not (isinstance(i, dict) and str(i.get("name") or "").strip() in drop)] if drop else []
+    if not kept:
+        return text
+    for name in drop:  # list lines that start with the item: "- **Bread**: 2 slices"
+        line = rf"^[ \t]*(?:[-*•]|\d+[.)])[ \t]*\**[ \t]*{re.escape(name)}(?!\w).*\n?"
+        text = re.sub(line, "", text, flags=re.IGNORECASE | re.MULTILINE)
+    return replace_json_block(text, {**meal, "menu": kept})
 
 
 async def run_suggestion_pipeline(
@@ -153,7 +169,7 @@ async def run_suggestion_pipeline(
     # The review may only improve the meal: when code finds more problems after it, keep the draft
     if _meal_problems(final_text, context) > _meal_problems(draft_text, context):
         final_text = draft_text
-    final_text = repair_json_block(final_text)
+    final_text = _serve_available(repair_json_block(final_text), context["ingredients"])
 
     yield {"type": "token", "content": final_text}
     yield {"type": "done", "content": final_text}

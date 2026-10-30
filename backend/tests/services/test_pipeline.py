@@ -12,6 +12,7 @@ import pytest
 
 from services.suggestion import build_pipeline_analyst_prompt
 from services.pipeline import run_suggestion_pipeline
+from utils import extract_json_block
 
 
 # ---------------------------------------------------------------------------
@@ -212,6 +213,27 @@ class TestPipelineOrchestrator:
         bigger = _meal_reply('{"name": "eggs", "amount": 3, "unit": "pcs"}')
         assert await _final_text([GOOD_MEAL, FEEDBACK, bigger]) == bigger
         assert await _final_text(["Your fridge is nearly empty.", FEEDBACK, GOOD_MEAL]) == GOOD_MEAL
+
+    # Water and simple items not in the fridge come off the menu and the text's item list; dishes stay
+    @pytest.mark.asyncio
+    async def test_serves_only_fridge_items(self):
+        reply = (
+            "A warm start.\n- **Boiled eggs**: soft\n- **Bread**: 2 slices\n* Water (500 ml)\n"
+            '```json\n{"menu_name": "Eggs", "menu": ['
+            '{"name": "Boiled eggs", "ingredients": [{"name": "eggs", "amount": 2, "unit": "pcs"}]}, '
+            '{"name": "Bread", "amount": 2, "unit": "slice", "ingredients": []}, '
+            '{"name": "Water", "amount": 500, "unit": "ml", "ingredients": []}]}\n```'
+        )
+        text = await _final_text([reply, FEEDBACK, reply])
+        assert text.startswith("A warm start.\n- **Boiled eggs**: soft\n```json\n")
+        assert [i["name"] for i in extract_json_block(text)["menu"]] == ["Boiled eggs"]
+        assert "Bread" not in text and "Water" not in text
+
+    # A menu that would be left empty stays as it is, so the user still sees what was suggested
+    @pytest.mark.asyncio
+    async def test_keeps_a_menu_that_would_be_empty(self):
+        toast = 'Toast!\n```json\n{"menu_name": "Toast", "menu": [{"name": "Bread", "amount": 2, "unit": "slice", "ingredients": []}]}\n```'
+        assert await _final_text([toast, FEEDBACK, toast]) == toast
 
     # Pipeline yields a done event with the full final text
     @pytest.mark.asyncio
