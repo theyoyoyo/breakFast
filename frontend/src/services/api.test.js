@@ -10,6 +10,8 @@ import {
   deleteIngredient,
   setPreference,
   getMeals,
+  updateSessionMessage,
+  createChatSocket,
 } from './api'
 
 
@@ -74,5 +76,33 @@ describe('preference API', () => {
     const [url, opts] = stub.mock.calls[0]
     expect(url).toContain('/preferences/fav%3Aeggs')
     expect(JSON.parse(opts.body)).toEqual({ value: 'eggs' })
+  })
+})
+
+
+describe('chat sync API', () => {
+  // A meal card edit PUTs the message's new content to its session message
+  it('PUT /sessions/{id}/messages/{messageId} sends the new content', async () => {
+    const stub = mockFetch(200, { status: 'ok' })
+    vi.stubGlobal('fetch', stub)
+    await updateSessionMessage('s1', 7, 'edited')
+    const [url, opts] = stub.mock.calls[0]
+    expect(url).toContain('/sessions/s1/messages/7')
+    expect(opts.method).toBe('PUT')
+    expect(JSON.parse(opts.body)).toEqual({ content: 'edited' })
+  })
+
+  // The chat socket hands done its saved message id and session_updated its session id
+  it('passes the done message id and session_updated to their callbacks', () => {
+    const sockets = []
+    vi.stubGlobal('WebSocket', class { constructor() { sockets.push(this) } })
+    const onDone = vi.fn()
+    const onSessionUpdated = vi.fn()
+    createChatSocket(vi.fn(), onDone, vi.fn(), null, null, null, null, onSessionUpdated)
+    sockets[0].onmessage({ data: JSON.stringify({ type: 'done', content: 'Hi', message_id: 5 }) })
+    sockets[0].onmessage({ data: JSON.stringify({ type: 'session_updated', session_id: 's1' }) })
+    expect(onDone).toHaveBeenCalledWith('Hi', 5)
+    expect(onSessionUpdated).toHaveBeenCalledWith('s1')
+    vi.unstubAllGlobals()
   })
 })
