@@ -35,6 +35,7 @@ async def run_suggestion_pipeline(
 
     Yields dicts with:
       {"type": "progress", "step": "drafting"|"analyzing"|"finalizing"}
+      {"type": "draft", "content": "..."}   — the full draft (for the prompt test; chat ignores it)
       {"type": "token", "content": "..."}   — final streamed tokens
       {"type": "done", "content": "..."}    — full final response
 
@@ -87,6 +88,7 @@ async def run_suggestion_pipeline(
     async for chunk in stream_response(suggestion_prompt, [], user_message, temperature=temperature):
         draft_chunks.append(chunk)
     draft_text = "".join(draft_chunks)
+    yield {"type": "draft", "content": draft_text}
 
     # --- Step 2: Analyst review ---
     yield {"type": "progress", "step": "analyzing"}

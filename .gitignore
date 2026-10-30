@@ -35,6 +35,9 @@ workbox-*.js
 # Logs
 *.log
 
+# Prompt test replies (backend/tools/prompt_check.py)
+backend/tools/runs/
+
 # IDE
 .vscode/
 .idea/

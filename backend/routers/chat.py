@@ -19,6 +19,12 @@ from utils import extract_json_block
 
 router = APIRouter()
 
+# Temperature per suggestion mode (also used by the prompt test, tools/prompt_check.py)
+SUGGEST_TEMPERATURES = {
+    "favorites": 0.6,
+    "explore": 0.9,
+}
+
 
 async def _save_suggestion(db, user_id: int, session_id: str, meal_data: dict, language: str = "en") -> int:
     """Insert a suggested meal into suggested_meals. Returns the new suggestion's id."""
@@ -149,11 +155,6 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                 async with get_db() as db:
                     cached_context = await load_chat_context(db, user_id)
 
-            # Temperature per suggestion mode
-            SUGGEST_TEMPERATURES = {
-                "favorites": 0.6,
-                "explore": 0.9,
-            }
             temperature = SUGGEST_TEMPERATURES.get(suggest_mode) if prompt_type == "suggest" else None
 
             if prompt_type == "suggest":

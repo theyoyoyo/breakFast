@@ -163,6 +163,18 @@ class TestPipelineOrchestrator:
         # Each character of "Hello" should be a token event
         assert "".join(token_events) == "Hello"
 
+    # Pipeline yields the full draft once, before the analyst review starts
+    @pytest.mark.asyncio
+    async def test_yields_draft_before_review(self):
+        fake_stream = _make_fake_stream(["Draft meal", '```json\n{"feedback": ["OK"]}\n```', "Final"])
+
+        with patch("services.pipeline.stream_response", fake_stream):
+            events = [e async for e in run_suggestion_pipeline(context=SAMPLE_CONTEXT, user_message="Suggest")]
+
+        kinds = [e.get("step", e["type"]) for e in events if e["type"] in ("progress", "draft")]
+        assert kinds == ["drafting", "draft", "analyzing", "finalizing"]
+        assert [e["content"] for e in events if e["type"] == "draft"] == ["Draft meal"]
+
     # Pipeline yields a done event with the full final text
     @pytest.mark.asyncio
     async def test_yields_done_event(self):
