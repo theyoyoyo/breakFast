@@ -1,12 +1,14 @@
 """
 /sessions endpoints — chat session management and message persistence.
+Saving or editing a message tells the user's open chat sockets (services/chat_sync).
 """
 
 import uuid
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from database import get_db
 from auth import require_user
+from services import chat_sync
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -87,13 +89,13 @@ async def delete_session(session_id: str, user_id: int = Depends(require_user)):
 
 @router.get("/{session_id}/messages")
 async def get_messages(session_id: str, user_id: int = Depends(require_user)):
-    """Get all messages for a session."""
+    """Get all messages for a session. The id lets a meal card edit update its message."""
     async with get_db() as db:
         async with db.execute(
             """
-            SELECT role, content, created_at FROM chat_messages
+            SELECT id, role, content, created_at FROM chat_messages
             WHERE session_id = ? AND user_id = ?
-            ORDER BY created_at ASC
+            ORDER BY created_at ASC, id ASC
             """,
             (session_id, user_id),
         ) as cur:
@@ -103,11 +105,11 @@ async def get_messages(session_id: str, user_id: int = Depends(require_user)):
 
 @router.post("/{session_id}/messages")
 async def save_message(session_id: str, body: dict, user_id: int = Depends(require_user)):
-    """Save a message to a session (used by demo meal injection)."""
+    """Save a message to a session (meals sent to chat, analysis and prep plan results)."""
     role = body.get("role", "assistant")
     content = body.get("content", "")
     async with get_db() as db:
-        await db.execute(
+        cur = await db.execute(
             "INSERT INTO chat_messages (session_id, user_id, role, content) VALUES (?, ?, ?, ?)",
             (session_id, user_id, role, content),
         )
@@ -116,4 +118,20 @@ async def save_message(session_id: str, body: dict, user_id: int = Depends(requi
             (session_id,),
         )
         await db.commit()
+    await chat_sync.notify_session_updated(user_id, session_id)
+    return {"status": "ok", "id": cur.lastrowid}
+
+
+@router.put("/{session_id}/messages/{message_id}")
+async def update_message(session_id: str, message_id: int, body: dict, user_id: int = Depends(require_user)):
+    """Replace a message's content (a meal card edit rewrites the message's meal block)."""
+    async with get_db() as db:
+        cur = await db.execute(
+            "UPDATE chat_messages SET content = ? WHERE id = ? AND session_id = ? AND user_id = ?",
+            (body.get("content", ""), message_id, session_id, user_id),
+        )
+        await db.commit()
+    if cur.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Message not found")
+    await chat_sync.notify_session_updated(user_id, session_id)
     return {"status": "ok"}

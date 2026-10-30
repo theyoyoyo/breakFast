@@ -56,6 +56,8 @@ Multiple users share one instance, each fully isolated. Auth is simple (pin/name
 [SQLite — breakFAST.db]
 ```
 
+**Chat sync across devices:** `services/chat_sync.py` keeps each user's open chat sockets in memory (one server process, no polling) and drops a socket on disconnect. When a session's messages change (a chat reply is saved, or a message is saved or edited over REST: meals sent to chat, analysis and prep plan results, and meal card edits, which rewrite the message's JSON meal block), the server sends `{type: 'session_updated', session_id}` to that user's sockets only. A reply skips the socket that asked, and tokens never go to other devices. `ChatInterface` reloads the chat on screen on that push, when the page becomes visible again, and when its socket opens. A reload waits for a streaming reply or a running analysis, and keeps the draft and unchanged cards. A reply whose device drops mid-stream still finishes and is saved.
+
 ---
 
 ## Features

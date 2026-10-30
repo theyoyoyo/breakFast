@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react'
-import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, saveSessionMessage, getTodaySupplements, toggleSupplement, analyzeMeal, getSchedule } from '../services/api'
+import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, saveSessionMessage, updateSessionMessage, getTodaySupplements, toggleSupplement, analyzeMeal, getSchedule } from '../services/api'
 import { useVoice } from '../hooks/useVoice'
 import SuggestButton from './SuggestButton'
 import DecidePanel from './DecidePanel'
@@ -68,6 +68,32 @@ function parseJsonBlock(text) {
   try { return JSON.parse(match[1].trim()) } catch { return null }
 }
 
+// The message with its ```json block replaced by an edited meal, so the edit is saved with it
+const FIRST_JSON_BLOCK_RE = /```json[\s\S]*?```/
+function withJsonBlock(text, meal) {
+  const block = '```json\n' + JSON.stringify(meal) + '\n```'
+  return FIRST_JSON_BLOCK_RE.test(text) ? text.replace(FIRST_JSON_BLOCK_RE, () => block) : `${text}\n\n${block}`
+}
+
+// Saved session messages as chat messages after the welcome line; the id lets a card edit save
+function toChatMessages(msgs) {
+  return [WELCOME_MSG, ...msgs.map(m => ({ id: m.id, role: m.role, content: m.content }))]
+}
+
+function sameMessages(a, b) {
+  return a.length === b.length && a.every((m, i) => m.role === b[i].role && m.content === b[i].content && m.id === b[i].id)
+}
+
+// Unchanged meal cards stay the same objects on a reload, so an open editor or a
+// "Today I ate" draft keeps its edits
+function keepUnchangedBlocks(prev, next) {
+  const kept = {}
+  for (const [i, meal] of Object.entries(next)) {
+    kept[i] = prev[i] && JSON.stringify(prev[i]) === JSON.stringify(meal) ? prev[i] : meal
+  }
+  return kept
+}
+
 // Template meal for demo/preview without LLM
 const DEMO_MEAL = {
   menu_name: 'Classic Spread Breakfast',
@@ -131,7 +157,12 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
   const [schedulingIdx, setSchedulingIdx] = useState(null)
   // pipelineStep: current pipeline progress step (null = not in pipeline)
   const [pipelineStep, setPipelineStep] = useState(null)
+  // syncPending: the open chat should reload from the server once nothing is in flight
+  const [syncPending, setSyncPending] = useState(false)
   const wsRef = useRef(null)
+  const hasConnectedRef = useRef(false)
+  const busyRef = useRef(false)
+  const reloadSeq = useRef(0)
   const messagesEndRef = useRef(null)
   const reconnectTimer = useRef(null)
   const reconnectDelay = useRef(1000)
@@ -150,15 +181,26 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     })
     const jsonBlock = '\n\n```json\n' + JSON.stringify(normalized) + '\n```'
     const fullContent = introText + jsonBlock
+    const msg = { role: 'assistant', content: fullContent }
     setMessages(prev => {
       const newIdx = prev.length
-      const newMsgs = [...prev, { role: 'assistant', content: fullContent }]
+      const newMsgs = [...prev, msg]
       setMealBlocks(blocks => ({ ...blocks, [newIdx]: normalized }))
       setCheckedMealIdx(newIdx)
       return newMsgs
     })
     if (sessionIdRef.current) {
-      saveSessionMessage(sessionIdRef.current, 'assistant', fullContent).catch(() => {})
+      saveSessionMessage(sessionIdRef.current, 'assistant', fullContent)
+        .then(({ id }) => setMessages(prev => prev.map(m => (m === msg ? { ...m, id } : m))))
+        .catch(() => {})
+    }
+  }, [])
+
+  // Show an assistant message and save it to the session, so reloads and other devices show it too
+  const appendSavedMessage = useCallback((content) => {
+    setMessages(prev => [...prev, { role: 'assistant', content }])
+    if (sessionIdRef.current) {
+      saveSessionMessage(sessionIdRef.current, 'assistant', content).catch(() => {})
     }
   }, [])
 
@@ -169,7 +211,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       injectMealToChat(DEMO_MEAL, introText)
     },
     injectDemoSchedule: () => {
-      setMessages(prev => [...prev, { role: 'assistant', content: DEMO_SCHEDULE }])
+      appendSavedMessage(DEMO_SCHEDULE)
     },
     injectFavoriteMeal: (meal) => {
       const introText = `⭐ From favorites: ${meal.meal_name}\n\n${meal.description || 'Enjoy!'}`
@@ -232,8 +274,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
         setSessionId(session.id)
         const msgs = await getSessionMessages(session.id)
         if (cancelled) return
-        const loaded = msgs.map(m => ({ role: m.role, content: m.content }))
-        const allMsgs = [WELCOME_MSG, ...loaded]
+        const allMsgs = toChatMessages(msgs)
         setMessages(allMsgs)
         setMealBlocks(parseMealBlocksFromMessages(allMsgs))
         setCheckedMealIdx(null)
@@ -246,6 +287,33 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     return () => { cancelled = true }
   }, [refreshNavState, loadTodaySupplements, parseMealBlocksFromMessages])
 
+  // Reload the open chat from the server: another device changed it, or this one was away.
+  // Keeps the draft, the selected card and every unchanged card.
+  const reloadSession = useCallback(async () => {
+    const id = sessionIdRef.current
+    if (!id) return
+    const seq = ++reloadSeq.current
+    let msgs
+    try {
+      msgs = await getSessionMessages(id)
+    } catch {
+      return // Backend not available
+    }
+    // Only the latest reload applies, and only to the chat it loaded
+    if (seq !== reloadSeq.current || id !== sessionIdRef.current) return
+    // A reply or an analysis started while loading: reload again once it's done
+    if (busyRef.current) {
+      setSyncPending(true)
+      return
+    }
+    const allMsgs = toChatMessages(msgs)
+    const blocks = parseMealBlocksFromMessages(allMsgs)
+    setMessages(prev => (sameMessages(prev, allMsgs) ? prev : allMsgs))
+    setMealBlocks(prev => keepUnchangedBlocks(prev, blocks))
+    setCheckedMealIdx(idx => (idx !== null && blocks[idx] ? idx : null))
+    refreshNavState(id)
+  }, [parseMealBlocksFromMessages, refreshNavState])
+
   // Refresh supplements when Chat tab becomes visible (picks up Settings changes)
   useEffect(() => {
     if (visible) loadTodaySupplements()
@@ -254,12 +322,6 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streamBuffer, analyzingIdx, pipelineStep])
-
-  // Close socket and clear reconnect timer on unmount
-  useEffect(() => () => {
-    clearTimeout(reconnectTimer.current)
-    wsRef.current?.close()
-  }, [])
 
   const ensureSocket = useCallback(() => {
     const state = wsRef.current?.readyState
@@ -273,8 +335,8 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
           setStreamBuffer((prev) => (prev ?? '') + chunk)
         }
       },
-      // onDone
-      (full) => {
+      // onDone — messageId is the saved reply's id (lets a card edit save into it)
+      (full, messageId) => {
         setPipelineStep(null)
         syncLyric(full) // keep client lyric index in sync if this was a fallback lyric
         if (abortedRef.current) {
@@ -282,7 +344,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
           abortedRef.current = false
           setAborted(false)
         } else {
-          setMessages((prev) => [...prev, { role: 'assistant', content: full }])
+          setMessages((prev) => [...prev, { id: messageId, role: 'assistant', content: full }])
         }
         setStreamBuffer(null)
       },
@@ -299,15 +361,21 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       },
       // onError — don't spam chat with error messages, header already shows "reconnecting…"
       () => {
+        if (wsRef.current !== ws) return // an old socket, already replaced
         setStreamBuffer(null)
         setPipelineStep(null)
         setConnected(false)
       },
-      // onClose — auto-reconnect with exponential backoff (max 30s)
+      // onClose — auto-reconnect with exponential backoff (max 30s).
+      // Skipped for a socket already replaced or closed on unmount (wsRef no longer points to it).
       () => {
+        if (wsRef.current !== ws) return
         setStreamBuffer(null)
         setPipelineStep(null)
         setConnected(false)
+        // A stopped reply's done can't arrive on this socket any more
+        abortedRef.current = false
+        setAborted(false)
         wsRef.current = null
         reconnectTimer.current = setTimeout(() => {
           reconnectDelay.current = Math.min(reconnectDelay.current * 2, 30000)
@@ -327,15 +395,52 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
           }
           return idx
         })
+      },
+      // onSessionUpdated — a session changed elsewhere: reload it if it's on screen,
+      // else only Back / Next may have changed
+      (changedId) => {
+        if (changedId === sessionIdRef.current) setSyncPending(true)
+        else if (sessionIdRef.current) refreshNavState(sessionIdRef.current)
       }
     )
     ws.addEventListener('open', () => {
+      hasConnectedRef.current = true
       setConnected(true)
       reconnectDelay.current = 1000 // reset backoff on successful connect
+      setSyncPending(true) // catch up on anything missed while disconnected
     })
     wsRef.current = ws
     return ws
-  }, [])
+  }, [refreshNavState])
+
+  // Open the socket on mount so other devices' changes arrive; close it on unmount
+  useEffect(() => {
+    ensureSocket()
+    return () => {
+      clearTimeout(reconnectTimer.current)
+      const ws = wsRef.current
+      wsRef.current = null // tells onClose not to reconnect
+      ws?.close()
+    }
+  }, [ensureSocket])
+
+  // Back from the background (phone app resumed, tab shown again): reload the chat now, or
+  // reconnect at once if the socket closed meanwhile (the reload follows on open)
+  useEffect(() => {
+    const handleVisible = () => {
+      if (document.visibilityState !== 'visible') return
+      const state = wsRef.current?.readyState
+      if (state === WebSocket.OPEN) {
+        setSyncPending(true)
+      } else if (state !== WebSocket.CONNECTING) {
+        clearTimeout(reconnectTimer.current)
+        reconnectDelay.current = 1000
+        ensureSocket()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisible)
+    return () => document.removeEventListener('visibilitychange', handleVisible)
+  }, [ensureSocket])
 
   const sendMessage = useCallback((text, type = 'chat', mode = null, chatContext = null) => {
     const msg = text.trim()
@@ -391,8 +496,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
   const switchToSession = useCallback(async (targetId) => {
     setSessionId(targetId)
     const msgs = await getSessionMessages(targetId)
-    const loaded = msgs.map(m => ({ role: m.role, content: m.content }))
-    const allMsgs = [WELCOME_MSG, ...loaded]
+    const allMsgs = toChatMessages(msgs)
     setMessages(allMsgs)
     setMealBlocks(parseMealBlocksFromMessages(allMsgs))
     setCheckedMealIdx(null)
@@ -517,16 +621,15 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
         ? result.analysis_text.replace(/```json[\s\S]*?```/g, '').trim()
         : "Couldn't get the analysis."
       syncLyric(displayText) // keep client lyric index in sync if this was a fallback lyric
-      const analysisMsg = `📊 ${mealName} — Nutrition Analysis\n\n${displayText}`
-      setMessages(prev => [...prev, { role: 'assistant', content: analysisMsg }])
+      appendSavedMessage(`📊 ${mealName} — Nutrition Analysis\n\n${displayText}`)
     } catch {
       if (abortCtrl.cancelled) return
-      setMessages(prev => [...prev, { role: 'assistant', content: `📊 ${meal.meal_name || meal.menu_name || 'Meal'} — Nutrition Analysis\n\n${nextLyric()}` }])
+      appendSavedMessage(`📊 ${meal.meal_name || meal.menu_name || 'Meal'} — Nutrition Analysis\n\n${nextLyric()}`)
     } finally {
       analyzeAbortRef.current = null
       if (!abortCtrl.cancelled) setAnalyzingIdx(null)
     }
-  }, [mealBlocks, analyzingIdx, streamBuffer])
+  }, [mealBlocks, analyzingIdx, streamBuffer, appendSavedMessage])
 
   const handleSchedule = useCallback(async (msgIdx) => {
     const meal = mealBlocks[msgIdx]
@@ -544,18 +647,39 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       const text = result.formatted || "Couldn't build a prep plan."
       syncLyric(text) // keep client lyric index in sync if this was a fallback lyric
       const idTag = meal.id ? ` (#${meal.id})` : ''
-      const scheduleMsg = `📋 ${mealName}${idTag} — Prep Plan\n\n${text}`
-      setMessages(prev => [...prev, { role: 'assistant', content: scheduleMsg }])
+      appendSavedMessage(`📋 ${mealName}${idTag} — Prep Plan\n\n${text}`)
     } catch {
       const idTag = meal.id ? ` (#${meal.id})` : ''
-      setMessages(prev => [...prev, { role: 'assistant', content: `📋 ${mealName}${idTag} — Prep Plan\n\n${nextLyric()}` }])
+      appendSavedMessage(`📋 ${mealName}${idTag} — Prep Plan\n\n${nextLyric()}`)
     } finally {
       setSchedulingIdx(null)
     }
-  }, [mealBlocks, schedulingIdx, streamBuffer])
+  }, [mealBlocks, schedulingIdx, streamBuffer, appendSavedMessage])
+
+  // Save a meal card edit into its message, so reloads and other devices show the edited card.
+  // A card whose message has no id yet (not saved) stays edited on this device only.
+  const handleMealSave = useCallback((idx, msg, updated) => {
+    setMealBlocks(prev => ({ ...prev, [idx]: updated }))
+    const content = withJsonBlock(msg.content, updated)
+    setMessages(prev => prev.map(m => (m === msg ? { ...m, content } : m)))
+    if (msg.id && sessionIdRef.current) {
+      updateSessionMessage(sessionIdRef.current, msg.id, content).catch(() => {})
+    }
+  }, [])
 
   // True when anything is busy (streaming, analyzing, or scheduling)
   const isBusy = streamBuffer !== null || analyzingIdx !== null || schedulingIdx !== null
+  // A stopped reply still runs on the server until its done arrives, so a reload waits for that too
+  const syncBusy = isBusy || aborted
+  busyRef.current = syncBusy
+
+  // Reload once nothing is in flight, so a streaming reply or an analysis on its way isn't lost
+  useEffect(() => {
+    if (syncPending && !syncBusy) {
+      setSyncPending(false)
+      reloadSession()
+    }
+  }, [syncPending, syncBusy, reloadSession])
 
   // Get the checked meal for DecidePanel (priority: checked block > null)
   const checkedMeal = checkedMealIdx !== null ? mealBlocks[checkedMealIdx] : null
@@ -571,7 +695,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     <div style={s.container}>
       <div style={{ ...s.header, display: 'flex', alignItems: 'center' }}>
         <span>break FAST</span>
-        {!connected && wsRef.current && (
+        {!connected && hasConnectedRef.current && (
           <span style={s.connStatus}> — reconnecting…</span>
         )}
         <button style={{ ...s.newSessionBtn, visibility: hasOlder ? 'visible' : 'hidden' }} onClick={handleBack} title="Previous session">
@@ -607,7 +731,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
                   meal={mealBlocks[i]}
                   checked={checkedMealIdx === i}
                   onCheck={() => setCheckedMealIdx(i)}
-                  onSave={(updated) => setMealBlocks(prev => ({ ...prev, [i]: updated }))}
+                  onSave={(updated) => handleMealSave(i, m, updated)}
                   onAnalyze={() => handleAnalyze(i)}
                   analyzing={analyzingIdx === i}
                   onSchedule={() => handleSchedule(i)}
