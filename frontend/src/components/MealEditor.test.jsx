@@ -133,6 +133,57 @@ describe('MealEditor fridge check', () => {
   })
 })
 
+describe('MealEditor dish rows', () => {
+  beforeEach(() => { vi.mocked(checkMissingIngredients).mockReset() })
+
+  const TWO_DISHES = {
+    menu_name: 'Test Breakfast',
+    menu: [
+      MEAL.menu[0],
+      { name: 'Porridge', ingredients: [{ name: 'Oats', amount: 1, unit: 'glass' }] },
+    ],
+  }
+
+  // The whole row is the target on a phone: its name and the space around it both toggle
+  it('opens a dish with a tap on its name and closes it with a tap on the row', () => {
+    render(<MealEditor meal={MEAL} menuMode />)
+    expect(screen.queryByText('Yumurta')).toBeNull()
+    fireEvent.click(screen.getByText('Menemen'))
+    expect(screen.getByText('Yumurta')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('🍳').parentElement)
+    expect(screen.queryByText('Yumurta')).toBeNull()
+  })
+
+  // The button sits inside the row, so a tap that reached the row too would close the dish again
+  it('toggles the ingredients exactly once from the Ingredients button', () => {
+    render(<MealEditor meal={MEAL} menuMode />)
+    fireEvent.click(screen.getByText('▶ Ingredients'))
+    expect(screen.getByText('Yumurta')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('▲ Ingredients'))
+    expect(screen.queryByText('Yumurta')).toBeNull()
+  })
+
+  // A delete that reached the row would open the dish that moves up into its place
+  it('deletes a dish with its trash button without opening the next one', () => {
+    render(<MealEditor meal={TWO_DISHES} menuMode />)
+    fireEvent.click(screen.getAllByTitle('Delete')[0])
+    expect(screen.queryByText('Menemen')).toBeNull()
+    expect(screen.getByText('Porridge')).toBeInTheDocument()
+    expect(screen.queryByText('Oats')).toBeNull()
+  })
+
+  // A missing dish name is its own button: the tap marks it as obtained and leaves the dish closed
+  it('marks a missing dish name as obtained without opening the dish', async () => {
+    checkMissingIngredients.mockResolvedValue({ missing: ['Menemen'] })
+    render(<MealEditor meal={MEAL} menuMode checkFridge />)
+    const name = await screen.findByTitle(MISSING)
+    expect(name).toHaveTextContent('Menemen')
+    fireEvent.click(name)
+    expect(name).toHaveAttribute('title', OBTAINED)
+    expect(screen.queryByText('Yumurta')).toBeNull()
+  })
+})
+
 describe('MealEditor prep words', () => {
   beforeEach(() => { vi.mocked(checkMissingIngredients).mockReset() })
 
