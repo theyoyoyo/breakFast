@@ -120,9 +120,7 @@ The user cooks only with what they have logged, basics like salt and oil include
 dish from the available ingredients below. In the JSON each ingredient is one of them, its name \
 copied exactly as listed (no alternatives like "X or Y", translations or notes; a cut or form \
 like chopped or rolled goes in its `prep`), even when that \
-name is in another language than your reply, so the app can find it in the fridge. Water is the one \
-exception: like gas and electricity it is always available, so list it whenever a recipe needs it \
-even though it is not in the inventory.
+name is in another language than your reply, so the app can find it in the fridge.
 When a recipe calls for something not on the list, use a listed item in its place (you may \
 mention the swap briefly in the text) or choose a different dish.
 If the list is too small for any reasonable breakfast, reply with a short note suggesting the \

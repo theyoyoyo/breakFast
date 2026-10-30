@@ -529,13 +529,13 @@ class TestSchedulerUserMessage:
 # ---------------------------------------------------------------------------
 
 class TestFridgeRule:
-    # One constructive rule: copy names from the list, basics included; water listed but never required
+    # One constructive rule: copy names from the list, basics included; water goes unmentioned, so the model isn't drawn to it
     def test_suggestion_prompt_has_one_copy_from_list_rule(self):
         prompt = build_suggestion_prompt([{"name": "Yumurta"}], [], {}, [])
         assert "copied exactly as listed (no alternatives like \"X or Y\", translations or notes; a cut or form" in prompt
         assert "`prep` (optional, dish ingredients only)" in prompt
         assert "basics like salt and oil included" in prompt
-        assert "list it whenever a recipe needs it" in prompt
+        assert "water" not in prompt.lower()
         assert "never appear in the JSON" not in prompt
 
     # Code checks the fridge, so the reviewer only uses the list to suggest swaps
