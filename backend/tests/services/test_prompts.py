@@ -532,18 +532,18 @@ class TestSchedulerUserMessage:
         msg = build_scheduler_user_message("Porridge", [], "", menu=menu)
         assert "- Porridge: Oats (1 glass, rolled), Banana (sliced)" in msg
 
-    def test_water_on_its_own_is_left_out(self):
-        """Water served on its own (older meals may list it) gets no task; water in a dish's recipe stays."""
+    def test_water_is_planned_like_any_item(self):
+        """Water in a recipe reaches the planner with the dish; a glass of water on its own is served as it is."""
         menu = [
             {"name": "Porridge", "ingredients": [
                 {"name": "Oats", "amount": 1, "unit": "glass"},
                 {"name": "Water", "amount": 1, "unit": "glass"},
             ]},
-            {"name": "Water", "amount": 500, "unit": "ml", "ingredients": []},
+            {"name": "Water", "amount": 200, "unit": "ml", "ingredients": []},
         ]
         msg = build_scheduler_user_message("Porridge", [], "", menu=menu)
         assert "- Porridge: Oats (1 glass), Water (1 glass)" in msg
-        assert "500" not in msg
+        assert "- Water (200 ml), served as it is" in msg
 
     def test_steps_still_included(self):
         """Older meals with recipe steps keep sending them, numbered."""

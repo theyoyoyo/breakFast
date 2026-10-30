@@ -9,7 +9,6 @@ All scheduling math (parallel execution, backward timing) is handled by our code
 """
 
 from models.units import localize_unit
-from services.fridge import is_water
 
 SCHEDULER_TEMPLATE = """You are a kitchen workflow expert. Your job is to turn a breakfast menu (its dishes and ingredients, plus any recipe steps given) into a detailed, structured cooking plan.
 {lang_instruction}
@@ -76,13 +75,13 @@ def _with_amount(item, language: str = "en") -> str:
 
 def format_menu(menu: list, language: str = "en") -> str:
     """One line per menu item: cooked dishes with their ingredients, simple items with their amount,
-    marked as served as they are. Water on its own is no menu item (older meals may list it)."""
+    marked as served as they are."""
     lines = []
     for item in menu:
         subs = item.get("ingredients") if isinstance(item, dict) else None
         if subs:
             lines.append(f"- {item.get('name', '?')}: {', '.join(_with_amount(s, language) for s in subs)}")
-        elif not is_water(str(item.get("name") or "") if isinstance(item, dict) else str(item)):
+        else:
             lines.append(f"- {_with_amount(item, language)}, served as it is")
     return "\n".join(lines)
 
