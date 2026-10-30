@@ -426,7 +426,7 @@ async def run(
 def _columns(persona: str) -> list[tuple[str, str]]:
     problems = [(p.capitalize(), f">{max(len(p) + 3, 7)}") for p in PERSONAS[persona]["problems"]]
     return [
-        ("Sample", "<8"), ("Stage", "<9"), ("Runs", ">5"), ("JSON", ">6"), ("Clean", ">7"), ("Distinct", ">10"),
+        ("Sample", "<10"), ("Stage", "<9"), ("Runs", ">5"), ("JSON", ">6"), ("Clean", ">7"), ("Distinct", ">10"),
         *problems, ("Errors", ">8"), ("Avg s", ">7"),
     ]
 
