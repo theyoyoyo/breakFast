@@ -11,6 +11,8 @@ load_shopping_context() return them, so the real prompts run without a database.
 - sparse: a nearly empty fridge.
 - vegan: a plant-based fridge with animal products on the avoid list.
 Simit sits in the en, tr and mixed fridges without tahini, to catch prepared items (#115).
+
+PLAN_CASES are menus for the prep plan test, shaped the way the Prep Plan button sends them.
 """
 
 from models.ingredient import DEMO_FRIDGE
@@ -144,5 +146,69 @@ SAMPLES = {
         "stated_habits": ["Plant-based"],
         "avoid_list": ["Eggs", "Milk", "Cheese", "Butter", "Honey", "Yogurt"],
         "history": [_meal("Overnight oats", "Oats", "Soy milk", "Chia seeds", "Banana")],
+    },
+}
+
+
+def _dish(name: str, method: str, *ingredients: tuple) -> dict:
+    return {"name": name, "method": method, "ingredients": [
+        {"name": n, "amount": a, "unit": u, **({"prep": p[0]} if p else {})} for n, a, u, *p in ingredients
+    ]}
+
+
+def _served(name: str, amount: float, unit: str) -> dict:
+    return {"name": name, "amount": amount, "unit": unit, "ingredients": []}
+
+
+# Menus for the prep plan test (--persona plan), as a suggestion designs them: dishes with their
+# method, plus simple items served as they are. The meal names don't give the method away.
+# - boiled: an egg sandwich made with hard-boiled eggs, which a planner without the method fried (#121).
+# - fried: the other way round, so a plan that boils these eggs is caught too.
+# - porridge: simmered, with prep words on its ingredients.
+# - menemen: a Turkish menu with a Turkish reply.
+PLAN_CASES = {
+    "boiled": {
+        "language": "en",
+        "kitchen_appliances": _BASE["kitchen_appliances"],
+        "meal_name": "Sandwich morning",
+        "menu": [
+            _dish("Egg sandwich", "Hard-boil the eggs, peel, slice into the buttered bread",
+                  ("Eggs", 2, "pcs"), ("Bread", 2, "slice"), ("Butter", 1, "tsp")),
+            _served("White cheese", 50, "g"),
+            _served("Olives", 8, "pcs"),
+        ],
+    },
+    "fried": {
+        "language": "en",
+        "kitchen_appliances": _BASE["kitchen_appliances"],
+        "meal_name": "Toast morning",
+        "menu": [
+            _dish("Eggs on toast", "Fry the eggs in butter, toast the bread, lay the eggs on top",
+                  ("Eggs", 2, "pcs"), ("Butter", 1, "tsp"), ("Bread", 2, "slice")),
+            _served("Cucumber", 1, "pcs"),
+        ],
+    },
+    "porridge": {
+        "language": "en",
+        "kitchen_appliances": _BASE["kitchen_appliances"],
+        "meal_name": "Warm bowl",
+        "menu": [
+            _dish("Porridge", "Simmer the oats in the milk, top with the banana and honey",
+                  ("Oats", 1, "glass", "rolled"), ("Milk", 1, "glass"), ("Banana", 1, "pcs", "sliced"),
+                  ("Honey", 1, "tsp")),
+            _served("Walnuts", 20, "g"),
+        ],
+    },
+    "menemen": {
+        "language": "tr",
+        "kitchen_appliances": _BASE["kitchen_appliances"],
+        "meal_name": "Kahvaltı tabağı",
+        "menu": [
+            _dish("Menemen", "Biberi ve domatesi zeytinyağında kavur, yumurtaları ekleyip karıştır",
+                  ("Yumurta", 2, "adet"), ("Domates", 2, "adet", "doğranmış"), ("Sivri biber", 2, "adet"),
+                  ("Zeytinyağı", 1, "yemek kaşığı")),
+            _served("Beyaz peynir", 50, "g"),
+            _served("Ekmek", 2, "dilim"),
+        ],
     },
 }

@@ -6,6 +6,7 @@ Run from backend/, with the server's Ollama reachable (docs/SETUPALL.md, BONUS C
     python -m tools.prompt_check --url http://100.x.x.x:11434 --note "what changed"
     python -m tools.prompt_check --samples en,tr --runs 3 --draft
     python -m tools.prompt_check --persona shopping --samples mixed,demo
+    python -m tools.prompt_check --persona plan
     python -m tools.prompt_check --history
 
 Personas, each run for a sample user (tools/prompt_samples.py):
@@ -14,6 +15,9 @@ Personas, each run for a sample user (tools/prompt_samples.py):
   draft (one model call instead of three).
 - shopping: Suggest Shopping, then Suggest More, as the Fridge tab sends them, with
   the same prompt, reply schema and code dedupe.
+- plan: one Prep Plan press per menu in PLAN_CASES (every menu by default), with the
+  planner's real prompt and menu message. It flags food the menu doesn't list and a
+  dish cooked another way than its method says (fry vs boil).
 Nothing touches the database. Every test is kept locally in tools/runs/ (git-ignored): a log with the
 replies and the exact prompts sent, and a line in history.jsonl that later tests are
 compared against, so a prompt change can't quietly make things worse.
@@ -34,14 +38,15 @@ from pathlib import Path
 
 from models.units import unknown_units
 from routers.chat import SUGGEST_TEMPERATURES
-from services import llm, pipeline
+from services import llm, pipeline, suggestion
 # The fridge check's own word matching, the other way round, to tell renamed items from missing ones
-from services.fridge import _contains, _tokens, find_missing_ingredients, same_name
+from services.fridge import _FOLD, _contains, _tokens, find_missing_ingredients, same_name
+from services.personas import build_scheduler_prompt, build_scheduler_user_message
 from services.personas.shopping import build_shopping_prompt
 from services.shopping import (
     SUGGESTIONS_SCHEMA, dish_names, new_suggestions, parse_suggestions, shopping_request,
 )
-from tools.prompt_samples import SAMPLES
+from tools.prompt_samples import PLAN_CASES, SAMPLES
 from utils import extract_json_block
 
 BACKEND = Path(__file__).resolve().parent.parent
@@ -63,11 +68,14 @@ SUGGEST_MESSAGES = {
 
 # Suggest Shopping's temperature (routers/ingredients.py, get_shopping_suggestions)
 SHOPPING_TEMPERATURE = 0.6
+# The Prep Plan button's temperature (routers/scheduler.py, get_schedule)
+PLAN_TEMPERATURE = 0.3
 
 # The stages each persona's runs score, and the problems its checks look for
 PERSONAS = {
     "suggest": {"stages": ("draft", "final"), "problems": ("missing", "renamed", "units", "turkish")},
     "shopping": {"stages": ("suggest", "more"), "problems": ("dish", "vague", "repeat", "turkish")},
+    "plan": {"stages": ("plan",), "problems": ("unlisted", "method", "turkish")},
 }
 STAGES = PERSONAS["suggest"]["stages"]
 _TURKISH_LETTERS = set("çğıöşüÇĞİÖŞÜ")
@@ -78,6 +86,24 @@ _VAGUE = re.compile(r"[(/]|\be\.?g\b|\bor\b|\b(fresh|organic|seasonal|assorted|v
 _DISH_WORDS = {
     "menemen", "omelette", "omelet", "toast", "tost", "salad", "sandwich", "porridge", "smoothie",
     "pancake", "pancakes", "soup", "scrambled", "boiled", "fried", "poached", "parfait", "bowl",
+}
+# Food a plan task may name, as word starts in the reply language (so plurals and Turkish suffixes
+# match): a heuristic for flagging food the menu doesn't list, like a copied example; read the log
+_FOOD_WORDS = {
+    "en": (
+        "egg", "tomato", "cucumber", "pepper", "cheese", "bread", "olive", "butter", "oil", "milk", "yogurt",
+        "honey", "banana", "oat", "walnut", "almond", "onion", "potato", "sausage", "bacon", "avocado",
+        "spinach", "mushroom", "apple", "berr", "salt", "jam", "simit", "sucuk",
+    ),
+    "tr": (
+        "yumurta", "domates", "salatalik", "biber", "peynir", "ekme", "zeytin", "tereyag", "sut", "yogur",
+        "bal", "sogan", "patates", "sucu", "mantar", "tuz",
+    ),
+}
+# Cooking methods code can tell apart, as word starts in either language
+_COOKING = {
+    "boil": ("boil", "simmer", "poach", "hasla", "kaynat"),
+    "fry": ("fry", "frie", "saute", "scrambl", "kizart", "kavur"),
 }
 
 
@@ -174,6 +200,82 @@ def score_shopping(replies: dict, sample: dict) -> dict:
     return scores
 
 
+def _folded(text: str) -> list[str]:
+    """The words of a text in lower case, Turkish letters folded ("Yumurtaları" → "yumurtalari")."""
+    return [w.translate(_FOLD).lower() for w in re.findall(r"\w+", text)]
+
+
+def _menu_names(menu: list[dict]) -> list[str]:
+    return [n for item in menu for n in [item["name"], *(s["name"] for s in item.get("ingredients") or [])]]
+
+
+def _plan_tasks(plan: dict) -> list[str]:
+    """Each task of a plan as one line: prep tasks with their detail, timed tasks with their end action."""
+    tasks = []
+    for group, extra in (("prep", "detail"), ("timed", "end_action")):
+        for t in plan.get(group) or []:
+            tasks.append(" ".join(str(t.get(k) or "") for k in ("task", extra)).strip() if isinstance(t, dict) else str(t))
+    return tasks
+
+
+def unlisted_food(tasks: list[str], case: dict) -> list[str]:
+    """Food words in the plan that no menu name, method or prep word starts the same way ("Cucumbers"
+    when the menu has none)."""
+    menu = case["menu"]
+    listed = _folded(" ".join(
+        [*_menu_names(menu), *(i.get("method") or "" for i in menu),
+         *(s.get("prep") or "" for i in menu for s in i.get("ingredients") or [])]
+    ))
+    found = []
+    for word in re.findall(r"\w+", " ".join(tasks)):
+        folded = _folded(word)[0]
+        roots = [r for r in _FOOD_WORDS[case["language"]] if folded.startswith(r)]
+        if roots and not any(w.startswith(r) for r in roots for w in listed) and word not in found:
+            found.append(word)
+    return found
+
+
+def _cooking(words: list[str]) -> set[str]:
+    return {way for way, starts in _COOKING.items() if any(w.startswith(starts) for w in words)}
+
+
+def contradicted_methods(tasks: list[str], case: dict) -> list[str]:
+    """Tasks that cook a dish's food another way than its method says, as "Fry the eggs (Egg sandwich:
+    boil)". A dish whose method names both ways or neither is skipped."""
+    found = []
+    for dish in case["menu"]:
+        ways = _cooking(_folded(dish.get("method") or ""))
+        if len(ways) != 1:
+            continue
+        # The dish's own words, plural-stripped: its name and its ingredients
+        names = [dish["name"], *(s["name"] for s in dish.get("ingredients") or [])]
+        roots = tuple(r for name in names for r in (min(v, key=len) for v in _tokens(name)) if len(r) >= 3)
+        for task in tasks:
+            words = _folded(task)
+            if any(w.startswith(roots) for w in words) and _cooking(words) and not _cooking(words) & ways:
+                found.append(f"{task} ({dish['name']}: {next(iter(ways))})")
+    return found
+
+
+def check_plan(text: str, case: dict) -> dict:
+    """Score one prep plan reply: does its JSON parse, does it plan only the menu, and each dish as designed."""
+    plan = extract_json_block(text or "")
+    if not isinstance(plan, dict) or not any(isinstance(plan.get(k), list) for k in ("prep", "timed")):
+        return _no_json("plan")
+    tasks = _plan_tasks(plan)
+    fridge = {"language": case["language"], "ingredients": [{"name": n} for n in _menu_names(case["menu"])]}
+    return {
+        "json": True,
+        # The plan's tasks, to count distinct plans across runs
+        "dishes": sorted(t.lower() for t in tasks),
+        "issues": {
+            "unlisted": unlisted_food(tasks, case),
+            "method": contradicted_methods(tasks, case),
+            "turkish": turkish_words(text, fridge),
+        },
+    }
+
+
 def is_clean(result: dict) -> bool:
     return result["json"] and not any(result["issues"].values())
 
@@ -249,6 +351,16 @@ async def shop_once(sample: dict, sent: dict) -> dict:
     return replies
 
 
+async def plan_once(case: dict, sent: dict) -> dict:
+    """One Prep Plan press, built the way routers/scheduler.py builds it: {"request": menu message, "plan": reply}."""
+    language, name = case["language"], case["meal_name"]
+    prompt = build_scheduler_prompt(name, [], "", kitchen_appliances=case["kitchen_appliances"], language=language)
+    message = build_scheduler_user_message(name, [], "", menu=case["menu"], language=language)
+    sent.setdefault(prompt, None)
+    chunks = [c async for c in suggestion.stream_response(prompt, [], message, temperature=PLAN_TEMPERATURE)]
+    return {"request": message, "plan": "".join(chunks)}
+
+
 @contextmanager
 def recording_prompts(into: dict):
     """Collect each distinct system prompt the pipeline sends (dict keys keep first-use order)."""
@@ -272,13 +384,15 @@ async def run(
     """Every run for every sample, one at a time (they share the server's GPU), and the prompts sent."""
     records, prompts = [], {}
     for key in samples:
-        sample, sent = SAMPLES[key], {}
+        sample, sent = (PLAN_CASES if persona == "plan" else SAMPLES)[key], {}
         with recording_prompts(sent):
             for i in range(1, runs + 1):
                 start = time.monotonic()
                 try:
                     if persona == "shopping":
                         replies = await shop_once(sample, sent)
+                    elif persona == "plan":
+                        replies = await plan_once(sample, sent)
                     else:
                         replies = await suggest_once(sample, mode, draft_only)
                     error = None
@@ -286,6 +400,8 @@ async def run(
                     replies, error = {}, f"{type(e).__name__}: {e}"
                 if persona == "shopping":
                     scores = score_shopping(replies, sample)
+                elif persona == "plan":
+                    scores = {"plan": check_plan(replies["plan"], sample)} if "plan" in replies else {}
                 else:
                     scores = {s: check_reply(replies[s], sample) for s in STAGES if s in replies}
                 record = {
@@ -437,6 +553,10 @@ def history_lines(history: list[dict]) -> list[str]:
     return lines or ["No tests yet."]
 
 
+# What the log calls the replies that aren't scored
+_UNSCORED = {"review": "Review feedback", "request": "Menu sent"}
+
+
 def save_log(records: list[dict], prompts: dict, header: str, report: str, diff: str) -> Path:
     """Write the report, uncommitted prompt changes, every reply and the prompts sent to tools/runs/."""
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
@@ -449,7 +569,7 @@ def save_log(records: list[dict], prompts: dict, header: str, report: str, diff:
         if r["error"]:
             out += ["", f"**Error:** {r['error']}"]
         for stage, text in r["replies"].items():
-            title = f"{stage.capitalize()}: {describe(r['scores'][stage])}" if stage in r["scores"] else "Review feedback"
+            title = f"{stage.capitalize()}: {describe(r['scores'][stage])}" if stage in r["scores"] else _UNSCORED[stage]
             out += ["", f"### {title}", "", "````text", text, "````"]
     out += ["", "## Prompts sent"]
     for key, sent in prompts.items():
@@ -462,18 +582,24 @@ def save_log(records: list[dict], prompts: dict, header: str, report: str, diff:
 # ── CLI ─────────────────────────────────────────────────────────────────────
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Score the suggestion and shopping prompts against an Ollama server.")
+    parser = argparse.ArgumentParser(description="Score the suggestion, shopping and prep plan prompts against an Ollama server.")
     parser.add_argument("--url", default=llm.OLLAMA_BASE_URL, help="Ollama address (default: OLLAMA_BASE_URL)")
     parser.add_argument("--runs", type=int, default=1, help="Suggest presses per sample (default: 1)")
-    parser.add_argument("--samples", default="en", help=f"comma-separated, from: {', '.join(SAMPLES)} (default: en)")
+    parser.add_argument(
+        "--samples",
+        help=f"comma-separated, from: {', '.join(SAMPLES)} (default: en); plan menus: {', '.join(PLAN_CASES)} (default: all)",
+    )
     parser.add_argument("--persona", choices=list(PERSONAS), default="suggest", help="what to test (default: suggest)")
     parser.add_argument("--mode", choices=["favorites", "explore"], help="Suggest mode (default: plain Suggest)")
     parser.add_argument("--draft", action="store_true", help="stop each run after the draft")
     parser.add_argument("--note", default="", help="what this prompt version changes, kept in the history")
     parser.add_argument("--history", action="store_true", help="list earlier tests and exit")
     args = parser.parse_args(argv)
-    args.samples = [s.strip() for s in args.samples.split(",") if s.strip()]
-    unknown = [s for s in args.samples if s not in SAMPLES]
+    pool = PLAN_CASES if args.persona == "plan" else SAMPLES
+    args.samples = [s.strip() for s in (args.samples or "").split(",") if s.strip()] or (
+        list(PLAN_CASES) if args.persona == "plan" else ["en"]
+    )
+    unknown = [s for s in args.samples if s not in pool]
     if unknown:
         parser.error(f"unknown sample: {', '.join(unknown)}")
     return args
