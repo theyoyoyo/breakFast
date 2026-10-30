@@ -132,6 +132,9 @@ export const itemRow = {
   fontSize: 15,
 }
 
+// A tap anywhere on a dish row opens or closes its ingredients
+export const dishRow = { ...itemRow, cursor: 'pointer' }
+
 export const qtyGroup = {
   display: 'flex',
   alignItems: 'center',
@@ -184,14 +187,14 @@ export const unitPicker = {
   flexShrink: 0,
   minWidth: 30,
   maxWidth: 110,
-  marginLeft: 8,
-  marginRight: 8,
+  marginLeft: 6,
+  marginRight: 6,
 }
 
+// Two-word units ("tea glass", "yemek kaşığı") take two lines; a long unknown unit breaks instead of overflowing
 export const unitText = {
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
+  lineHeight: 1.2,
+  overflowWrap: 'anywhere',
 }
 
 // Covers the picker so a tap opens the native list, which shows spoon and glass sizes
@@ -204,8 +207,11 @@ export const unitSelect = {
   cursor: 'pointer',
 }
 
+// minWidth 0: on a narrow phone a long name breaks onto another line instead of pushing the row wider
 export const itemText = {
   flex: 1,
+  minWidth: 0,
+  overflowWrap: 'anywhere',
   color: 'var(--text)',
 }
 
@@ -234,9 +240,11 @@ export const dishBadge = {
   marginRight: 6,
 }
 
+// ▶ Ingredients: --border nearly matches the row, so the outline is the muted text color at 70%
+// (3.5:1 on --surface2, was 1.1:1; text colors are the same in every theme)
 export const expandBtn = (isOpen) => ({
   background: 'none',
-  border: '1px solid var(--border)',
+  border: '1px solid color-mix(in srgb, var(--text-muted) 70%, transparent)',
   borderRadius: 4,
   cursor: 'pointer',
   fontSize: 10,
@@ -266,21 +274,33 @@ export const subRow = {
   fontSize: 13,
 }
 
+// Add rows wrap instead of overflowing at phone width
 export const subAddRow = {
   display: 'flex',
+  flexWrap: 'wrap',
   gap: 6,
   marginTop: 2,
 }
 
 export const addRow = {
   display: 'flex',
+  flexWrap: 'wrap',
   gap: 8,
   marginTop: 12,
   flexShrink: 0,
 }
 
+// ＋ Item and ＋ Dish stay together: on a narrow phone they move under the name box, kept at the right
+export const addBtns = {
+  display: 'flex',
+  gap: 8,
+  marginLeft: 'auto',
+}
+
+// Shrinks below its native width (minWidth 0) down to 6em, then gets a line of its own
 export const addInput = {
-  flex: 1,
+  flex: '1 1 6em',
+  minWidth: 0,
   background: 'var(--surface2)',
   border: '1px solid var(--border)',
   borderRadius: 10,
@@ -299,6 +319,8 @@ export const addBtn = {
   fontSize: 18,
   fontWeight: 600,
   cursor: 'pointer',
+  flexShrink: 0,
+  whiteSpace: 'nowrap',
 }
 
 export const actions = {

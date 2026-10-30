@@ -120,7 +120,8 @@ export default function MealEditor({
       style: { ...s.itemText, ...extraStyle, ...s.missingName({ obtained: got }), cursor: 'pointer' },
       title: got ? OBTAINED_HINT : MISSING_HINT,
       role: 'button',
-      onClick: () => toggleObtained(name),
+      // Stops here so a missing dish name doesn't also open the dish
+      onClick: (e) => { e.stopPropagation(); toggleObtained(name) },
     }
   }
 
@@ -373,7 +374,8 @@ export default function MealEditor({
             <div key={idx}>
               {isDish ? (
                 // ── Dish row ──────────────────────────────────────────────
-                <div style={s.itemRow}>
+                // A tap opens or closes the ingredients; its buttons and a missing name's mark keep the tap to themselves
+                <div style={s.dishRow} onClick={() => toggleDish(idx)}>
                   <span style={s.dishBadge}>🍳</span>
                   {dishNameMissing ? (
                     <span {...nameProps(item.name, { fontWeight: 500 })}>{item.name}</span>
@@ -390,12 +392,12 @@ export default function MealEditor({
                   <div style={s.itemActions}>
                     <button
                       style={s.expandBtn(isOpen)}
-                      onClick={() => toggleDish(idx)}
+                      onClick={(e) => { e.stopPropagation(); toggleDish(idx) }}
                       title={isOpen ? 'Close ingredients' : 'Edit ingredients'}
                     >
                       {isOpen ? '▲ Ingredients' : '▶ Ingredients'}
                     </button>
-                    <button style={s.deleteBtn} onClick={() => handleDelete(idx)} title="Delete">🗑️</button>
+                    <button style={s.deleteBtn} onClick={(e) => { e.stopPropagation(); handleDelete(idx) }} title="Delete">🗑️</button>
                   </div>
                 </div>
               ) : (
@@ -453,7 +455,6 @@ export default function MealEditor({
                       onChange={(e) => setNewSubItem(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleSubAdd(idx)}
                       placeholder="Add ingredient…"
-                      autoFocus
                     />
                     <button style={s.addBtn} onClick={() => handleSubAdd(idx)}>＋ Item</button>
                   </div>
@@ -473,10 +474,10 @@ export default function MealEditor({
           placeholder={menuMode ? 'Item or dish name…' : 'Add item…'}
         />
         {menuMode ? (
-          <>
+          <div style={s.addBtns}>
             <button style={s.addBtn} onClick={() => handleAdd(false)} title="Add simple item (peynir, zeytin…)">＋ Item</button>
             <button style={s.addBtn} onClick={() => handleAdd(true)} title="Add complex dish (menemen, omlet…)">＋ Dish</button>
-          </>
+          </div>
         ) : (
           <button style={s.addBtn} onClick={() => handleAdd(false)}>+</button>
         )}
@@ -505,11 +506,12 @@ export default function MealEditor({
 
 // Unit dropdown in the AI language; a unit outside the list stays selectable as written.
 // The box shows the plain unit and only the open list shows spoon and glass sizes, so the
-// select lies invisibly over a label as wide as the longest unit, like a native select.
+// select lies invisibly over a label as wide as the longest word of any unit: two-word units
+// take two lines, so the column stays narrow on phones and keeps its width when a unit is picked.
 function UnitSelect({ unit, units, language, onChange }) {
   const value = localizeUnit(unit || countUnit(language), language)
   const options = units.includes(value) ? units : [...units, value]
-  const width = `${Math.max(...options.map(u => u.length)) + 2}ch`
+  const width = `${Math.max(...options.flatMap(u => u.split(' ')).map(word => word.length)) + 2}ch`
   return (
     <span style={{ ...s.unitPicker, width }}>
       <span style={s.unitText} aria-hidden="true">{value}</span>
