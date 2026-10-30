@@ -573,15 +573,15 @@ reachable from your other devices.
    python -m tools.prompt_check --url http://100.x.x.x:11434 --note "what changed"
    ```
 
-   It runs 3 Suggest presses for the English sample by default. Options: `--runs 5`,
+   It runs 1 Suggest press for the English sample by default. Options: `--runs 3`,
    `--samples en,tr`, `--mode explore`, `--draft` (stop after the draft: one model call
    instead of three). Setting `OLLAMA_BASE_URL` in the development PC's `backend/.env`
    saves the `--url`.
 
 3. Each run is one Suggest press for a sample user (`tools/prompt_samples.py`). The
    table counts, for the draft and the final reply, how many replies were clean (meal
-   JSON parses, nothing missing from the fridge, no prepared item served as one fridge
-   item, units the app knows, no Turkish words in an English reply) and how many
+   JSON parses, nothing missing from the fridge, no renamed fridge items like "White
+   cheese (peynir)", units the app knows, no Turkish words in an English reply) and how many
    different menus came back, then lists the most frequent problems.
 
 4. Every test is kept on the development PC in `backend/tools/runs/` (git-ignored): a log

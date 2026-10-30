@@ -2,10 +2,14 @@
 Fridge check — which ingredients of a suggested meal are not in the user's fridge.
 
 Plain code, not the LLM: the suggestion pipeline runs this on the draft and
-hands the result to the refine step as a hard rule. Names are compared
-loosely (case, Turkish letters, simple plurals, "Beyaz peynir" ~ "Peynir"),
-so the check only flags clear misses. Nothing is assumed: basics like salt
-and oil count only when they are logged (usually in the Pantry group).
+hands the result to the refine step as a hard rule. Names are compared one
+way round (case, Turkish letters and simple plurals aside): a meal name may
+be shorter than a fridge name ("Peynir" for "Beyaz peynir"), never longer.
+A longer name is another or a prepared item: "Poached egg", "Simit with
+tahini" and "White cheese (peynir)" aren't "Egg", "Simit" or "White cheese",
+so they come back as dishes with their fridge ingredients (#115). Nothing is
+assumed: basics like salt and oil count only when they are logged (usually
+in the Pantry group).
 """
 
 import re
@@ -47,10 +51,6 @@ def _contains(hay: list[set[str]], needle: list[set[str]]) -> bool:
     )
 
 
-def _same_item(a: list[set[str]], b: list[set[str]]) -> bool:
-    return _contains(a, b) or _contains(b, a)
-
-
 def same_name(a: str, b: str) -> bool:
     """Exact match: the same words in order, ignoring case, Turkish letters and plurals.
 
@@ -89,7 +89,7 @@ def find_missing_ingredients(meal: dict | None, inventory: list[dict]) -> list[s
         if _is_water(name):
             continue
         words = _tokens(name)
-        if any(_same_item(words, s) for s in stock):
+        if any(_contains(s, words) for s in stock):  # the name sits inside a fridge name
             continue
         if name not in missing:
             missing.append(name)

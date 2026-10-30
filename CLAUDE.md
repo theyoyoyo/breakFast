@@ -18,7 +18,7 @@ Multiple users share one instance, each fully isolated. Auth is simple (pin/name
 
 **Health-aware, silently.** Health rules are per-user, stored in DB, injected into prompts at runtime. Never mentioned to the user. The app just makes good choices.
 
-**Everything ready at once.** The prep planner splits a menu into untimed prep (chop, slice) and timed tasks on appliances. The LLM only decomposes and estimates; `_build_plan` in `routers/scheduler.py` does the math: the longest timed task sets the total time and every other task starts at `total − duration`, so all food finishes together. User's configured appliances (from Kitchen Settings) are injected into all LLM prompts.
+**Everything ready at once.** The prep planner splits a menu into untimed prep (chop, slice) and timed tasks on appliances. The LLM only decomposes and estimates; `_build_plan` in `routers/scheduler.py` does the math: the longest timed task sets the total time and every other task starts at `total − duration`, so all food finishes together. The planner gets only what the menu lists: items served as they are get no cooking, and the prompt's example plan is placeholders only (the 7B model copied its food into real plans). User's configured appliances (from Kitchen Settings) are injected into all LLM prompts.
 
 **Local-first, free forever.** Primary LLM is Ollama on the user's own hardware. Song lyric fallback when unreachable.
 
@@ -83,7 +83,7 @@ LLM returns a full menu, not a single dish:
   "menu_name": "Klasik Kahvaltı",
   "menu": [
     { "name": "Menemen", "ingredients": [
-        { "name": "Yumurta", "amount": 2, "unit": "adet" }
+        { "name": "Yumurta", "amount": 2, "unit": "adet", "prep": "çırpılmış" }
     ]},
     { "name": "Beyaz peynir", "amount": 50, "unit": "g", "ingredients": [] }
   ],
@@ -94,6 +94,7 @@ LLM returns a full menu, not a single dish:
 
 - Complex dish: no top-level `amount`, has `ingredients[]`
 - Simple item: has `amount` + `unit`, `ingredients: []`
+- A dish ingredient may carry optional `prep` words ("rolled", "chopped"): the name stays exactly the fridge name, the prep plan gets "Oats (1 glass, rolled)", and MealEditor lists them per dish behind an ℹ️ button beside the time and id
 - `isSimpleItem(item)` = `item.amount != null`
 - DB column `menu_items TEXT` on `meal_history`, `suggested_meals`, `favorite_meals`
 - Old flat-format meals still work via `normalizeMeal()` in frontend
@@ -116,17 +117,17 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 
 **Chat persona:** responds in plain text only. Meal blocks come only from the Suggest button, never from chat.
 
-**Suggestion persona:** outputs short text (taste tips only — no prep steps, no nutrition table, no supplement notes) + JSON meal block. Must build meals from the fridge inventory only, basics like salt and oil included; a missing recipe item may be replaced with an inventory item, never with something outside it.
+**Suggestion persona:** outputs short text (taste tips only — no prep steps, no nutrition table, no supplement notes) + JSON meal block. Must build meals from the fridge inventory only, basics like salt and oil included; a missing recipe item may be replaced with an inventory item, never with something outside it. A simple item is one fridge item served as it is; anything cooked, combined or with a sauce is a dish with its ingredients. The prompt's JSON example shows the format only (placeholders), because the 7B model copies a full example menu.
 
-**Suggestion pipeline:** Draft → Analyst review + code fridge check (`services/fridge.py`) → Refine (one pass). Missing ingredients go to the refine step as the first feedback point. Progress sent via WebSocket `{type: 'progress'}`.
+**Suggestion pipeline:** Draft → Analyst review (at most three concrete changes with fridge items) + code fridge check (`services/fridge.py`) → Refine (one pass, keeps everything the feedback doesn't touch). Missing ingredients go to the refine step as the first feedback point. The review may only improve the meal: if code counts more fridge misses or unknown units in the final than in the draft, the user gets the draft, so the final is sent once that check is done instead of streamed. Code never removes items from a suggested menu: something the user doesn't have keeps its yellow mark so they can obtain it, and better menus come from the prompts. Progress sent via WebSocket `{type: 'progress'}`.
 
-**Shopping persona:** suggests products you can buy, never dishes (a dish becomes its missing ingredients). Names are plain and specific, and every word names the product: "Frozen strawberries" is a different item from "Strawberries", while filler like "fresh" doesn't belong in a name. The reply is constrained by Ollama structured outputs (`SUGGESTIONS_SCHEMA` in `services/shopping.py`, sent by `chat_json` in `services/llm.py`; needs Ollama 0.5+), and the raw reply is logged when it still can't be parsed. Code then drops anything in the fridge, on the shopping list, already shown or on the avoid list by exact name (`same_name` in `services/fridge.py`: case, Turkish letters and plurals only), and asks once more when a whole reply was repeats.
+**Shopping persona:** suggests products you can buy, never dishes (a dish becomes its missing ingredients). Names are plain and specific, and every word names the product: "Frozen strawberries" is a different item from "Strawberries", while filler like "fresh" doesn't belong in a name. The reply is constrained by Ollama structured outputs (`SUGGESTIONS_SCHEMA` in `services/shopping.py`, sent by `chat_json` in `services/llm.py`; needs Ollama 0.5+), and the raw reply is logged when it still can't be parsed. Code then drops anything in the fridge, on the shopping list, already shown or on the avoid list by exact name (`same_name` in `services/fridge.py`: case, Turkish letters and plurals only), and asks once more when a whole reply was repeats. Code also drops names that aren't one product ("Leafy greens (e.g. spinach)", "X or Y"; the prompt asks for alternatives as separate items next to each other) and the user's own dishes (`dish_names`: meal names and menu items made with ingredients, from all logged and favorite meals; simple items stay products). That filter is a safety net: the prompt asks for a dish's missing ingredients instead of the dish. The request message (`shopping_request`) names the reply language and, for Suggest More, the items already shown: the 7B model follows the last message better than the system prompt.
 
 **Suggestion + Analyst + Shopping** share `backend/services/knowledge.py`.
 
 **Prompt style:** state each rule once, in the prompt that owns it, as a positive instruction with a short reason, not a growing list of bans and special cases. Anything code can verify (fridge membership, JSON shape) is checked in code, not by asking another persona to police it.
 
-**Prompt test:** `backend/tools/prompt_check.py` runs the real suggestion pipeline for the sample users in `tools/prompt_samples.py` against an Ollama server and scores the draft and final replies in code (meal JSON, missing fridge items, prepared items served as one fridge item, units the app can't show, Turkish words in English replies, distinct menus). Run it before and after a prompt change with a `--note` (`docs/SETUPALL.md`, BONUS C): every test is logged in the git-ignored `tools/runs/` (replies, prompts sent, `history.jsonl`) and compared with the best earlier one, so keep a change only when it doesn't score worse. The pipeline yields a `draft` event for it, which chat ignores. When the suggestion context gains a field, add it to the samples (a test runs every sample through the pipeline).
+**Prompt test:** `backend/tools/prompt_check.py` runs the real suggestion pipeline (or, with `--persona shopping`, Suggest Shopping then Suggest More) for the sample users in `tools/prompt_samples.py` (en, tr, mixed, demo, sparse, vegan) against an Ollama server and scores the replies in code. For suggestions it scores the draft and the final (meal JSON, missing fridge items, renamed ones such as "White cheese (peynir)" or "Simit with tahini", units the app can't show, Turkish words in English replies, distinct menus; the review's feedback is logged too); for shopping it flags dishes, vague names, repeats the dedupe has to drop, and Turkish words in English replies. Run it before and after a prompt change with a `--note` (`docs/SETUPALL.md`, BONUS C): every test is logged in the git-ignored `tools/runs/` (replies, prompts sent, `history.jsonl`) and compared with the best earlier one, so keep a change only when it doesn't score worse. The pipeline yields `draft` and `review` events for it, which chat ignores. When the suggestion context gains a field, add it to the samples (a test runs every sample through the pipeline).
 
 ---
 
@@ -134,7 +135,7 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 
 - **Health rules**: injected into every LLM prompt silently. Never surface them to the user.
 - **Avoid list**: hard ban. Never suggest avoided ingredients.
-- **Fridge constraint**: suggestions use only the inventory. Nothing is assumed: basics (salt, oil, spices) and long-life items (flour, sesame, oats…) are logged like anything else, usually in the 🫙 Pantry group. A planned Fridge quick-add button will make logging them easy. Water is a utility like electricity and gas: listed in recipes when needed, but never required in the fridge (the check skips it). Ingredient names in the meal JSON must match the inventory as written, so the code check can compare them.
+- **Fridge constraint**: suggestions use only the inventory. Nothing is assumed: basics (salt, oil, spices) and long-life items (flour, sesame, oats…) are logged like anything else, usually in the 🫙 Pantry group. A planned Fridge quick-add button will make logging them easy. Water is a utility like electricity and gas: recipes may list it and the check skips it. The suggestion prompt doesn't mention water, so the model isn't drawn to serving it on its own. Ingredient names in the meal JSON must match the inventory as written, one item per name (a cut or form like "rolled" goes in the ingredient's `prep`), so the code check can compare them. The check matches one way: a meal name may be shorter than a fridge name ("Peynir" for "Beyaz peynir"), never longer ("Poached egg" isn't "Egg").
 - **Date and country**: today's date and the optional Country from Settings → Profile (`user_profiles.country`, list in `utils/countries.js`) go into the shopping and suggestion prompts (`format_today`), so "in season" means something. The profile text the analysts read leaves the country out.
 - **CORS**: configurable via `CORS_ORIGINS` env var (comma-separated).
 - **Demo user**: only created when `DEMO_USER=true` (empty PIN). A newly created demo account gets a starter fridge (`DEMO_FRIDGE` in `models/ingredient.py`, basics included). Never enable it on a reachable instance.

@@ -31,14 +31,27 @@ def test_collects_flat_format_ingredients():
     assert meal_ingredient_names(meal) == ["Bread", "Butter"]
 
 
-# Everything in the fridge, compared loosely (case, plural, partial name), is not flagged
-def test_fridge_items_match_loosely():
+# Everything in the fridge, ignoring case and plurals or shorter than its fridge name, is not flagged
+def test_fridge_items_match_by_shorter_or_equal_name():
     meal = _meal(
         {"name": "Menemen", "ingredients": [{"name": "yumurta"}, {"name": "DOMATES"}]},
         {"name": "Olives", "amount": 10, "unit": "adet", "ingredients": []},
         {"name": "Peynir", "amount": 50, "unit": "g", "ingredients": []},
     )
     assert find_missing_ingredients(meal, INVENTORY) == []
+
+
+# A name longer than its fridge name is another or a prepared item, so it's flagged (#115)
+def test_longer_names_are_not_their_fridge_item():
+    inventory = [{"name": "Egg"}, {"name": "Simit"}, {"name": "White cheese"}, {"name": "Yogurt"}]
+    meal = _meal(
+        {"name": "Poached egg", "amount": 2, "unit": "pcs", "ingredients": []},
+        {"name": "Simit with tahini dipping sauce", "amount": 1, "unit": "pcs", "ingredients": []},
+        {"name": "Plate", "ingredients": [{"name": "White cheese (peynir)"}, {"name": "Greek yogurt or milk"}]},
+    )
+    assert find_missing_ingredients(meal, inventory) == [
+        "Poached egg", "Simit with tahini dipping sauce", "White cheese (peynir)", "Greek yogurt or milk",
+    ]
 
 
 # Pantry-group items count as fridge items

@@ -69,6 +69,43 @@ export const prepTimeUnit = {
   color: 'var(--text-muted)',
 }
 
+// ℹ️ beside the time and id: opens how the suggestion meant the ingredients to be prepared
+export const detailsBtn = (isOpen) => ({
+  background: isOpen ? 'var(--surface2)' : 'none',
+  border: '1px solid var(--border)',
+  borderRadius: 6,
+  cursor: 'pointer',
+  fontSize: 14,
+  padding: '3px 6px',
+  lineHeight: 1,
+  flexShrink: 0,
+})
+
+export const detailsBox = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 8,
+  marginTop: -6,
+  marginBottom: 14,
+  padding: '10px 12px',
+  background: 'var(--surface2)',
+  border: '1px solid var(--border)',
+  borderRadius: 10,
+  fontSize: 13,
+  flexShrink: 0,
+}
+
+export const detailsDish = {
+  fontWeight: 600,
+  color: 'var(--text)',
+  marginBottom: 2,
+}
+
+export const detailsLine = {
+  color: 'var(--text-muted)',
+  paddingLeft: 10,
+}
+
 export const itemList = {
   display: 'flex',
   flexDirection: 'column',

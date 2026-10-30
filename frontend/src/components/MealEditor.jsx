@@ -54,6 +54,7 @@ export default function MealEditor({
   const [newSubItem, setNewSubItem] = useState('')
   const [favSaving, setFavSaving] = useState(false)
   const [favAdded, setFavAdded] = useState(false)
+  const [detailsOpen, setDetailsOpen] = useState(false)
   // Missing ingredients the user marked as obtained for this meal (yellow → green)
   const [obtained, setObtained] = useState(() => new Set(meal?.obtained || []))
   // Units follow the AI language: known ones are shown in it, unknown ones as written
@@ -68,6 +69,7 @@ export default function MealEditor({
     setOpenDishIdx(null)
     setNewSubItem('')
     setFavAdded(false)
+    setDetailsOpen(false)
     setObtained(new Set(meal?.obtained || []))
   }, [meal, menuMode])
 
@@ -281,6 +283,14 @@ export default function MealEditor({
 
   const handleSave = () => onSave?.(buildCurrentMeal())
 
+  // How the suggestion meant each dish's ingredients to be prepared ("Oats: rolled"), behind the ℹ️ button
+  const prepDetails = menuMode
+    ? items
+        .filter(item => !isSimpleItem(item))
+        .map(item => ({ dish: item.name, notes: (item.ingredients || []).filter(sub => typeof sub.prep === 'string' && sub.prep.trim()) }))
+        .filter(({ notes }) => notes.length > 0)
+    : []
+
   const handleFavorite = async () => {
     setFavSaving(true)
     try {
@@ -321,7 +331,28 @@ export default function MealEditor({
             <span style={s.prepTimeUnit}>m</span>
           </div>
         )}
+        {prepDetails.length > 0 && (
+          <button
+            style={s.detailsBtn(detailsOpen)}
+            onClick={() => setDetailsOpen(open => !open)}
+            title="Preparation details"
+            aria-expanded={detailsOpen}
+          >ℹ️</button>
+        )}
       </div>
+
+      {detailsOpen && prepDetails.length > 0 && (
+        <div style={s.detailsBox}>
+          {prepDetails.map(({ dish, notes }, di) => (
+            <div key={di}>
+              <div style={s.detailsDish}>{dish}</div>
+              {notes.map((sub, ni) => (
+                <div key={ni} style={s.detailsLine}>{sub.name}: {sub.prep.trim()}</div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div style={s.itemList}>
         {items.map((item, idx) => {

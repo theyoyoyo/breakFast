@@ -1,6 +1,6 @@
 """Tests for the shopping suggestion reply parsing and the code dedupe."""
 
-from services.shopping import new_suggestions, parse_suggestions
+from services.shopping import dish_names, new_suggestions, parse_suggestions, shopping_request
 
 
 # A schema-shaped reply gives its items, names and reasons trimmed
@@ -36,6 +36,39 @@ def test_new_suggestions_drop_exact_matches_only():
     ]
     known = ["Strawberry", "Milk", "Egg"]
     assert [i["name"] for i in new_suggestions(items, known)] == ["Frozen strawberries", "Almond milk"]
+
+
+# Names that aren't one product and the user's own dishes are left out, so alternatives come as separate items
+def test_new_suggestions_drop_vague_names_and_dishes():
+    items = [{"name": n, "reason": ""} for n in (
+        "Leafy greens (e.g. spinach)", "Milk or yogurt", "Spinach", "Chard", "Menemen", "Tomatoes",
+    )]
+    kept = new_suggestions(items, [], dishes=["Menemen", "Sucuklu tost"])
+    assert [i["name"] for i in kept] == ["Spinach", "Chard", "Tomatoes"]
+
+
+# Dishes are meal names and menu items made with ingredients; simple items and meals named after
+# one of their own ingredients stay products
+def test_dish_names_come_from_meals_and_their_menus():
+    meals = [
+        {"meal_name": "Weekend breakfast", "menu_items": [
+            {"name": "Menemen", "ingredients": [{"name": "Eggs"}, {"name": "Tomatoes"}]},
+            {"name": "Beyaz peynir", "amount": 50, "unit": "g", "ingredients": []},
+            {"name": "Yogurt", "ingredients": [{"name": "Yogurt"}, {"name": "Honey"}]},
+        ]},
+        {"meal_name": "Simit", "ingredients": ["Simit", "Tea"]},
+        {"meal_name": "Menemen", "ingredients": [{"name": "Eggs"}]},
+    ]
+    assert dish_names(meals) == ["Weekend breakfast", "Menemen"]
+
+
+# The request names the reply language and, for Suggest More, what was already shown
+def test_shopping_request_names_the_language_and_shown_items():
+    assert shopping_request("en") == "Generate shopping suggestions for me, in English."
+    assert shopping_request("tr", ["Kiwi", "Pear"]) == (
+        "Generate more shopping suggestions for me, in Turkish, all different from these, "
+        "which I've already seen: Kiwi, Pear."
+    )
 
 
 # The same item twice in one reply is kept once

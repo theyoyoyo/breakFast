@@ -16,7 +16,7 @@ All `task`, `detail`, and `end_action` strings in the JSON output MUST be writte
 
 Split the work into two groups:
 
-1. **prep**: Quick manual tasks with no specific timing — chopping, plating, mixing, putting into small bowls, slicing, etc. These are done first, before any timed cooking starts.
+1. **prep**: Quick manual tasks with no specific timing — chopping, slicing, grating, whisking, mixing. These are done first, before any timed cooking starts.
 
 2. **timed**: Tasks that require a specific kitchen resource for a measured duration — boiling, toasting, frying, baking, etc. For each:
    - Estimate the duration in minutes (be realistic)
@@ -24,24 +24,24 @@ Split the work into two groups:
    - Specify what to do when the task finishes (strain, remove, flip, etc.)
 
 Rules:
-- Cover every item on the menu. Work out the actions each dish needs even when no steps are given, and add necessary but missing actions (e.g., for boiled eggs, add "strain and transfer to cold water" as end_action)
-- Items served as-is (cheese, olives, honey, fruit) usually need only a prep task such as slicing or plating
+- Plan only what the menu lists. Work out the actions each dish needs even when no steps are given; an ingredient's words after its amount (chopped, grated) say how to prepare it.
+- Items served as they are need no timed task, and a prep task only when they must be cut first.
 - Be realistic about durations
 - Output ONLY the JSON object, nothing else
 
-Output format (inside ```json ... ``` fences):
+Output format (inside ```json ... ``` fences). This shows the format only; the <…> parts are yours to fill:
 
 ```json
 {{
   "prep": [
-    {{"task": "Slice tomatoes and cucumber", "detail": "thin rounds"}}
+    {{"task": "<manual task>", "detail": "<how, in a few words>"}}
   ],
   "timed": [
     {{
-      "task": "Boil eggs",
-      "duration_min": 7,
-      "resource": "Stove",
-      "end_action": "Drain and transfer to cold water"
+      "task": "<cooking task>",
+      "duration_min": 5,
+      "resource": "<appliance from the list>",
+      "end_action": "<what to do when it finishes>"
     }}
   ]
 }}
@@ -62,24 +62,27 @@ def build_scheduler_prompt(meal_name: str, steps: list[str], ingredients_str: st
 
 
 def _with_amount(item, language: str = "en") -> str:
-    """'Egg (2 pcs)' for a dict with amount/unit, the plain name otherwise. Units follow the language."""
+    """'Egg (2 pcs)' for a dict with amount/unit, plus its prep words ('Oats (1 glass, rolled)'),
+    the plain name otherwise. Units follow the language."""
     if not isinstance(item, dict):
         return str(item)
     name = item.get("name", "?")
     unit = localize_unit(item.get("unit"), language)
     qty = " ".join(str(v) for v in (item.get("amount"), unit) if v not in (None, ""))
-    return f"{name} ({qty})" if qty else name
+    details = ", ".join(v for v in (qty, str(item.get("prep") or "").strip()) if v)
+    return f"{name} ({details})" if details else name
 
 
 def format_menu(menu: list, language: str = "en") -> str:
-    """One line per menu item: cooked dishes with their ingredients, simple items with their amount."""
+    """One line per menu item: cooked dishes with their ingredients, simple items with their amount,
+    marked as served as they are."""
     lines = []
     for item in menu:
         subs = item.get("ingredients") if isinstance(item, dict) else None
         if subs:
             lines.append(f"- {item.get('name', '?')}: {', '.join(_with_amount(s, language) for s in subs)}")
         else:
-            lines.append(f"- {_with_amount(item, language)}")
+            lines.append(f"- {_with_amount(item, language)}, served as it is")
     return "\n".join(lines)
 
 

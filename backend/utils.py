@@ -13,6 +13,25 @@ from typing import Optional
 # objects/arrays are included.
 _JSON_BLOCK_RE = re.compile(r"```json\s*([\s\S]*?)\s*```")
 
+# A 7B model sometimes writes fractions as values ("amount": 1/4), which JSON doesn't allow
+_FRACTION_RE = re.compile(r"(:\s*)(\d+(?:\.\d+)?)\s*/\s*(\d+(?:\.\d+)?)(?=\s*[,}\]])")
+
+
+def _decimal(match: re.Match) -> str:
+    numerator, denominator = float(match.group(2)), float(match.group(3))
+    if not denominator:
+        return match.group(0)
+    return f"{match.group(1)}{round(numerator / denominator, 2):g}"
+
+
+def repair_json_block(text: str) -> str:
+    """The text with fractions in its ```json block written as decimals ("amount": 1/4 → 0.25),
+    so the backend and the chat UI, which re-reads saved replies, can both parse it."""
+    match = _JSON_BLOCK_RE.search(text)
+    if not match:
+        return text
+    return text[:match.start(1)] + _FRACTION_RE.sub(_decimal, match.group(1)) + text[match.end(1):]
+
 
 def extract_json_block(text: str) -> Optional[dict]:
     """
@@ -23,7 +42,7 @@ def extract_json_block(text: str) -> Optional[dict]:
     if not match:
         return None
     try:
-        return json.loads(match.group(1).strip())
+        return json.loads(_FRACTION_RE.sub(_decimal, match.group(1).strip()))
     except json.JSONDecodeError:
         return None
 

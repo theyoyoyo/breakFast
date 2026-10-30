@@ -484,6 +484,21 @@ class TestAnalystPrompt:
 # Scheduler (prep plan)
 # ---------------------------------------------------------------------------
 
+class TestSchedulerPrompt:
+    def test_example_shows_the_format_only(self):
+        """The 7B model copies a full example plan into real ones, so the example holds placeholders only."""
+        prompt = build_scheduler_prompt("", [], "")
+        assert "This shows the format only" in prompt
+        assert '"task": "<manual task>"' in prompt
+        assert "tomato" not in prompt.lower() and "boil eggs" not in prompt.lower()
+
+    def test_items_served_as_they_are_get_no_cooking(self):
+        """Simple items need no timed task, and a prep task only when they must be cut."""
+        prompt = build_scheduler_prompt("", [], "")
+        assert "Items served as they are need no timed task, and a prep task only when they must be cut first." in prompt
+        assert "Plan only what the menu lists." in prompt
+
+
 class TestSchedulerUserMessage:
     MENU = [
         {"name": "Menemen", "ingredients": [
@@ -497,7 +512,7 @@ class TestSchedulerUserMessage:
         """A menu-format meal sends its dishes and amounts, with no empty Steps section."""
         msg = build_scheduler_user_message("Classic Breakfast", [], "Egg, Tomato", menu=self.MENU)
         assert "- Menemen: Egg (2 pcs), Tomato (1 pcs)" in msg
-        assert "- White cheese (50 g)" in msg
+        assert "- White cheese (50 g), served as it is" in msg
         assert "Steps:" not in msg
         assert "Ingredients:" not in msg
 
@@ -507,6 +522,28 @@ class TestSchedulerUserMessage:
         msg = build_scheduler_user_message("Kahvaltı", [], "", menu=menu, language="tr")
         assert "- Menemen: Egg (2 adet), Tomato (1 adet)" in msg
         assert "- Protein powder (1 scoop)" in msg
+
+    def test_prep_words_follow_the_amount(self):
+        """An ingredient's prep words reach the planner beside its amount, so the dish is made as suggested."""
+        menu = [{"name": "Porridge", "ingredients": [
+            {"name": "Oats", "amount": 1, "unit": "glass", "prep": "rolled"},
+            {"name": "Banana", "prep": "sliced"},
+        ]}]
+        msg = build_scheduler_user_message("Porridge", [], "", menu=menu)
+        assert "- Porridge: Oats (1 glass, rolled), Banana (sliced)" in msg
+
+    def test_water_is_planned_like_any_item(self):
+        """Water in a recipe reaches the planner with the dish; a glass of water on its own is served as it is."""
+        menu = [
+            {"name": "Porridge", "ingredients": [
+                {"name": "Oats", "amount": 1, "unit": "glass"},
+                {"name": "Water", "amount": 1, "unit": "glass"},
+            ]},
+            {"name": "Water", "amount": 200, "unit": "ml", "ingredients": []},
+        ]
+        msg = build_scheduler_user_message("Porridge", [], "", menu=menu)
+        assert "- Porridge: Oats (1 glass), Water (1 glass)" in msg
+        assert "- Water (200 ml), served as it is" in msg
 
     def test_steps_still_included(self):
         """Older meals with recipe steps keep sending them, numbered."""
@@ -520,12 +557,13 @@ class TestSchedulerUserMessage:
 # ---------------------------------------------------------------------------
 
 class TestFridgeRule:
-    # One constructive rule: copy names from the list, basics included; water listed but never required
+    # One constructive rule: copy names from the list, basics included; water goes unmentioned, so the model isn't drawn to it
     def test_suggestion_prompt_has_one_copy_from_list_rule(self):
         prompt = build_suggestion_prompt([{"name": "Yumurta"}], [], {}, [])
-        assert "copy each ingredient name exactly as it appears there" in prompt
+        assert "copied exactly as listed (no alternatives like \"X or Y\", translations or notes; a cut or form" in prompt
+        assert "`prep` (optional, dish ingredients only)" in prompt
         assert "basics like salt and oil included" in prompt
-        assert "list it whenever a recipe needs it" in prompt
+        assert "water" not in prompt.lower()
         assert "never appear in the JSON" not in prompt
 
     # Code checks the fridge, so the reviewer only uses the list to suggest swaps
@@ -551,7 +589,7 @@ class TestLanguageReminder:
             "analyst": build_analyst_prompt([], None, None, None, language=language),
             "weekly_analyst": build_weekly_analyst_prompt_with_meals("Mon: eggs", language=language),
             "scheduler": build_scheduler_prompt("Menemen", [], "eggs", language=language),
-            "shopping": build_shopping_prompt([], [], {}, [], exclude_names=["Kiwi"], language=language),
+            "shopping": build_shopping_prompt([], [], {}, [], language=language),
         }
 
     def test_english_directive_is_last(self):
@@ -569,7 +607,7 @@ class TestLanguageReminder:
     def test_menu_name_follows_response_language(self):
         """The menu name is a title in the response language, not a dish name kept in Turkish."""
         prompt = build_suggestion_prompt([], [], {}, [])
-        assert "`menu_name`: a short descriptive title in the response language" in prompt
+        assert "`menu_name`: a short title for the whole menu in the response language" in prompt
         assert "never to the menu name" in prompt
 
 
@@ -661,9 +699,8 @@ class TestShoppingPrompt:
 
     def test_exclusions_are_stated_once_and_positively(self):
         """Code drops repeats, so the prompt only lists what is covered, without a pile of bans."""
-        prompt = build_shopping_prompt([], [], {}, [], shopping_list=["Kiwi"], exclude_names=["Pear"])
+        prompt = build_shopping_prompt([], [], {}, [], shopping_list=["Kiwi"])
         assert "CURRENT SHOPPING LIST:\nKiwi" in prompt
-        assert "ALREADY SHOWN (the user has seen these, so suggest different items):\nPear" in prompt
         assert "Do NOT suggest" not in prompt
 
     def test_reply_is_an_items_object(self):

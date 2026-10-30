@@ -69,6 +69,22 @@ def localize_unit(unit, language: str):
     return UNIT_PAIRS[row][0 if language == "en" else 1]
 
 
+def unknown_units(meal: dict, language: str) -> list[str]:
+    """Units in a meal the app can't show as one of the language's units (known spellings like "gr" pass)."""
+    allowed = {u.lower() for u in units_for(language)}
+    found = []
+    for item in meal.get("menu") or []:
+        if not isinstance(item, dict):
+            continue
+        for row in item.get("ingredients") or [item]:
+            unit = row.get("unit") if isinstance(row, dict) else None
+            if not isinstance(unit, str) or not unit.strip() or unit in found:
+                continue
+            if localize_unit(unit, language).strip().lower() not in allowed:
+                found.append(unit)
+    return found
+
+
 def unit_sizes(language: str) -> str:
     """Spoon and glass sizes with the language's unit names, e.g. "tsp 5 ml, …, glass 200 ml"."""
     return ", ".join(f"{localize_unit(unit, language)} {ml} ml" for unit, ml in UNIT_ML.items())
