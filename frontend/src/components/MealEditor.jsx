@@ -507,11 +507,12 @@ export default function MealEditor({
 
 // Unit dropdown in the AI language; a unit outside the list stays selectable as written.
 // The box shows the plain unit and only the open list shows spoon and glass sizes, so the
-// select lies invisibly over a label as wide as the longest unit, like a native select.
+// select lies invisibly over a label as wide as the longest word of any unit: two-word units
+// take two lines, so the column stays narrow on phones and keeps its width when a unit is picked.
 function UnitSelect({ unit, units, language, onChange }) {
   const value = localizeUnit(unit || countUnit(language), language)
   const options = units.includes(value) ? units : [...units, value]
-  const width = `${Math.max(...options.map(u => u.length)) + 2}ch`
+  const width = `${Math.max(...options.flatMap(u => u.split(' ')).map(word => word.length)) + 2}ch`
   return (
     <span style={{ ...s.unitPicker, width }}>
       <span style={s.unitText} aria-hidden="true">{value}</span>

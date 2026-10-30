@@ -187,14 +187,14 @@ export const unitPicker = {
   flexShrink: 0,
   minWidth: 30,
   maxWidth: 110,
-  marginLeft: 8,
-  marginRight: 8,
+  marginLeft: 6,
+  marginRight: 6,
 }
 
+// Two-word units ("tea glass", "yemek kaşığı") take two lines; a long unknown unit breaks instead of overflowing
 export const unitText = {
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
+  lineHeight: 1.2,
+  overflowWrap: 'anywhere',
 }
 
 // Covers the picker so a tap opens the native list, which shows spoon and glass sizes
@@ -207,8 +207,11 @@ export const unitSelect = {
   cursor: 'pointer',
 }
 
+// minWidth 0: on a narrow phone a long name breaks onto another line instead of pushing the row wider
 export const itemText = {
   flex: 1,
+  minWidth: 0,
+  overflowWrap: 'anywhere',
   color: 'var(--text)',
 }
 
