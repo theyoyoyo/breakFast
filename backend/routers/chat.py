@@ -3,6 +3,7 @@
 Handles streaming conversation with context loading from DB.
 Parses JSON meal blocks from LLM responses and auto-logs meals.
 Messages are persisted to chat_messages table for session continuity.
+Each open socket is registered in services/chat_sync, so a saved reply reaches the user's other devices.
 """
 
 import json
@@ -14,6 +15,7 @@ from services.llm import LLMUnavailableError, lyric_cycler
 from services.suggestion import build_chat_prompt, stream_response
 from services.pipeline import run_suggestion_pipeline
 from services.context import load_chat_context
+from services import chat_sync
 from models.units import count_unit
 from utils import extract_json_block
 
@@ -67,9 +69,9 @@ async def _save_suggestion(db, user_id: int, session_id: str, meal_data: dict, l
         return row[0]
 
 
-async def _save_message(db, session_id: str, user_id: int, role: str, content: str):
-    """Persist a chat message and touch session updated_at."""
-    await db.execute(
+async def _save_message(db, session_id: str, user_id: int, role: str, content: str) -> int:
+    """Persist a chat message and touch session updated_at. Returns the new message's id."""
+    cur = await db.execute(
         "INSERT INTO chat_messages (session_id, user_id, role, content) VALUES (?, ?, ?, ?)",
         (session_id, user_id, role, content),
     )
@@ -78,6 +80,7 @@ async def _save_message(db, session_id: str, user_id: int, role: str, content: s
         (session_id,),
     )
     await db.commit()
+    return cur.lastrowid
 
 
 async def _load_session_history(db, session_id: str, user_id: int) -> list[dict]:
@@ -104,6 +107,7 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
         return
 
     await websocket.accept()
+    chat_sync.register(user_id, websocket)
     cached_context: dict | None = None
     session_id: str | None = None
 
@@ -232,9 +236,13 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
             # Persist both messages to DB
             async with get_db() as db:
                 await _save_message(db, session_id, user_id, "user", user_message)
-                await _save_message(db, session_id, user_id, "assistant", saved_text)
+                message_id = await _save_message(db, session_id, user_id, "assistant", saved_text)
 
-            await websocket.send_json({"type": "done", "content": response_text})
+            # The user's other devices reload this chat (they never get the tokens)
+            await chat_sync.notify_session_updated(user_id, session_id, exclude=websocket)
+
+            # message_id lets this device save later meal card edits into the message
+            await websocket.send_json({"type": "done", "content": response_text, "message_id": message_id})
 
             if meal_data:
                 if prompt_type == "suggest":
@@ -245,3 +253,5 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
 
     except WebSocketDisconnect:
         pass
+    finally:
+        chat_sync.unregister(user_id, websocket)
