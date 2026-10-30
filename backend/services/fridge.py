@@ -79,13 +79,6 @@ def meal_ingredient_names(meal: dict) -> list[str]:
     return [n.strip() for n in names if n and n.strip()]
 
 
-def fridge_items_in(name: str, inventory: list[dict]) -> list[str]:
-    """Fridge items whose names sit inside a longer name: Oats for "Rolled oats", Eggs for
-    "Poached eggs". The refine step gets these as the likely replacement for a flagged name."""
-    words = _tokens(name)
-    return [i["name"] for i in inventory if i.get("name") and _contains(words, _tokens(i["name"]))]
-
-
 def find_missing_ingredients(meal: dict | None, inventory: list[dict]) -> list[str]:
     """Ingredients of the meal that are not in the inventory."""
     if not isinstance(meal, dict):

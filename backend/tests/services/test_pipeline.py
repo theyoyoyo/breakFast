@@ -371,18 +371,6 @@ class TestPipelineOrchestrator:
         assert "eggs" not in fridge_line
         assert msg.index("FRIDGE CHECK") < msg.index("Add more fiber")
 
-    # A flagged name with added words gets the fridge item inside it as the replacement
-    @pytest.mark.asyncio
-    async def test_fridge_check_names_the_fridge_item_inside_a_longer_name(self):
-        draft = (
-            '```json\n{"menu_name": "Eggs", "menu": ['
-            '{"name": "Eggs on toast", "ingredients": [{"name": "Poached eggs"}, {"name": "Bread"}]}'
-            ']}\n```'
-        )
-        msg = await self._refinement_message(draft)
-        fridge_line = next(line for line in msg.splitlines() if "FRIDGE CHECK" in line)
-        assert "not in the fridge: Poached eggs (the inventory has eggs), Bread." in fridge_line
-
     # A draft that only uses fridge items gets no fridge feedback
     @pytest.mark.asyncio
     async def test_fridge_check_silent_when_all_available(self):
