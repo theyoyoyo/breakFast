@@ -508,6 +508,15 @@ class TestSchedulerUserMessage:
         assert "- Menemen: Egg (2 adet), Tomato (1 adet)" in msg
         assert "- Protein powder (1 scoop)" in msg
 
+    def test_prep_words_follow_the_amount(self):
+        """An ingredient's prep words reach the planner beside its amount, so the dish is made as suggested."""
+        menu = [{"name": "Porridge", "ingredients": [
+            {"name": "Oats", "amount": 1, "unit": "glass", "prep": "rolled"},
+            {"name": "Banana", "prep": "sliced"},
+        ]}]
+        msg = build_scheduler_user_message("Porridge", [], "", menu=menu)
+        assert "- Porridge: Oats (1 glass, rolled), Banana (sliced)" in msg
+
     def test_steps_still_included(self):
         """Older meals with recipe steps keep sending them, numbered."""
         msg = build_scheduler_user_message("Eggs", ["Boil eggs", "Peel"], "Egg")
@@ -523,7 +532,8 @@ class TestFridgeRule:
     # One constructive rule: copy names from the list, basics included; water listed but never required
     def test_suggestion_prompt_has_one_copy_from_list_rule(self):
         prompt = build_suggestion_prompt([{"name": "Yumurta"}], [], {}, [])
-        assert "copied exactly as listed with no words added (no alternatives like \"X or Y\", forms like" in prompt
+        assert "copied exactly as listed (no alternatives like \"X or Y\", translations or notes; a cut or form" in prompt
+        assert "`prep` (optional, dish ingredients only)" in prompt
         assert "basics like salt and oil included" in prompt
         assert "list it whenever a recipe needs it" in prompt
         assert "never appear in the JSON" not in prompt

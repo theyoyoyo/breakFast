@@ -62,13 +62,15 @@ def build_scheduler_prompt(meal_name: str, steps: list[str], ingredients_str: st
 
 
 def _with_amount(item, language: str = "en") -> str:
-    """'Egg (2 pcs)' for a dict with amount/unit, the plain name otherwise. Units follow the language."""
+    """'Egg (2 pcs)' for a dict with amount/unit, plus its prep words ('Oats (1 glass, rolled)'),
+    the plain name otherwise. Units follow the language."""
     if not isinstance(item, dict):
         return str(item)
     name = item.get("name", "?")
     unit = localize_unit(item.get("unit"), language)
     qty = " ".join(str(v) for v in (item.get("amount"), unit) if v not in (None, ""))
-    return f"{name} ({qty})" if qty else name
+    details = ", ".join(v for v in (qty, str(item.get("prep") or "").strip()) if v)
+    return f"{name} ({details})" if details else name
 
 
 def format_menu(menu: list, language: str = "en") -> str:

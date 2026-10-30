@@ -118,8 +118,8 @@ HARD CONSTRAINT — FRIDGE-ONLY
 ═══════════════════════════════════════════════════════════════
 The user cooks only with what they have logged, basics like salt and oil included. Build every \
 dish from the available ingredients below. In the JSON each ingredient is one of them, its name \
-copied exactly as listed with no words added (no alternatives like "X or Y", forms like rolled or \
-chopped, translations or notes; the dish name says how it is prepared), even when that \
+copied exactly as listed (no alternatives like "X or Y", translations or notes; a cut or form \
+like chopped or rolled goes in its `prep`), even when that \
 name is in another language than your reply, so the app can find it in the fridge. Water is the one \
 exception: like gas and electricity it is always available, so list it whenever a recipe needs it \
 even though it is not in the inventory.
@@ -177,7 +177,7 @@ Append a JSON block at the end of your response. This shows the format only; the
     {{
       "name": "<dish name>",
       "ingredients": [
-        {{"name": "<inventory item>", "amount": 2, "unit": "{unit_count}"}},
+        {{"name": "<inventory item>", "amount": 2, "unit": "{unit_count}", "prep": "<cut or form>"}},
         {{"name": "<inventory item>", "amount": 1, "unit": "{unit_spoon}"}}
       ]
     }},
@@ -201,6 +201,9 @@ Rules for the JSON:
 - `unit`: one of {unit_list}. These are the units of the response language, so the \
   app can show and edit them. Spoons and glasses are the fixed sizes the user \
   measures with ({unit_sizes}), so pick amounts for those sizes.
+- `prep` (optional, dish ingredients only): one or two words in the response language on \
+  how that ingredient is cut or used (chopped, grated, rolled), so the prep plan makes the \
+  dish exactly as you meant it. Leave it out when there is nothing to say.
 - `nutrition_note`: one short sentence summarizing nutritional value. No numbers.
 - `prep_time_min`: realistic total time for the whole menu.
 - `menu_name`: a short title for the whole menu in the response language, not a dish name.
