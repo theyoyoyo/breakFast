@@ -321,70 +321,69 @@ async def get_shopping_suggestions(
     body: ShoppingSuggestionsRequest | None = None,
     user_id: int = Depends(require_user),
 ):
-    """Generate AI-powered shopping suggestions based on full user context."""
-    import json as _json
+    """Generate AI-powered shopping suggestions based on full user context.
+
+    Code keeps only new items: anything in the fridge, on the shopping list,
+    already shown (`exclude`) or on the avoid list is dropped by exact name.
+    When a whole reply is repeats, the model is asked once more.
+    """
     import logging
     from services.context import load_shopping_context
     from services.suggestion import build_shopping_prompt
-    from services.llm import chat_complete, LLMUnavailableError, lyric_cycler
+    from services.llm import chat_json, LLMUnavailableError, lyric_cycler
+    from services.shopping import SUGGESTIONS_SCHEMA, new_suggestions, parse_suggestions
 
-    exclude = body.exclude if body else []
+    shown = list(body.exclude) if body else []
 
     try:
         async with get_db() as db:
             ctx = await load_shopping_context(db, user_id)
-
-        prompt = build_shopping_prompt(
-            ingredient_inventory=ctx["ingredients"],
-            recent_meal_history=ctx["history"],
-            user_preferences=ctx["preferences"],
-            stated_habits=ctx["stated_habits"],
-            inferred_habits=ctx["inferred_habits"],
-            health_rules=ctx["health_rules"],
-            user_profile=ctx["user_profile"],
-            supplements=ctx["supplements"],
-            avoid_list=ctx["avoid_list"],
-            exclude_names=exclude,
-            shopping_list=ctx.get("shopping_list"),
-            favorites=ctx.get("favorites"),
-            ratings=ctx.get("ratings"),
-            language=ctx.get("language", "en"),
-        )
     except Exception as e:
-        logging.exception("Shopping context/prompt build failed")
+        logging.exception("Shopping context load failed")
         return {"suggestions": [], "lyric": lyric_cycler.next(), "error": str(e)}
 
-    try:
-        response = await chat_complete(
-            system_prompt=prompt,
-            messages=[{"role": "user", "content": "Generate shopping suggestions for me."}],
-        )
-    except LLMUnavailableError:
-        return {"suggestions": [], "lyric": lyric_cycler.next()}
-    except Exception as e:
-        logging.exception("Shopping LLM call failed")
-        return {"suggestions": [], "lyric": lyric_cycler.next(), "error": str(e)}
+    # The avoid list is a hard ban, so code enforces it beside the prompt rule
+    known = [i["name"] for i in ctx["ingredients"]] + ctx["shopping_list"] + ctx["avoid_list"]
 
-    # Parse the JSON array from the response.
-    # extract_json_block already returns parsed data (list or dict) — NOT a string.
-    from utils import extract_json_block
-    try:
-        parsed = extract_json_block(response)
-        if isinstance(parsed, list):
-            return {"suggestions": parsed, "lyric": None}
+    for _ in range(2):
+        try:
+            prompt = build_shopping_prompt(
+                ingredient_inventory=ctx["ingredients"],
+                recent_meal_history=ctx["history"],
+                user_preferences=ctx["preferences"],
+                stated_habits=ctx["stated_habits"],
+                inferred_habits=ctx["inferred_habits"],
+                health_rules=ctx["health_rules"],
+                user_profile=ctx["user_profile"],
+                supplements=ctx["supplements"],
+                avoid_list=ctx["avoid_list"],
+                exclude_names=shown,
+                shopping_list=ctx["shopping_list"],
+                favorites=ctx["favorites"],
+                ratings=ctx["ratings"],
+                language=ctx["language"],
+                country=ctx["country"],
+            )
+            reply = await chat_json(
+                system_prompt=prompt,
+                messages=[{"role": "user", "content": "Generate shopping suggestions for me."}],
+                schema=SUGGESTIONS_SCHEMA,
+                temperature=0.6,
+            )
+        except LLMUnavailableError:
+            return {"suggestions": [], "lyric": lyric_cycler.next()}
+        except Exception as e:
+            logging.exception("Shopping LLM call failed")
+            return {"suggestions": [], "lyric": lyric_cycler.next(), "error": str(e)}
 
-        # Fallback: LLM returned a bare JSON array without ```json fences
-        stripped = response.strip()
-        if stripped.startswith("[") and stripped.endswith("]"):
-            suggestions = _json.loads(stripped)
-            if isinstance(suggestions, list):
-                return {"suggestions": suggestions, "lyric": None}
-    except Exception:
-        logging.exception("Shopping suggestions parse failed")
+        items = parse_suggestions(reply)
+        if items is None:
+            logging.warning("Shopping suggestions: could not parse the reply: %r", reply)
+            return {"suggestions": [], "lyric": None, "error": "Could not read the AI reply. Please try again."}
 
-    # Parsing failed — return empty list with debug hint instead of 500
-    return {
-        "suggestions": [],
-        "lyric": None,
-        "error": "Could not parse LLM output as a JSON array.",
-    }
+        fresh = new_suggestions(items, known + shown)
+        if fresh:
+            return {"suggestions": fresh, "lyric": None}
+        shown += [i["name"] for i in items]
+
+    return {"suggestions": [], "lyric": None}

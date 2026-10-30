@@ -77,3 +77,21 @@ def test_water_is_never_missing():
 def test_no_meal_means_nothing_missing():
     assert find_missing_ingredients(None, INVENTORY) == []
     assert find_missing_ingredients(["not", "a", "meal"], INVENTORY) == []
+
+
+# Exact names match across case, Turkish letters and simple plurals
+def test_same_name_ignores_case_letters_and_plurals():
+    from services.fridge import same_name
+    assert same_name("Strawberry", "strawberries")
+    assert same_name("Zeytinler", "zeytin")
+    assert same_name("Şeftali", "seftali")
+    assert same_name("Eggs", "Egg")
+
+
+# Every word counts, so a longer or shorter name is a different product
+def test_same_name_needs_every_word():
+    from services.fridge import same_name
+    assert not same_name("Frozen strawberries", "Strawberries")
+    assert not same_name("Almond milk", "Milk")
+    assert not same_name("Yogurt", "Greek yogurt")
+    assert not same_name("", "")

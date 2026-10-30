@@ -132,6 +132,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     height_cm       INTEGER,
     weight_kg       REAL,
     activity_level  TEXT,
+    country         TEXT,
     updated_at      TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -370,6 +371,14 @@ async def init_db() -> None:
         try:
             await db.execute(
                 "ALTER TABLE favorite_meals ADD COLUMN menu_items TEXT"
+            )
+        except Exception:
+            pass  # Column already exists
+
+        # Migrate: add country column to user_profiles if missing
+        try:
+            await db.execute(
+                "ALTER TABLE user_profiles ADD COLUMN country TEXT"
             )
         except Exception:
             pass  # Column already exists

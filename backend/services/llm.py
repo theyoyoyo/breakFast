@@ -92,6 +92,36 @@ async def chat_complete(
     return "".join(chunks)
 
 
+async def chat_json(
+    system_prompt: str,
+    messages: list[dict],
+    schema: dict,
+    temperature: float | None = None,
+) -> str:
+    """Non-streaming call whose reply Ollama constrains to the JSON schema (structured outputs).
+
+    Returns the raw reply text; callers parse it. Needs Ollama 0.5 or later.
+    """
+    if not await check_llm_availability():
+        raise LLMUnavailableError(LLM_UNAVAILABLE_MESSAGE)
+
+    payload = {
+        "model": OLLAMA_MODEL,
+        "messages": [{"role": "system", "content": system_prompt}] + messages,
+        "stream": False,
+        "format": schema,
+    }
+    if temperature is not None:
+        payload["options"] = {"temperature": temperature}
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        response = await client.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload)
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            raise LLMUnavailableError(f"Ollama error {e.response.status_code}: model may not be downloaded") from e
+        return response.json().get("message", {}).get("content", "")
+
+
 # ---------------------------------------------------------------------------
 # Ollama
 # ---------------------------------------------------------------------------

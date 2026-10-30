@@ -73,6 +73,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
   const [selectedSuggestions, setSelectedSuggestions] = useState({})
   const [shoppingListOpen, setShoppingListOpen] = useState(false)
   const [lyricBanner, setLyricBanner] = useState(null)
+  const [noNewSuggestions, setNoNewSuggestions] = useState(false) // the AI only had repeats
 
   // Delete-to-shopping popup
   const [deletePopup, setDeletePopup] = useState(null) // { id, name }
@@ -305,6 +306,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
       setError(null)
       setSuggestionsLoading(true)
       setLyricBanner(null)
+      setNoNewSuggestions(false)
       const exclude = suggestions.map(s => s.name) // exclude current when "suggest more"
       const result = await getShoppingSuggestions(suggestions.length > 0 ? exclude : [])
 
@@ -343,6 +345,9 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
           result.suggestions.forEach((_, i) => { sel[i] = true })
           setSelectedSuggestions(sel)
         }
+      } else {
+        // The backend drops anything already known and retried once, so nothing new is left
+        setNoNewSuggestions(true)
       }
     } catch {
       setError('Failed to get suggestions')
@@ -686,6 +691,9 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
         </button>
         {lyricBanner && (
           <div style={s.lyricBanner}>{lyricBanner}</div>
+        )}
+        {noNewSuggestions && (
+          <div style={s.suggestNote}>No new items this time. Try again in a moment.</div>
         )}
       </div>
 

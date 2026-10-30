@@ -68,7 +68,7 @@ Chat with Ollama, ingredient inventory, meal suggestions, meal history, multi-us
 
 ### Phase 3 (IN PROGRESS)
 
-**Done:** Ingredient groups (11 fixed groups incl. 🫙 Pantry, English names), fridge-only enforcement (code check after the draft), expiry tracking, favorite ingredients (staples list), shopping list, delete confirm redesign, kitchen appliances settings, multi-item menu format, shared MealEditor, unit dropdown with smart defaults, simplified suggestion text, overlay edit pattern across all panels, explore mode, shopping assistant persona, weekly nutrition review, language toggle (English default + Turkish option), chat meal blocks only from the Suggest button, five color themes, Markdown in chat replies, fridge readiness badges on chat cards and favorites, "Today I ate" rework (Confirm waits until nothing is missing, Ate out, ⭐ Save, kept draft), units that follow the language setting.
+**Done:** Ingredient groups (11 fixed groups incl. 🫙 Pantry, English names), fridge-only enforcement (code check after the draft), expiry tracking, favorite ingredients (staples list), shopping list, delete confirm redesign, kitchen appliances settings, multi-item menu format, shared MealEditor, unit dropdown with smart defaults, simplified suggestion text, overlay edit pattern across all panels, explore mode, shopping assistant persona, weekly nutrition review, language toggle (English default + Turkish option), chat meal blocks only from the Suggest button, five color themes, Markdown in chat replies, fridge readiness badges on chat cards and favorites, "Today I ate" rework (Confirm waits until nothing is missing, Ate out, ⭐ Save, kept draft), units that follow the language setting, shopping suggestions as specific buyable products (date and country aware, structured outputs, code dedupe so Suggest More never repeats).
 
 **Remaining:** Habit onboarding, auth hardening (salted slow PIN hashing, 6+ digit PIN minimum, login rate limiting).
 
@@ -120,6 +120,8 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 
 **Suggestion pipeline:** Draft → Analyst review + code fridge check (`services/fridge.py`) → Refine (one pass). Missing ingredients go to the refine step as the first feedback point. Progress sent via WebSocket `{type: 'progress'}`.
 
+**Shopping persona:** suggests products you can buy, never dishes (a dish becomes its missing ingredients). Names are plain and specific, and every word names the product: "Frozen strawberries" is a different item from "Strawberries", while filler like "fresh" doesn't belong in a name. The reply is constrained by Ollama structured outputs (`SUGGESTIONS_SCHEMA` in `services/shopping.py`, sent by `chat_json` in `services/llm.py`; needs Ollama 0.5+), and the raw reply is logged when it still can't be parsed. Code then drops anything in the fridge, on the shopping list, already shown or on the avoid list by exact name (`same_name` in `services/fridge.py`: case, Turkish letters and plurals only), and asks once more when a whole reply was repeats.
+
 **Suggestion + Analyst + Shopping** share `backend/services/knowledge.py`.
 
 **Prompt style:** state each rule once, in the prompt that owns it, as a positive instruction with a short reason, not a growing list of bans and special cases. Anything code can verify (fridge membership, JSON shape) is checked in code, not by asking another persona to police it.
@@ -131,6 +133,7 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 - **Health rules**: injected into every LLM prompt silently. Never surface them to the user.
 - **Avoid list**: hard ban. Never suggest avoided ingredients.
 - **Fridge constraint**: suggestions use only the inventory. Nothing is assumed: basics (salt, oil, spices) and long-life items (flour, sesame, oats…) are logged like anything else, usually in the 🫙 Pantry group. A planned Fridge quick-add button will make logging them easy. Water is a utility like electricity and gas: listed in recipes when needed, but never required in the fridge (the check skips it). Ingredient names in the meal JSON must match the inventory as written, so the code check can compare them.
+- **Date and country**: today's date and the optional Country from Settings → Profile (`user_profiles.country`, list in `utils/countries.js`) go into the shopping and suggestion prompts (`format_today`), so "in season" means something. The profile text the analysts read leaves the country out.
 - **CORS**: configurable via `CORS_ORIGINS` env var (comma-separated).
 - **Demo user**: only created when `DEMO_USER=true` (empty PIN). A newly created demo account gets a starter fridge (`DEMO_FRIDGE` in `models/ingredient.py`, basics included). Never enable it on a reachable instance.
 - **Language**: the UI is English only; the setting changes AI replies. User data is often Turkish and pulls a 7B model toward Turkish, so every user-facing prompt ends with a `FINAL REMINDER` restating the language directive. Code-built text in replies (e.g. prep plan labels) follows the same setting, and so do units.
@@ -189,7 +192,8 @@ breakFAST/
 │   │   ├── context.py               ← shared context loaders for prompts
 │   │   ├── knowledge.py             ← shared food knowledge
 │   │   ├── insights.py              ← behavioral pattern extraction
-│   │   ├── fridge.py                ← fridge check: draft ingredients vs inventory
+│   │   ├── fridge.py                ← fridge check: draft ingredients vs inventory; exact name match
+│   │   ├── shopping.py              ← shopping reply schema, parser + dedupe
 │   │   ├── suggestion.py            ← stream_response + persona re-exports
 │   │   └── llm.py                   ← Ollama streaming + lyric fallback
 │   └── models/
@@ -201,6 +205,7 @@ breakFAST/
     ├── App.jsx                      ← tab nav (Chat, Fridge, Preferences, Settings)
     ├── utils/ingredients.js         ← ingredient helpers, units per language + unit memory
     ├── utils/language.js            ← AI language store (cached per device, like the theme)
+    ├── utils/countries.js           ← Country list for Settings → Profile
     ├── styles/common.js             ← shared styles
     ├── services/api.js              ← all REST + WebSocket calls
     ├── hooks/useVoice.js            ← Web Speech API

@@ -87,3 +87,39 @@ def test_global_lyric_cycler_is_singleton():
 def test_fallback_lyrics_has_12_lines():
     """Song has exactly 12 lines."""
     assert len(FALLBACK_LYRICS) == 12
+
+
+@pytest.mark.asyncio
+async def test_chat_json_sends_schema_as_format():
+    """chat_json asks Ollama for one non-streamed reply shaped by the schema and returns its text."""
+    from unittest.mock import MagicMock
+    from services.llm import chat_json
+
+    response = MagicMock()
+    response.json.return_value = {"message": {"content": '{"items": []}'}}
+    with patch("services.llm.check_llm_availability", return_value=True), \
+         patch("services.llm.httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=response)
+        mock_client_cls.return_value = mock_client
+
+        schema = {"type": "object"}
+        reply = await chat_json("system", [{"role": "user", "content": "hi"}], schema, temperature=0.6)
+
+    payload = mock_client.post.call_args.kwargs["json"]
+    assert reply == '{"items": []}'
+    assert payload["format"] == schema
+    assert payload["stream"] is False
+    assert payload["options"] == {"temperature": 0.6}
+
+
+@pytest.mark.asyncio
+async def test_chat_json_raises_when_llm_unavailable():
+    """chat_json raises LLMUnavailableError so callers can fall back to a lyric."""
+    from services.llm import chat_json
+
+    with patch("services.llm.check_llm_availability", return_value=False):
+        with pytest.raises(LLMUnavailableError):
+            await chat_json("system", [], {"type": "object"})

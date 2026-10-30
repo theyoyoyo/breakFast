@@ -82,7 +82,7 @@ async def fetch_health_rules(db, user_id: int) -> list[dict]:
 
 async def fetch_profile(db, user_id: int) -> dict | None:
     async with db.execute(
-        "SELECT age, gender, height_cm, weight_kg, activity_level FROM user_profiles WHERE user_id = ?",
+        "SELECT age, gender, height_cm, weight_kg, activity_level, country FROM user_profiles WHERE user_id = ?",
         (user_id,),
     ) as cur:
         row = await cur.fetchone()
@@ -142,6 +142,7 @@ async def load_chat_context(db, user_id: int) -> dict:
         "avoid_list": avoid_list,
         "kitchen_appliances": kitchen_appliances,
         "weekly_summary": weekly_summary,
+        "country": (user_profile or {}).get("country"),
         "language": language,
     }
 
@@ -208,6 +209,7 @@ async def load_shopping_context(db, user_id: int) -> dict:
         "shopping_list": shopping_list,
         "favorites": favorites,
         "ratings": ratings,
+        "country": (user_profile or {}).get("country"),
         "language": language,
     }
 

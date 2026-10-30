@@ -24,6 +24,12 @@ class ProfileIn(BaseModel):
     height_cm: int | None = None
     weight_kg: float | None = None
     activity_level: str | None = None
+    country: str | None = Field(default=None, max_length=60)  # only shapes "in season" in prompts
+
+    @field_validator("country")
+    @classmethod
+    def country_blank_is_none(cls, v):
+        return (v.strip() or None) if v else None
 
     @field_validator("age")
     @classmethod
@@ -91,17 +97,18 @@ async def upsert_profile(body: ProfileIn, user_id: int = Depends(require_user)):
     async with get_db() as db:
         await db.execute(
             """
-            INSERT INTO user_profiles (user_id, age, gender, height_cm, weight_kg, activity_level)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO user_profiles (user_id, age, gender, height_cm, weight_kg, activity_level, country)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
                 age = excluded.age,
                 gender = excluded.gender,
                 height_cm = excluded.height_cm,
                 weight_kg = excluded.weight_kg,
                 activity_level = excluded.activity_level,
+                country = excluded.country,
                 updated_at = datetime('now')
             """,
-            (user_id, body.age, body.gender, body.height_cm, body.weight_kg, body.activity_level),
+            (user_id, body.age, body.gender, body.height_cm, body.weight_kg, body.activity_level, body.country),
         )
         await db.commit()
         async with db.execute(

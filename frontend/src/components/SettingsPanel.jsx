@@ -15,6 +15,7 @@ import MealEditor from './MealEditor'
 import StarRating from './StarRating'
 import { THEMES, applyTheme, storedTheme } from '../utils/theme'
 import { applyLanguage } from '../utils/language'
+import { COUNTRIES } from '../utils/countries'
 import { useLanguage } from '../hooks/useLanguage'
 import * as s from './SettingsPanel.styles'
 
@@ -34,7 +35,7 @@ export default function SettingsPanel({ visible }) {
   const [error, setError] = useState(null)
 
   // Profile state
-  const [profile, setProfile] = useState({ age: '', gender: '', height_cm: '', weight_kg: '', activity_level: '' })
+  const [profile, setProfile] = useState({ age: '', gender: '', height_cm: '', weight_kg: '', activity_level: '', country: '' })
   const [profileDirty, setProfileDirty] = useState(false)
   const [profileLoaded, setProfileLoaded] = useState(false)
 
@@ -81,6 +82,7 @@ export default function SettingsPanel({ visible }) {
           height_cm: prof.height_cm ?? '',
           weight_kg: prof.weight_kg ?? '',
           activity_level: prof.activity_level ?? '',
+          country: prof.country ?? '',
         })
       }
       setSupplements(supps)
@@ -199,6 +201,7 @@ export default function SettingsPanel({ visible }) {
         height_cm,
         weight_kg,
         activity_level: profile.activity_level || null,
+        country: profile.country || null,
       })
       setProfileDirty(false)
     } catch {
@@ -671,6 +674,22 @@ export default function SettingsPanel({ visible }) {
               <option value="moderate">Moderate</option>
               <option value="active">Active</option>
               <option value="very_active">Very Active</option>
+            </select>
+          </div>
+          {/* Optional: tells the AI what's in season; not part of the incomplete-profile dot */}
+          <div style={s.profileField}>
+            <label style={s.profileLabel} htmlFor="profile-country">Country</label>
+            <select
+              id="profile-country"
+              style={s.select}
+              value={profile.country}
+              onChange={(e) => handleProfileChange('country', e.target.value)}
+            >
+              <option value="">—</option>
+              {profile.country && !COUNTRIES.includes(profile.country) && (
+                <option value={profile.country}>{profile.country}</option>
+              )}
+              {COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           {profileDirty && (

@@ -568,6 +568,13 @@ export const lyricBanner = {
   fontStyle: 'italic',
 }
 
+export const suggestNote = {
+  marginTop: 6,
+  fontSize: 12,
+  color: 'var(--text-muted)',
+  textAlign: 'center',
+}
+
 export const suggestionsPanel = {
   borderTop: '1px solid var(--border)',
   background: 'var(--surface)',

@@ -158,3 +158,12 @@ class TestKnowledgeMatchesSuggestion:
         assert _format_behavioral is format_behavioral
         assert _format_user_profile is format_user_profile
         assert _format_supplements is format_supplements
+
+
+# Today's date reads as an English sentence part, with the country when set
+def test_format_today():
+    from datetime import date
+    from services.knowledge import format_today
+    day = date(2026, 10, 27)
+    assert format_today(day) == "Tuesday, 27 October 2026"
+    assert format_today(day, "Türkiye") == "Tuesday, 27 October 2026, in Türkiye"

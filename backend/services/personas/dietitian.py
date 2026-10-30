@@ -6,6 +6,8 @@ Designs healthiest, most satisfying breakfast based on full user context.
 Supports "favorites" and "explore" modes.
 """
 
+from datetime import date
+
 from services.knowledge import (
     format_ingredients,
     format_history,
@@ -17,6 +19,7 @@ from services.knowledge import (
     format_user_profile,
     format_supplements_taken,
     format_weekly_summary,
+    format_today,
 )
 from models.units import count_unit, unit_sizes, units_for
 
@@ -107,7 +110,7 @@ Do NOT silently exclude any ingredient the user has not explicitly asked to avoi
 ═══════════════════════════════════════════════════════════════
 SEASONALITY
 ═══════════════════════════════════════════════════════════════
-Prefer seasonal fruits and vegetables — they're healthier and tastier. \
+Today is {today}. Prefer fruits and vegetables in season at this time and place — they're healthier and tastier. \
 This is a priority hint, not a hard constraint.
 
 ═══════════════════════════════════════════════════════════════
@@ -254,6 +257,8 @@ def build_suggestion_prompt(
     kitchen_appliances: list[str] | None = None,
     weekly_summary: dict | None = None,
     language: str = "en",
+    country: str | None = None,
+    today: date | None = None,
 ) -> str:
     """Build the suggestion persona system prompt."""
     appliance_str = ", ".join(kitchen_appliances) if kitchen_appliances else "Not configured"
@@ -273,6 +278,7 @@ def build_suggestion_prompt(
         avoid_list=format_avoid_list(avoid_list),
         kitchen_appliances=appliance_str,
         weekly_summary=format_weekly_summary(weekly_summary),
+        today=format_today(today, country),
     )
     mode_instruction = MODE_INSTRUCTIONS.get(mode, "")
     return base + mode_instruction + FINAL_REMINDER.format(lang_instruction=_lang(language))
