@@ -132,6 +132,9 @@ export const itemRow = {
   fontSize: 15,
 }
 
+// A tap anywhere on a dish row opens or closes its ingredients
+export const dishRow = { ...itemRow, cursor: 'pointer' }
+
 export const qtyGroup = {
   display: 'flex',
   alignItems: 'center',

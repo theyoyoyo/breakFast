@@ -120,7 +120,8 @@ export default function MealEditor({
       style: { ...s.itemText, ...extraStyle, ...s.missingName({ obtained: got }), cursor: 'pointer' },
       title: got ? OBTAINED_HINT : MISSING_HINT,
       role: 'button',
-      onClick: () => toggleObtained(name),
+      // Stops here so a missing dish name doesn't also open the dish
+      onClick: (e) => { e.stopPropagation(); toggleObtained(name) },
     }
   }
 
@@ -373,7 +374,8 @@ export default function MealEditor({
             <div key={idx}>
               {isDish ? (
                 // ── Dish row ──────────────────────────────────────────────
-                <div style={s.itemRow}>
+                // A tap opens or closes the ingredients; its buttons and a missing name's mark keep the tap to themselves
+                <div style={s.dishRow} onClick={() => toggleDish(idx)}>
                   <span style={s.dishBadge}>🍳</span>
                   {dishNameMissing ? (
                     <span {...nameProps(item.name, { fontWeight: 500 })}>{item.name}</span>
@@ -390,12 +392,12 @@ export default function MealEditor({
                   <div style={s.itemActions}>
                     <button
                       style={s.expandBtn(isOpen)}
-                      onClick={() => toggleDish(idx)}
+                      onClick={(e) => { e.stopPropagation(); toggleDish(idx) }}
                       title={isOpen ? 'Close ingredients' : 'Edit ingredients'}
                     >
                       {isOpen ? '▲ Ingredients' : '▶ Ingredients'}
                     </button>
-                    <button style={s.deleteBtn} onClick={() => handleDelete(idx)} title="Delete">🗑️</button>
+                    <button style={s.deleteBtn} onClick={(e) => { e.stopPropagation(); handleDelete(idx) }} title="Delete">🗑️</button>
                   </div>
                 </div>
               ) : (
