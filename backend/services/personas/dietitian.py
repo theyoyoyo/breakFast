@@ -198,7 +198,8 @@ Rules for the JSON:
   topping is a dish: list each of its ingredients (name, amount, unit) and leave out \
   the top-level amount and unit.
 - `method` (dishes only): how you designed the dish to be made, as its main steps in one \
-  short line in the response language, so the prep plan makes it the way you meant.
+  short line in the response language. Cooking steps go here only, so the reply text stays \
+  a short menu and the prep plan makes the dish the way you meant.
 - `unit`: one of {unit_list}. These are the units of the response language, so the \
   app can show and edit them. Spoons and glasses are the fixed sizes the user \
   measures with ({unit_sizes}), so pick amounts for those sizes.
