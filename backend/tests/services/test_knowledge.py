@@ -3,6 +3,7 @@ Tests for the shared knowledge module — context formatters used by all persona
 Verifies that knowledge.py formatters produce the same output as the old suggestion.py ones.
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -21,6 +22,7 @@ from services.knowledge import (
     format_ingredient_item,
     format_meal_detail,
     format_history_detailed,
+    format_history_for_weekly_review,
 )
 
 
@@ -52,12 +54,34 @@ class TestKnowledgeFormatters:
     def test_format_history_empty(self):
         assert format_history([]) == "no history yet"
 
-    # History respects limit parameter
+    # History comes newest first, so the limit keeps the newest meals
     def test_format_history_with_limit(self):
         meals = [{"meal_name": f"meal_{i}"} for i in range(10)]
         result = format_history(meals, limit=3)
-        assert "meal_9" in result
-        assert "meal_0" not in result
+        assert "meal_0" in result
+        assert "meal_9" not in result
+
+    # Detailed history keeps the newest meals too
+    def test_format_history_detailed_keeps_newest(self):
+        meals = [{"meal_name": f"meal_{i}", "ingredients": "[]"} for i in range(10)]
+        result = format_history_detailed(meals, limit=3)
+        assert "meal_0" in result
+        assert "meal_9" not in result
+
+    # A menu meal (DB strings, as fetched) lists its dishes with their ingredients and its simple items
+    def test_format_meal_detail_menu_items(self):
+        menu = [
+            {"name": "Menemen", "ingredients": [{"name": "Yumurta"}, {"name": "Domates"}]},
+            {"name": "Beyaz peynir", "amount": 50, "unit": "g", "ingredients": []},
+        ]
+        meal = {"meal_name": "Kahvaltı", "ingredients": "[]", "menu_items": json.dumps(menu)}
+        assert format_meal_detail(meal) == "Kahvaltı: Menemen (Yumurta, Domates), Beyaz peynir"
+
+    # The weekly review lists a menu meal's items too
+    def test_weekly_review_lists_menu_items(self):
+        menu = [{"name": "Toast", "ingredients": [{"name": "Bread"}, {"name": "Butter"}]}]
+        meal = {"meal_name": "Toast", "ingredients": "[]", "menu_items": json.dumps(menu), "logged_at": "2026-10-30 08:00"}
+        assert format_history_for_weekly_review([meal]) == "[2026-10-30] Toast — Toast (Bread, Butter)"
 
     # Meal detail formats name + ingredients
     def test_format_meal_detail_basic(self):

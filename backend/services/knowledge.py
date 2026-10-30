@@ -41,9 +41,10 @@ def format_ingredients(ingredients: list[dict]) -> str:
 
 
 def format_history(history: list[dict], limit: int = 5) -> str:
+    """Names of the newest meals; history comes newest first."""
     if not history:
         return "no history yet"
-    return "; ".join(m["meal_name"] for m in history[-limit:])
+    return "; ".join(m["meal_name"] for m in history[:limit])
 
 
 def format_preferences(preferences: dict) -> str:
@@ -180,25 +181,41 @@ def format_ingredient_item(item) -> str:
     return str(item)
 
 
+def _json_list(value) -> list:
+    """A JSON list field, whether still the DB's string or already parsed."""
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError:
+            return []
+    return value if isinstance(value, list) else []
+
+
+def format_meal_items(meal: dict) -> str:
+    """What a meal had: its menu, each dish with its ingredients ("Menemen (Eggs, Tomatoes)"),
+    or an old flat meal's ingredients."""
+    menu = _json_list(meal.get("menu_items"))
+    if menu:
+        parts = []
+        for item in menu:
+            sub = _json_list(item.get("ingredients")) if isinstance(item, dict) else []
+            name = format_ingredient_item(item)
+            parts.append(f"{name} ({', '.join(format_ingredient_item(s) for s in sub)})" if sub else name)
+        return ", ".join(parts)
+    ingredients = _json_list(meal.get("ingredients"))
+    return ", ".join(format_ingredient_item(i) for i in ingredients) if ingredients else "no items listed"
+
+
 def format_meal_detail(meal: dict) -> str:
     """Format a single meal with its ingredients for analyst context."""
-    name = meal.get("meal_name", "Unknown")
-    ingredients = meal.get("ingredients", "[]")
-    if isinstance(ingredients, str):
-        try:
-            ingredients = json.loads(ingredients)
-        except (json.JSONDecodeError, TypeError):
-            ingredients = []
-    items = ", ".join(format_ingredient_item(i) for i in ingredients) if ingredients else "no items listed"
-    return f"{name}: {items}"
+    return f"{meal.get('meal_name', 'Unknown')}: {format_meal_items(meal)}"
 
 
 def format_history_detailed(history: list[dict], limit: int = 5) -> str:
-    """Format meal history with ingredient details (for analyst use)."""
+    """The newest meals with their items (for analyst use); history comes newest first."""
     if not history:
         return "no history yet"
-    meals = history[-limit:]
-    return "\n".join(f"- {format_meal_detail(m)}" for m in meals)
+    return "\n".join(f"- {format_meal_detail(m)}" for m in history[:limit])
 
 
 def format_history_for_weekly_review(meals: list[dict]) -> str:
@@ -215,13 +232,7 @@ def format_history_for_weekly_review(meals: list[dict]) -> str:
     for m in sorted_meals:
         date_str = m.get("logged_at", "")[:10]  # YYYY-MM-DD
         name = m.get("meal_name", "Unknown")
-        ingredients = m.get("ingredients", "[]")
-        if isinstance(ingredients, str):
-            try:
-                ingredients = json.loads(ingredients)
-            except (json.JSONDecodeError, TypeError):
-                ingredients = []
-        items = ", ".join(format_ingredient_item(i) for i in ingredients) if ingredients else "no items listed"
+        items = format_meal_items(m)
         note = m.get("nutrition_note") or ""
         line = f"[{date_str}] {name} — {items}"
         if note:

@@ -48,7 +48,7 @@ async def fetch_ingredients(db, user_id: int) -> list[dict]:
 
 
 async def fetch_history(db, user_id: int, limit: int = 10, include_ingredients: bool = False) -> list[dict]:
-    cols = "meal_name, ingredients" if include_ingredients else "meal_name"
+    cols = "meal_name, ingredients, menu_items" if include_ingredients else "meal_name"
     async with db.execute(
         f"SELECT {cols} FROM meal_history WHERE user_id = ? ORDER BY logged_at DESC LIMIT ?",
         (user_id, limit),
@@ -117,7 +117,8 @@ async def load_chat_context(db, user_id: int) -> dict:
         kitchen_appliances,
     ) = await asyncio.gather(
         fetch_ingredients(db, user_id),
-        fetch_history(db, user_id, limit=10),
+        # With their items: the pipeline's reviewer reads what recent meals had
+        fetch_history(db, user_id, limit=10, include_ingredients=True),
         fetch_preferences(db, user_id),
         fetch_habits(db, user_id),
         fetch_health_rules(db, user_id),
