@@ -25,7 +25,7 @@ def _words(name: str) -> list[str]:
     return re.findall(r"[a-z0-9]+", name.translate(_FOLD).lower())
 
 
-def is_water(name: str) -> bool:
+def _is_water(name: str) -> bool:
     """'Water', 'hot water', 'Sıcak su'… but not 'Maden suyu' or 'Sparkling water'."""
     words = set(_words(name))
     return bool(words & {"water", "su"}) and words <= _WATER_WORDS
@@ -86,7 +86,7 @@ def find_missing_ingredients(meal: dict | None, inventory: list[dict]) -> list[s
     stock = [_tokens(i["name"]) for i in inventory if i.get("name")]
     missing = []
     for name in meal_ingredient_names(meal):
-        if is_water(name):
+        if _is_water(name):
             continue
         words = _tokens(name)
         if any(_contains(s, words) for s in stock):  # the name sits inside a fridge name
@@ -94,16 +94,3 @@ def find_missing_ingredients(meal: dict | None, inventory: list[dict]) -> list[s
         if name not in missing:
             missing.append(name)
     return missing
-
-
-def unservable_items(meal: dict | None, inventory: list[dict]) -> list[str]:
-    """Simple menu items the user can't be served: water, which recipes use like gas and
-    electricity but which is no breakfast item on its own, and anything not in the fridge."""
-    if not isinstance(meal, dict):
-        return []
-    simple = [
-        str(i.get("name") or "").strip() for i in meal.get("menu") or []
-        if isinstance(i, dict) and not i.get("ingredients")
-    ]
-    missing = find_missing_ingredients({"menu": [{"name": n} for n in simple]}, inventory)
-    return [n for n in simple if n and (is_water(n) or n in missing)]

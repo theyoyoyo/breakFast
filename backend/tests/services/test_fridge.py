@@ -1,6 +1,6 @@
 """Tests for the fridge check that flags suggested ingredients the user doesn't have."""
 
-from services.fridge import find_missing_ingredients, meal_ingredient_names, unservable_items
+from services.fridge import find_missing_ingredients, meal_ingredient_names
 
 INVENTORY = [
     {"name": "Yumurta"},
@@ -108,15 +108,3 @@ def test_same_name_needs_every_word():
     assert not same_name("Almond milk", "Milk")
     assert not same_name("Yogurt", "Greek yogurt")
     assert not same_name("", "")
-
-
-# Simple items can't be served when they are water or not in the fridge; dishes keep their marks instead
-def test_unservable_items_are_water_and_missing_simple_items():
-    meal = _meal(
-        {"name": "Menemen", "ingredients": [{"name": "Yumurta"}, {"name": "Bread"}]},
-        {"name": "Yumurta", "amount": 2, "unit": "adet", "ingredients": []},
-        {"name": "Bread", "amount": 2, "unit": "slice", "ingredients": []},
-        {"name": "Sıcak su", "amount": 1, "unit": "glass", "ingredients": []},
-    )
-    assert unservable_items(meal, INVENTORY) == ["Bread", "Sıcak su"]
-    assert unservable_items(None, INVENTORY) == []
