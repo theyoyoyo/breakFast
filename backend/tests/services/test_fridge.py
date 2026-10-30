@@ -31,7 +31,7 @@ def test_collects_flat_format_ingredients():
     assert meal_ingredient_names(meal) == ["Bread", "Butter"]
 
 
-# Everything in the fridge, ignoring case and plurals or shorter than its fridge name, is not flagged
+# Everything in the fridge, ignoring case and plurals or written as its fridge name's end, is not flagged
 def test_fridge_items_match_by_shorter_or_equal_name():
     meal = _meal(
         {"name": "Menemen", "ingredients": [{"name": "yumurta"}, {"name": "DOMATES"}]},
@@ -52,6 +52,41 @@ def test_longer_names_are_not_their_fridge_item():
     assert find_missing_ingredients(meal, inventory) == [
         "Poached egg", "Simit with tahini dipping sauce", "White cheese (peynir)", "Greek yogurt or milk",
     ]
+
+
+# A shorter name matches only a fridge name's head noun, so the start of a name is another product
+def test_shorter_names_match_the_head_noun_only():
+    inventory = [{"name": n} for n in ("Olive oil", "Cream cheese", "Rice cakes", "Cooked rice", "Blueberries")]
+    meal = _meal(
+        {"name": "Olives", "amount": 10, "unit": "pcs", "ingredients": []},
+        {"name": "Bowl", "ingredients": [{"name": "Cream"}, {"name": "Rice"}, {"name": "Blueberry"}]},
+    )
+    assert find_missing_ingredients(meal, inventory) == ["Olives", "Cream"]
+
+
+# An avoided item's words anywhere in a name ban it, unless "free" follows them
+def test_avoided_matches_any_word_but_not_free_of_it():
+    from services.fridge import avoided
+    assert avoided("Walnut oil", ["Walnuts"])
+    assert avoided("Feta Cheese", ["Cheese"])
+    assert avoided("Strawberry jam", ["Strawberries"])
+    assert avoided("Granola with almond milk", ["Peanuts", "Almonds"])
+    assert not avoided("Gluten-free oats", ["Gluten"])
+    assert not avoided("Glutensiz yulaf", ["Gluten"])
+    assert not avoided("Oat milk", ["Almonds"])
+
+
+# Avoided dishes and ingredients are both found, each name once
+def test_find_avoided_checks_dishes_and_ingredients():
+    from services.fridge import find_avoided
+    meal = _meal(
+        {"name": "Granola with almond milk", "ingredients": [{"name": "Granola"}, {"name": "Almond milk"}]},
+        {"name": "Almonds", "amount": 20, "unit": "g", "ingredients": []},
+        {"name": "Banana", "amount": 1, "unit": "pcs", "ingredients": []},
+    )
+    assert find_avoided(meal, ["Almonds"]) == ["Granola with almond milk", "Almond milk", "Almonds"]
+    assert find_avoided(meal, []) == []
+    assert find_avoided(None, ["Almonds"]) == []
 
 
 # Pantry-group items count as fridge items
@@ -99,6 +134,7 @@ def test_same_name_ignores_case_letters_and_plurals():
     assert same_name("Zeytinler", "zeytin")
     assert same_name("Şeftali", "seftali")
     assert same_name("Eggs", "Egg")
+    assert same_name("Blueberry", "Blueberries")
 
 
 # Every word counts, so a longer or shorter name is a different product

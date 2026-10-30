@@ -249,7 +249,7 @@ def contradicted_methods(tasks: list[str], case: dict) -> list[str]:
             continue
         # The dish's own words, plural-stripped: its name and its ingredients
         names = [dish["name"], *(s["name"] for s in dish.get("ingredients") or [])]
-        roots = tuple(r for name in names for r in (min(v, key=len) for v in _tokens(name)) if len(r) >= 3)
+        roots = tuple(r for name in names for r in (min(v, key=lambda w: (len(w), w)) for v in _tokens(name)) if len(r) >= 3)
         for task in tasks:
             words = _folded(task)
             if any(w.startswith(roots) for w in words) and _cooking(words) and not _cooking(words) & ways:
