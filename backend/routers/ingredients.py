@@ -342,8 +342,7 @@ async def get_shopping_suggestions(
         logging.exception("Shopping context load failed")
         return {"suggestions": [], "lyric": lyric_cycler.next(), "error": str(e)}
 
-    # The avoid list is a hard ban, so code enforces it beside the prompt rule
-    known = [i["name"] for i in ctx["ingredients"]] + ctx["shopping_list"] + ctx["avoid_list"]
+    known = [i["name"] for i in ctx["ingredients"]] + ctx["shopping_list"]
 
     for _ in range(2):
         try:
@@ -380,7 +379,8 @@ async def get_shopping_suggestions(
             logging.warning("Shopping suggestions: could not parse the reply: %r", reply)
             return {"suggestions": [], "lyric": None, "error": "Could not read the AI reply. Please try again."}
 
-        fresh = new_suggestions(items, known + shown, ctx["dishes"])
+        # The avoid list is a hard ban, so code enforces it beside the prompt rule
+        fresh = new_suggestions(items, known + shown, ctx["dishes"], ctx["avoid_list"])
         if fresh:
             return {"suggestions": fresh, "lyric": None}
         shown += [i["name"] for i in items]

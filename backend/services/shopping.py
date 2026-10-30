@@ -2,17 +2,18 @@
 Shopping suggestions: the reply schema and the code dedupe.
 
 Ollama constrains the shopping persona's reply to SUGGESTIONS_SCHEMA, and plain
-code then keeps only new products: anything in the fridge, on the shopping list,
-already shown or on the avoid list is dropped, and so are names that aren't one
-product and the user's own dishes (a safety net: the prompt asks for a dish's
-ingredients instead of the dish). Product names are specific, so names are
-compared exactly (see fridge.same_name), not loosely.
+code then keeps only new products: anything in the fridge, on the shopping list
+or already shown is dropped, and so are names that aren't one product and the
+user's own dishes (a safety net: the prompt asks for a dish's ingredients instead
+of the dish). Product names are specific, so names are compared exactly (see
+fridge.same_name), not loosely. The avoid list is the exception: a product made
+with an avoided item is dropped too ("Walnut oil" for Walnuts, see fridge.avoided).
 """
 
 import json
 import re
 
-from services.fridge import same_name
+from services.fridge import avoided, same_name
 
 SUGGESTIONS_SCHEMA = {
     "type": "object",
@@ -90,14 +91,14 @@ def dish_names(meals: list[dict]) -> list[str]:
     return dishes
 
 
-def new_suggestions(items: list[dict], known: list[str], dishes: list[str] = ()) -> list[dict]:
-    """Items whose names aren't already known, each name once. Names that aren't one product
-    and the user's own dishes (see dish_names) are left out too."""
+def new_suggestions(items: list[dict], known: list[str], dishes: list[str] = (), avoid: list[str] = ()) -> list[dict]:
+    """Items whose names aren't already known, each name once. Names that aren't one product,
+    the user's own dishes (see dish_names) and products made with an avoided item are left out too."""
     seen = list(known)
     result = []
     for item in items:
         name = item["name"]
-        if _NOT_ONE_PRODUCT.search(name) or any(same_name(name, d) for d in dishes):
+        if _NOT_ONE_PRODUCT.search(name) or any(same_name(name, d) for d in dishes) or avoided(name, avoid):
             continue
         if any(same_name(name, k) for k in seen):
             continue
