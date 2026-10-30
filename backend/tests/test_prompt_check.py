@@ -42,6 +42,12 @@ def test_no_meal_json():
     assert describe(result) == "no JSON"
 
 
+# A fraction amount is read the way the app reads it, so the reply still scores as a meal
+def test_fraction_amounts_score_as_a_meal():
+    text = 'Enjoy!\n```json\n{"menu_name": "Oats", "menu": [{"name": "Oats", "amount": 1/4, "unit": "glass", "ingredients": []}]}\n```'
+    assert is_clean(check_reply(text, EN))
+
+
 # An ingredient outside the fridge is reported as missing
 def test_missing_ingredient():
     text = _reply({"name": "Avocado toast", "ingredients": [
