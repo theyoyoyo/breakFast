@@ -94,7 +94,7 @@ LLM returns a full menu, not a single dish:
 
 - Complex dish: no top-level `amount`, has `ingredients[]`
 - Simple item: has `amount` + `unit`, `ingredients: []`
-- A dish may carry an optional `method`: its main steps in one short line, in the reply language ("Hard-boil the eggs, peel, slice into the bread"). It is stored with the dish in `menu_items` (older meals have none), and the prep plan gets "- Egg sandwich (Hard-boil the eggs, …): Egg (2 pcs), Bread (2 slice)"
+- A dish may carry an optional `method`: its main steps in one short line, in the reply language ("Hard-boil the eggs, peel, slice into the bread"). It is stored with the dish in `menu_items` (older meals have none), and the prep plan gets "- Egg sandwich (Hard-boil the eggs, …): Egg (2 pcs), Bread (2 slice)". The suggestion prompt doesn't ask for it yet: with a method rule the prompt test scored worse (more renamed items and unknown units), so it waits for a way that doesn't cost the menu (#121)
 - A dish ingredient may carry optional `prep` words ("rolled", "chopped"): the name stays exactly the fridge name, and the prep plan gets "Oats (1 glass, rolled)"
 - MealEditor shows each dish's method and prep words behind an ℹ️ button beside the time and id
 - `isSimpleItem(item)` = `item.amount != null`
@@ -119,7 +119,7 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 
 **Chat persona:** responds in plain text only. Meal blocks come only from the Suggest button, never from chat.
 
-**Suggestion persona:** outputs short text (taste tips only — no prep steps, no nutrition table, no supplement notes) + JSON meal block. Must build meals from the fridge inventory only, basics like salt and oil included; a missing recipe item may be replaced with an inventory item, never with something outside it. A simple item is one fridge item served as it is; anything cooked, combined or with a sauce is a dish with its ingredients and a one-line `method`, which carries the dish's design to the prep plan. The prompt's JSON example shows the format only (placeholders), because the 7B model copies a full example menu.
+**Suggestion persona:** outputs short text (taste tips only — no prep steps, no nutrition table, no supplement notes) + JSON meal block. Must build meals from the fridge inventory only, basics like salt and oil included; a missing recipe item may be replaced with an inventory item, never with something outside it. A simple item is one fridge item served as it is; anything cooked, combined or with a sauce is a dish with its ingredients. The prompt's JSON example shows the format only (placeholders), because the 7B model copies a full example menu.
 
 **Suggestion pipeline:** Draft → Analyst review (at most three concrete changes with fridge items) + code fridge check (`services/fridge.py`) → Refine (one pass, keeps everything the feedback doesn't touch). Missing ingredients go to the refine step as the first feedback point. The review may only improve the meal: if code counts more fridge misses or unknown units in the final than in the draft, the user gets the draft, so the final is sent once that check is done instead of streamed. Code never removes items from a suggested menu: something the user doesn't have keeps its yellow mark so they can obtain it, and better menus come from the prompts. Progress sent via WebSocket `{type: 'progress'}`.
 
