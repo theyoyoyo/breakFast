@@ -523,7 +523,7 @@ class TestFridgeRule:
     # One constructive rule: copy names from the list, basics included; water listed but never required
     def test_suggestion_prompt_has_one_copy_from_list_rule(self):
         prompt = build_suggestion_prompt([{"name": "Yumurta"}], [], {}, [])
-        assert "copied exactly as listed (no alternatives like \"X or Y\", translations or notes)" in prompt
+        assert "copied exactly as listed with no words added (no alternatives like \"X or Y\", forms like" in prompt
         assert "basics like salt and oil included" in prompt
         assert "list it whenever a recipe needs it" in prompt
         assert "never appear in the JSON" not in prompt

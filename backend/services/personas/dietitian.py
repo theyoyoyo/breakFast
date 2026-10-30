@@ -118,7 +118,8 @@ HARD CONSTRAINT — FRIDGE-ONLY
 ═══════════════════════════════════════════════════════════════
 The user cooks only with what they have logged, basics like salt and oil included. Build every \
 dish from the available ingredients below. In the JSON each ingredient is one of them, its name \
-copied exactly as listed (no alternatives like "X or Y", translations or notes), even when that \
+copied exactly as listed with no words added (no alternatives like "X or Y", forms like rolled or \
+chopped, translations or notes; the dish name says how it is prepared), even when that \
 name is in another language than your reply, so the app can find it in the fridge. Water is the one \
 exception: like gas and electricity it is always available, so list it whenever a recipe needs it \
 even though it is not in the inventory.
