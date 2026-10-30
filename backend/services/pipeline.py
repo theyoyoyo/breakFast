@@ -16,7 +16,7 @@ Steps:
 from typing import AsyncGenerator
 
 from models.units import unknown_units
-from services.fridge import find_missing_ingredients
+from services.fridge import find_missing_ingredients, fridge_items_in
 from services.suggestion import (
     build_suggestion_prompt,
     build_pipeline_analyst_prompt,
@@ -124,9 +124,14 @@ async def run_suggestion_pipeline(
     # The 7B model misses fridge-only violations, so code checks the draft's JSON too
     missing = find_missing_ingredients(extract_json_block(draft_text), context["ingredients"])
     if missing:
+        # A name with added words ("Rolled oats") gets the fridge item it contains as the fix
+        flagged = []
+        for name in missing:
+            near = fridge_items_in(name, context["ingredients"])
+            flagged.append(f"{name} (the inventory has {', '.join(near)})" if near else name)
         fridge_feedback = (
             "- FRIDGE CHECK (hard rule, fix this first): these ingredients are not in the fridge: "
-            f"{', '.join(missing)}. Replace each one with an inventory item, writing its name "
+            f"{', '.join(flagged)}. Replace each one with an inventory item, writing its name "
             "exactly as listed, or remove it. Drop a dish only if it can't be made without it."
         )
         feedback_formatted = f"{fridge_feedback}\n{feedback_formatted}"

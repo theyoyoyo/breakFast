@@ -35,8 +35,7 @@ from pathlib import Path
 from models.units import unknown_units
 from routers.chat import SUGGEST_TEMPERATURES
 from services import llm, pipeline
-# The fridge check's own word matching, the other way round, to tell renamed items from missing ones
-from services.fridge import _contains, _tokens, find_missing_ingredients, same_name
+from services.fridge import find_missing_ingredients, fridge_items_in, same_name
 from services.personas.shopping import build_shopping_prompt
 from services.shopping import (
     SUGGESTIONS_SCHEMA, dish_names, new_suggestions, parse_suggestions, shopping_request,
@@ -86,8 +85,7 @@ _DISH_WORDS = {
 def renamed_items(names: list[str], inventory: list[dict]) -> list[str]:
     """Names the fridge check flags although they contain a fridge item: prepared, combined or
     renamed items ("Simit with tahini dipping sauce", "White cheese (peynir)", "Yogurt or milk")."""
-    stock = [_tokens(i["name"]) for i in inventory if i.get("name")]
-    return [n for n in names if any(_contains(_tokens(n), s) for s in stock)]
+    return [n for n in names if fridge_items_in(n, inventory)]
 
 
 def turkish_words(text: str, sample: dict) -> list[str]:

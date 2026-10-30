@@ -108,3 +108,12 @@ def test_same_name_needs_every_word():
     assert not same_name("Almond milk", "Milk")
     assert not same_name("Yogurt", "Greek yogurt")
     assert not same_name("", "")
+
+
+# The fridge items inside a longer name are found, each matched as whole words in order
+def test_fridge_items_in_a_longer_name():
+    from services.fridge import fridge_items_in
+    assert fridge_items_in("Rolled oats", [{"name": "Oats"}, {"name": "Soy milk"}]) == ["Oats"]
+    assert fridge_items_in("Domatesli yumurta", INVENTORY) == ["Yumurta"]  # "domatesli" is another word
+    assert fridge_items_in("Beyaz peynir dilimleri", INVENTORY) == ["Beyaz peynir"]
+    assert fridge_items_in("Avocado", INVENTORY) == []
