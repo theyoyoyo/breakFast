@@ -9,6 +9,7 @@ All scheduling math (parallel execution, backward timing) is handled by our code
 """
 
 from models.units import localize_unit
+from services.fridge import is_water
 
 SCHEDULER_TEMPLATE = """You are a kitchen workflow expert. Your job is to turn a breakfast menu (its dishes and ingredients, plus any recipe steps given) into a detailed, structured cooking plan.
 {lang_instruction}
@@ -16,7 +17,7 @@ All `task`, `detail`, and `end_action` strings in the JSON output MUST be writte
 
 Split the work into two groups:
 
-1. **prep**: Quick manual tasks with no specific timing — chopping, plating, mixing, putting into small bowls, slicing, etc. These are done first, before any timed cooking starts.
+1. **prep**: Quick manual tasks with no specific timing — chopping, slicing, grating, whisking, mixing. These are done first, before any timed cooking starts.
 
 2. **timed**: Tasks that require a specific kitchen resource for a measured duration — boiling, toasting, frying, baking, etc. For each:
    - Estimate the duration in minutes (be realistic)
@@ -24,24 +25,24 @@ Split the work into two groups:
    - Specify what to do when the task finishes (strain, remove, flip, etc.)
 
 Rules:
-- Cover every item on the menu. Work out the actions each dish needs even when no steps are given, and add necessary but missing actions (e.g., for boiled eggs, add "strain and transfer to cold water" as end_action)
-- Items served as-is (cheese, olives, honey, fruit) usually need only a prep task such as slicing or plating
+- Plan only what the menu lists. Work out the actions each dish needs even when no steps are given; an ingredient's words after its amount (chopped, grated) say how to prepare it.
+- Items served as they are need no timed task, and a prep task only when they must be cut first.
 - Be realistic about durations
 - Output ONLY the JSON object, nothing else
 
-Output format (inside ```json ... ``` fences):
+Output format (inside ```json ... ``` fences). This shows the format only; the <…> parts are yours to fill:
 
 ```json
 {{
   "prep": [
-    {{"task": "Slice tomatoes and cucumber", "detail": "thin rounds"}}
+    {{"task": "<manual task>", "detail": "<how, in a few words>"}}
   ],
   "timed": [
     {{
-      "task": "Boil eggs",
-      "duration_min": 7,
-      "resource": "Stove",
-      "end_action": "Drain and transfer to cold water"
+      "task": "<cooking task>",
+      "duration_min": 5,
+      "resource": "<appliance from the list>",
+      "end_action": "<what to do when it finishes>"
     }}
   ]
 }}
@@ -74,14 +75,15 @@ def _with_amount(item, language: str = "en") -> str:
 
 
 def format_menu(menu: list, language: str = "en") -> str:
-    """One line per menu item: cooked dishes with their ingredients, simple items with their amount."""
+    """One line per menu item: cooked dishes with their ingredients, simple items with their amount,
+    marked as served as they are. Water on its own is no menu item (older meals may list it)."""
     lines = []
     for item in menu:
         subs = item.get("ingredients") if isinstance(item, dict) else None
         if subs:
             lines.append(f"- {item.get('name', '?')}: {', '.join(_with_amount(s, language) for s in subs)}")
-        else:
-            lines.append(f"- {_with_amount(item, language)}")
+        elif not is_water(str(item.get("name") or "") if isinstance(item, dict) else str(item)):
+            lines.append(f"- {_with_amount(item, language)}, served as it is")
     return "\n".join(lines)
 
 

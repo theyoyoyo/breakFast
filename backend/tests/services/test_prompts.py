@@ -484,6 +484,21 @@ class TestAnalystPrompt:
 # Scheduler (prep plan)
 # ---------------------------------------------------------------------------
 
+class TestSchedulerPrompt:
+    def test_example_shows_the_format_only(self):
+        """The 7B model copies a full example plan into real ones, so the example holds placeholders only."""
+        prompt = build_scheduler_prompt("", [], "")
+        assert "This shows the format only" in prompt
+        assert '"task": "<manual task>"' in prompt
+        assert "tomato" not in prompt.lower() and "boil eggs" not in prompt.lower()
+
+    def test_items_served_as_they_are_get_no_cooking(self):
+        """Simple items need no timed task, and a prep task only when they must be cut."""
+        prompt = build_scheduler_prompt("", [], "")
+        assert "Items served as they are need no timed task, and a prep task only when they must be cut first." in prompt
+        assert "Plan only what the menu lists." in prompt
+
+
 class TestSchedulerUserMessage:
     MENU = [
         {"name": "Menemen", "ingredients": [
@@ -497,7 +512,7 @@ class TestSchedulerUserMessage:
         """A menu-format meal sends its dishes and amounts, with no empty Steps section."""
         msg = build_scheduler_user_message("Classic Breakfast", [], "Egg, Tomato", menu=self.MENU)
         assert "- Menemen: Egg (2 pcs), Tomato (1 pcs)" in msg
-        assert "- White cheese (50 g)" in msg
+        assert "- White cheese (50 g), served as it is" in msg
         assert "Steps:" not in msg
         assert "Ingredients:" not in msg
 
@@ -516,6 +531,19 @@ class TestSchedulerUserMessage:
         ]}]
         msg = build_scheduler_user_message("Porridge", [], "", menu=menu)
         assert "- Porridge: Oats (1 glass, rolled), Banana (sliced)" in msg
+
+    def test_water_on_its_own_is_left_out(self):
+        """Water served on its own (older meals may list it) gets no task; water in a dish's recipe stays."""
+        menu = [
+            {"name": "Porridge", "ingredients": [
+                {"name": "Oats", "amount": 1, "unit": "glass"},
+                {"name": "Water", "amount": 1, "unit": "glass"},
+            ]},
+            {"name": "Water", "amount": 500, "unit": "ml", "ingredients": []},
+        ]
+        msg = build_scheduler_user_message("Porridge", [], "", menu=menu)
+        assert "- Porridge: Oats (1 glass), Water (1 glass)" in msg
+        assert "500" not in msg
 
     def test_steps_still_included(self):
         """Older meals with recipe steps keep sending them, numbered."""
