@@ -200,6 +200,13 @@ class TestPipelineOrchestrator:
         worse = _meal_reply('{"name": "Poached eggs", "amount": 2, "unit": "cup"}')
         assert await _final_text([GOOD_MEAL, FEEDBACK, worse]) == GOOD_MEAL
 
+    # A final with a new avoid-list item loses to the draft, even when the draft has more fridge misses
+    @pytest.mark.asyncio
+    async def test_falls_back_to_draft_when_final_adds_an_avoided_item(self):
+        draft = _meal_reply('{"name": "Toast", "amount": 1, "unit": "pcs"}, {"name": "Jam", "amount": 1, "unit": "tbsp"}')
+        allergen = _meal_reply('{"name": "Shellfish", "amount": 100, "unit": "g"}')
+        assert await _final_text([draft, FEEDBACK, allergen]) == draft
+
     # A meal JSON with fractions ("amount": 1/2) reaches the user with decimals, so the chat can read it again
     @pytest.mark.asyncio
     async def test_final_fractions_become_decimals(self):

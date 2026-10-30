@@ -10,13 +10,14 @@ Steps:
 2. Pipeline Analyst reviews the draft (a few changes as a JSON list), and plain
    code lists any draft ingredient that isn't in the fridge.
 3. Suggestion persona refines the meal using that feedback. If code finds more
-   problems in the refined meal than in the draft, the user gets the draft.
+   problems in the refined meal than in the draft, the user gets the draft:
+   avoid-list hits first, then fridge misses and unknown units.
 """
 
 from typing import AsyncGenerator
 
 from models.units import unknown_units
-from services.fridge import find_missing_ingredients
+from services.fridge import find_avoided, find_missing_ingredients
 from services.suggestion import (
     build_suggestion_prompt,
     build_pipeline_analyst_prompt,
@@ -25,14 +26,16 @@ from services.suggestion import (
 from utils import extract_json_block, repair_json_block
 
 
-def _meal_problems(text: str, context: dict) -> float:
-    """Code-checked problems in a reply's meal: fridge misses and units the app can't show.
+def _meal_problems(text: str, context: dict) -> tuple[float, float]:
+    """Code-checked problems in a reply's meal, compared in order: avoid-list hits (a hard ban,
+    so one outweighs any number of the rest), then fridge misses and units the app can't show.
     A reply without a meal counts as the worst."""
     meal = extract_json_block(text)
     if not isinstance(meal, dict) or not isinstance(meal.get("menu"), list):
-        return float("inf")
+        return float("inf"), float("inf")
+    avoided = find_avoided(meal, context["avoid_list"])
     missing = find_missing_ingredients(meal, context["ingredients"])
-    return len(missing) + len(unknown_units(meal, context.get("language", "en")))
+    return len(avoided), len(missing) + len(unknown_units(meal, context.get("language", "en")))
 
 
 async def run_suggestion_pipeline(
