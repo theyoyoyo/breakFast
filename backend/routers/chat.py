@@ -110,6 +110,19 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
     chat_sync.register(user_id, websocket)
     cached_context: dict | None = None
     session_id: str | None = None
+    # False once this device drops mid-reply (a phone locked while waiting): the reply
+    # still finishes and is saved, and the user's devices load it from the session
+    client_live = True
+
+    async def send_live(event: dict) -> None:
+        """Send a reply event to this device, unless it has already dropped."""
+        nonlocal client_live
+        if not client_live:
+            return
+        try:
+            await websocket.send_json(event)
+        except WebSocketDisconnect:
+            client_live = False
 
     try:
         while True:
@@ -177,9 +190,9 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                         chat_context=chat_context,
                     ):
                         if event["type"] == "progress":
-                            await websocket.send_json(event)
+                            await send_live(event)
                         elif event["type"] == "token":
-                            await websocket.send_json(event)
+                            await send_live(event)
                         elif event["type"] == "done":
                             response_text = event["content"]
                 except LLMUnavailableError:
@@ -208,7 +221,7 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                 try:
                     async for chunk in stream_response(system_prompt, conversation_history, user_message, temperature=temperature):
                         full_response.append(chunk)
-                        await websocket.send_json({"type": "token", "content": chunk})
+                        await send_live({"type": "token", "content": chunk})
 
                     response_text = "".join(full_response)
                 except LLMUnavailableError:
@@ -242,14 +255,17 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
             await chat_sync.notify_session_updated(user_id, session_id, exclude=websocket)
 
             # message_id lets this device save later meal card edits into the message
-            await websocket.send_json({"type": "done", "content": response_text, "message_id": message_id})
+            await send_live({"type": "done", "content": response_text, "message_id": message_id})
 
             if meal_data:
                 if prompt_type == "suggest":
-                    await websocket.send_json({"type": "meal_logged", "meal": meal_data})
+                    await send_live({"type": "meal_logged", "meal": meal_data})
                 else:
-                    await websocket.send_json({"type": "meal_updated", "meal": meal_data})
+                    await send_live({"type": "meal_updated", "meal": meal_data})
                 cached_context = None
+
+            if not client_live:
+                break
 
     except WebSocketDisconnect:
         pass
