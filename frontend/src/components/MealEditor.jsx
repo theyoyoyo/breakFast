@@ -473,10 +473,10 @@ export default function MealEditor({
           placeholder={menuMode ? 'Item or dish name…' : 'Add item…'}
         />
         {menuMode ? (
-          <>
+          <div style={s.addBtns}>
             <button style={s.addBtn} onClick={() => handleAdd(false)} title="Add simple item (peynir, zeytin…)">＋ Item</button>
             <button style={s.addBtn} onClick={() => handleAdd(true)} title="Add complex dish (menemen, omlet…)">＋ Dish</button>
-          </>
+          </div>
         ) : (
           <button style={s.addBtn} onClick={() => handleAdd(false)}>+</button>
         )}

@@ -266,21 +266,33 @@ export const subRow = {
   fontSize: 13,
 }
 
+// Add rows wrap instead of overflowing at phone width
 export const subAddRow = {
   display: 'flex',
+  flexWrap: 'wrap',
   gap: 6,
   marginTop: 2,
 }
 
 export const addRow = {
   display: 'flex',
+  flexWrap: 'wrap',
   gap: 8,
   marginTop: 12,
   flexShrink: 0,
 }
 
+// ＋ Item and ＋ Dish stay together: on a narrow phone they move under the name box, kept at the right
+export const addBtns = {
+  display: 'flex',
+  gap: 8,
+  marginLeft: 'auto',
+}
+
+// Shrinks below its native width (minWidth 0) down to 6em, then gets a line of its own
 export const addInput = {
-  flex: 1,
+  flex: '1 1 6em',
+  minWidth: 0,
   background: 'var(--surface2)',
   border: '1px solid var(--border)',
   borderRadius: 10,
@@ -299,6 +311,8 @@ export const addBtn = {
   fontSize: 18,
   fontWeight: 600,
   cursor: 'pointer',
+  flexShrink: 0,
+  whiteSpace: 'nowrap',
 }
 
 export const actions = {
