@@ -133,6 +133,30 @@ describe('MealEditor fridge check', () => {
   })
 })
 
+describe('MealEditor prep words', () => {
+  beforeEach(() => { vi.mocked(checkMissingIngredients).mockReset() })
+
+  const PREP_MEAL = {
+    menu_name: 'Porridge',
+    menu: [{ name: 'Porridge', ingredients: [
+      { name: 'Oats', amount: 1, unit: 'glass', prep: 'rolled' },
+      { name: 'Banana', amount: 1, unit: 'pcs', prep: 'sliced' },
+    ] }],
+  }
+
+  it('shows an ingredient\'s prep words on hover, before the fridge hint, and keeps them through edits', async () => {
+    checkMissingIngredients.mockResolvedValue({ missing: ['Banana'] })
+    const onChange = vi.fn()
+    render(<MealEditor meal={PREP_MEAL} menuMode checkFridge onChange={onChange} />)
+    fireEvent.click(screen.getByText('▶ Ingredients'))
+    expect(screen.getByText('Oats')).toHaveAttribute('title', 'rolled')
+    await waitFor(() => expect(screen.getByText('Banana')).toHaveAttribute('title', `sliced · ${MISSING}`))
+    fireEvent.click(screen.getAllByText('▲')[0])
+    const oats = onChange.mock.lastCall[0].menu[0].ingredients[0]
+    expect(oats).toMatchObject({ name: 'Oats', amount: 2, prep: 'rolled' })
+  })
+})
+
 describe('MealEditor units', () => {
   afterEach(() => applyLanguage('en'))
 

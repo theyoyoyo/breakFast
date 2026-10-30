@@ -107,16 +107,17 @@ export default function MealEditor({
   }
 
   // Missing names are tappable: yellow until marked as obtained, then green
-  // (templates only show the yellow underline)
-  const nameProps = (name, extraStyle = {}) => {
-    if (!isMissing(name)) return { style: { ...s.itemText, ...extraStyle } }
+  // (templates only show the yellow underline). An ingredient's prep words ("rolled") show on hover.
+  const nameProps = (name, extraStyle = {}, prep) => {
+    const title = (hint) => [prep, hint].filter(Boolean).join(' · ') || undefined
+    if (!isMissing(name)) return { style: { ...s.itemText, ...extraStyle }, title: title() }
     if (!canMarkObtained) {
-      return { style: { ...s.itemText, ...extraStyle, ...s.missingName() }, title: TEMPLATE_MISSING_HINT }
+      return { style: { ...s.itemText, ...extraStyle, ...s.missingName() }, title: title(TEMPLATE_MISSING_HINT) }
     }
     const got = isObtained(name)
     return {
       style: { ...s.itemText, ...extraStyle, ...s.missingName({ obtained: got }), cursor: 'pointer' },
-      title: got ? OBTAINED_HINT : MISSING_HINT,
+      title: title(got ? OBTAINED_HINT : MISSING_HINT),
       role: 'button',
       onClick: () => toggleObtained(name),
     }
@@ -403,7 +404,7 @@ export default function MealEditor({
                         <button style={s.arrowBtn} onClick={() => handleSubQtyStep(idx, si, 1)}>▲</button>
                       </div>
                       <UnitSelect unit={sub.unit} units={units} language={language} onChange={(unit) => handleSubUnitChange(idx, si, unit)} />
-                      <span {...nameProps(sub.name)}>{sub.name}</span>
+                      <span {...nameProps(sub.name, {}, sub.prep)}>{sub.name}</span>
                       <div style={s.itemActions}>
                         <button style={s.deleteBtn} onClick={() => handleSubDelete(idx, si)} title="Delete">🗑️</button>
                       </div>
