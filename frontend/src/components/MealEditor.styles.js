@@ -69,7 +69,7 @@ export const prepTimeUnit = {
   color: 'var(--text-muted)',
 }
 
-// ℹ️ beside the time and id: opens how the suggestion meant the ingredients to be prepared
+// ℹ️ beside the time and id: opens how the suggestion meant each dish to be made
 export const detailsBtn = (isOpen) => ({
   background: isOpen ? 'var(--surface2)' : 'none',
   border: '1px solid var(--border)',
@@ -98,6 +98,13 @@ export const detailsBox = {
 export const detailsDish = {
   fontWeight: 600,
   color: 'var(--text)',
+  marginBottom: 2,
+}
+
+// The dish's method reads as its main line; prep words follow in muted text
+export const detailsMethod = {
+  color: 'var(--text)',
+  paddingLeft: 10,
   marginBottom: 2,
 }
 

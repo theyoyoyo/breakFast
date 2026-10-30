@@ -169,6 +169,35 @@ describe('MealEditor prep words', () => {
     render(<MealEditor meal={MEAL} menuMode />)
     expect(screen.queryByTitle('Preparation details')).toBeNull()
   })
+
+  const METHOD_MEAL = {
+    menu_name: 'Egg sandwich',
+    menu: [
+      { name: 'Egg sandwich', method: 'Hard-boil the eggs, peel, slice into the bread', ingredients: [
+        { name: 'Eggs', amount: 2, unit: 'pcs' },
+        { name: 'Bread', amount: 2, unit: 'slice' },
+      ] },
+      { name: 'Olives', amount: 10, unit: 'pcs', ingredients: [] },
+    ],
+  }
+
+  it('shows a dish method behind the info button, also when no ingredient has prep words', () => {
+    render(<MealEditor meal={METHOD_MEAL} menuMode />)
+    expect(screen.queryByText('Hard-boil the eggs, peel, slice into the bread')).toBeNull()
+    fireEvent.click(screen.getByTitle('Preparation details'))
+    expect(screen.getByText('Egg sandwich', { selector: 'div' })).toBeInTheDocument()
+    expect(screen.getByText('Hard-boil the eggs, peel, slice into the bread')).toBeInTheDocument()
+  })
+
+  it('keeps a dish method through edits', () => {
+    const onChange = vi.fn()
+    render(<MealEditor meal={METHOD_MEAL} menuMode onChange={onChange} />)
+    fireEvent.click(screen.getByText('▶ Ingredients'))
+    fireEvent.click(screen.getAllByText('▲')[0])
+    const dish = onChange.mock.lastCall[0].menu[0]
+    expect(dish.method).toBe('Hard-boil the eggs, peel, slice into the bread')
+    expect(dish.ingredients[0]).toMatchObject({ name: 'Eggs', amount: 3 })
+  })
 })
 
 describe('MealEditor units', () => {
