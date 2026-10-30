@@ -83,7 +83,7 @@ LLM returns a full menu, not a single dish:
   "menu_name": "Klasik Kahvaltı",
   "menu": [
     { "name": "Menemen", "ingredients": [
-        { "name": "Yumurta", "amount": 2, "unit": "adet" }
+        { "name": "Yumurta", "amount": 2, "unit": "adet", "prep": "çırpılmış" }
     ]},
     { "name": "Beyaz peynir", "amount": 50, "unit": "g", "ingredients": [] }
   ],
@@ -94,6 +94,7 @@ LLM returns a full menu, not a single dish:
 
 - Complex dish: no top-level `amount`, has `ingredients[]`
 - Simple item: has `amount` + `unit`, `ingredients: []`
+- A dish ingredient may carry optional `prep` words ("rolled", "chopped"): the name stays exactly the fridge name, the prep plan gets "Oats (1 glass, rolled)", and MealEditor shows them on hover
 - `isSimpleItem(item)` = `item.amount != null`
 - DB column `menu_items TEXT` on `meal_history`, `suggested_meals`, `favorite_meals`
 - Old flat-format meals still work via `normalizeMeal()` in frontend
@@ -134,7 +135,7 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 
 - **Health rules**: injected into every LLM prompt silently. Never surface them to the user.
 - **Avoid list**: hard ban. Never suggest avoided ingredients.
-- **Fridge constraint**: suggestions use only the inventory. Nothing is assumed: basics (salt, oil, spices) and long-life items (flour, sesame, oats…) are logged like anything else, usually in the 🫙 Pantry group. A planned Fridge quick-add button will make logging them easy. Water is a utility like electricity and gas: listed in recipes when needed, but never required in the fridge (the check skips it). Ingredient names in the meal JSON must match the inventory as written, one item per name and no words added (the dish name says how it is prepared), so the code check can compare them. The check matches one way: a meal name may be shorter than a fridge name ("Peynir" for "Beyaz peynir"), never longer ("Poached egg" isn't "Egg").
+- **Fridge constraint**: suggestions use only the inventory. Nothing is assumed: basics (salt, oil, spices) and long-life items (flour, sesame, oats…) are logged like anything else, usually in the 🫙 Pantry group. A planned Fridge quick-add button will make logging them easy. Water is a utility like electricity and gas: listed in recipes when needed, but never required in the fridge (the check skips it). Ingredient names in the meal JSON must match the inventory as written, one item per name (a cut or form like "rolled" goes in the ingredient's `prep`), so the code check can compare them. The check matches one way: a meal name may be shorter than a fridge name ("Peynir" for "Beyaz peynir"), never longer ("Poached egg" isn't "Egg").
 - **Date and country**: today's date and the optional Country from Settings → Profile (`user_profiles.country`, list in `utils/countries.js`) go into the shopping and suggestion prompts (`format_today`), so "in season" means something. The profile text the analysts read leaves the country out.
 - **CORS**: configurable via `CORS_ORIGINS` env var (comma-separated).
 - **Demo user**: only created when `DEMO_USER=true` (empty PIN). A newly created demo account gets a starter fridge (`DEMO_FRIDGE` in `models/ingredient.py`, basics included). Never enable it on a reachable instance.
