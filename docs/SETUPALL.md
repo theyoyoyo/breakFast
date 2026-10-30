@@ -575,8 +575,10 @@ reachable from your other devices.
 
    It runs 1 Suggest press for the English sample by default. Options: `--runs 3`,
    `--samples en,tr`, `--mode explore`, `--draft` (stop after the draft: one model call
-   instead of three). Setting `OLLAMA_BASE_URL` in the development PC's `backend/.env`
-   saves the `--url`.
+   instead of three). `--persona shopping` tests Suggest Shopping and Suggest More;
+   `--persona plan` runs the prep planner for the menus in `PLAN_CASES` and flags food
+   the menu doesn't list and a dish cooked another way than its method says (fry vs boil).
+   Setting `OLLAMA_BASE_URL` in the development PC's `backend/.env` saves the `--url`.
 
 3. Each run is one Suggest press for a sample user (`tools/prompt_samples.py`). The
    table counts, for the draft and the final reply, how many replies were clean (meal

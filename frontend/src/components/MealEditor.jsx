@@ -283,12 +283,16 @@ export default function MealEditor({
 
   const handleSave = () => onSave?.(buildCurrentMeal())
 
-  // How the suggestion meant each dish's ingredients to be prepared ("Oats: rolled"), behind the ℹ️ button
+  // How the suggestion meant each dish to be made: its method and its ingredients' prep words ("Oats: rolled"), behind the ℹ️ button
   const prepDetails = menuMode
     ? items
         .filter(item => !isSimpleItem(item))
-        .map(item => ({ dish: item.name, notes: (item.ingredients || []).filter(sub => typeof sub.prep === 'string' && sub.prep.trim()) }))
-        .filter(({ notes }) => notes.length > 0)
+        .map(item => ({
+          dish: item.name,
+          method: typeof item.method === 'string' ? item.method.trim() : '',
+          notes: (item.ingredients || []).filter(sub => typeof sub.prep === 'string' && sub.prep.trim()),
+        }))
+        .filter(({ method, notes }) => method || notes.length > 0)
     : []
 
   const handleFavorite = async () => {
@@ -343,9 +347,10 @@ export default function MealEditor({
 
       {detailsOpen && prepDetails.length > 0 && (
         <div style={s.detailsBox}>
-          {prepDetails.map(({ dish, notes }, di) => (
+          {prepDetails.map(({ dish, method, notes }, di) => (
             <div key={di}>
               <div style={s.detailsDish}>{dish}</div>
+              {method && <div style={s.detailsMethod}>{method}</div>}
               {notes.map((sub, ni) => (
                 <div key={ni} style={s.detailsLine}>{sub.name}: {sub.prep.trim()}</div>
               ))}

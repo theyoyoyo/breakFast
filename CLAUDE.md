@@ -18,7 +18,7 @@ Multiple users share one instance, each fully isolated. Auth is simple (pin/name
 
 **Health-aware, silently.** Health rules are per-user, stored in DB, injected into prompts at runtime. Never mentioned to the user. The app just makes good choices.
 
-**Everything ready at once.** The prep planner splits a menu into untimed prep (chop, slice) and timed tasks on appliances. The LLM only decomposes and estimates; `_build_plan` in `routers/scheduler.py` does the math: the longest timed task sets the total time and every other task starts at `total − duration`, so all food finishes together. The planner gets only what the menu lists: items served as they are get no cooking, and the prompt's example plan is placeholders only (the 7B model copied its food into real plans). User's configured appliances (from Kitchen Settings) are injected into all LLM prompts.
+**Everything ready at once.** The prep planner splits a menu into untimed prep (chop, slice) and timed tasks on appliances. The LLM only decomposes and estimates; `_build_plan` in `routers/scheduler.py` does the math: the longest timed task sets the total time and every other task starts at `total − duration`, so all food finishes together. The planner gets only what the menu lists: each dish comes with its `method` in brackets after its name and is planned that way, items served as they are get no cooking, and the prompt's example plan is placeholders only (the 7B model copied its food into real plans). User's configured appliances (from Kitchen Settings) are injected into all LLM prompts.
 
 **Local-first, free forever.** Primary LLM is Ollama on the user's own hardware. Song lyric fallback when unreachable.
 
@@ -82,7 +82,7 @@ LLM returns a full menu, not a single dish:
 {
   "menu_name": "Klasik Kahvaltı",
   "menu": [
-    { "name": "Menemen", "ingredients": [
+    { "name": "Menemen", "method": "Biberi ve domatesi kavur, yumurtaları ekleyip karıştır", "ingredients": [
         { "name": "Yumurta", "amount": 2, "unit": "adet", "prep": "çırpılmış" }
     ]},
     { "name": "Beyaz peynir", "amount": 50, "unit": "g", "ingredients": [] }
@@ -94,7 +94,9 @@ LLM returns a full menu, not a single dish:
 
 - Complex dish: no top-level `amount`, has `ingredients[]`
 - Simple item: has `amount` + `unit`, `ingredients: []`
-- A dish ingredient may carry optional `prep` words ("rolled", "chopped"): the name stays exactly the fridge name, the prep plan gets "Oats (1 glass, rolled)", and MealEditor lists them per dish behind an ℹ️ button beside the time and id
+- A dish may carry an optional `method`: its main steps in one short line, in the reply language ("Hard-boil the eggs, peel, slice into the bread"). It is stored with the dish in `menu_items` (older meals have none), and the prep plan gets "- Egg sandwich (Hard-boil the eggs, …): Egg (2 pcs), Bread (2 slice)". The suggestion prompt doesn't ask for it yet: with a method rule the prompt test scored worse (more renamed items and unknown units), so it waits for a way that doesn't cost the menu (#121)
+- A dish ingredient may carry optional `prep` words ("rolled", "chopped"): the name stays exactly the fridge name, and the prep plan gets "Oats (1 glass, rolled)"
+- MealEditor shows each dish's method and prep words behind an ℹ️ button beside the time and id
 - `isSimpleItem(item)` = `item.amount != null`
 - DB column `menu_items TEXT` on `meal_history`, `suggested_meals`, `favorite_meals`
 - Old flat-format meals still work via `normalizeMeal()` in frontend
@@ -127,7 +129,7 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 
 **Prompt style:** state each rule once, in the prompt that owns it, as a positive instruction with a short reason, not a growing list of bans and special cases. Anything code can verify (fridge membership, JSON shape) is checked in code, not by asking another persona to police it.
 
-**Prompt test:** `backend/tools/prompt_check.py` runs the real suggestion pipeline (or, with `--persona shopping`, Suggest Shopping then Suggest More) for the sample users in `tools/prompt_samples.py` (en, tr, mixed, demo, sparse, vegan) against an Ollama server and scores the replies in code. For suggestions it scores the draft and the final (meal JSON, missing fridge items, renamed ones such as "White cheese (peynir)" or "Simit with tahini", units the app can't show, Turkish words in English replies, distinct menus; the review's feedback is logged too); for shopping it flags dishes, vague names, repeats the dedupe has to drop, and Turkish words in English replies. Run it before and after a prompt change with a `--note` (`docs/SETUPALL.md`, BONUS C): every test is logged in the git-ignored `tools/runs/` (replies, prompts sent, `history.jsonl`) and compared with the best earlier one, so keep a change only when it doesn't score worse. The pipeline yields `draft` and `review` events for it, which chat ignores. When the suggestion context gains a field, add it to the samples (a test runs every sample through the pipeline).
+**Prompt test:** `backend/tools/prompt_check.py` runs the real suggestion pipeline (or, with `--persona shopping`, Suggest Shopping then Suggest More) for the sample users in `tools/prompt_samples.py` (en, tr, mixed, demo, sparse, vegan), or with `--persona plan` the prep planner for the menus in `PLAN_CASES` (a hard-boiled egg sandwich among them), against an Ollama server and scores the replies in code. For suggestions it scores the draft and the final (meal JSON, missing fridge items, renamed ones such as "White cheese (peynir)" or "Simit with tahini", units the app can't show, Turkish words in English replies, distinct menus; the review's feedback is logged too); for shopping it flags dishes, vague names, repeats the dedupe has to drop, and Turkish words in English replies; for plans it flags food the menu doesn't list, a dish cooked another way than its method says (fry vs boil), and Turkish words in English replies. Run it before and after a prompt change with a `--note` (`docs/SETUPALL.md`, BONUS C): every test is logged in the git-ignored `tools/runs/` (replies, prompts sent, `history.jsonl`) and compared with the best earlier one, so keep a change only when it doesn't score worse. The pipeline yields `draft` and `review` events for it, which chat ignores. When the suggestion context gains a field, add it to the samples (a test runs every sample through the pipeline).
 
 ---
 

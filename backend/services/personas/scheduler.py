@@ -25,6 +25,7 @@ Split the work into two groups:
 
 Rules:
 - Plan only what the menu lists. Work out the actions each dish needs even when no steps are given; an ingredient's words after its amount (chopped, grated) say how to prepare it.
+- A dish's method, in brackets after its name, is how the dish was designed, so plan it that way.
 - Items served as they are need no timed task, and a prep task only when they must be cut first.
 - Be realistic about durations
 - Output ONLY the JSON object, nothing else
@@ -74,13 +75,16 @@ def _with_amount(item, language: str = "en") -> str:
 
 
 def format_menu(menu: list, language: str = "en") -> str:
-    """One line per menu item: cooked dishes with their ingredients, simple items with their amount,
-    marked as served as they are."""
+    """One line per menu item: cooked dishes with their method and ingredients
+    ('Egg sandwich (hard-boil the eggs, peel, slice into the bread): Egg (2 pcs), …'),
+    simple items with their amount, marked as served as they are."""
     lines = []
     for item in menu:
         subs = item.get("ingredients") if isinstance(item, dict) else None
         if subs:
-            lines.append(f"- {item.get('name', '?')}: {', '.join(_with_amount(s, language) for s in subs)}")
+            method = str(item.get("method") or "").strip().rstrip(".")
+            name = f"{item.get('name', '?')} ({method})" if method else item.get("name", "?")
+            lines.append(f"- {name}: {', '.join(_with_amount(s, language) for s in subs)}")
         else:
             lines.append(f"- {_with_amount(item, language)}, served as it is")
     return "\n".join(lines)

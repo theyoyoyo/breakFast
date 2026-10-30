@@ -498,6 +498,11 @@ class TestSchedulerPrompt:
         assert "Items served as they are need no timed task, and a prep task only when they must be cut first." in prompt
         assert "Plan only what the menu lists." in prompt
 
+    def test_dish_method_is_followed(self):
+        """One rule says a dish's method is how it was designed, so the plan makes it that way."""
+        prompt = build_scheduler_prompt("", [], "")
+        assert "A dish's method, in brackets after its name, is how the dish was designed, so plan it that way." in prompt
+
 
 class TestSchedulerUserMessage:
     MENU = [
@@ -531,6 +536,19 @@ class TestSchedulerUserMessage:
         ]}]
         msg = build_scheduler_user_message("Porridge", [], "", menu=menu)
         assert "- Porridge: Oats (1 glass, rolled), Banana (sliced)" in msg
+
+    def test_dish_method_follows_the_name(self):
+        """A dish's method reaches the planner in brackets after its name; older dishes without one are unchanged."""
+        menu = [
+            {"name": "Egg sandwich", "method": "Hard-boil the eggs, peel, slice into the bread. ", "ingredients": [
+                {"name": "Egg", "amount": 2, "unit": "pcs"},
+                {"name": "Bread", "amount": 2, "unit": "slice"},
+            ]},
+            *self.MENU,
+        ]
+        msg = build_scheduler_user_message("Egg sandwich", [], "", menu=menu)
+        assert "- Egg sandwich (Hard-boil the eggs, peel, slice into the bread): Egg (2 pcs), Bread (2 slice)" in msg
+        assert "- Menemen: Egg (2 pcs), Tomato (1 pcs)" in msg
 
     def test_water_is_planned_like_any_item(self):
         """Water in a recipe reaches the planner with the dish; a glass of water on its own is served as it is."""

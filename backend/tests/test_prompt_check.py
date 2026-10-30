@@ -3,12 +3,14 @@
 import json
 from unittest.mock import patch
 
+import pytest
+
 from services import pipeline
 from tools.prompt_check import (
-    check_reply, compare, describe, is_clean, recording_prompts, score_shopping, shop_once, suggest_once,
-    summarize,
+    check_plan, check_reply, compare, describe, is_clean, parse_args, plan_once, recording_prompts, score_shopping,
+    shop_once, suggest_once, summarize,
 )
-from tools.prompt_samples import SAMPLES
+from tools.prompt_samples import PLAN_CASES, SAMPLES
 
 EN, TR = SAMPLES["en"], SAMPLES["tr"]
 
@@ -225,3 +227,62 @@ def test_shopping_summary():
     lines = summarize(records, "shopping").splitlines()
     assert lines[0].split()[6:10] == ["Dish", "Vague", "Repeat", "Turkish"]
     assert lines[1].split() == ["mixed", "suggest", "1", "1", "0", "1", "1", "0", "0", "0", "0", "20"]
+
+
+def _plan(prep=(), timed=()) -> str:
+    plan = {"prep": [{"task": t, "detail": ""} for t in prep],
+            "timed": [{"task": t, "duration_min": 5, "resource": "Stove", "end_action": e} for t, e in timed]}
+    return "```json\n" + json.dumps(plan, ensure_ascii=False) + "\n```"
+
+
+# A plan that makes the egg sandwich as designed, with only menu food, is clean
+def test_plan_following_the_method_is_clean():
+    text = _plan(prep=["Slice the white cheese", "Put the olives in a bowl"],
+                 timed=[("Hard-boil the eggs", "Peel and slice them into the bread"), ("Toast the bread", "")])
+    result = check_plan(text, PLAN_CASES["boiled"])
+    assert is_clean(result), describe(result)
+
+
+# Frying what the method boils is flagged, and so is food the menu doesn't list, like a copied example
+def test_plan_against_the_method_and_off_the_menu():
+    text = _plan(prep=["Slice tomatoes and cucumbers"], timed=[("Fry the eggs in oil", "Slide onto the bread")])
+    issues = check_plan(text, PLAN_CASES["boiled"])["issues"]
+    assert issues["method"] == ["Fry the eggs in oil Slide onto the bread (Egg sandwich: boil)"]
+    assert issues["unlisted"] == ["tomatoes", "cucumbers", "oil"]
+
+
+# Turkish suffixes still match: boiling the eggs of a menemen is flagged, its peppers and tomatoes are on the menu
+def test_turkish_plan_against_the_method():
+    text = _plan(prep=["Biberleri ve domatesleri doğra"], timed=[("Yumurtaları haşla", "Soy")])
+    issues = check_plan(text, PLAN_CASES["menemen"])["issues"]
+    assert issues["method"] == ["Yumurtaları haşla Soy (Menemen: fry)"]
+    assert issues["unlisted"] == []
+    assert describe(check_plan("No plan today.", PLAN_CASES["menemen"])) == "no JSON"
+
+
+# One plan run sends the planner's real prompt and the menu with each dish's method, for every plan menu
+async def test_plan_once_sends_the_menu_with_its_methods():
+    calls = []
+
+    async def fake_stream(system_prompt, history, message, temperature=None):
+        calls.append(temperature)
+        yield "ok"
+
+    requests = {}
+    with patch("services.suggestion.stream_response", fake_stream):
+        for key, case in PLAN_CASES.items():
+            sent = {}
+            replies = await plan_once(case, sent)
+            assert replies["plan"] == "ok"
+            assert len(sent) == 1 and "kitchen workflow expert" in next(iter(sent))
+            requests[key] = replies["request"]
+    assert "- Egg sandwich (Hard-boil the eggs, peel, slice into the buttered bread): Eggs (2 pcs)" in requests["boiled"]
+    assert set(calls) == {0.3}
+
+
+# The plan persona runs every plan menu by default and only knows plan menus
+def test_plan_samples():
+    assert parse_args(["--persona", "plan"]).samples == list(PLAN_CASES)
+    assert parse_args([]).samples == ["en"]
+    with pytest.raises(SystemExit):
+        parse_args(["--persona", "plan", "--samples", "en"])
