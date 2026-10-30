@@ -455,7 +455,6 @@ export default function MealEditor({
                       onChange={(e) => setNewSubItem(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleSubAdd(idx)}
                       placeholder="Add ingredient…"
-                      autoFocus
                     />
                     <button style={s.addBtn} onClick={() => handleSubAdd(idx)}>＋ Item</button>
                   </div>
