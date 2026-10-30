@@ -267,8 +267,13 @@ export const listSessions = () =>
 export const getSessionMessages = (sessionId) =>
   apiFetch(`${BASE_URL}/sessions/${sessionId}/messages`)
 
+// → { status, id }; the user's open chats are told the session changed
 export const saveSessionMessage = (sessionId, role, content) =>
   apiFetch(`${BASE_URL}/sessions/${sessionId}/messages`, json('POST', { role, content }))
+
+// Replace a saved message's content (a meal card edit rewrites its meal block)
+export const updateSessionMessage = (sessionId, messageId, content) =>
+  apiFetch(`${BASE_URL}/sessions/${sessionId}/messages/${messageId}`, json('PUT', { content }))
 
 // ---------------------------------------------------------------------------
 // Health Rules
@@ -322,8 +327,10 @@ export const getSchedule = (meal_name, steps, ingredients, meal_id = null, menu 
 
 /**
  * Open a WebSocket to /chat with auth token as query param.
+ * onDone gets the reply and its saved message id; onSessionUpdated gets the id of a
+ * session another device (or a REST save) changed.
  */
-export function createChatSocket(onToken, onDone, onMealLogged, onError, onClose, onProgress, onMealUpdated) {
+export function createChatSocket(onToken, onDone, onMealLogged, onError, onClose, onProgress, onMealUpdated, onSessionUpdated) {
   const token = getToken()
   const ws = new WebSocket(`${WS_URL}/chat?token=${token}`)
 
@@ -331,10 +338,11 @@ export function createChatSocket(onToken, onDone, onMealLogged, onError, onClose
     try {
       const msg = JSON.parse(event.data)
       if (msg.type === 'token') onToken(msg.content)
-      else if (msg.type === 'done') onDone(msg.content)
+      else if (msg.type === 'done') onDone(msg.content, msg.message_id)
       else if (msg.type === 'meal_logged') onMealLogged(msg.meal)
       else if (msg.type === 'meal_updated') onMealUpdated?.(msg.meal)
       else if (msg.type === 'progress') onProgress?.(msg.step)
+      else if (msg.type === 'session_updated') onSessionUpdated?.(msg.session_id)
     } catch {
       // ignore unparseable frames
     }
