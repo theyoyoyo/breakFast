@@ -202,7 +202,7 @@ breakFAST/
 │   │   ├── context.py               ← shared context loaders for prompts
 │   │   ├── knowledge.py             ← shared food knowledge
 │   │   ├── insights.py              ← behavioral pattern extraction
-│   │   ├── fridge.py                ← fridge check: draft ingredients vs inventory; exact name match
+│   │   ├── fridge.py                ← name matching: fridge check (head noun), avoid hits and same_name (exact)
 │   │   ├── shopping.py              ← shopping reply schema, parser + dedupe
 │   │   ├── suggestion.py            ← stream_response + persona re-exports
 │   │   └── llm.py                   ← Ollama streaming + lyric fallback
