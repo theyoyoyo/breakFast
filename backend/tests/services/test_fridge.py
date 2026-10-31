@@ -64,27 +64,16 @@ def test_shorter_names_match_the_head_noun_only():
     assert find_missing_ingredients(meal, inventory) == ["Olives", "Cream"]
 
 
-# An avoided item's words anywhere in a name ban it, unless "free" follows them
-def test_avoided_matches_any_word_but_not_free_of_it():
-    from services.fridge import avoided
-    assert avoided("Walnut oil", ["Walnuts"])
-    assert avoided("Feta Cheese", ["Cheese"])
-    assert avoided("Strawberry jam", ["Strawberries"])
-    assert avoided("Granola with almond milk", ["Peanuts", "Almonds"])
-    assert not avoided("Gluten-free oats", ["Gluten"])
-    assert not avoided("Glutensiz yulaf", ["Gluten"])
-    assert not avoided("Oat milk", ["Almonds"])
-
-
-# Avoided dishes and ingredients are both found, each name once
-def test_find_avoided_checks_dishes_and_ingredients():
+# Avoided dishes and ingredients are found by exact name, so a longer name the user hasn't banned passes
+def test_find_avoided_matches_exact_names():
     from services.fridge import find_avoided
     meal = _meal(
-        {"name": "Granola with almond milk", "ingredients": [{"name": "Granola"}, {"name": "Almond milk"}]},
-        {"name": "Almonds", "amount": 20, "unit": "g", "ingredients": []},
-        {"name": "Banana", "amount": 1, "unit": "pcs", "ingredients": []},
+        {"name": "Granola bowl", "ingredients": [{"name": "Granola"}, {"name": "Almond milk"}]},
+        {"name": "almond", "amount": 20, "unit": "g", "ingredients": []},
+        {"name": "Beyaz peynir", "amount": 50, "unit": "g", "ingredients": []},
     )
-    assert find_avoided(meal, ["Almonds"]) == ["Granola with almond milk", "Almond milk", "Almonds"]
+    assert find_avoided(meal, ["Almonds", "Peynir"]) == ["almond"]
+    assert find_avoided(meal, ["Granola bowl", "Almond milk"]) == ["Granola bowl", "Almond milk"]
     assert find_avoided(meal, []) == []
     assert find_avoided(None, ["Almonds"]) == []
 

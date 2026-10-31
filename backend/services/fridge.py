@@ -12,9 +12,9 @@ a prepared item: "Poached egg", "Simit with tahini" and "White cheese
 dishes with their fridge ingredients (#115). Nothing is assumed: basics like
 salt and oil count only when they are logged (usually in the Pantry group).
 
-The avoid list is matched loosely instead: anything made with an avoided item
-is banned, so its words may sit anywhere in a name ("Walnut oil" for Walnuts),
-except right before "free" ("Gluten-free oats").
+The avoid list is matched by exact name (same_name), like the shopping dedupe:
+a user who bans "Peynir" and then sees "Beyaz peynir" bans that too, or states
+a habit, rather than code guessing which products an item is in.
 """
 
 import re
@@ -50,22 +50,18 @@ def _tokens(name: str) -> list[set[str]]:
     return result
 
 
-def _matches_at(hay: list[set[str]], needle: list[set[str]]) -> list[int]:
-    """Where the needle's words appear in a row inside hay."""
-    n = len(needle)
-    if not n:
-        return []
-    return [i for i in range(len(hay) - n + 1) if all(hay[i + j] & needle[j] for j in range(n))]
-
-
 def _contains(hay: list[set[str]], needle: list[set[str]]) -> bool:
     """True when the needle's words appear in a row inside hay."""
-    return bool(_matches_at(hay, needle))
+    n = len(needle)
+    return n > 0 and any(
+        all(hay[i + j] & needle[j] for j in range(n)) for i in range(len(hay) - n + 1)
+    )
 
 
 def _ends_with(hay: list[set[str]], needle: list[set[str]]) -> bool:
     """True when the needle's words are hay's last words: its head noun, as in "Beyaz peynir"."""
-    return len(hay) - len(needle) in _matches_at(hay, needle)
+    n = len(needle)
+    return 0 < n <= len(hay) and all(h & w for h, w in zip(hay[-n:], needle))
 
 
 def same_name(a: str, b: str) -> bool:
@@ -76,18 +72,6 @@ def same_name(a: str, b: str) -> bool:
     """
     wa, wb = _tokens(a), _tokens(b)
     return len(wa) == len(wb) > 0 and all(x & y for x, y in zip(wa, wb))
-
-
-def avoided(name: str, avoid_list: list[str]) -> bool:
-    """True when an avoided item's words appear in the name, unless "free" follows them."""
-    words = _tokens(name)
-    for item in avoid_list:
-        needle = _tokens(item)
-        for i in _matches_at(words, needle):
-            after = words[i + len(needle)] if i + len(needle) < len(words) else set()
-            if "free" not in after:
-                return True
-    return False
 
 
 def meal_ingredient_names(meal: dict) -> list[str]:
@@ -123,9 +107,9 @@ def find_missing_ingredients(meal: dict | None, inventory: list[dict]) -> list[s
 
 
 def find_avoided(meal: dict | None, avoid_list: list[str]) -> list[str]:
-    """Names in the meal, its dishes and their ingredients, that the avoid list bans."""
+    """Names in the meal, its dishes and their ingredients, that are on the avoid list."""
     if not isinstance(meal, dict):
         return []
     dishes = [i.get("name", "") for i in meal.get("menu") or [] if isinstance(i, dict) and i.get("ingredients")]
     names = dict.fromkeys(n for n in dishes + meal_ingredient_names(meal) if n)
-    return [n for n in names if avoided(n, avoid_list)]
+    return [n for n in names if any(same_name(n, a) for a in avoid_list)]
