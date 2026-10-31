@@ -71,13 +71,6 @@ def test_shopping_request_names_the_language_and_shown_items():
     )
 
 
-# Products made with an avoided item are dropped, while a product free of it stays
-def test_new_suggestions_drop_products_made_with_avoided_items():
-    items = [{"name": n, "reason": ""} for n in ("Walnut oil", "Feta cheese", "Gluten-free oats", "Pear")]
-    kept = new_suggestions(items, [], avoid=["Walnuts", "Cheese", "Gluten"])
-    assert [i["name"] for i in kept] == ["Gluten-free oats", "Pear"]
-
-
 # The same item twice in one reply is kept once
 def test_new_suggestions_drop_repeats_within_reply():
     items = [{"name": "Kiwi", "reason": "a"}, {"name": "Kiwis", "reason": "b"}]

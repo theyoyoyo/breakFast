@@ -170,7 +170,7 @@ def check_shopping(text: str, sample: dict, shown: list[str]) -> tuple[dict, lis
         return _no_json("shopping"), []
     names = [i["name"] for i in items]
     known = [i["name"] for i in sample["ingredients"]] + sample["shopping_list"] + sample["avoid_list"] + shown
-    kept = [i["name"] for i in new_suggestions(items, known, _dishes(sample), sample["avoid_list"])]
+    kept = [i["name"] for i in new_suggestions(items, known, _dishes(sample))]
     return {
         "json": True,
         "dishes": sorted(n.lower() for n in kept),
@@ -347,7 +347,7 @@ async def shop_once(sample: dict, sent: dict) -> dict:
             temperature=SHOPPING_TEMPERATURE,
         )
         items = parse_suggestions(replies[stage]) or []
-        shown += [i["name"] for i in new_suggestions(items, known + shown, _dishes(sample), sample["avoid_list"])]
+        shown += [i["name"] for i in new_suggestions(items, known + shown, _dishes(sample))]
     return replies
 
 

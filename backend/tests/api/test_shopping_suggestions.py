@@ -22,15 +22,15 @@ async def _suggest(client, exclude=None):
     return r.json()
 
 
-# Fridge items, the shopping list and shown items are dropped by exact name, and products made with an avoided item too
+# Fridge items, the shopping list, shown items and the avoid list are dropped by exact name
 async def test_drops_known_items_by_exact_name(client):
     await client.post("/ingredients/", json={"name": "Strawberries"})
     await client.post("/shopping/", json={"item_name": "Kiwi"})
     await client.put("/preferences/avoid:Milk", json={"value": "Milk"})
-    reply = _reply("Strawberry", "Frozen strawberries", "Kiwis", "Pear", "Milk", "Milk chocolate", "Salmon")
+    reply = _reply("Strawberry", "Frozen strawberries", "Kiwis", "Pear", "Milk", "Almond milk", "Salmon")
     with _llm(reply):
         data = await _suggest(client, exclude=["Pear"])
-    assert [s["name"] for s in data["suggestions"]] == ["Frozen strawberries", "Salmon"]
+    assert [s["name"] for s in data["suggestions"]] == ["Frozen strawberries", "Almond milk", "Salmon"]
     assert data["lyric"] is None
 
 
