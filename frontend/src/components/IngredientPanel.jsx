@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useImperativeHandle, forwardRef } from 'react'
 import { Trash2, Pencil, Plus, X, AlertTriangle, ShoppingCart, Sparkles, Loader, ChevronRight, Heart } from 'lucide-react'
 import {
   getIngredients, addIngredient, updateIngredient, deleteIngredient,
   getExpiredIngredients, getExpiredCount, handleExpiredAction,
-  getShoppingSuggestions, addShoppingItemsBulk, addShoppingItem,
+  getShoppingSuggestions, getSuggestionList, saveSuggestionList, addShoppingItemsBulk, addShoppingItem,
   getFavoriteIngredients, addFavoriteIngredient, removeFavoriteIngredient,
 } from '../services/api'
+import { useSyncNotice } from '../hooks/useSyncNotice'
 import ShoppingListPanel from './ShoppingListPanel'
 import FavoriteIngredientsPanel from './FavoriteIngredientsPanel'
 import * as s from './IngredientPanel.styles'
@@ -27,18 +28,30 @@ function loadCollapseState() {
   catch { return {} }
 }
 
-/** Deterministic subtle background color from group name hash */
-const STORAGE_KEY = 'bf_suggestions'
+// The suggestions list lives on the server (the same on every device). This device's old
+// list from before that moves to the server on its first load, then the key is cleared.
+const LEGACY_SUGGESTIONS_KEY = 'bf_suggestions'
+// Whether the suggestions list is collapsed (▼) — a per-device view setting
+const SUGGESTIONS_COLLAPSED_KEY = 'bf_suggestions_collapsed'
 
-function loadSavedSuggestions() {
+function readLegacySuggestions() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : []
+    const list = JSON.parse(localStorage.getItem(LEGACY_SUGGESTIONS_KEY))
+    return Array.isArray(list) ? list.filter(i => typeof i?.name === 'string' && i.name.trim()) : []
   } catch { return [] }
 }
 
-function saveSuggestions(data) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)) } catch { /* ignore */ }
+/** The list with the new items added at the end, checked; names already listed are skipped. */
+function appendNew(list, items) {
+  const names = new Set(list.map(i => i.name.toLowerCase()))
+  const added = []
+  for (const item of items) {
+    const key = item.name.toLowerCase()
+    if (names.has(key)) continue
+    names.add(key)
+    added.push({ name: item.name, reason: item.reason || '', checked: true })
+  }
+  return [...list, ...added]
 }
 
 const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, visible }, ref) {
@@ -67,10 +80,12 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
   const [expiryPanelOpen, setExpiryPanelOpen] = useState(false)
   const [expiryAction, setExpiryAction] = useState({}) // {id: 'delete'|'keep'|'shopping'}
 
-  // Shopping state
-  const [suggestions, setSuggestions] = useState(() => loadSavedSuggestions())
+  // Shopping state: the suggestions list is [{ name, reason, checked }], kept on the server
+  const [suggestions, setSuggestions] = useState([])
+  const [suggestionsCollapsed, setSuggestionsCollapsed] = useState(() => {
+    try { return localStorage.getItem(SUGGESTIONS_COLLAPSED_KEY) === 'true' } catch { return false }
+  })
   const [suggestionsLoading, setSuggestionsLoading] = useState(false)
-  const [selectedSuggestions, setSelectedSuggestions] = useState({})
   const [shoppingListOpen, setShoppingListOpen] = useState(false)
   const [lyricBanner, setLyricBanner] = useState(null)
   const [noNewSuggestions, setNoNewSuggestions] = useState(false) // the AI only had repeats
@@ -127,21 +142,76 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
     } catch { /* ignore */ }
   }, [])
 
+  // Latest suggestions list, for handlers that finish after a request
+  const suggestionsRef = useRef(suggestions)
+  suggestionsRef.current = suggestions
+  // Saves in flight; a reload asked for meanwhile waits for them, so it can't show an older list
+  const savingRef = useRef(0)
+  const reloadPendingRef = useRef(false)
+  const loadSeqRef = useRef(0)
+
+  // Load the suggestions list from the server (another device may have changed it)
+  const loadSuggestions = useCallback(async () => {
+    if (savingRef.current > 0) { reloadPendingRef.current = true; return }
+    const seq = ++loadSeqRef.current
+    try {
+      const { items } = await getSuggestionList()
+      if (seq !== loadSeqRef.current) return
+      if (savingRef.current > 0) { reloadPendingRef.current = true; return }
+      setSuggestions(items)
+    } catch { /* offline — keep what's shown */ }
+  }, [])
+
+  // Show the new list at once and save it; `removed` names were removed with ×
+  const saveSuggestions = useCallback(async (items, removed = []) => {
+    setSuggestions(items)
+    savingRef.current += 1
+    try {
+      await saveSuggestionList(items, removed)
+    } catch {
+      setError('Failed to save suggestions')
+      reloadPendingRef.current = true // show what the server has
+    } finally {
+      savingRef.current -= 1
+    }
+    if (savingRef.current === 0 && reloadPendingRef.current) {
+      reloadPendingRef.current = false
+      loadSuggestions()
+    }
+  }, [loadSuggestions])
+
   useEffect(() => { load(); refreshExpiredCount(); loadFavorites() }, [refreshTrigger]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Refresh ingredients + expired count + favorites every time the tab becomes visible
+  // Refresh ingredients + expired count + favorites + suggestions every time the tab becomes visible
   useEffect(() => {
-    if (visible) { load(); refreshExpiredCount(); loadFavorites() }
+    if (visible) { load(); refreshExpiredCount(); loadFavorites(); loadSuggestions() }
   }, [visible]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Init selected suggestions from saved data
+  // First load: move this device's old local list to the server (after what's there), then load it
   useEffect(() => {
-    if (suggestions.length > 0) {
-      const sel = {}
-      suggestions.forEach((_, i) => { sel[i] = true })
-      setSelectedSuggestions(sel)
-    }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    ;(async () => {
+      const legacy = readLegacySuggestions()
+      if (legacy.length > 0) {
+        try {
+          const { items } = await getSuggestionList()
+          const merged = appendNew(items, legacy)
+          if (merged.length > items.length) await saveSuggestionList(merged)
+          localStorage.removeItem(LEGACY_SUGGESTIONS_KEY)
+        } catch { /* offline — move it on the next load */ }
+      }
+      loadSuggestions()
+    })()
+  }, [loadSuggestions])
+
+  // Another device changed the list, or the chat socket (re)opened: reload it
+  useSyncNotice(['shopping_suggestions_updated', 'sync_connected'], loadSuggestions)
+
+  // Back from the background (phone app resumed): reload it too, in case a push was missed
+  useEffect(() => {
+    const handleVisible = () => { if (document.visibilityState === 'visible') loadSuggestions() }
+    document.addEventListener('visibilitychange', handleVisible)
+    return () => document.removeEventListener('visibilitychange', handleVisible)
+  }, [loadSuggestions])
 
   // Dismiss delete confirm on any outside click (serves as cancel)
   useEffect(() => {
@@ -171,11 +241,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
         { name: 'Tahini', reason: 'Calcium and iron source, classic with molasses' },
         { name: 'Rolled oats', reason: 'Beta-glucan helps lower cholesterol' },
       ]
-      setSuggestions(demoSuggestions)
-      saveSuggestions(demoSuggestions)
-      const sel = {}
-      demoSuggestions.forEach((_, i) => { sel[i] = true })
-      setSelectedSuggestions(sel)
+      saveSuggestions(appendNew([], demoSuggestions))
     },
   }))
 
@@ -300,54 +366,30 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
     }
   }
 
-  // Shopping handlers
+  // Shopping handlers: Suggest Shopping / Suggest More add new items at the end, checked;
+  // items already listed keep their checks. The server leaves out what's listed (`exclude`)
+  // and what was removed with × in the last 7 days.
   const handleSuggest = async () => {
     try {
       setError(null)
       setSuggestionsLoading(true)
       setLyricBanner(null)
       setNoNewSuggestions(false)
-      const exclude = suggestions.map(s => s.name) // exclude current when "suggest more"
-      const result = await getShoppingSuggestions(suggestions.length > 0 ? exclude : [])
+      const result = await getShoppingSuggestions(suggestionsRef.current.map(s => s.name))
 
       if (result.lyric) {
         // LLM is down
         setLyricBanner(result.lyric)
-        // Show saved suggestions if we have none
-        if (suggestions.length === 0) {
-          const saved = loadSavedSuggestions()
-          if (saved.length > 0) {
-            setSuggestions(saved)
-            const sel = {}
-            saved.forEach((_, i) => { sel[i] = true })
-            setSelectedSuggestions(sel)
-          }
-        }
       } else if (result.error && (!result.suggestions || result.suggestions.length === 0)) {
         // Backend returned 200 with an error hint (e.g., parsing failed)
         setError(result.error)
-      } else if (result.suggestions && result.suggestions.length > 0) {
-        if (suggestions.length > 0) {
-          // "Suggest more" mode — append new, deduplicate by name
-          const existingNames = new Set(suggestions.map(s => s.name.toLowerCase()))
-          const newItems = result.suggestions.filter(s => !existingNames.has(s.name.toLowerCase()))
-          const merged = [...suggestions, ...newItems]
-          setSuggestions(merged)
-          saveSuggestions(merged)
-          // Select only new items
-          const sel = { ...selectedSuggestions }
-          newItems.forEach((_, i) => { sel[suggestions.length + i] = true })
-          setSelectedSuggestions(sel)
-        } else {
-          setSuggestions(result.suggestions)
-          saveSuggestions(result.suggestions)
-          const sel = {}
-          result.suggestions.forEach((_, i) => { sel[i] = true })
-          setSelectedSuggestions(sel)
-        }
       } else {
+        // Added to the latest list: another device may have changed it meanwhile
+        const latest = suggestionsRef.current
+        const merged = appendNew(latest, result.suggestions || [])
+        if (merged.length > latest.length) await saveSuggestions(merged)
         // The backend drops anything already known and retried once, so nothing new is left
-        setNoNewSuggestions(true)
+        else setNoNewSuggestions(true)
       }
     } catch {
       setError('Failed to get suggestions')
@@ -356,34 +398,52 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
     }
   }
 
-  const toggleSuggestion = (idx) => {
-    setSelectedSuggestions(prev => ({ ...prev, [idx]: !prev[idx] }))
+  const toggleSuggestion = (name) => {
+    saveSuggestions(suggestions.map(s => (s.name === name ? { ...s, checked: !s.checked } : s)))
   }
 
+  // × — remove one item; it stays out of new suggestions for 7 days
+  const removeSuggestion = (name) => {
+    saveSuggestions(suggestions.filter(s => s.name !== name), [name])
+  }
+
+  // Send to List moves the checked items to the shopping list and keeps the rest
   const handleSendToList = async () => {
-    const selected = suggestions.filter((_, i) => selectedSuggestions[i])
-    if (selected.length === 0) return
+    const sent = suggestions.filter(s => s.checked).map(s => s.name)
+    if (sent.length === 0) return
     try {
       setError(null)
-      await addShoppingItemsBulk(selected.map(s => s.name))
-      // Close suggestions panel entirely after sending
-      setSuggestions([])
-      saveSuggestions([])
-      setSelectedSuggestions({})
-      setLyricBanner(null)
+      await addShoppingItemsBulk(sent)
     } catch {
       setError('Failed to add items to shopping list')
+      return
     }
-  }
-
-  const closeSuggestions = () => {
-    setSuggestions([])
-    saveSuggestions([])
-    setSelectedSuggestions({})
     setLyricBanner(null)
+    await saveSuggestions(suggestionsRef.current.filter(s => !sent.includes(s.name)))
   }
 
-  const selectedSuggestionCount = Object.values(selectedSuggestions).filter(Boolean).length
+  // ▲/▼ hides or shows the list; it never clears it
+  const toggleSuggestionsCollapsed = () => {
+    setSuggestionsCollapsed(prev => {
+      try { localStorage.setItem(SUGGESTIONS_COLLAPSED_KEY, String(!prev)) } catch { /* ignore */ }
+      return !prev
+    })
+  }
+
+  const selectedSuggestionCount = suggestions.filter(s => s.checked).length
+
+  const suggestButtonLabel = suggestionsLoading
+    ? <><Loader size={13} style={{ animation: 'spin 1s linear infinite' }} /> Thinking…</>
+    : suggestions.length > 0
+      ? <><Sparkles size={13} /> Suggest More</>
+      : <><Sparkles size={13} /> Suggest Shopping</>
+
+  const suggestNotes = (
+    <>
+      {lyricBanner && <div style={s.lyricBanner}>{lyricBanner}</div>}
+      {noNewSuggestions && <div style={s.suggestNote}>No new items this time. Try again in a moment.</div>}
+    </>
+  )
 
   const formatExpiry = (dateStr) => {
     if (!dateStr) return null
@@ -672,68 +732,93 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
         </div>
       )}
 
-      {/* Shopping suggestions section */}
-      <div style={s.suggestSection}>
-        <button
-          style={{
-            ...s.suggestBtn,
-            opacity: suggestionsLoading ? 0.6 : 1,
-            cursor: suggestionsLoading ? 'default' : 'pointer',
-          }}
-          onClick={handleSuggest}
-          disabled={suggestionsLoading}
-        >
-          {suggestionsLoading
-            ? <><Loader size={13} style={{ animation: 'spin 1s linear infinite' }} /> Thinking…</>
-            : suggestions.length > 0
-              ? <><Sparkles size={13} /> Suggest More</>
-              : <><Sparkles size={13} /> Suggest Shopping</>}
-        </button>
-        {lyricBanner && (
-          <div style={s.lyricBanner}>{lyricBanner}</div>
-        )}
-        {noNewSuggestions && (
-          <div style={s.suggestNote}>No new items this time. Try again in a moment.</div>
-        )}
-      </div>
-
-      {/* Suggestions list (persisted in localStorage) */}
-      {suggestions.length > 0 && (
-        <div style={s.suggestionsPanel}>
-          <div style={s.suggestionsPanelHeader}>
-            <span style={s.suggestionsPanelTitle}>Suggestions</span>
-            <button style={s.closeBtn} onClick={closeSuggestions}>
-              <X size={14} />
-            </button>
-          </div>
-          <div style={s.suggestionsList}>
-            {suggestions.map((item, idx) => (
-              <label key={idx} style={s.suggestionRow}>
-                <input
-                  type="checkbox"
-                  checked={!!selectedSuggestions[idx]}
-                  onChange={() => toggleSuggestion(idx)}
-                  style={s.checkbox}
-                />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={s.suggestionName}>{item.name}</div>
-                  {item.reason && <div style={s.suggestionReason}>{item.reason}</div>}
-                </div>
-              </label>
-            ))}
-          </div>
+      {/* Shopping suggestions: Suggest Shopping at the top while there's no list */}
+      {suggestions.length === 0 && (
+        <div style={s.suggestSection}>
           <button
             style={{
-              ...s.sendToListBtn,
-              opacity: selectedSuggestionCount === 0 ? 0.4 : 1,
-              cursor: selectedSuggestionCount === 0 ? 'default' : 'pointer',
+              ...s.suggestBtn,
+              opacity: suggestionsLoading ? 0.6 : 1,
+              cursor: suggestionsLoading ? 'default' : 'pointer',
             }}
-            onClick={handleSendToList}
-            disabled={selectedSuggestionCount === 0}
+            onClick={handleSuggest}
+            disabled={suggestionsLoading}
           >
-            <ShoppingCart size={13} />
-            Send to List{selectedSuggestionCount > 0 ? ` (${selectedSuggestionCount})` : ''}
+            {suggestButtonLabel}
           </button>
+          {suggestNotes}
+        </div>
+      )}
+
+      {/* Suggestions list (kept on the server): ▲/▼ hides it, × removes one item,
+          Send to List and Suggest More sit together under it */}
+      {suggestions.length > 0 && (
+        <div style={s.suggestionsPanel}>
+          <button
+            style={s.suggestionsPanelHeader}
+            onClick={toggleSuggestionsCollapsed}
+            aria-expanded={!suggestionsCollapsed}
+            title={suggestionsCollapsed ? 'Show suggestions' : 'Hide suggestions'}
+          >
+            <span style={s.suggestionsPanelTitle}>
+              Suggestions{suggestionsCollapsed ? ` (${suggestions.length})` : ''}
+            </span>
+            <span style={s.collapseIcon} aria-hidden="true">{suggestionsCollapsed ? '▼' : '▲'}</span>
+          </button>
+          {!suggestionsCollapsed && (
+            <>
+              <div style={s.suggestionsList}>
+                {suggestions.map((item) => (
+                  <div key={item.name} style={s.suggestionRow}>
+                    <label style={s.suggestionLabel}>
+                      <input
+                        type="checkbox"
+                        checked={item.checked}
+                        onChange={() => toggleSuggestion(item.name)}
+                        style={s.checkbox}
+                      />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={s.suggestionName}>{item.name}</div>
+                        {item.reason && <div style={s.suggestionReason}>{item.reason}</div>}
+                      </div>
+                    </label>
+                    <button
+                      style={s.suggestionRemoveBtn}
+                      onClick={() => removeSuggestion(item.name)}
+                      title="Remove (not suggested again for 7 days)"
+                      aria-label={`Remove ${item.name}`}
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+              <div style={s.suggestionsActions}>
+                <button
+                  style={{
+                    ...s.sendToListBtn,
+                    opacity: selectedSuggestionCount === 0 ? 0.4 : 1,
+                    cursor: selectedSuggestionCount === 0 ? 'default' : 'pointer',
+                  }}
+                  onClick={handleSendToList}
+                  disabled={selectedSuggestionCount === 0}
+                >
+                  <ShoppingCart size={13} />
+                  Send to List{selectedSuggestionCount > 0 ? ` (${selectedSuggestionCount})` : ''}
+                </button>
+                <button
+                  style={{
+                    ...s.suggestMoreBtn,
+                    opacity: suggestionsLoading ? 0.6 : 1,
+                    cursor: suggestionsLoading ? 'default' : 'pointer',
+                  }}
+                  onClick={handleSuggest}
+                  disabled={suggestionsLoading}
+                >
+                  {suggestButtonLabel}
+                </button>
+              </div>
+              {(lyricBanner || noNewSuggestions) && <div style={s.suggestionsNotes}>{suggestNotes}</div>}
+            </>
+          )}
         </div>
       )}
 

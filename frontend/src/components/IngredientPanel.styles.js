@@ -583,11 +583,22 @@ export const suggestionsPanel = {
   maxHeight: '45%',
 }
 
+// The whole header is the ▲/▼ toggle, so it's an easy tap on a phone
 export const suggestionsPanelHeader = {
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
   padding: '8px 12px 4px',
+  background: 'none',
+  border: 'none',
+  width: '100%',
+  cursor: 'pointer',
+  textAlign: 'left',
+}
+
+export const collapseIcon = {
+  fontSize: 11,
+  color: 'var(--text-muted)',
 }
 
 export const suggestionsPanelTitle = {
@@ -609,7 +620,28 @@ export const suggestionRow = {
   alignItems: 'flex-start',
   padding: '6px 8px',
   gap: 10,
+}
+
+// Checkbox and text: tapping either toggles the check
+export const suggestionLabel = {
+  display: 'flex',
+  alignItems: 'flex-start',
+  gap: 10,
+  flex: 1,
+  minWidth: 0,
   cursor: 'pointer',
+}
+
+// × at the end of a row — red, since it removes the item
+export const suggestionRemoveBtn = {
+  background: 'none',
+  border: 'none',
+  color: colors.danger,
+  fontSize: 18,
+  lineHeight: 1,
+  cursor: 'pointer',
+  padding: '0 4px',
+  flexShrink: 0,
 }
 
 export const suggestionName = {
@@ -625,9 +657,17 @@ export const suggestionReason = {
   lineHeight: 1.3,
 }
 
+// Send to List and Suggest More side by side under the list
+export const suggestionsActions = {
+  display: 'flex',
+  gap: 8,
+  padding: '6px 12px 10px',
+}
+
 export const sendToListBtn = {
-  margin: '6px 12px 10px',
-  padding: '8px 16px',
+  flex: 1,
+  minWidth: 0,
+  padding: '8px 12px',
   background: secondaryColor, // follows the theme
   color: '#fff',
   border: 'none',
@@ -638,4 +678,10 @@ export const sendToListBtn = {
   alignItems: 'center',
   justifyContent: 'center',
   gap: 6,
+}
+
+export const suggestMoreBtn = { ...sendToListBtn }
+
+export const suggestionsNotes = {
+  padding: '0 12px 8px',
 }
