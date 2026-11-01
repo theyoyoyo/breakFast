@@ -194,6 +194,17 @@ export const ateOutBtn = {
   color: 'var(--text)',
 }
 
+// Save keeps the edits with the chat card: an outlined button, filled once saved
+export const saveBtn = {
+  ...ateOutBtn,
+}
+
+export const saveBtnDone = {
+  ...ateOutBtn,
+  opacity: 0.6,
+  cursor: 'default',
+}
+
 // Ate out has nothing to do when no item is missing
 export const ateOutBtnIdle = {
   ...ateOutBtn,
@@ -205,6 +216,13 @@ export const confirmBtnBlocked = {
   ...confirmBtn,
   opacity: 0.45,
   cursor: 'not-allowed',
+}
+
+export const saveNote = {
+  marginTop: 10,
+  fontSize: 13,
+  lineHeight: 1.5,
+  color: colors.error,
 }
 
 export const missingNote = {

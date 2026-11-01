@@ -283,6 +283,10 @@ export const saveSessionMessage = (sessionId, role, content) =>
 export const updateSessionMessage = (sessionId, messageId, content) =>
   apiFetch(`${BASE_URL}/sessions/${sessionId}/messages/${messageId}`, json('PUT', { content }))
 
+// Save a meal card's "Today I ate" version with its message; the user's other devices get it
+export const saveAteDraft = (sessionId, messageId, meal) =>
+  apiFetch(`${BASE_URL}/sessions/${sessionId}/messages/${messageId}`, json('PUT', { ate_draft: meal }))
+
 // ---------------------------------------------------------------------------
 // Health Rules
 // ---------------------------------------------------------------------------

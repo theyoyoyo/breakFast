@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react'
-import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, saveSessionMessage, updateSessionMessage, getTodaySupplements, toggleSupplement, analyzeMeal, getSchedule } from '../services/api'
+import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, saveSessionMessage, updateSessionMessage, saveAteDraft, getTodaySupplements, toggleSupplement, analyzeMeal, getSchedule } from '../services/api'
 import { useVoice } from '../hooks/useVoice'
 import { emitSyncNotice, useSyncNotice } from '../hooks/useSyncNotice'
 import SuggestButton from './SuggestButton'
@@ -76,17 +76,21 @@ function withJsonBlock(text, meal) {
   return FIRST_JSON_BLOCK_RE.test(text) ? text.replace(FIRST_JSON_BLOCK_RE, () => block) : `${text}\n\n${block}`
 }
 
-// Saved session messages as chat messages after the welcome line; the id lets a card edit save
+// Saved session messages as chat messages after the welcome line; the id lets a card edit save,
+// and ateDraft is the card's saved "Today I ate" version
 function toChatMessages(msgs) {
-  return [WELCOME_MSG, ...msgs.map(m => ({ id: m.id, role: m.role, content: m.content }))]
+  return [WELCOME_MSG, ...msgs.map(m => ({ id: m.id, role: m.role, content: m.content, ateDraft: m.ate_draft ?? null }))]
 }
+
+const sameDraft = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
 
 function sameMessages(a, b) {
-  return a.length === b.length && a.every((m, i) => m.role === b[i].role && m.content === b[i].content && m.id === b[i].id)
+  return a.length === b.length && a.every((m, i) => (
+    m.role === b[i].role && m.content === b[i].content && m.id === b[i].id && sameDraft(m.ateDraft, b[i].ateDraft)
+  ))
 }
 
-// Unchanged meal cards stay the same objects on a reload, so an open editor or a
-// "Today I ate" draft keeps its edits
+// Unchanged meal cards stay the same objects on a reload, so an open editor keeps its edits
 function keepUnchangedBlocks(prev, next) {
   const kept = {}
   for (const [i, meal] of Object.entries(next)) {
@@ -664,6 +668,14 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     }
   }, [mealBlocks, schedulingIdx, streamBuffer, appendSavedMessage])
 
+  // Save a card's "Today I ate" version with its message, so the panel opens from it on every device.
+  // A card whose message has no id yet (not saved) keeps it on this device only.
+  const handleSaveAteDraft = async (idx, meal) => {
+    const msg = messages[idx]
+    setMessages(prev => prev.map((m, i) => (i === idx ? { ...m, ateDraft: meal } : m)))
+    if (msg?.id && sessionIdRef.current) await saveAteDraft(sessionIdRef.current, msg.id, meal)
+  }
+
   // Save a meal card edit into its message, so reloads and other devices show the edited card.
   // A card whose message has no id yet (not saved) stays edited on this device only.
   const handleMealSave = useCallback((idx, msg, updated) => {
@@ -694,10 +706,9 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
 
   const [suppMenuOpen, setSuppMenuOpen] = useState(false)
   const [decideOpen, setDecideOpen] = useState(false)
-  // "Today I ate" draft: kept across close/reopen while the same chat meal stays selected.
-  // Selecting another meal (or saving the selected one) gives a different source, so the draft is dropped.
-  const decideDraftRef = useRef({ source: null, meal: null })
-  const decideDraft = decideDraftRef.current.source === checkedMeal ? decideDraftRef.current.meal : null
+  // The card "Today I ate" opened from (its message index), kept while the panel is open
+  const [decideIdx, setDecideIdx] = useState(null)
+  const decideMeal = decideIdx !== null ? mealBlocks[decideIdx] ?? null : null
 
   return (
     <div style={s.container}>
@@ -766,12 +777,11 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
 
       {decideOpen && (
         <DecidePanel
-          meal={checkedMeal}
-          draft={decideDraft}
-          onDraftChange={(draftMeal) => { decideDraftRef.current = { source: checkedMeal, meal: draftMeal } }}
+          meal={decideMeal}
+          saved={decideIdx !== null ? messages[decideIdx]?.ateDraft ?? null : null}
+          onSave={decideMeal ? (meal) => handleSaveAteDraft(decideIdx, meal) : undefined}
           onClose={() => setDecideOpen(false)}
           onConfirm={() => {
-            decideDraftRef.current = { source: null, meal: null }
             setDecideOpen(false)
             setCheckedMealIdx(null)
           }}
@@ -818,8 +828,11 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
           <button
             style={s.decideBtn(decideOpen)}
             onClick={() => {
+              if (!decideOpen) {
+                setDecideIdx(checkedMeal ? checkedMealIdx : null)
+                setSuppMenuOpen(false)
+              }
               setDecideOpen(prev => !prev)
-              if (!decideOpen) setSuppMenuOpen(false)
             }}
             disabled={isBusy}
             title="Today I ate..."

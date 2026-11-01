@@ -3,7 +3,8 @@
  * when its socket reconnects and on a session_updated push for it, without losing the draft
  * or a streaming reply; analysis results and meal card edits are saved to the session;
  * the 💊 list reloads on a supplements push and when the page becomes visible, and other
- * notices reach the rest of the app.
+ * notices reach the rest of the app; "Today I ate" saves its version with the card, opens
+ * from it, and drops unsaved edits on Close.
  * API calls and the chat socket are mocked — no real network calls are made.
  */
 
@@ -12,7 +13,8 @@ import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import ChatInterface from './ChatInterface'
 import {
   createChatSocket, getActiveSession, listSessions, getSessionMessages,
-  saveSessionMessage, updateSessionMessage, analyzeMeal, getTodaySupplements,
+  saveSessionMessage, updateSessionMessage, saveAteDraft, analyzeMeal, getTodaySupplements,
+  checkMissingIngredients, getRatings,
 } from '../services/api'
 import { SYNC_NOTICE_EVENT } from '../hooks/useSyncNotice'
 
@@ -25,19 +27,27 @@ vi.mock('../services/api', () => ({
   getSessionMessages: vi.fn(),
   saveSessionMessage: vi.fn(),
   updateSessionMessage: vi.fn(),
+  saveAteDraft: vi.fn(),
   getTodaySupplements: vi.fn(),
   toggleSupplement: vi.fn(),
   analyzeMeal: vi.fn(),
   getSchedule: vi.fn(),
+  // "Today I ate" (DecidePanel and its MealEditor)
+  checkMissingIngredients: vi.fn(),
+  getRatings: vi.fn(),
+  createRating: vi.fn(),
+  logMeal: vi.fn(),
+  addFavorite: vi.fn(),
 }))
 
 // The card itself is MealBlock's and MealEditor's business; here it only exposes its callbacks
 vi.mock('./MealBlock', () => ({
-  default: ({ meal, onSave, onAnalyze }) => (
+  default: ({ meal, onSave, onAnalyze, onCheck }) => (
     <div>
       <span>Card: {meal.menu_name}</span>
       <button onClick={() => onSave({ ...meal, menu_name: 'Edited Breakfast' })}>Save card</button>
       <button onClick={onAnalyze}>Analyze card</button>
+      <button onClick={onCheck}>Select card</button>
     </div>
   ),
 }))
@@ -93,6 +103,9 @@ describe('ChatInterface sync', () => {
     saveSessionMessage.mockResolvedValue({ status: 'ok', id: 9 })
     updateSessionMessage.mockResolvedValue({ status: 'ok' })
     getTodaySupplements.mockResolvedValue([])
+    saveAteDraft.mockResolvedValue({ status: 'ok' })
+    checkMissingIngredients.mockResolvedValue({ missing: [] })
+    getRatings.mockResolvedValue([])
   })
 
   // Coming back to the page (phone app resumed) reloads the open chat from the server
@@ -215,6 +228,57 @@ describe('ChatInterface sync', () => {
     } finally {
       window.removeEventListener(SYNC_NOTICE_EVENT, listener)
     }
+  })
+
+  // Open "Today I ate" from the meal card
+  async function openTodayIAte() {
+    fireEvent.click(await screen.findByRole('button', { name: 'Select card' }))
+    fireEvent.click(screen.getByTitle('Today I ate...'))
+    return screen.findByText('Today I ate')
+  }
+
+  // Save stores the edited meal with the card's message, and the panel opens from it next time
+  it('saves "Today I ate" with its card and opens from it', async () => {
+    getSessionMessages.mockReset().mockResolvedValue([HELLO, MEAL_MSG])
+    await renderChat()
+    await openTodayIAte()
+    fireEvent.click(screen.getAllByTitle('Delete')[0]) // remove Olives
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(saveAteDraft).toHaveBeenCalledTimes(1))
+    const [sessionId, messageId, meal] = saveAteDraft.mock.calls[0]
+    expect([sessionId, messageId, meal.menu]).toEqual(['s1', 3, []])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    fireEvent.click(screen.getByTitle('Today I ate...'))
+    await screen.findByText('Today I ate')
+    expect(screen.queryByText('Olives')).toBeNull()
+  })
+
+  // Close drops edits that weren't saved
+  it('drops unsaved "Today I ate" edits on Close', async () => {
+    getSessionMessages.mockReset().mockResolvedValue([HELLO, MEAL_MSG])
+    await renderChat()
+    await openTodayIAte()
+    fireEvent.click(screen.getAllByTitle('Delete')[0]) // remove Olives
+    expect(screen.queryByText('Olives')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    fireEvent.click(screen.getByTitle('Today I ate...'))
+    expect(await screen.findByText('Olives')).toBeInTheDocument()
+    expect(saveAteDraft).not.toHaveBeenCalled()
+  })
+
+  // A version saved on another device arrives with the messages; the panel opens from it
+  it('opens "Today I ate" from a version saved on another device', async () => {
+    const savedOnPhone = { ...MEAL, menu: [{ name: 'Honey', amount: 1, unit: 'tbsp', ingredients: [] }] }
+    getSessionMessages.mockReset()
+      .mockResolvedValueOnce([HELLO, MEAL_MSG])
+      .mockResolvedValue([HELLO, { ...MEAL_MSG, ate_draft: savedOnPhone }])
+    await renderChat()
+    pushSessionUpdated('s1')
+    await waitFor(() => expect(getSessionMessages).toHaveBeenCalledTimes(2))
+    await openTodayIAte()
+    expect(screen.getByText('Honey')).toBeInTheDocument()
+    expect(screen.queryByText('Olives')).toBeNull()
   })
 
   // An analysis result is saved to the session, so reloads and the other device show it
