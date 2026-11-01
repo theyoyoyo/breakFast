@@ -1,7 +1,7 @@
 """
 Tests for live chat sync — a user's other chat sockets get session_updated after a reply,
-a REST save or a message edit, and supplements_updated after a supplement change;
-no other user's socket does.
+a REST save or a message edit, supplements_updated after a supplement change and
+shopping_suggestions_updated after a suggestions list change; no other user's socket does.
 """
 
 import sys
@@ -177,6 +177,24 @@ async def test_supplement_changes_notify_users_sockets(sync_setup):
 
             assert _pushes(_chat(ada), "supplements_updated") == [{"type": "supplements_updated"}] * 4
             assert _pushes(_chat(bob), "supplements_updated") == []
+
+
+# A shopping suggestions change tells the user's sockets, and no other user's.
+@pytest.mark.asyncio
+async def test_shopping_suggestions_change_notifies_users_sockets(sync_setup):
+    app, users = sync_setup
+    ada_token, _, _ = users["ada"]
+    bob_token, _, _ = users["bob"]
+    with _fake_llm(), TestClient(app) as client:
+        with client.websocket_connect(f"/chat?token={ada_token}") as ada,              client.websocket_connect(f"/chat?token={bob_token}") as bob:
+            r = client.put(
+                "/shopping/suggestions",
+                json={"items": [{"name": "Salmon", "reason": "Omega-3"}]},
+                headers={"Authorization": f"Bearer {ada_token}"},
+            )
+            assert r.status_code == 200
+            assert _pushes(_chat(ada), "shopping_suggestions_updated") == [{"type": "shopping_suggestions_updated"}]
+            assert _pushes(_chat(bob), "shopping_suggestions_updated") == []
 
 
 class _DroppingSocket:

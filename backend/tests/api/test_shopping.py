@@ -128,3 +128,63 @@ async def test_bought_restores_group_from_memory(client):
     ingredients = (await client.get("/ingredients/")).json()
     kasar = [i for i in ingredients if i["name"] == "kasar"][0]
     assert kasar["group_name"] == "🐄 Animal Products"
+
+
+# ---------------------------------------------------------------------------
+# Shopping suggestions list (/shopping/suggestions)
+# ---------------------------------------------------------------------------
+
+SALMON = {"name": "Salmon", "reason": "Omega-3", "checked": True}
+KIWI = {"name": "Kiwi", "reason": "In season", "checked": False}
+
+
+async def _second_user_auth():
+    """Auth header for a second user in the same test database."""
+    import aiosqlite
+    import database
+    from auth import hash_pin, create_token
+
+    async with aiosqlite.connect(database.DATABASE_PATH) as conn:
+        cur = await conn.execute(
+            "INSERT INTO users (name, pin_hash, is_admin) VALUES (?, ?, ?)", ("user2", hash_pin("5678"), 0),
+        )
+        await conn.commit()
+    return {"Authorization": f"Bearer {create_token(cur.lastrowid)}"}
+
+
+# A new user's suggestions list is empty
+async def test_suggestions_list_empty_on_fresh_db(client):
+    r = await client.get("/shopping/suggestions")
+    assert r.status_code == 200
+    assert r.json() == {"items": []}
+
+
+# The saved list comes back in order with each item's reason and check
+async def test_suggestions_list_saved_and_loaded(client):
+    r = await client.put("/shopping/suggestions", json={"items": [KIWI, SALMON]})
+    assert r.status_code == 200
+    assert r.json() == {"items": [KIWI, SALMON]}
+    assert (await client.get("/shopping/suggestions")).json() == {"items": [KIWI, SALMON]}
+
+
+# Saving replaces the whole list: items left out (sent to the shopping list) are gone
+async def test_suggestions_list_save_replaces(client):
+    await client.put("/shopping/suggestions", json={"items": [SALMON, KIWI]})
+    await client.put("/shopping/suggestions", json={"items": [KIWI]})
+    assert (await client.get("/shopping/suggestions")).json() == {"items": [KIWI]}
+
+
+# A removed item leaves the list
+async def test_suggestions_list_removed_item_leaves(client):
+    await client.put("/shopping/suggestions", json={"items": [SALMON, KIWI]})
+    r = await client.put("/shopping/suggestions", json={"items": [SALMON], "removed": ["Kiwi"]})
+    assert r.json() == {"items": [SALMON]}
+
+
+# Another user neither sees nor changes the list
+async def test_suggestions_list_is_per_user(client):
+    await client.put("/shopping/suggestions", json={"items": [SALMON]})
+    other = await _second_user_auth()
+    assert (await client.get("/shopping/suggestions", headers=other)).json() == {"items": []}
+    await client.put("/shopping/suggestions", json={"items": [KIWI]}, headers=other)
+    assert (await client.get("/shopping/suggestions")).json() == {"items": [SALMON]}

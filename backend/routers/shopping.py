@@ -1,13 +1,17 @@
 """
-/shopping — CRUD endpoints for the persistent shopping list.
+/shopping — CRUD endpoints for the persistent shopping list, and the Fridge tab's
+shopping suggestions list (/shopping/suggestions), kept per user so every device shows
+the same one. A suggestions change tells the user's open chats (services/chat_sync).
 All queries are scoped to the authenticated user.
 """
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from database import get_db
 from auth import require_user
+from services import chat_sync
+from services.shopping import REMOVED_DAYS
 
 router = APIRouter(prefix="/shopping", tags=["shopping"])
 
@@ -25,6 +29,17 @@ class ShoppingItemCreate(BaseModel):
 class BoughtRequest(BaseModel):
     ids: list[int]
     expiry_dates: Optional[dict[str, str]] = None  # {item_name: expiry_date}
+
+
+class SuggestionItem(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    reason: str = ""
+    checked: bool = True
+
+
+class SuggestionsState(BaseModel):
+    items: list[SuggestionItem] = []   # the whole list, in order
+    removed: list[str] = []            # names just removed with ×
 
 
 @router.get("/", response_model=list[ShoppingItem])
@@ -125,3 +140,56 @@ async def bought_items(body: BoughtRequest, user_id: int = Depends(require_user)
         await db.commit()
 
     return {"bought": len(items)}
+
+
+# ---------------------------------------------------------------------------
+# Shopping suggestions list (Fridge tab)
+# ---------------------------------------------------------------------------
+
+
+async def _suggestion_items(db, user_id: int) -> list[dict]:
+    async with db.execute(
+        """SELECT name, reason, checked FROM shopping_suggestions
+           WHERE user_id = ? AND removed_at IS NULL
+           ORDER BY position, id""",
+        (user_id,),
+    ) as cur:
+        return [{"name": r["name"], "reason": r["reason"], "checked": bool(r["checked"])} for r in await cur.fetchall()]
+
+
+@router.get("/suggestions")
+async def get_suggestions(user_id: int = Depends(require_user)):
+    """The suggestions list with each item's check, in order."""
+    async with get_db() as db:
+        return {"items": await _suggestion_items(db, user_id)}
+
+
+@router.put("/suggestions")
+async def put_suggestions(body: SuggestionsState, user_id: int = Depends(require_user)):
+    """Replace the suggestions list. Names in `removed` were removed with ×: they are kept
+    with the time, so new suggestions leave them out for REMOVED_DAYS days.
+    Items that are simply gone (sent to the shopping list) are deleted."""
+    async with get_db() as db:
+        await db.execute(
+            "DELETE FROM shopping_suggestions WHERE user_id = ? AND removed_at IS NULL", (user_id,)
+        )
+        await db.execute(
+            "DELETE FROM shopping_suggestions WHERE user_id = ? AND removed_at < datetime('now', ?)",
+            (user_id, f"-{REMOVED_DAYS} days"),
+        )
+        await db.executemany(
+            """INSERT INTO shopping_suggestions (user_id, name, removed_at) VALUES (?, ?, datetime('now'))
+               ON CONFLICT(user_id, name) DO UPDATE SET removed_at = excluded.removed_at""",
+            [(user_id, name) for name in body.removed],
+        )
+        await db.executemany(
+            """INSERT INTO shopping_suggestions (user_id, name, reason, checked, position) VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(user_id, name) DO UPDATE SET
+                   reason = excluded.reason, checked = excluded.checked,
+                   position = excluded.position, removed_at = NULL""",
+            [(user_id, item.name, item.reason, int(item.checked), i) for i, item in enumerate(body.items)],
+        )
+        await db.commit()
+        items = await _suggestion_items(db, user_id)
+    await chat_sync.notify_user(user_id, {"type": "shopping_suggestions_updated"})
+    return {"items": items}

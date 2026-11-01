@@ -190,6 +190,19 @@ CREATE TABLE IF NOT EXISTS shopping_list (
     UNIQUE(user_id, item_name)
 );
 
+-- Fridge tab's shopping suggestions, the same on every device. A row with removed_at
+-- was removed with ×: it is left out of new suggestions for 7 days.
+CREATE TABLE IF NOT EXISTS shopping_suggestions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES users(id),
+    name        TEXT    NOT NULL,
+    reason      TEXT    NOT NULL DEFAULT '',
+    checked     INTEGER NOT NULL DEFAULT 1,
+    position    INTEGER NOT NULL DEFAULT 0,
+    removed_at  TEXT,
+    UNIQUE(user_id, name)
+);
+
 CREATE TABLE IF NOT EXISTS user_kitchen_appliances (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id         INTEGER NOT NULL REFERENCES users(id),
@@ -209,6 +222,7 @@ CREATE TABLE IF NOT EXISTS weekly_summaries (
 
 -- Indices on frequently-filtered foreign key columns
 CREATE INDEX IF NOT EXISTS idx_shopping_list_user ON shopping_list(user_id);
+CREATE INDEX IF NOT EXISTS idx_shopping_suggestions_user ON shopping_suggestions(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_kitchen_appliances_user ON user_kitchen_appliances(user_id);
 CREATE INDEX IF NOT EXISTS idx_ingredient_inventory_user ON ingredient_inventory(user_id);
 CREATE INDEX IF NOT EXISTS idx_ingredient_group_memory_user ON ingredient_group_memory(user_id);

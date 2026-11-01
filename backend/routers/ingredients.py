@@ -324,26 +324,31 @@ async def get_shopping_suggestions(
     """Generate AI-powered shopping suggestions based on full user context.
 
     Code keeps only new items: anything in the fridge, on the shopping list,
-    already shown (`exclude`) or on the avoid list is dropped by exact name.
+    already shown (`exclude`), on the avoid list or removed from the suggestions
+    list in the last 7 days is dropped by exact name.
     When a whole reply is repeats, the model is asked once more.
     """
     import logging
     from services.context import load_shopping_context
     from services.suggestion import build_shopping_prompt
     from services.llm import chat_json, LLMUnavailableError, lyric_cycler
-    from services.shopping import SUGGESTIONS_SCHEMA, new_suggestions, parse_suggestions, shopping_request
+    from services.shopping import (
+        SUGGESTIONS_SCHEMA, new_suggestions, parse_suggestions, recently_removed, shopping_request,
+    )
 
     shown = list(body.exclude) if body else []
 
     try:
         async with get_db() as db:
             ctx = await load_shopping_context(db, user_id)
+            removed = await recently_removed(db, user_id)
     except Exception as e:
         logging.exception("Shopping context load failed")
         return {"suggestions": [], "lyric": lyric_cycler.next(), "error": str(e)}
 
-    # The avoid list is a hard ban, so code enforces it beside the prompt rule
-    known = [i["name"] for i in ctx["ingredients"]] + ctx["shopping_list"] + ctx["avoid_list"]
+    # The avoid list is a hard ban, so code enforces it beside the prompt rule.
+    # Items removed with × are left out by code only, so the prompt stays the same.
+    known = [i["name"] for i in ctx["ingredients"]] + ctx["shopping_list"] + ctx["avoid_list"] + removed
 
     for _ in range(2):
         try:
