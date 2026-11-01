@@ -104,7 +104,7 @@ export default function DecidePanel({ meal, draft, onDraftChange, onClose, onCon
     setSaving(false)
   }, [doLogMeal])
 
-  // MealEditor's ⭐ Save → keep the menu in favorites for later; nothing is logged
+  // MealEditor's ⭐ Fav → keep the menu in favorites for later; nothing is logged
   const handleFavorite = useCallback(async (currentMeal) => {
     await addFavorite({
       meal_name: currentMeal.menu_name || currentMeal.meal_name || 'Breakfast',
@@ -135,7 +135,7 @@ export default function DecidePanel({ meal, draft, onDraftChange, onClose, onCon
     setPhase('rate')
   }, [existingRatings, logWithoutRating])
 
-  // Rating phase Save — persist ratings then log meal
+  // Rating phase Confirm — persist ratings then log meal
   const handleSaveWithRatings = useCallback(async () => {
     setSaving(true)
     try {
@@ -173,7 +173,7 @@ export default function DecidePanel({ meal, draft, onDraftChange, onClose, onCon
           <div style={s.actions}>
             <button style={s.backBtn} onClick={handleBackToEdit}>Back</button>
             <button style={s.confirmBtn} onClick={handleSaveWithRatings} disabled={saving}>
-              {saving ? '...' : 'Save'}
+              {saving ? '...' : 'Confirm'}
             </button>
           </div>
         </div>

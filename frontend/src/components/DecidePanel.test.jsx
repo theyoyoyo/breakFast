@@ -1,6 +1,6 @@
 /**
  * Tests for "Today I ate": Confirm waits until nothing is missing, Ate out marks missing items
- * as obtained (no logging), ⭐ Save stores the menu in favorites, and edits survive
+ * as obtained (no logging), ⭐ Fav stores the menu in favorites, and edits survive
  * closing, going back from rating and re-opening.
  * API calls are mocked — no real network calls are made.
  */
@@ -73,13 +73,29 @@ describe('DecidePanel', () => {
     await waitFor(() => expect(confirmBtn()).toBeEnabled())
   })
 
-  it('saves the menu to favorites with ⭐ Save and logs nothing', async () => {
+  it('saves the menu to favorites with ⭐ Fav and logs nothing', async () => {
     checkMissingIngredients.mockResolvedValue({ missing: [] })
     render(<DecidePanel meal={MEAL} onClose={() => {}} />)
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: /Save/ }))
-    await waitFor(() => expect(addFavorite).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByRole('button', { name: '⭐ Fav' }))
+    expect(await screen.findByRole('button', { name: '✓ Fav' })).toBeInTheDocument()
+    expect(addFavorite).toHaveBeenCalledTimes(1)
     expect(logMeal).not.toHaveBeenCalled()
+  })
+
+  // The rating step logs the meal with Confirm, like the button that logs it when there's nothing to rate
+  it('names the rating step\'s button Confirm', async () => {
+    checkMissingIngredients.mockResolvedValue({ missing: [] })
+    getRatings.mockResolvedValue([])
+    const onConfirm = vi.fn()
+    render(<DecidePanel meal={MEAL} onClose={() => {}} onConfirm={onConfirm} />)
+    await waitFor(() => expect(confirmBtn()).toBeEnabled())
+    fireEvent.click(confirmBtn())
+    expect(await screen.findByText('Rate')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+    fireEvent.click(confirmBtn())
+    await waitFor(() => expect(logMeal).toHaveBeenCalledTimes(1))
+    expect(onConfirm).toHaveBeenCalledTimes(1)
   })
 
   it('reports edits as a draft and starts from that draft when reopened', async () => {

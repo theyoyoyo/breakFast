@@ -493,7 +493,7 @@ export default function MealEditor({
             disabled={favSaving || favAdded}
             title={favAdded ? 'Added to favorites' : 'Copy to favorites'}
           >
-            {favSaving ? '...' : favAdded ? '✓ Saved' : '⭐ Save'}
+            {favSaving ? '...' : favAdded ? '✓ Fav' : '⭐ Fav'}
           </button>
         )}
         {onSave && <button style={s.saveBtn} onClick={handleSave}>Save</button>}
