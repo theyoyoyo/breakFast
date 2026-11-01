@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { addFavorite } from '../services/api'
+import { addFavorite, deleteFavorite } from '../services/api'
 import { formatIngredient } from '../utils/ingredients'
 import { pickEmoji } from '../utils/emoji'
 import { useMealReadiness } from '../hooks/useMealReadiness'
@@ -44,9 +44,10 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
     setPanelOpen(false)
   }
 
-  // Called by MealEditor with the current edited state — always saves what user sees
+  // Called by MealEditor with the current edited state — always saves what user sees.
+  // Returns the favorite's id, so a second tap on the star can remove it.
   const handleFavorite = async (currentMeal) => {
-    await addFavorite({
+    const { id } = await addFavorite({
       meal_name: currentMeal.menu_name || currentMeal.meal_name || mealName,
       description: currentMeal.description,
       ingredients: currentMeal.ingredients || [],
@@ -55,6 +56,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
       nutrition_note: currentMeal.nutrition_note,
       menu_items: currentMeal.menu || currentMeal.menu_items || null,
     })
+    return id
   }
 
   return (
@@ -105,9 +107,9 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
               onClose={() => setPanelOpen(false)}
               showPrepTime={true}
               editPrepTime={true}
-              showId={true}
               menuMode={isMenuFormat}
               onFavorite={handleFavorite}
+              onUnfavorite={deleteFavorite}
               checkFridge
             />
           </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { getRatings, createRating, logMeal, addFavorite } from '../services/api'
+import { getRatings, createRating, logMeal, addFavorite, deleteFavorite } from '../services/api'
 import { countUnit } from '../utils/ingredients'
 import MealEditor from './MealEditor'
 import StarRating from './StarRating'
@@ -14,7 +14,7 @@ import * as s from './DecidePanel.styles'
  *   onSave    — async (meal) => void — Save stores the current meal with the card, then the panel
  *               closes (no Save without it)
  *   onClose   — Close drops unsaved edits
- *   onConfirm — the meal was logged (the saved version stays, so it can be confirmed again)
+ *   onConfirm — the meal was logged (with ratings, or with Skip on the rating step)
  */
 export default function DecidePanel({ meal, saved, onSave, onClose, onConfirm }) {
   // Phase: 'edit' = MealEditor open, 'rate' = star-rating unrated items
@@ -112,9 +112,10 @@ export default function DecidePanel({ meal, saved, onSave, onClose, onConfirm })
     setSaving(false)
   }, [doLogMeal])
 
-  // MealEditor's ⭐ Fav → keep the menu in favorites for later; nothing is logged
+  // MealEditor's ☆ → keep the menu in favorites for later; nothing is logged.
+  // Returns the favorite's id, so a second tap can remove it.
   const handleFavorite = useCallback(async (currentMeal) => {
-    await addFavorite({
+    const { id } = await addFavorite({
       meal_name: currentMeal.menu_name || currentMeal.meal_name || 'Breakfast',
       description: currentMeal.description,
       ingredients: currentMeal.ingredients || [],
@@ -123,6 +124,7 @@ export default function DecidePanel({ meal, saved, onSave, onClose, onConfirm })
       nutrition_note: currentMeal.nutrition_note,
       menu_items: currentMeal.menu || currentMeal.menu_items || null,
     })
+    return id
   }, [])
 
   // "Confirm" → collect ratings for unrated items, then log (waits until nothing is missing)
@@ -155,6 +157,9 @@ export default function DecidePanel({ meal, saved, onSave, onClose, onConfirm })
     setSaving(false)
   }, [ratings, meal, doLogMeal])
 
+  // Rating phase Skip — log the meal without rating anything (the items are asked again next time)
+  const handleSkipRatings = useCallback(() => logWithoutRating(pendingMealRef.current || meal), [meal, logWithoutRating])
+
   const handleOverlayClick = (e) => {
     if (e.target === e.currentTarget) onClose()
   }
@@ -180,6 +185,9 @@ export default function DecidePanel({ meal, saved, onSave, onClose, onConfirm })
           </div>
           <div style={s.actions}>
             <button style={s.backBtn} onClick={handleBackToEdit}>Back</button>
+            <button style={s.outlineBtn} onClick={handleSkipRatings} disabled={saving} title="Log the meal without rating">
+              Skip
+            </button>
             <button style={s.confirmBtn} onClick={handleSaveWithRatings} disabled={saving}>
               {saving ? '...' : 'Confirm'}
             </button>
@@ -198,6 +206,7 @@ export default function DecidePanel({ meal, saved, onSave, onClose, onConfirm })
         <MealEditor
           meal={editorMeal}
           onFavorite={handleFavorite}
+          onUnfavorite={deleteFavorite}
           onClose={onClose}
           showPrepTime={true}
           editPrepTime={true}
@@ -205,11 +214,11 @@ export default function DecidePanel({ meal, saved, onSave, onClose, onConfirm })
           checkFridge
           onMissingChange={handleMissingChange}
           onChange={handleEditorChange}
-          extraActions={(buildCurrentMeal, { markAllObtained }) => (
+          extraActions={(buildCurrentMeal) => (
             <>
               {onSave && (
                 <button
-                  style={s.saveBtn}
+                  style={s.outlineBtn}
                   onClick={() => handleSave(buildCurrentMeal())}
                   disabled={saving || saveState === 'saving'}
                   title="Keep these edits with this chat meal, on every device, and close"
@@ -217,14 +226,6 @@ export default function DecidePanel({ meal, saved, onSave, onClose, onConfirm })
                   {saveState === 'saving' ? '...' : 'Save'}
                 </button>
               )}
-              <button
-                style={missing?.length ? s.ateOutBtn : s.ateOutBtnIdle}
-                onClick={markAllObtained}
-                disabled={saving || !missing?.length}
-                title="Ate out: mark every missing item as obtained"
-              >
-                Ate out
-              </button>
               <button
                 style={missing?.length === 0 ? s.confirmBtn : s.confirmBtnBlocked}
                 onClick={() => handleProceedToRating(buildCurrentMeal())}
@@ -243,7 +244,7 @@ export default function DecidePanel({ meal, saved, onSave, onClose, onConfirm })
         )}
         {missing?.length > 0 && (
           <div style={s.missingNote}>
-            Not in your fridge: {missing.join(', ')}. Tap an item once you have it, remove it, or use Ate out if you ate somewhere else.
+            Not in your fridge: {missing.join(', ')}. Tap an item, or a dish's name, once you have it, or remove it.
           </div>
         )}
       </div>

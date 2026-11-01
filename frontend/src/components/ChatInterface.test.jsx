@@ -15,7 +15,7 @@ import ChatInterface from './ChatInterface'
 import {
   createChatSocket, getActiveSession, listSessions, getSessionMessages,
   saveSessionMessage, updateSessionMessage, saveAteDraft, selectSessionMessage, analyzeMeal, getTodaySupplements,
-  checkMissingIngredients, getRatings,
+  checkMissingIngredients, getRatings, logMeal,
 } from '../services/api'
 import { SYNC_NOTICE_EVENT } from '../hooks/useSyncNotice'
 
@@ -40,6 +40,7 @@ vi.mock('../services/api', () => ({
   createRating: vi.fn(),
   logMeal: vi.fn(),
   addFavorite: vi.fn(),
+  deleteFavorite: vi.fn(),
 }))
 
 // The card itself is MealBlock's and MealEditor's business; here it only exposes its callbacks
@@ -283,6 +284,23 @@ describe('ChatInterface sync', () => {
     await openTodayIAte()
     expect(screen.getByText('Honey')).toBeInTheDocument()
     expect(screen.queryByText('Olives')).toBeNull()
+  })
+
+  // Logging the meal unselects its card and clears its saved version, on every device
+  it('clears the saved version and the selection once the meal is logged', async () => {
+    getSessionMessages.mockReset().mockResolvedValue([HELLO, { ...MEAL_MSG, selected: true, ate_draft: MEAL }])
+    getRatings.mockResolvedValue([{ product_name: 'Olives' }]) // nothing to rate: Confirm logs at once
+    logMeal.mockResolvedValue({})
+    await renderChat()
+    expect(await screen.findByText('Selected')).toBeInTheDocument()
+    fireEvent.click(screen.getByTitle('Today I ate...'))
+    const confirm = await screen.findByRole('button', { name: 'Confirm' })
+    await waitFor(() => expect(confirm).toBeEnabled())
+    fireEvent.click(confirm)
+    await waitFor(() => expect(saveAteDraft).toHaveBeenCalledWith('s1', 3, null))
+    expect(logMeal).toHaveBeenCalledTimes(1)
+    expect(selectSessionMessage).toHaveBeenLastCalledWith('s1', null)
+    expect(screen.queryByText('Selected')).toBeNull()
   })
 
   // Selecting a card tells the server (so other devices follow), and a second tap unselects it

@@ -689,8 +689,9 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     }
   }
 
-  // Save a card's "Today I ate" version with its message, so the panel opens from it on every device.
-  // A card whose message has no id yet (not saved) keeps it on this device only.
+  // Save a card's "Today I ate" version with its message, so the panel opens from it on every device
+  // (null clears it once the meal is logged). A card whose message has no id yet (not saved) keeps
+  // it on this device only.
   const handleSaveAteDraft = async (idx, meal) => {
     const msg = messages[idx]
     setMessages(prev => prev.map((m, i) => (i === idx ? { ...m, ateDraft: meal } : m)))
@@ -803,8 +804,12 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
           onSave={decideMeal ? (meal) => handleSaveAteDraft(decideIdx, meal) : undefined}
           onClose={() => setDecideOpen(false)}
           onConfirm={() => {
+            // Logged: the card is unselected and its saved version cleared, on every device
             setDecideOpen(false)
             selectCard(null)
+            if (decideIdx !== null && messages[decideIdx]?.ateDraft) {
+              handleSaveAteDraft(decideIdx, null).catch(() => {})
+            }
           }}
         />
       )}

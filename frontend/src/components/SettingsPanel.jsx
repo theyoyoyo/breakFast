@@ -5,7 +5,7 @@ import {
   getSupplements, createSupplement, updateSupplement, deleteSupplement,
   getMeals, updateMeal, deleteMeal, deleteOldMeals,
   getHealthRules, createHealthRule, updateHealthRule, deleteHealthRule,
-  addFavorite,
+  addFavorite, deleteFavorite,
   getPreferences, setPreference,
   analyzeMeal,
 } from '../services/api'
@@ -372,9 +372,10 @@ export default function SettingsPanel({ visible }) {
     }
   }
 
-  // Receives current editor state (not stale meal prop) via MealEditor's onFavorite
+  // Receives current editor state (not stale meal prop) via MealEditor's onFavorite;
+  // returns the favorite's id, so a second tap on the star can remove it
   const handleCopyToFavorites = async (currentMeal) => {
-    await addFavorite({
+    const { id } = await addFavorite({
       meal_name: currentMeal.menu_name || currentMeal.meal_name,
       description: currentMeal.description,
       ingredients: Array.isArray(currentMeal.ingredients) ? currentMeal.ingredients : [],
@@ -383,6 +384,7 @@ export default function SettingsPanel({ visible }) {
       nutrition_note: currentMeal.nutrition_note,
       menu_items: currentMeal.menu || currentMeal.menu_items || null,
     })
+    return id
   }
 
   const handleAnalyzeMeal = async (meal) => {
@@ -512,6 +514,7 @@ export default function SettingsPanel({ visible }) {
                         editPrepTime={true}
                         menuMode={isMenuFormat}
                         onFavorite={handleCopyToFavorites}
+                        onUnfavorite={deleteFavorite}
                       />
                     </div>
                   </div>
