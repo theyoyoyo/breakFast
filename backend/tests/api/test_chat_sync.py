@@ -1,6 +1,7 @@
 """
 Tests for live chat sync — a user's other chat sockets get session_updated after a reply,
-a REST save or a message edit, and no other user's socket does.
+a REST save or a message edit, and supplements_updated after a supplement change;
+no other user's socket does.
 """
 
 import sys
@@ -74,8 +75,8 @@ def _chat(ws, message="hello", session_id=None):
             return received
 
 
-def _pushes(received):
-    return [m for m in received if m["type"] == "session_updated"]
+def _pushes(received, kind="session_updated"):
+    return [m for m in received if m["type"] == kind]
 
 
 # The user's other socket is told about the saved reply, without its tokens; the socket that asked isn't told.
@@ -156,6 +157,26 @@ async def test_message_edit_replaces_content_and_notifies(sync_setup):
             headers={"Authorization": f"Bearer {bob_token}"},
         )
         assert r.status_code == 404
+
+
+# Marking a pill and every supplement change in Settings tell the user's sockets, and no other user's.
+@pytest.mark.asyncio
+async def test_supplement_changes_notify_users_sockets(sync_setup):
+    app, users = sync_setup
+    ada_token, _, _ = users["ada"]
+    bob_token, _, _ = users["bob"]
+    ada_auth = {"Authorization": f"Bearer {ada_token}"}
+    with _fake_llm(), TestClient(app) as client:
+        with client.websocket_connect(f"/chat?token={ada_token}") as ada, \
+             client.websocket_connect(f"/chat?token={bob_token}") as bob:
+            supp_id = client.post("/profile/supplements", json={"name": "Vitamin D"}, headers=ada_auth).json()["id"]
+            edit = {"name": "Vitamin D3", "contents": "1000 IU", "frequency": "sometimes"}
+            assert client.put(f"/profile/supplements/{supp_id}", json=edit, headers=ada_auth).status_code == 200
+            assert client.post(f"/profile/supplements/{supp_id}/toggle", json={"taken": True}, headers=ada_auth).status_code == 200
+            assert client.delete(f"/profile/supplements/{supp_id}", headers=ada_auth).status_code == 204
+
+            assert _pushes(_chat(ada), "supplements_updated") == [{"type": "supplements_updated"}] * 4
+            assert _pushes(_chat(bob), "supplements_updated") == []
 
 
 class _DroppingSocket:
