@@ -1,7 +1,9 @@
 /**
  * Tests for chat sync across devices: the open chat reloads when the page becomes visible,
  * when its socket reconnects and on a session_updated push for it, without losing the draft
- * or a streaming reply; analysis results and meal card edits are saved to the session.
+ * or a streaming reply; analysis results and meal card edits are saved to the session;
+ * the 💊 list reloads on a supplements push and when the page becomes visible, and other
+ * notices reach the rest of the app.
  * API calls and the chat socket are mocked — no real network calls are made.
  */
 
@@ -10,8 +12,9 @@ import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import ChatInterface from './ChatInterface'
 import {
   createChatSocket, getActiveSession, listSessions, getSessionMessages,
-  saveSessionMessage, updateSessionMessage, analyzeMeal,
+  saveSessionMessage, updateSessionMessage, analyzeMeal, getTodaySupplements,
 } from '../services/api'
+import { SYNC_NOTICE_EVENT } from '../hooks/useSyncNotice'
 
 vi.mock('../services/api', () => ({
   createChatSocket: vi.fn(),
@@ -52,6 +55,9 @@ function lastSocket() {
 function pushSessionUpdated(sessionId) {
   act(() => lastSocket().callbacks[7](sessionId))
 }
+function pushNotice(notice) {
+  act(() => lastSocket().callbacks[8](notice))
+}
 
 function setVisibility(state) {
   Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state })
@@ -86,6 +92,7 @@ describe('ChatInterface sync', () => {
     getSessionMessages.mockResolvedValueOnce([HELLO]).mockResolvedValue([HELLO, PHONE_REPLY])
     saveSessionMessage.mockResolvedValue({ status: 'ok', id: 9 })
     updateSessionMessage.mockResolvedValue({ status: 'ok' })
+    getTodaySupplements.mockResolvedValue([])
   })
 
   // Coming back to the page (phone app resumed) reloads the open chat from the server
@@ -173,6 +180,41 @@ describe('ChatInterface sync', () => {
     expect([sessionId, messageId]).toEqual(['s1', 3])
     expect(content.startsWith('Try this.\n\n```json\n')).toBe(true)
     expect(JSON.parse(content.match(/```json\s*([\s\S]*?)\s*```/)[1]).menu_name).toBe('Edited Breakfast')
+  })
+
+  // A pill marked on another device shows up in the open 💊 list on a supplements push
+  it('reloads the 💊 list on a supplements push', async () => {
+    const MAGNESIUM = { id: 1, name: 'Magnesium', frequency: 'sometimes', taken_today: 0 }
+    getTodaySupplements.mockResolvedValue([MAGNESIUM])
+    await renderChat()
+    fireEvent.click(screen.getByTitle('Supplements'))
+    expect(await screen.findByText('○ Magnesium')).toBeInTheDocument()
+
+    getTodaySupplements.mockResolvedValue([{ ...MAGNESIUM, taken_today: 1 }])
+    pushNotice({ type: 'supplements_updated' })
+    expect(await screen.findByText('✓ Magnesium')).toBeInTheDocument()
+  })
+
+  // Coming back to the page reloads the 💊 list too, in case a push was missed in the background
+  it('reloads the 💊 list when the page becomes visible again', async () => {
+    await renderChat()
+    const calls = getTodaySupplements.mock.calls.length
+    setVisibility('visible')
+    await waitFor(() => expect(getTodaySupplements.mock.calls.length).toBe(calls + 1))
+  })
+
+  // A notice that isn't about the chat is passed to the rest of the app as one window event
+  it('passes other notices to the app as a window event', async () => {
+    const seen = []
+    const listener = (e) => seen.push(e.detail)
+    window.addEventListener(SYNC_NOTICE_EVENT, listener)
+    try {
+      await renderChat()
+      pushNotice({ type: 'shopping_suggestions_updated' })
+      expect(seen).toEqual([{ type: 'shopping_suggestions_updated' }])
+    } finally {
+      window.removeEventListener(SYNC_NOTICE_EVENT, listener)
+    }
   })
 
   // An analysis result is saved to the session, so reloads and the other device show it

@@ -328,9 +328,10 @@ export const getSchedule = (meal_name, steps, ingredients, meal_id = null, menu 
 /**
  * Open a WebSocket to /chat with auth token as query param.
  * onDone gets the reply and its saved message id; onSessionUpdated gets the id of a
- * session another device (or a REST save) changed.
+ * session another device (or a REST save) changed; onNotice gets any other notice
+ * ({ type: 'supplements_updated' }, …) for the rest of the app.
  */
-export function createChatSocket(onToken, onDone, onMealLogged, onError, onClose, onProgress, onMealUpdated, onSessionUpdated) {
+export function createChatSocket(onToken, onDone, onMealLogged, onError, onClose, onProgress, onMealUpdated, onSessionUpdated, onNotice) {
   const token = getToken()
   const ws = new WebSocket(`${WS_URL}/chat?token=${token}`)
 
@@ -343,6 +344,7 @@ export function createChatSocket(onToken, onDone, onMealLogged, onError, onClose
       else if (msg.type === 'meal_updated') onMealUpdated?.(msg.meal)
       else if (msg.type === 'progress') onProgress?.(msg.step)
       else if (msg.type === 'session_updated') onSessionUpdated?.(msg.session_id)
+      else if (msg.type) onNotice?.(msg)
     } catch {
       // ignore unparseable frames
     }

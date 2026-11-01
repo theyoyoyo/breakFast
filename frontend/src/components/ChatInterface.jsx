@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react'
 import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, saveSessionMessage, updateSessionMessage, getTodaySupplements, toggleSupplement, analyzeMeal, getSchedule } from '../services/api'
 import { useVoice } from '../hooks/useVoice'
+import { emitSyncNotice, useSyncNotice } from '../hooks/useSyncNotice'
 import SuggestButton from './SuggestButton'
 import DecidePanel from './DecidePanel'
 import MealBlock from './MealBlock'
@@ -319,6 +320,9 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     if (visible) loadTodaySupplements()
   }, [visible]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Another device marked a pill or changed a supplement, or the socket (re)opened: reload the 💊 list
+  useSyncNotice(['supplements_updated', 'sync_connected'], loadTodaySupplements)
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streamBuffer, analyzingIdx, pipelineStep])
@@ -401,13 +405,16 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       (changedId) => {
         if (changedId === sessionIdRef.current) setSyncPending(true)
         else if (sessionIdRef.current) refreshNavState(sessionIdRef.current)
-      }
+      },
+      // onNotice — any other change (supplements, shopping suggestions) goes to every panel
+      emitSyncNotice
     )
     ws.addEventListener('open', () => {
       hasConnectedRef.current = true
       setConnected(true)
       reconnectDelay.current = 1000 // reset backoff on successful connect
       setSyncPending(true) // catch up on anything missed while disconnected
+      emitSyncNotice({ type: 'sync_connected' }) // and so do the other panels
     })
     wsRef.current = ws
     return ws
@@ -424,11 +431,12 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     }
   }, [ensureSocket])
 
-  // Back from the background (phone app resumed, tab shown again): reload the chat now, or
-  // reconnect at once if the socket closed meanwhile (the reload follows on open)
+  // Back from the background (phone app resumed, tab shown again): reload the chat and the 💊 list
+  // now, or reconnect at once if the socket closed meanwhile (the chat reload follows on open)
   useEffect(() => {
     const handleVisible = () => {
       if (document.visibilityState !== 'visible') return
+      loadTodaySupplements()
       const state = wsRef.current?.readyState
       if (state === WebSocket.OPEN) {
         setSyncPending(true)
@@ -440,7 +448,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     }
     document.addEventListener('visibilitychange', handleVisible)
     return () => document.removeEventListener('visibilitychange', handleVisible)
-  }, [ensureSocket])
+  }, [ensureSocket, loadTodaySupplements])
 
   const sendMessage = useCallback((text, type = 'chat', mode = null, chatContext = null) => {
     const msg = text.trim()
