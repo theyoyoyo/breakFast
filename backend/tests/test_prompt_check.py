@@ -7,10 +7,10 @@ import pytest
 
 from services import pipeline
 from tools.prompt_check import (
-    check_plan, check_reply, compare, describe, is_clean, parse_args, plan_once, recording_prompts, score_shopping,
-    shop_once, suggest_once, summarize,
+    CHECKS, PERSONAS, check_plan, check_reply, compare, describe, is_clean, parse_args, plan_once, recording_prompts,
+    run, score_shopping, shop_once, suggest_once, summarize,
 )
-from tools.prompt_samples import PLAN_CASES, SAMPLES
+from tools.prompt_samples import PLAN_CASES, SAMPLE_MODES, SAMPLES
 
 EN, TR = SAMPLES["en"], SAMPLES["tr"]
 
@@ -110,6 +110,54 @@ def test_turkish_words_in_english_reply():
     assert check_reply(text, TR)["issues"]["turkish"] == []
 
 
+# Amounts the app can't read as a number above zero, and items without an amount or unit, are reported with what's wrong
+def test_amount_problems():
+    text = _reply(
+        {"name": "Omelette", "ingredients": [
+            {"name": "Eggs", "amount": 2, "unit": "pcs"},
+            {"name": "Salt", "amount": "to taste", "unit": "pinch"},
+            {"name": "Butter", "amount": 0, "unit": "tsp"},
+        ]},
+        {"name": "Bread", "amount": "2", "unit": "slice", "ingredients": []},
+        {"name": "Banana", "amount": 1, "ingredients": []},
+        {"name": "Olives", "unit": "pcs", "ingredients": []},
+    )
+    assert check_reply(text, EN)["issues"]["amounts"] == [
+        "Salt (to taste)", "Butter (0)", "Banana (no unit)", "Olives (no amount)",
+    ]
+
+
+# Avoided items are found by exact name, so a longer name the user hasn't banned isn't reported
+def test_avoided_items():
+    sample = {**EN, "avoid_list": ["Walnuts", "Milk"]}
+    text = _reply({"name": "Oat bowl", "ingredients": [
+        {"name": "Oats", "amount": 1, "unit": "glass"},
+        {"name": "Walnut", "amount": 20, "unit": "g"},
+        {"name": "Almond milk", "amount": 1, "unit": "glass"},
+    ]})
+    assert check_reply(text, sample)["issues"]["avoided"] == ["Walnut"]
+
+
+# A dish named after a fridge item it doesn't use is reported with that word; words that name no
+# fridge item ("pudding") and color words ("Green" of "Green peppers") are left alone
+def test_dishes_named_after_what_they_lack():
+    text = _reply(
+        {"name": "Banana oat porridge", "ingredients": [
+            {"name": "Oats", "amount": 1, "unit": "glass"}, {"name": "Milk", "amount": 1, "unit": "glass"},
+        ]},
+        {"name": "Tomato omelette", "ingredients": [
+            {"name": "Eggs", "amount": 2, "unit": "pcs"}, {"name": "Tomatoes", "amount": 1, "unit": "pcs"},
+        ]},
+        {"name": "Chia pudding", "ingredients": [
+            {"name": "Yogurt", "amount": 1, "unit": "glass"}, {"name": "Honey", "amount": 1, "unit": "tsp"},
+        ]},
+        {"name": "Green scramble", "ingredients": [
+            {"name": "Eggs", "amount": 2, "unit": "pcs"}, {"name": "Butter", "amount": 1, "unit": "tsp"},
+        ]},
+    )
+    assert check_reply(text, EN)["issues"]["named"] == ["Banana oat porridge (banana)"]
+
+
 # One run returns the draft and the final reply; draft-only closes the pipeline before the review
 async def test_suggest_once_collects_draft_and_final():
     calls = []
@@ -129,6 +177,21 @@ async def test_suggest_once_collects_draft_and_final():
         "reviewed",
         ("Suggest Breakfast", None),
     ]
+
+
+# Without --mode each sample's user presses Suggest the way they usually do; --mode overrides it for all
+async def test_samples_run_in_their_usual_mode():
+    modes = []
+
+    async def fake_suggest_once(sample, mode, draft_only):
+        modes.append(mode)
+        return {}
+
+    with patch("tools.prompt_check.suggest_once", fake_suggest_once):
+        await run(["en", "picky", "greek"], 1, None, False)
+        await run(["picky"], 1, "explore", False)
+    assert modes == [None, "favorites", "explore", "explore"]
+    assert set(SAMPLE_MODES) <= set(SAMPLES)
 
 
 # Every sample runs through the real pipeline with a fake model, so it has all the context the prompts read
@@ -159,7 +222,7 @@ async def test_recording_prompts_keeps_distinct_system_prompts():
 
 # The summary counts replies and distinct menus per sample and stage, then lists the most frequent offenders
 def test_summary_counts_and_offenders():
-    none = {"missing": [], "renamed": [], "units": [], "turkish": []}
+    none = {p: [] for p in PERSONAS["suggest"]["problems"]}
     clean = {"json": True, "dishes": ["menemen"], "issues": none}
     simit = {"json": True, "dishes": ["simit"], "issues": {**none, "renamed": ["Simit with tahini"]}}
     records = [
@@ -167,19 +230,20 @@ def test_summary_counts_and_offenders():
         {"sample": "en", "run": 2, "seconds": 50, "error": None, "replies": {}, "scores": {"draft": simit, "final": simit}},
     ]
     lines = summarize(records).splitlines()
-    assert lines[1].split() == ["en", "draft", "2", "2", "0", "1", "0", "2", "0", "0", "0", "40"]
-    assert lines[2].split() == ["en", "final", "2", "2", "1", "2", "0", "1", "0", "0", "0", "40"]
+    assert lines[1].split() == ["en", "draft", "2", "2", "0", "1", "0", "2", "0", "0", "0", "0", "0", "0", "40"]
+    assert lines[2].split() == ["en", "final", "2", "2", "1", "2", "0", "1", "0", "0", "0", "0", "0", "0", "40"]
     assert "en draft renamed: Simit with tahini ×2" in lines
 
 
-# Each sample and stage is compared with its best earlier test in the same mode
+# Each sample and stage is compared with its best earlier test in the same mode, scored by the same checks
 def test_compare_with_best_earlier_test():
-    old = {"date": "2026-10-27 23:21", "prompt": "aaaaaaa", "mode": "plain", "note": "baseline",
+    old = {"date": "2026-10-27 23:21", "prompt": "aaaaaaa", "mode": "usual", "checks": CHECKS, "note": "baseline",
            "results": {"en final": {"clean": 1, "scored": 2, "distinct": 1}}}
     best = {**old, "prompt": "bbbbbbb", "note": "", "results": {"en final": {"clean": 2, "scored": 2, "distinct": 2}}}
     explore = {**old, "mode": "explore", "results": {"en final": {"clean": 3, "scored": 3, "distinct": 3}}}
+    fewer_checks = {**explore, "mode": "usual", "checks": CHECKS - 1}
     now = {"en final": {"clean": 1, "scored": 2, "distinct": 2}, "en draft": {"clean": 0, "scored": 2, "distinct": 1}}
-    assert compare(now, [old, best, explore], "plain") == [
+    assert compare(now, [old, best, explore, fewer_checks], "usual") == [
         "en final: 1/2 clean, 2 distinct ▼ best 2/2 clean, 2 distinct: prompt bbbbbbb (2026-10-27 23:21)",
         "en draft: 0/2 clean, 1 distinct · first test",
     ]
@@ -288,3 +352,10 @@ def test_plan_samples():
     assert parse_args([]).samples == ["en"]
     with pytest.raises(SystemExit):
         parse_args(["--persona", "plan", "--samples", "en"])
+
+
+# --samples all runs every sample of the persona
+def test_all_samples():
+    assert parse_args(["--samples", "all"]).samples == list(SAMPLES)
+    assert parse_args(["--persona", "shopping", "--samples", "all"]).samples == list(SAMPLES)
+    assert parse_args(["--persona", "plan", "--samples", "all"]).samples == list(PLAN_CASES)

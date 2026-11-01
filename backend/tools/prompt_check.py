@@ -6,13 +6,15 @@ Run from backend/, with the server's Ollama reachable (docs/SETUPALL.md, BONUS C
     python -m tools.prompt_check --url http://100.x.x.x:11434 --note "what changed"
     python -m tools.prompt_check --samples en,tr --runs 3 --draft
     python -m tools.prompt_check --persona shopping --samples mixed,demo
+    python -m tools.prompt_check --samples all --note "baseline"
     python -m tools.prompt_check --persona plan
     python -m tools.prompt_check --history
 
 Personas, each run for a sample user (tools/prompt_samples.py):
 - suggest (default): one Suggest press through the real draft → review → refine
-  pipeline. The draft and the final reply are both scored; --draft stops after the
-  draft (one model call instead of three).
+  pipeline, in the mode the sample's user usually presses unless --mode is given.
+  The draft and the final reply are both scored; --draft stops after the draft (one
+  model call instead of three).
 - shopping: Suggest Shopping, then Suggest More, as the Fridge tab sends them, with
   the same prompt, reply schema and code dedupe.
 - plan: one Prep Plan press per menu in PLAN_CASES (every menu by default), with the
@@ -40,13 +42,13 @@ from models.units import unknown_units
 from routers.chat import SUGGEST_TEMPERATURES
 from services import llm, pipeline, suggestion
 # The fridge check's own word handling, to tell renamed items from missing ones
-from services.fridge import _FOLD, _tokens, find_missing_ingredients, same_name
+from services.fridge import _FOLD, _tokens, _words, find_avoided, find_missing_ingredients, same_name
 from services.personas import build_scheduler_prompt, build_scheduler_user_message
 from services.personas.shopping import build_shopping_prompt
 from services.shopping import (
     SUGGESTIONS_SCHEMA, dish_names, new_suggestions, parse_suggestions, shopping_request,
 )
-from tools.prompt_samples import PLAN_CASES, SAMPLES
+from tools.prompt_samples import PLAN_CASES, SAMPLE_MODES, SAMPLES
 from utils import extract_json_block
 
 BACKEND = Path(__file__).resolve().parent.parent
@@ -73,11 +75,16 @@ PLAN_TEMPERATURE = 0.3
 
 # The stages each persona's runs score, and the problems its checks look for
 PERSONAS = {
-    "suggest": {"stages": ("draft", "final"), "problems": ("missing", "renamed", "units", "turkish")},
+    "suggest": {
+        "stages": ("draft", "final"),
+        "problems": ("missing", "renamed", "units", "amounts", "avoided", "named", "turkish"),
+    },
     "shopping": {"stages": ("suggest", "more"), "problems": ("dish", "vague", "repeat", "turkish")},
     "plan": {"stages": ("plan",), "problems": ("unlisted", "method", "turkish")},
 }
 STAGES = PERSONAS["suggest"]["stages"]
+# Bumped when a check changes what counts as clean, so a test is compared only with tests scored the same way
+CHECKS = 2
 _TURKISH_LETTERS = set("çğıöşüÇĞİÖŞÜ")
 
 # Shopping names that aren't one specific product: alternatives, examples or filler words
@@ -105,6 +112,11 @@ _COOKING = {
     "boil": ("boil", "simmer", "poach", "hasla", "kaynat"),
     "fry": ("fry", "frie", "saute", "scrambl", "kizart", "kavur"),
 }
+# Color and form words that don't name a food on their own, so a "Green smoothie" isn't about "Green peppers"
+_NOT_FOOD = {
+    "white", "black", "green", "red", "yellow", "brown", "fresh", "dried", "frozen", "whole", "plain", "cooked",
+    "raw", "smoked", "sliced", "ground", "sweet", "light", "beyaz", "siyah", "yesil", "kirmizi", "taze",
+}
 
 
 # ── Checks ──────────────────────────────────────────────────────────────────
@@ -124,6 +136,58 @@ def renamed_items(names: list[str], inventory: list[dict]) -> list[str]:
     another product, so it stays missing."""
     stock = [_tokens(i["name"]) for i in inventory if i.get("name")]
     return [n for n in names if any(_contains(_tokens(n), s) for s in stock)]
+
+
+def _positive_number(value) -> bool:
+    """An amount the app reads as a number above zero: 2, 0.5 and "2" pass, "to taste" and 0 don't."""
+    if isinstance(value, bool):
+        return False
+    try:
+        return float(value) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def amount_problems(meal: dict) -> list[str]:
+    """Ingredients and simple items without a number amount and a unit, with what's wrong:
+    "Salt (to taste)", "Avocado (no unit)". The editor would turn such an amount into 1."""
+    found = []
+    for item in meal.get("menu") or []:
+        if not isinstance(item, dict):
+            continue
+        for row in [s for s in item.get("ingredients") or [] if isinstance(s, dict)] or [item]:
+            amount, unit = row.get("amount"), row.get("unit")
+            if amount is None:
+                problem = "no amount"
+            elif not _positive_number(amount):
+                problem = str(amount)
+            elif not (isinstance(unit, str) and unit.strip()):
+                problem = "no unit"
+            else:
+                continue
+            found.append(f"{row.get('name', '?')} ({problem})")
+    return found
+
+
+def named_dishes(meal: dict, inventory: list[dict]) -> list[str]:
+    """Dishes whose name has a word of a fridge item that none of their ingredients has, with those words:
+    "Chia porridge (chia)". Words that name no fridge item ("pudding", "cake") are left alone. Only a
+    label for reading the log: a word can sit in a fridge name by chance."""
+    fridge = {v for i in inventory if i.get("name") for word in _tokens(i["name"]) for v in word}
+    found = []
+    for item in meal.get("menu") or []:
+        subs = [s for s in item.get("ingredients") or [] if isinstance(s, dict)] if isinstance(item, dict) else []
+        if not subs:
+            continue
+        used = {v for s in subs for word in _tokens(str(s.get("name", ""))) for v in word}
+        name = str(item.get("name", ""))
+        lacking = [
+            word for word, variants in zip(_words(name), _tokens(name))
+            if variants & fridge and not variants & used and not variants & _NOT_FOOD
+        ]
+        if lacking:
+            found.append(f"{name} ({', '.join(lacking)})")
+    return found
 
 
 def turkish_words(text: str, sample: dict) -> list[str]:
@@ -158,6 +222,9 @@ def check_reply(text: str, sample: dict) -> dict:
             "missing": [n for n in flagged if n not in renamed],
             "renamed": renamed,
             "units": unknown_units(meal, sample["language"]),
+            "amounts": amount_problems(meal),
+            "avoided": find_avoided(meal, sample["avoid_list"]),
+            "named": named_dishes(meal, sample["ingredients"]),
             "turkish": turkish_words(text, sample),
         },
     }
@@ -391,10 +458,12 @@ def recording_prompts(into: dict):
 async def run(
     samples: list[str], runs: int, mode: str | None, draft_only: bool, persona: str = "suggest",
 ) -> tuple[list[dict], dict]:
-    """Every run for every sample, one at a time (they share the server's GPU), and the prompts sent."""
+    """Every run for every sample, one at a time (they share the server's GPU), and the prompts sent.
+    Without a mode, each sample's user presses Suggest the way they usually do."""
     records, prompts = [], {}
     for key in samples:
         sample, sent = (PLAN_CASES if persona == "plan" else SAMPLES)[key], {}
+        sample_mode = mode or SAMPLE_MODES.get(key)
         with recording_prompts(sent):
             for i in range(1, runs + 1):
                 start = time.monotonic()
@@ -404,7 +473,7 @@ async def run(
                     elif persona == "plan":
                         replies = await plan_once(sample, sent)
                     else:
-                        replies = await suggest_once(sample, mode, draft_only)
+                        replies = await suggest_once(sample, sample_mode, draft_only)
                     error = None
                 except Exception as e:  # keep going; the summary counts errors
                     replies, error = {}, f"{type(e).__name__}: {e}"
@@ -416,6 +485,7 @@ async def run(
                     scores = {s: check_reply(replies[s], sample) for s in STAGES if s in replies}
                 record = {
                     "sample": key,
+                    "mode": sample_mode if persona == "suggest" else None,
                     "run": i,
                     "seconds": time.monotonic() - start,
                     "error": error,
@@ -426,7 +496,7 @@ async def run(
                 outcome = error or "  |  ".join(f"{s}: {describe(r)}" for s, r in record["scores"].items())
                 if replies.get("final") is not None and replies["final"] == replies.get("draft"):
                     outcome += " (draft kept)"
-                print(f"{key:<4}{i:>3}/{runs}  {record['seconds']:>4.0f} s  {outcome}", flush=True)
+                print(f"{key:<11}{i:>3}/{runs}  {record['seconds']:>4.0f} s  {outcome}", flush=True)
         prompts[key] = list(sent)
     return records, prompts
 
@@ -436,7 +506,7 @@ async def run(
 def _columns(persona: str) -> list[tuple[str, str]]:
     problems = [(p.capitalize(), f">{max(len(p) + 3, 7)}") for p in PERSONAS[persona]["problems"]]
     return [
-        ("Sample", "<10"), ("Stage", "<9"), ("Runs", ">5"), ("JSON", ">6"), ("Clean", ">7"), ("Distinct", ">10"),
+        ("Sample", "<12"), ("Stage", "<9"), ("Runs", ">5"), ("JSON", ">6"), ("Clean", ">7"), ("Distinct", ">10"),
         *problems, ("Errors", ">8"), ("Avg s", ">7"),
     ]
 
@@ -531,13 +601,14 @@ def _share(result: dict) -> tuple[float, float]:
 
 
 def compare(results: dict, history: list[dict], mode: str, persona: str = "suggest") -> list[str]:
-    """This test against the best earlier one per sample and stage, same persona and mode: ▲ better, ▼ worse."""
+    """This test against the best earlier one per sample and stage, same persona, mode and checks: ▲ better, ▼ worse."""
     lines = []
     for key, now in results.items():
         text = f"{key}: {now['clean']}/{now['scored']} clean, {now['distinct']} distinct"
         earlier = [
             e for e in history
-            if e.get("persona", "suggest") == persona and e.get("mode") == mode and key in e.get("results", {})
+            if e.get("persona", "suggest") == persona and e.get("mode") == mode and e.get("checks", 1) == CHECKS
+            and key in e.get("results", {})
         ]
         if not earlier:
             lines.append(f"{text} · first test")
@@ -575,7 +646,8 @@ def save_log(records: list[dict], prompts: dict, header: str, report: str, diff:
     if diff:
         out += ["", "## Uncommitted prompt changes", "", "```diff", diff, "```"]
     for r in records:
-        out += ["", f"## {r['sample']} · run {r['run']} · {r['seconds']:.0f} s"]
+        mode = f" · {r['mode']} mode" if r.get("mode") else ""
+        out += ["", f"## {r['sample']}{mode} · run {r['run']} · {r['seconds']:.0f} s"]
         if r["error"]:
             out += ["", f"**Error:** {r['error']}"]
         for stage, text in r["replies"].items():
@@ -597,10 +669,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--runs", type=int, default=1, help="Suggest presses per sample (default: 1)")
     parser.add_argument(
         "--samples",
-        help=f"comma-separated, from: {', '.join(SAMPLES)} (default: en); plan menus: {', '.join(PLAN_CASES)} (default: all)",
+        help=f"comma-separated or all, from: {', '.join(SAMPLES)} (default: en); "
+             f"plan menus: {', '.join(PLAN_CASES)} (default: all)",
     )
     parser.add_argument("--persona", choices=list(PERSONAS), default="suggest", help="what to test (default: suggest)")
-    parser.add_argument("--mode", choices=["favorites", "explore"], help="Suggest mode (default: plain Suggest)")
+    parser.add_argument(
+        "--mode", choices=["favorites", "explore"],
+        help="Suggest mode for every sample (default: each sample's usual mode, plain Suggest for most)",
+    )
     parser.add_argument("--draft", action="store_true", help="stop each run after the draft")
     parser.add_argument("--note", default="", help="what this prompt version changes, kept in the history")
     parser.add_argument("--history", action="store_true", help="list earlier tests and exit")
@@ -609,6 +685,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     args.samples = [s.strip() for s in (args.samples or "").split(",") if s.strip()] or (
         list(PLAN_CASES) if args.persona == "plan" else ["en"]
     )
+    if args.samples == ["all"]:
+        args.samples = list(pool)
     unknown = [s for s in args.samples if s not in pool]
     if unknown:
         parser.error(f"unknown sample: {', '.join(unknown)}")
@@ -625,7 +703,7 @@ async def main(argv: list[str] | None = None) -> int:
         print(f"Ollama isn't reachable at {args.url}. See docs/SETUPALL.md, BONUS C.")
         return 1
     # The code under test as it is now; later edits during the run don't belong to this test
-    mode, prompt, commit = args.mode or "plain", prompt_id(), _commit()
+    mode, prompt, commit = args.mode or "usual", prompt_id(), _commit()
     diff = _git("diff", "HEAD", "--", *PROMPT_SOURCES)
     header = (
         f"Prompt {prompt} · commit {commit} · {llm.OLLAMA_MODEL} at {args.url} · {args.persona} · mode {mode} · "
@@ -639,7 +717,7 @@ async def main(argv: list[str] | None = None) -> int:
     if results:
         entry = {
             "date": f"{datetime.now():%Y-%m-%d %H:%M}", "prompt": prompt, "commit": commit,
-            "persona": args.persona, "mode": mode,
+            "persona": args.persona, "mode": mode, "checks": CHECKS,
             "draft_only": args.draft, "runs": args.runs, "note": args.note, "log": log.name, "results": results,
         }
         with HISTORY.open("a", encoding="utf-8") as f:
