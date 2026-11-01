@@ -574,7 +574,8 @@ reachable from your other devices.
    ```
 
    It runs 1 Suggest press for the English sample by default. Options: `--runs 3`,
-   `--samples en,tr`, `--mode explore`, `--draft` (stop after the draft: one model call
+   `--samples en,tr` or `--samples all`, `--mode explore` (without it, each sample uses
+   the mode its user usually presses), `--draft` (stop after the draft: one model call
    instead of three). `--persona shopping` tests Suggest Shopping and Suggest More;
    `--persona plan` runs the prep planner for the menus in `PLAN_CASES` and flags food
    the menu doesn't list and a dish cooked another way than its method says (fry vs boil).
@@ -583,14 +584,16 @@ reachable from your other devices.
 3. Each run is one Suggest press for a sample user (`tools/prompt_samples.py`). The
    table counts, for the draft and the final reply, how many replies were clean (meal
    JSON parses, nothing missing from the fridge, no renamed fridge items like "White
-   cheese (peynir)", units the app knows, no Turkish words in an English reply) and how many
-   different menus came back, then lists the most frequent problems.
+   cheese (peynir)", units the app knows, every amount a number with a unit, nothing on
+   the avoid list, no dish named after a fridge item it doesn't use, no Turkish words in
+   an English reply) and how many different menus came back, then lists the most
+   frequent problems.
 
 4. Every test is kept on the development PC in `backend/tools/runs/` (git-ignored): a log
    with the replies and the exact prompts sent, and a line in `history.jsonl` with the
    prompt id (a hash of the prompt code, committed or not) and your note. Each test is
-   compared with the best earlier one (▲ better, ▼ worse), so a prompt change can't
-   quietly make things worse. `--history` lists them all.
+   compared with the best earlier one scored by the same checks (▲ better, ▼ worse), so
+   a prompt change can't quietly make things worse. `--history` lists them all.
 
 Runs share the server's GPU, so the app is slower meanwhile; a full run takes about a
 minute, a `--draft` run about 15 seconds.

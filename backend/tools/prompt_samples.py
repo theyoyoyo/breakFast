@@ -12,6 +12,14 @@ load_shopping_context() return them, so the real prompts run without a database.
 - vegan: a plant-based fridge with animal products on the avoid list.
 Simit sits in the en, tr and mixed fridges without tahini, to catch prepared items (#115).
 
+Five users from the 15-fridge test (2026-10-30), whose replies looked clean but weren't (#131):
+- picky: nuts avoided with almond milk in the fridge, dislikes, favorites mode.
+- diabetic: a critical blood sugar rule, with white bread and honey in the fridge.
+- student: no stove (microwave, kettle, toaster), ten minutes on weekdays.
+- big_fridge: about 50 items and every appliance.
+- greek: explore mode, with figs and pomegranate in season.
+SAMPLE_MODES holds the Suggest mode a sample's user usually presses.
+
 PLAN_CASES are menus for the prep plan test, shaped the way the Prep Plan button sends them.
 """
 
@@ -147,7 +155,134 @@ SAMPLES = {
         "avoid_list": ["Eggs", "Milk", "Cheese", "Butter", "Honey", "Yogurt"],
         "history": [_meal("Overnight oats", "Oats", "Soy milk", "Chia seeds", "Banana")],
     },
+    "picky": {
+        **_BASE,
+        "language": "en",
+        "country": "Canada",
+        "ingredients": _fridge({
+            "🐄 Animal Products": ["Eggs", "Milk", "Butter", "Cheddar", "Cream cheese", "Yogurt"],
+            "🥬 Produce": ["Strawberries", "Bananas", "Tomatoes", "Mushrooms"],
+            "🍞 Breads": ["Bread", "Bagels"],
+            "🍯 Sweets": ["Maple syrup", "Honey"],
+            "🫒 Breakfast Staples": ["Olives", "Granola"],
+            "🌱 Plant-Based": ["Almond milk"],
+            "☕ Beverages": ["Orange juice", "Hot chocolate"],
+            "🫙 Pantry": ["Flour", "Sugar", "Baking powder", "Oats", "Salt", "Vegetable oil"],
+        }),
+        "preferences": {
+            "fav:pancakes": "Pancakes", "fav:cheese": "Cheese",
+            "dislike:tomatoes": "Tomatoes", "dislike:olives": "Olives", "dislike:mushrooms": "Mushrooms",
+        },
+        "avoid_list": ["Peanuts", "Almonds", "Walnuts", "Hazelnuts", "Cashews"],
+        "stated_habits": ["Sweet breakfasts on weekends"],
+        "kitchen_appliances": ["Stove", "Toaster", "Microwave"],
+        "history": [
+            _meal("Pancakes with maple syrup", "Flour", "Eggs", "Milk", "Maple syrup"),
+            _meal("Bagel with cream cheese", "Bagels", "Cream cheese"),
+        ],
+    },
+    "diabetic": {
+        **_BASE,
+        "language": "en",
+        "country": "Germany",
+        "ingredients": _fridge({
+            "🐄 Animal Products": ["Eggs", "Feta", "Plain yogurt", "Milk"],
+            "🥬 Produce": ["Tomatoes", "Cucumber", "Avocado", "Spinach", "Mushrooms", "Apples", "Strawberries"],
+            "🍞 Breads": ["Rye bread", "White bread"],
+            "🍯 Sweets": ["Honey", "Apricot jam"],
+            "🥜 Nuts & Seeds": ["Walnuts", "Chia seeds"],
+            "☕ Beverages": ["Orange juice", "Coffee"],
+            "🧂 Spices": ["Cinnamon"],
+            "🫙 Pantry": ["Olive oil", "Salt"],
+        }),
+        "user_profile": {"age": 58, "gender": "female", "height_cm": 164, "weight_kg": 74, "activity_level": "light"},
+        "health_rules": [
+            {"rule_text": "Type 2 diabetes: keep blood sugar stable, low glycemic load", "priority": "critical"},
+            {"rule_text": "Limit salt, high blood pressure", "priority": "high"},
+        ],
+        "supplements": [{"name": "Vitamin B12", "contents": "500 mcg B12", "frequency": "daily", "taken_today": 1}],
+        "kitchen_appliances": ["Stove", "Oven", "Toaster", "Kettle"],
+        "history": [
+            _meal("Rye bread with feta", "Rye bread", "Feta", "Tomatoes"),
+            _meal("Yogurt with strawberries", "Plain yogurt", "Strawberries"),
+        ],
+    },
+    "student": {
+        **_BASE,
+        "language": "en",
+        "country": "United Kingdom",
+        "ingredients": _fridge({
+            "🐄 Animal Products": ["Eggs", "Milk", "Cheddar", "Butter"],
+            "🥬 Produce": ["Bananas", "Frozen peas"],
+            "🍞 Breads": ["Bread"],
+            "🍯 Sweets": ["Strawberry jam", "Peanut butter"],
+            "🫒 Breakfast Staples": ["Baked beans"],
+            "☕ Beverages": ["Instant coffee", "Tea"],
+            "🫙 Pantry": ["Porridge oats", "Salt", "Sunflower oil", "Ketchup"],
+        }),
+        "user_profile": {"age": 20, "gender": "male", "height_cm": 181, "weight_kg": 70, "activity_level": "light"},
+        "stated_habits": ["No time on weekdays, 10 minutes max"],
+        "kitchen_appliances": ["Microwave", "Kettle", "Toaster"],
+        "history": [
+            _meal("Toast with jam", "Bread", "Strawberry jam", "Butter"),
+            _meal("Beans on toast", "Baked beans", "Bread"),
+        ],
+    },
+    "big_fridge": {
+        **_BASE,
+        "language": "en",
+        "country": "United States",
+        "ingredients": _fridge({
+            "🐄 Animal Products": [
+                "Eggs", "Bacon", "Turkey slices", "Cheddar", "Mozzarella", "Cream cheese", "Greek yogurt", "Milk",
+                "Butter", "Heavy cream",
+            ],
+            "🥬 Produce": [
+                "Spinach", "Kale", "Bell peppers", "Onion", "Garlic", "Tomatoes", "Avocado", "Mushrooms", "Zucchini",
+                "Sweet potatoes", "Apples", "Bananas", "Blueberries", "Strawberries", "Lemons",
+            ],
+            "🍞 Breads": ["Whole wheat bread", "Bagels", "Tortillas", "English muffins"],
+            "🍯 Sweets": ["Maple syrup", "Honey", "Strawberry jam", "Nutella"],
+            "🫒 Breakfast Staples": ["Granola", "Cereal"],
+            "🥜 Nuts & Seeds": ["Almonds", "Pecans", "Flax seeds"],
+            "🌱 Plant-Based": ["Almond milk"],
+            "☕ Beverages": ["Coffee", "Orange juice"],
+            "🧂 Spices": ["Cinnamon", "Paprika", "Chili flakes"],
+            "🫙 Pantry": ["Salt", "Black pepper", "Olive oil", "Flour", "Baking powder", "Sugar", "Vanilla extract"],
+        }),
+        "user_profile": {"age": 35, "gender": "female", "height_cm": 170, "weight_kg": 63, "activity_level": "active"},
+        "kitchen_appliances": ["Stove", "Oven", "Air Fryer", "Toaster", "Microwave", "Blender", "Sandwich Press", "Kettle"],
+        "history": [
+            _meal("Avocado toast", "Whole wheat bread", "Avocado", "Eggs"),
+            _meal("Blueberry pancakes", "Flour", "Eggs", "Milk", "Blueberries", "Maple syrup"),
+            _meal("Yogurt parfait", "Greek yogurt", "Granola", "Strawberries"),
+        ],
+    },
+    "greek": {
+        **_BASE,
+        "language": "en",
+        "country": "Greece",
+        "ingredients": _fridge({
+            "🐄 Animal Products": ["Feta", "Greek yogurt", "Eggs"],
+            "🥬 Produce": ["Tomatoes", "Cucumber", "Red onion", "Figs", "Pomegranate"],
+            "🍞 Breads": ["Pita bread"],
+            "🍯 Sweets": ["Honey", "Tahini"],
+            "🫒 Breakfast Staples": ["Kalamata olives", "Hummus"],
+            "🥜 Nuts & Seeds": ["Walnuts"],
+            "☕ Beverages": ["Greek coffee"],
+            "🧂 Spices": ["Oregano"],
+            "🫙 Pantry": ["Olive oil", "Salt"],
+        }),
+        "kitchen_appliances": ["Stove", "Oven", "Kettle"],
+        "history": [
+            _meal("Greek yogurt with honey and walnuts", "Greek yogurt", "Honey", "Walnuts"),
+            _meal("Kagianas", "Eggs", "Tomatoes", "Feta"),
+        ],
+    },
 }
+
+# The Suggest mode a sample's user usually presses; the others press plain Suggest
+SAMPLE_MODES = {"picky": "favorites", "greek": "explore"}
 
 
 def _dish(name: str, method: str, *ingredients: tuple) -> dict:
