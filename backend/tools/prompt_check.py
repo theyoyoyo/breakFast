@@ -39,8 +39,8 @@ from pathlib import Path
 from models.units import unknown_units
 from routers.chat import SUGGEST_TEMPERATURES
 from services import llm, pipeline, suggestion
-# The fridge check's own word matching, the other way round, to tell renamed items from missing ones
-from services.fridge import _FOLD, _contains, _tokens, find_missing_ingredients, same_name
+# The fridge check's own word handling, to tell renamed items from missing ones
+from services.fridge import _FOLD, _tokens, find_missing_ingredients, same_name
 from services.personas import build_scheduler_prompt, build_scheduler_user_message
 from services.personas.shopping import build_shopping_prompt
 from services.shopping import (
@@ -109,9 +109,19 @@ _COOKING = {
 
 # ── Checks ──────────────────────────────────────────────────────────────────
 
+def _contains(hay: list[set[str]], needle: list[set[str]]) -> bool:
+    """True when the needle's words appear in a row inside hay."""
+    n = len(needle)
+    return n > 0 and any(
+        all(hay[i + j] & needle[j] for j in range(n)) for i in range(len(hay) - n + 1)
+    )
+
+
 def renamed_items(names: list[str], inventory: list[dict]) -> list[str]:
     """Names the fridge check flags although they contain a fridge item: prepared, combined or
-    renamed items ("Simit with tahini dipping sauce", "White cheese (peynir)", "Yogurt or milk")."""
+    renamed items ("Simit with tahini dipping sauce", "White cheese (peynir)", "Yogurt or milk").
+    Only a label for reading the log: a shorter name ("Cheese" for "White cheese") may be
+    another product, so it stays missing."""
     stock = [_tokens(i["name"]) for i in inventory if i.get("name")]
     return [n for n in names if any(_contains(_tokens(n), s) for s in stock)]
 

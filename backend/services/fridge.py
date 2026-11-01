@@ -2,19 +2,18 @@
 Fridge check — which ingredients of a suggested meal are not in the user's fridge.
 
 Plain code, not the LLM: the suggestion pipeline runs this on the draft and
-hands the result to the refine step as a hard rule. Names are compared one
-way round (case, Turkish letters and simple plurals aside): a meal name may
-be shorter than a fridge name when it is the fridge name's end, its head noun
-("Peynir" for "Beyaz peynir"). Its start names another product: "Olives"
-isn't "Olive oil" and "Rice" isn't "Rice cakes". A longer name is another or
-a prepared item: "Poached egg", "Simit with tahini" and "White cheese
-(peynir)" aren't "Egg", "Simit" or "White cheese", so they come back as
-dishes with their fridge ingredients (#115). Nothing is assumed: basics like
-salt and oil count only when they are logged (usually in the Pantry group).
+hands the result to the refine step as a hard rule. Names are compared
+exactly (same_name: case, Turkish letters and simple plurals aside), because
+an extra or missing word can name another product: "Peynir" isn't "Beyaz
+peynir" and "Olives" isn't "Olive oil". A prepared item is a dish: "Poached
+egg", "Simit with tahini" and "White cheese (peynir)" aren't "Egg", "Simit"
+or "White cheese", so they come back as dishes with their fridge ingredients
+(#115). Nothing is assumed: basics like salt and oil count only when they are
+logged (usually in the Pantry group).
 
-The avoid list is matched by exact name (same_name), like the shopping dedupe:
-a user who bans "Peynir" and then sees "Beyaz peynir" bans that too, or states
-a habit, rather than code guessing which products an item is in.
+The avoid list and the shopping dedupe use the same exact match: a user who
+bans "Peynir" and then sees "Beyaz peynir" bans that too, or states a habit,
+rather than code guessing which products an item is in.
 """
 
 import re
@@ -50,20 +49,6 @@ def _tokens(name: str) -> list[set[str]]:
     return result
 
 
-def _contains(hay: list[set[str]], needle: list[set[str]]) -> bool:
-    """True when the needle's words appear in a row inside hay."""
-    n = len(needle)
-    return n > 0 and any(
-        all(hay[i + j] & needle[j] for j in range(n)) for i in range(len(hay) - n + 1)
-    )
-
-
-def _ends_with(hay: list[set[str]], needle: list[set[str]]) -> bool:
-    """True when the needle's words are hay's last words: its head noun, as in "Beyaz peynir"."""
-    n = len(needle)
-    return 0 < n <= len(hay) and all(h & w for h, w in zip(hay[-n:], needle))
-
-
 def same_name(a: str, b: str) -> bool:
     """Exact match: the same words in order, ignoring case, Turkish letters and plurals.
 
@@ -93,13 +78,10 @@ def find_missing_ingredients(meal: dict | None, inventory: list[dict]) -> list[s
     """Ingredients of the meal that are not in the inventory."""
     if not isinstance(meal, dict):
         return []
-    stock = [_tokens(i["name"]) for i in inventory if i.get("name")]
+    stock = [i["name"] for i in inventory if i.get("name")]
     missing = []
     for name in meal_ingredient_names(meal):
-        if _is_water(name):
-            continue
-        words = _tokens(name)
-        if any(_ends_with(s, words) for s in stock):  # the name ends a fridge name
+        if _is_water(name) or any(same_name(name, s) for s in stock):
             continue
         if name not in missing:
             missing.append(name)
