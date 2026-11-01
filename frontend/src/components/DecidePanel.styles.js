@@ -194,15 +194,9 @@ export const ateOutBtn = {
   color: 'var(--text)',
 }
 
-// Save keeps the edits with the chat card: an outlined button, filled once saved
+// Save keeps the edits with the chat card and closes the panel: an outlined button
 export const saveBtn = {
   ...ateOutBtn,
-}
-
-export const saveBtnDone = {
-  ...ateOutBtn,
-  opacity: 0.6,
-  cursor: 'default',
 }
 
 // Ate out has nothing to do when no item is missing

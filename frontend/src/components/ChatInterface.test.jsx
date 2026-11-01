@@ -237,18 +237,18 @@ describe('ChatInterface sync', () => {
     return screen.findByText('Today I ate')
   }
 
-  // Save stores the edited meal with the card's message, and the panel opens from it next time
-  it('saves "Today I ate" with its card and opens from it', async () => {
+  // Save stores the edited meal with the card's message and closes; the panel opens from it next time
+  it('saves "Today I ate" with its card, closes and opens from it', async () => {
     getSessionMessages.mockReset().mockResolvedValue([HELLO, MEAL_MSG])
     await renderChat()
     await openTodayIAte()
     fireEvent.click(screen.getAllByTitle('Delete')[0]) // remove Olives
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(saveAteDraft).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(screen.queryByText('Today I ate')).toBeNull())
+    expect(saveAteDraft).toHaveBeenCalledTimes(1)
     const [sessionId, messageId, meal] = saveAteDraft.mock.calls[0]
     expect([sessionId, messageId, meal.menu]).toEqual(['s1', 3, []])
 
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
     fireEvent.click(screen.getByTitle('Today I ate...'))
     await screen.findByText('Today I ate')
     expect(screen.queryByText('Olives')).toBeNull()

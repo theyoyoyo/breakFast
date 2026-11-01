@@ -84,29 +84,29 @@ describe('DecidePanel', () => {
     expect(logMeal).not.toHaveBeenCalled()
   })
 
-  // Save sends the edited meal and says so until the next edit; nothing is logged
-  it('Save sends the current meal and shows it is saved', async () => {
+  // Save sends the edited meal, then closes the panel; nothing is logged
+  it('Save sends the current meal and closes', async () => {
     checkMissingIngredients.mockResolvedValue({ missing: [] })
     const onSave = vi.fn(() => Promise.resolve())
-    render(<DecidePanel meal={MEAL} onSave={onSave} onClose={() => {}} />)
+    const onClose = vi.fn()
+    render(<DecidePanel meal={MEAL} onSave={onSave} onClose={onClose} />)
     fireEvent.click(screen.getAllByTitle('Delete')[0]) // remove Olives
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
+    expect(onSave).toHaveBeenCalledTimes(1)
     expect(onSave.mock.calls[0][0].menu.map(i => i.name)).toEqual(['Bread'])
-    expect(await screen.findByRole('button', { name: '✓ Saved' })).toBeDisabled()
     expect(logMeal).not.toHaveBeenCalled()
-
-    fireEvent.click(screen.getAllByTitle('Delete')[0]) // another edit
-    expect(await screen.findByRole('button', { name: 'Save' })).toBeEnabled()
   })
 
-  // A failed Save says so and lets the user try again
-  it('tells the user when Save fails', async () => {
+  // A failed Save says so, stays open and lets the user try again
+  it('stays open and tells the user when Save fails', async () => {
     checkMissingIngredients.mockResolvedValue({ missing: [] })
-    render(<DecidePanel meal={MEAL} onSave={() => Promise.reject(new Error('offline'))} onClose={() => {}} />)
+    const onClose = vi.fn()
+    render(<DecidePanel meal={MEAL} onSave={() => Promise.reject(new Error('offline'))} onClose={onClose} />)
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(await screen.findByText(/Couldn't save/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
+    expect(onClose).not.toHaveBeenCalled()
   })
 
   // Opening starts from the card's saved version, not the card

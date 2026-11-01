@@ -11,7 +11,8 @@ import * as s from './DecidePanel.styles'
  * Props:
  *   meal      — the chat meal selected for today (its obtained marks carry over)
  *   saved     — that card's saved "Today I ate" version, if any; the editor starts from it
- *   onSave    — async (meal) => void — Save stores the current meal with the card (no Save without it)
+ *   onSave    — async (meal) => void — Save stores the current meal with the card, then the panel
+ *               closes (no Save without it)
  *   onClose   — Close drops unsaved edits
  *   onConfirm — the meal was logged (the saved version stays, so it can be confirmed again)
  */
@@ -31,9 +32,8 @@ export default function DecidePanel({ meal, saved, onSave, onClose, onConfirm })
   // only Back from rating changes it, to return to the edited menu. `edited` marks a meal the
   // editor built (saved, or Back from rating): its menu is used as is, even when emptied.
   const [base, setBase] = useState(() => ({ meal: saved || meal, edited: !!saved }))
-  // Save: 'idle' → 'saving' → 'saved' (until the next edit), or 'error'
+  // Save: 'idle' → 'saving' → closed, or 'error' (stays open to try again)
   const [saveState, setSaveState] = useState('idle')
-  const editsRef = useRef(0)
 
   // Load existing ratings to skip already-rated products in the rate phase
   useEffect(() => {
@@ -66,22 +66,21 @@ export default function DecidePanel({ meal, saved, onSave, onClose, onConfirm })
     setMissing(prev => (prev && prev.join('\n') === names.join('\n') ? prev : names))
   }, [])
 
-  // An edit after Save makes the panel unsaved again
+  // An edit after a failed Save clears its note
   const handleEditorChange = useCallback(() => {
-    editsRef.current += 1
-    setSaveState(prev => (prev === 'saved' || prev === 'error' ? 'idle' : prev))
+    setSaveState(prev => (prev === 'error' ? 'idle' : prev))
   }, [])
 
-  // Save stores the current meal with the card; the panel stays open
+  // Save stores the current meal with the card and closes the panel; a failed save stays open
   const handleSave = async (current) => {
-    const edits = editsRef.current
     setSaveState('saving')
     try {
       await onSave(current)
-      setSaveState(editsRef.current === edits ? 'saved' : 'idle')
     } catch {
       setSaveState('error')
+      return
     }
+    onClose()
   }
 
   // Back from rating returns to the edited menu, not the original
@@ -210,12 +209,12 @@ export default function DecidePanel({ meal, saved, onSave, onClose, onConfirm })
             <>
               {onSave && (
                 <button
-                  style={saveState === 'saved' ? s.saveBtnDone : s.saveBtn}
+                  style={s.saveBtn}
                   onClick={() => handleSave(buildCurrentMeal())}
-                  disabled={saving || saveState === 'saving' || saveState === 'saved'}
-                  title={saveState === 'saved' ? 'Saved with this chat meal' : 'Keep these edits with this chat meal, on every device'}
+                  disabled={saving || saveState === 'saving'}
+                  title="Keep these edits with this chat meal, on every device, and close"
                 >
-                  {saveState === 'saving' ? '...' : saveState === 'saved' ? '✓ Saved' : 'Save'}
+                  {saveState === 'saving' ? '...' : 'Save'}
                 </button>
               )}
               <button
