@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     user_id     INTEGER NOT NULL REFERENCES users(id),
     role        TEXT    NOT NULL CHECK(role IN ('user', 'assistant')),
     content     TEXT    NOT NULL,
+    ate_draft   TEXT,           -- JSON meal: the card's "Today I ate" version, saved with Save
     created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -393,6 +394,14 @@ async def init_db() -> None:
         try:
             await db.execute(
                 "ALTER TABLE user_profiles ADD COLUMN country TEXT"
+            )
+        except Exception:
+            pass  # Column already exists
+
+        # Migrate: add ate_draft column to chat_messages if missing
+        try:
+            await db.execute(
+                "ALTER TABLE chat_messages ADD COLUMN ate_draft TEXT"
             )
         except Exception:
             pass  # Column already exists

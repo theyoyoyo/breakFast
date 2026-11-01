@@ -1,12 +1,16 @@
 """
 /sessions endpoints — chat session management and message persistence.
 Saving or editing a message tells the user's open chat sockets (services/chat_sync).
+A meal card's message also keeps the card's "Today I ate" version (`ate_draft`), saved
+with that panel's Save button.
 """
 
+import json
 import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from database import get_db
+from db_helpers import parse_json_field
 from auth import require_user
 from services import chat_sync
 
@@ -89,18 +93,19 @@ async def delete_session(session_id: str, user_id: int = Depends(require_user)):
 
 @router.get("/{session_id}/messages")
 async def get_messages(session_id: str, user_id: int = Depends(require_user)):
-    """Get all messages for a session. The id lets a meal card edit update its message."""
+    """Get all messages for a session. The id lets a meal card edit update its message;
+    `ate_draft` is the card's saved "Today I ate" version, or null."""
     async with get_db() as db:
         async with db.execute(
             """
-            SELECT id, role, content, created_at FROM chat_messages
+            SELECT id, role, content, ate_draft, created_at FROM chat_messages
             WHERE session_id = ? AND user_id = ?
             ORDER BY created_at ASC, id ASC
             """,
             (session_id, user_id),
         ) as cur:
             rows = await cur.fetchall()
-    return [dict(r) for r in rows]
+    return [{**dict(r), "ate_draft": parse_json_field(r["ate_draft"], default=None)} for r in rows]
 
 
 @router.post("/{session_id}/messages")
@@ -124,11 +129,24 @@ async def save_message(session_id: str, body: dict, user_id: int = Depends(requi
 
 @router.put("/{session_id}/messages/{message_id}")
 async def update_message(session_id: str, message_id: int, body: dict, user_id: int = Depends(require_user)):
-    """Replace a message's content (a meal card edit rewrites the message's meal block)."""
+    """Change a message: `content` replaces its text (a meal card edit rewrites the message's
+    meal block), `ate_draft` stores the card's "Today I ate" version (null clears it).
+    Only the fields sent change; the last save wins."""
+    updates = {}
+    if "content" in body:
+        updates["content"] = body["content"] or ""
+    if "ate_draft" in body:
+        draft = body["ate_draft"]
+        if draft is not None and not isinstance(draft, dict):
+            raise HTTPException(status_code=422, detail="ate_draft must be a meal object or null")
+        updates["ate_draft"] = json.dumps(draft, ensure_ascii=False) if draft is not None else None
+    if not updates:
+        raise HTTPException(status_code=422, detail="Nothing to update")
+    set_clause = ", ".join(f"{column} = ?" for column in updates)
     async with get_db() as db:
         cur = await db.execute(
-            "UPDATE chat_messages SET content = ? WHERE id = ? AND session_id = ? AND user_id = ?",
-            (body.get("content", ""), message_id, session_id, user_id),
+            f"UPDATE chat_messages SET {set_clause} WHERE id = ? AND session_id = ? AND user_id = ?",
+            (*updates.values(), message_id, session_id, user_id),
         )
         await db.commit()
     if cur.rowcount == 0:

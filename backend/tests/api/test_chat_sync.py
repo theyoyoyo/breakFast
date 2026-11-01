@@ -1,7 +1,8 @@
 """
 Tests for live chat sync — a user's other chat sockets get session_updated after a reply,
-a REST save or a message edit, supplements_updated after a supplement change and
-shopping_suggestions_updated after a suggestions list change; no other user's socket does.
+a REST save, a message edit or a saved "Today I ate" version, supplements_updated after
+a supplement change and shopping_suggestions_updated after a suggestions list change;
+no other user's socket does.
 """
 
 import sys
@@ -157,6 +158,49 @@ async def test_message_edit_replaces_content_and_notifies(sync_setup):
             headers={"Authorization": f"Bearer {bob_token}"},
         )
         assert r.status_code == 404
+
+
+# A card's "Today I ate" version is stored on its message, comes back with the messages and pushes
+# to the user's sockets; a later card edit keeps it, and another user can't write it.
+@pytest.mark.asyncio
+async def test_ate_draft_saved_on_message_and_pushed(sync_setup):
+    app, users = sync_setup
+    ada_token, _, ada_session = users["ada"]
+    bob_token, _, _ = users["bob"]
+    ada_auth = {"Authorization": f"Bearer {ada_token}"}
+    draft = {"menu_name": "Test Breakfast", "menu": [{"name": "Olives", "amount": 5, "unit": "pcs", "ingredients": []}]}
+    url = f"/sessions/{ada_session}/messages"
+    with _fake_llm(), TestClient(app) as client:
+        message_id = client.post(url, json={"role": "assistant", "content": "card"}, headers=ada_auth).json()["id"]
+        assert client.get(url, headers=ada_auth).json()[0]["ate_draft"] is None
+
+        with client.websocket_connect(f"/chat?token={ada_token}") as ada:
+            r = client.put(f"{url}/{message_id}", json={"ate_draft": draft}, headers=ada_auth)
+            assert r.status_code == 200
+            assert _pushes(_chat(ada)) == [{"type": "session_updated", "session_id": ada_session}]
+
+        client.put(f"{url}/{message_id}", json={"content": "edited card"}, headers=ada_auth)
+        saved = client.get(url, headers=ada_auth).json()[0]
+        assert (saved["content"], saved["ate_draft"]) == ("edited card", draft)
+
+        r = client.put(f"{url}/{message_id}", json={"ate_draft": {"menu_name": "Hijacked"}},
+                       headers={"Authorization": f"Bearer {bob_token}"})
+        assert r.status_code == 404
+        assert client.get(url, headers=ada_auth).json()[0]["ate_draft"] == draft
+
+
+# A message update with nothing to change, or a draft that isn't a meal object, is refused
+@pytest.mark.asyncio
+async def test_message_update_validates_body(sync_setup):
+    app, users = sync_setup
+    ada_token, _, ada_session = users["ada"]
+    ada_auth = {"Authorization": f"Bearer {ada_token}"}
+    url = f"/sessions/{ada_session}/messages"
+    with TestClient(app) as client:
+        message_id = client.post(url, json={"role": "assistant", "content": "card"}, headers=ada_auth).json()["id"]
+        assert client.put(f"{url}/{message_id}", json={}, headers=ada_auth).status_code == 422
+        assert client.put(f"{url}/{message_id}", json={"ate_draft": "Olives"}, headers=ada_auth).status_code == 422
+        assert client.get(url, headers=ada_auth).json()[0]["content"] == "card"
 
 
 # Marking a pill and every supplement change in Settings tell the user's sockets, and no other user's.
