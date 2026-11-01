@@ -4,15 +4,15 @@ Fridge check — which ingredients of a suggested meal are not in the user's fri
 Plain code, not the LLM: the suggestion pipeline runs this on the draft and
 hands the result to the refine step as a hard rule. Names are compared
 exactly (same_name: case, Turkish letters and simple plurals aside), because
-an extra or missing word can name another product: "Peynir" isn't "Beyaz
-peynir" and "Olives" isn't "Olive oil". A prepared item is a dish: "Poached
+an extra or missing word can name another product: "Cheese" isn't "White
+cheese" and "Olives" isn't "Olive oil". A prepared item is a dish: "Poached
 egg", "Simit with tahini" and "White cheese (peynir)" aren't "Egg", "Simit"
 or "White cheese", so they come back as dishes with their fridge ingredients
 (#115). Nothing is assumed: basics like salt and oil count only when they are
 logged (usually in the Pantry group).
 
 The avoid list and the shopping dedupe use the same exact match: a user who
-bans "Peynir" and then sees "Beyaz peynir" bans that too, or states a habit,
+bans "Cheese" and then sees "White cheese" bans that too, or states a habit,
 rather than code guessing which products an item is in.
 """
 
