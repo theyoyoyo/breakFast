@@ -1,9 +1,10 @@
 /**
  * Tests for the Fridge tab's shopping suggestions: new items are listed, and an empty
  * answer (everything was a repeat) says so instead of showing nothing. The list is kept
- * on the server: Send to List moves only the checked items, × removes one item, ▲/▼ hides
- * the list without clearing it, Suggest More adds checked items at the end, the list
- * reloads on a push, and a list saved in this browser moves to the server.
+ * on the server: it starts collapsed, Send to List moves only the checked items, × removes one
+ * item, ▲/▼ hides the list without clearing it, the header's helpers check or uncheck every
+ * item and clear the list, Suggest More adds checked items at the end, the list reloads on a
+ * push, and a list saved in this browser moves to the server.
  * API calls are mocked — no real network calls are made.
  */
 
@@ -34,10 +35,13 @@ const OATS = { name: 'Rolled oats', reason: 'Fiber', checked: true }
 const checkboxFor = (name) => screen.getByRole('checkbox', { name: new RegExp(name) })
 const lastSaved = () => api.saveSuggestionList.mock.calls.at(-1)
 
-// Render the Fridge tab with this list already saved on the server
+const header = () => screen.getByRole('button', { name: /^Suggestions \(/ })
+
+// Render the Fridge tab with this list already saved on the server, and open the list
 async function renderWithList(items) {
   api.getSuggestionList.mockResolvedValue({ items })
   render(<IngredientPanel visible />)
+  fireEvent.click(await screen.findByRole('button', { name: `Suggestions (${items.length})` }))
   await screen.findByText(items[0].name)
 }
 
@@ -104,15 +108,43 @@ describe('IngredientPanel shopping suggestions', () => {
     expect(lastSaved()).toEqual([[SALMON, { ...KIWI, checked: true }], []])
   })
 
-  // ▲/▼ hides the list (the header shows the count) and shows it again, without clearing it
+  // The list starts collapsed: only the header with the count shows
+  it('starts collapsed', async () => {
+    api.getSuggestionList.mockResolvedValue({ items: [SALMON, KIWI] })
+    render(<IngredientPanel visible />)
+    expect(await screen.findByRole('button', { name: 'Suggestions (2)' })).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText('Salmon')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Delete all' })).toBeNull()
+  })
+
+  // ▲/▼ hides the list and shows it again, without clearing it
   it('hides and shows the list without clearing it', async () => {
     await renderWithList([SALMON, KIWI])
-    fireEvent.click(screen.getByRole('button', { name: /Suggestions/ }))
+    expect(header()).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.click(header())
     expect(screen.queryByText('Salmon')).toBeNull()
-    expect(screen.getByRole('button', { name: /Suggestions \(2\)/ })).toHaveAttribute('aria-expanded', 'false')
-    fireEvent.click(screen.getByRole('button', { name: /Suggestions/ }))
+    expect(header()).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(header())
     expect(screen.getByText('Salmon')).toBeInTheDocument()
     expect(api.saveSuggestionList).not.toHaveBeenCalled()
+  })
+
+  // One helper checks every item, and once all are checked it unchecks them all
+  it('checks and unchecks every item with one button', async () => {
+    await renderWithList([SALMON, KIWI])
+    fireEvent.click(screen.getByRole('button', { name: 'Select all' }))
+    expect(lastSaved()).toEqual([[SALMON, { ...KIWI, checked: true }], []])
+    fireEvent.click(screen.getByRole('button', { name: 'Unselect all' }))
+    expect(lastSaved()).toEqual([[{ ...SALMON, checked: false }, KIWI], []])
+    expect(header()).toHaveAttribute('aria-expanded', 'true') // the helpers don't toggle the list
+  })
+
+  // The trash clears the whole list without leaving the items out of later suggestions
+  it('deletes all items without marking them removed', async () => {
+    await renderWithList([SALMON, KIWI])
+    fireEvent.click(screen.getByRole('button', { name: 'Delete all' }))
+    expect(lastSaved()).toEqual([[], []])
+    expect(await screen.findByRole('button', { name: /Suggest Shopping/ })).toBeInTheDocument()
   })
 
   // Send to List and Suggest More sit together under the list; Suggest Shopping isn't at the top any more
@@ -131,6 +163,7 @@ describe('IngredientPanel shopping suggestions', () => {
     api.getSuggestionList.mockResolvedValue({ items: [SALMON, KIWI] })
     act(() => emitSyncNotice({ type: 'shopping_suggestions_updated' }))
     expect(await screen.findByText('Kiwi')).toBeInTheDocument()
+    expect(header()).toHaveTextContent('Suggestions (2)')
   })
 
   // A list this browser kept before moves to the server after what's there, then the local copy is cleared

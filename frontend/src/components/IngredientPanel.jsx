@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useImperativeHandle, forwardRef } from 'react'
-import { Trash2, Pencil, Plus, X, AlertTriangle, ShoppingCart, Sparkles, Loader, ChevronRight, Heart } from 'lucide-react'
+import { Trash2, Pencil, Plus, X, AlertTriangle, ShoppingCart, Sparkles, Loader, ChevronRight, Heart, CheckSquare, Square } from 'lucide-react'
 import {
   getIngredients, addIngredient, updateIngredient, deleteIngredient,
   getExpiredIngredients, getExpiredCount, handleExpiredAction,
@@ -31,8 +31,6 @@ function loadCollapseState() {
 // The suggestions list lives on the server (the same on every device). This device's old
 // list from before that moves to the server on its first load, then the key is cleared.
 const LEGACY_SUGGESTIONS_KEY = 'bf_suggestions'
-// Whether the suggestions list is collapsed (▼) — a per-device view setting
-const SUGGESTIONS_COLLAPSED_KEY = 'bf_suggestions_collapsed'
 
 function readLegacySuggestions() {
   try {
@@ -82,9 +80,8 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
 
   // Shopping state: the suggestions list is [{ name, reason, checked }], kept on the server
   const [suggestions, setSuggestions] = useState([])
-  const [suggestionsCollapsed, setSuggestionsCollapsed] = useState(() => {
-    try { return localStorage.getItem(SUGGESTIONS_COLLAPSED_KEY) === 'true' } catch { return false }
-  })
+  // The list starts collapsed (▼) and opens when new suggestions arrive
+  const [suggestionsCollapsed, setSuggestionsCollapsed] = useState(true)
   const [suggestionsLoading, setSuggestionsLoading] = useState(false)
   const [shoppingListOpen, setShoppingListOpen] = useState(false)
   const [lyricBanner, setLyricBanner] = useState(null)
@@ -387,9 +384,13 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
         // Added to the latest list: another device may have changed it meanwhile
         const latest = suggestionsRef.current
         const merged = appendNew(latest, result.suggestions || [])
-        if (merged.length > latest.length) await saveSuggestions(merged)
-        // The backend drops anything already known and retried once, so nothing new is left
-        else setNoNewSuggestions(true)
+        if (merged.length > latest.length) {
+          setSuggestionsCollapsed(false) // show what just arrived
+          await saveSuggestions(merged)
+        } else {
+          // The backend drops anything already known and retried once, so nothing new is left
+          setNoNewSuggestions(true)
+        }
       }
     } catch {
       setError('Failed to get suggestions')
@@ -423,14 +424,22 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
   }
 
   // ▲/▼ hides or shows the list; it never clears it
-  const toggleSuggestionsCollapsed = () => {
-    setSuggestionsCollapsed(prev => {
-      try { localStorage.setItem(SUGGESTIONS_COLLAPSED_KEY, String(!prev)) } catch { /* ignore */ }
-      return !prev
-    })
-  }
+  const toggleSuggestionsCollapsed = () => setSuggestionsCollapsed(prev => !prev)
 
   const selectedSuggestionCount = suggestions.filter(s => s.checked).length
+  const allSuggestionsChecked = selectedSuggestionCount === suggestions.length
+
+  // Header helpers (open list only): check or uncheck every item, and clear the whole list.
+  // Clearing doesn't count as × — the same items may be suggested again.
+  const toggleAllSuggestions = () => {
+    saveSuggestions(suggestions.map(s => ({ ...s, checked: !allSuggestionsChecked })))
+  }
+
+  const clearSuggestions = () => {
+    setLyricBanner(null)
+    setNoNewSuggestions(false)
+    saveSuggestions([])
+  }
 
   const suggestButtonLabel = suggestionsLoading
     ? <><Loader size={13} style={{ animation: 'spin 1s linear infinite' }} /> Thinking…</>
@@ -754,17 +763,46 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
           Send to List and Suggest More sit together under it */}
       {suggestions.length > 0 && (
         <div style={s.suggestionsPanel}>
-          <button
-            style={s.suggestionsPanelHeader}
-            onClick={toggleSuggestionsCollapsed}
-            aria-expanded={!suggestionsCollapsed}
-            title={suggestionsCollapsed ? 'Show suggestions' : 'Hide suggestions'}
-          >
-            <span style={s.suggestionsPanelTitle}>
-              Suggestions{suggestionsCollapsed ? ` (${suggestions.length})` : ''}
-            </span>
-            <span style={s.collapseIcon} aria-hidden="true">{suggestionsCollapsed ? '▼' : '▲'}</span>
-          </button>
+          {/* As big as Suggest Shopping: helpers at the left (open list only), the title in the
+              middle, ▲/▼ at the right; a tap anywhere else opens or closes the list */}
+          <div style={s.suggestSection}>
+            <div
+              style={s.suggestionsPanelHeader}
+              role="button"
+              tabIndex={0}
+              onClick={toggleSuggestionsCollapsed}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSuggestionsCollapsed() }
+              }}
+              aria-expanded={!suggestionsCollapsed}
+              title={suggestionsCollapsed ? 'Show suggestions' : 'Hide suggestions'}
+            >
+              <span style={s.suggestionsHelpers}>
+                {!suggestionsCollapsed && (
+                  <>
+                    <button
+                      style={s.suggestionsHelperBtn}
+                      onClick={(e) => { e.stopPropagation(); toggleAllSuggestions() }}
+                      title={allSuggestionsChecked ? 'Unselect all' : 'Select all'}
+                      aria-label={allSuggestionsChecked ? 'Unselect all' : 'Select all'}
+                    >
+                      {allSuggestionsChecked ? <Square size={13} /> : <CheckSquare size={13} />}
+                    </button>
+                    <button
+                      style={s.suggestionsClearBtn}
+                      onClick={(e) => { e.stopPropagation(); clearSuggestions() }}
+                      title="Delete all"
+                      aria-label="Delete all"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </>
+                )}
+              </span>
+              <span style={s.suggestionsPanelTitle}>Suggestions ({suggestions.length})</span>
+              <span style={s.collapseIcon} aria-hidden="true">{suggestionsCollapsed ? '▼' : '▲'}</span>
+            </div>
+          </div>
           {!suggestionsCollapsed && (
             <>
               <div style={s.suggestionsList}>

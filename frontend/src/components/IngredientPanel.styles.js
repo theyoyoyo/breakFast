@@ -542,6 +542,7 @@ export const suggestSection = {
 
 export const suggestBtn = {
   width: '100%',
+  minHeight: 36,
   padding: '9px 16px',
   background: secondaryColor, // follows the theme
   color: '#fff',
@@ -576,37 +577,57 @@ export const suggestNote = {
 }
 
 export const suggestionsPanel = {
-  borderTop: '1px solid var(--border)',
   background: 'var(--surface)',
   display: 'flex',
   flexDirection: 'column',
-  maxHeight: '45%',
+  maxHeight: '55%',
 }
 
-// The whole header is the ▲/▼ toggle, so it's an easy tap on a phone
+// The header is a bar as big as Suggest Shopping, in the theme color, and the ▲/▼ toggle:
+// helpers at the left, the title in the middle, ▲/▼ at the right
 export const suggestionsPanelHeader = {
-  display: 'flex',
-  justifyContent: 'space-between',
+  ...suggestBtn,
+  padding: '7px 12px', // same height as Suggest Shopping, with the helper chips
+  display: 'grid',
+  gridTemplateColumns: '1fr auto 1fr',
   alignItems: 'center',
-  padding: '8px 12px 4px',
-  background: 'none',
+  userSelect: 'none',
+}
+
+export const suggestionsHelpers = {
+  display: 'flex',
+  gap: 6,
+  justifySelf: 'start',
+}
+
+// Small dark chips on the theme-colored bar, readable in every theme
+export const suggestionsHelperBtn = {
+  background: 'var(--surface)',
   border: 'none',
-  width: '100%',
+  borderRadius: 6,
+  color: 'var(--text)',
+  width: 26,
+  height: 22,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
   cursor: 'pointer',
-  textAlign: 'left',
+  padding: 0,
+}
+
+// Delete all: red, like every delete
+export const suggestionsClearBtn = {
+  ...suggestionsHelperBtn,
+  color: colors.danger,
 }
 
 export const collapseIcon = {
+  justifySelf: 'end',
   fontSize: 11,
-  color: 'var(--text-muted)',
 }
 
 export const suggestionsPanelTitle = {
-  fontSize: 12,
-  fontWeight: 700,
-  textTransform: 'uppercase',
-  letterSpacing: '0.06em',
-  color: 'var(--text-muted)',
+  whiteSpace: 'nowrap',
 }
 
 export const suggestionsList = {
