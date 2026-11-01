@@ -15,13 +15,21 @@ import MealEditor from './MealEditor'
 import StarRating from './StarRating'
 import { THEMES, applyTheme, storedTheme } from '../utils/theme'
 import { applyLanguage } from '../utils/language'
-import { COUNTRIES } from '../utils/countries'
+import { COUNTRIES, countryCode } from '../utils/countries'
 import { useLanguage } from '../hooks/useLanguage'
 import { useSyncNotice } from '../hooks/useSyncNotice'
 import * as s from './SettingsPanel.styles'
 
 // Display names for the stored supplement frequency values
 const FREQUENCY_LABELS = { daily: 'Daily', sometimes: 'Occasional' }
+
+// Profile numbers are typed in compact text boxes (no spinner), like the meal editor's amounts:
+// whole numbers up to 3 digits, and weight with one decimal ("72.5"; a comma works too)
+function cleanProfileNumber(field, value) {
+  const text = value.replace(',', '.').replace(field === 'weight_kg' ? /[^\d.]/g : /\D/g, '')
+  const [whole, ...decimals] = text.split('.')
+  return decimals.length ? `${whole.slice(0, 3)}.${decimals.join('').slice(0, 1)}` : whole.slice(0, 3)
+}
 
 const PRIORITY_OPTIONS = [
   { value: 'low', label: "Don't really care" },
@@ -188,6 +196,8 @@ export default function SettingsPanel({ visible }) {
     setProfile((prev) => ({ ...prev, [field]: value }))
     setProfileDirty(true)
   }
+
+  const handleProfileNumber = (field, value) => handleProfileChange(field, cleanProfileNumber(field, value))
 
   const handleClearProfileField = (field) => {
     setProfile((prev) => ({ ...prev, [field]: '' }))
@@ -628,93 +638,111 @@ export default function SettingsPanel({ visible }) {
             Profile
             {profileIncomplete && <span style={{ color: '#e74c3c', marginLeft: 6, fontSize: 10 }}>●</span>}
           </div>
-          <div style={s.profileGrid}>
-            <div style={s.profileField}>
-              <label style={s.profileLabel}>Age</label>
-              <div style={s.profileInputRow}>
-                <input
-                  type="number"
-                  min="1"
-                  style={{ ...s.input, ...missingField(profile.age) }}
-                  value={profile.age}
-                  onChange={(e) => handleProfileChange('age', e.target.value)}
-                  placeholder="—"
-                />
-                {profile.age !== '' && <button style={s.clearFieldBtn} onClick={() => handleClearProfileField('age')}>×</button>}
+          {/* Age + Gender and Height + Weight: four in a row where they fit, two by two on a phone */}
+          <div style={s.profileRow}>
+            <div style={s.profilePair}>
+              <div style={s.profileField}>
+                <label style={s.profileLabel} htmlFor="profile-age">Age</label>
+                <div style={s.profileInputRow}>
+                  <input
+                    id="profile-age"
+                    type="text"
+                    inputMode="numeric"
+                    style={{ ...s.profileNumber(3), ...missingField(profile.age) }}
+                    value={profile.age}
+                    onChange={(e) => handleProfileNumber('age', e.target.value)}
+                    placeholder="—"
+                  />
+                  {profile.age !== '' && <button style={s.clearFieldBtn} onClick={() => handleClearProfileField('age')}>×</button>}
+                </div>
+              </div>
+              <div style={s.profileField}>
+                <label style={s.profileLabel} htmlFor="profile-gender">Gender</label>
+                <select
+                  id="profile-gender"
+                  style={{ ...s.profileSelect, ...missingField(profile.gender) }}
+                  value={profile.gender}
+                  onChange={(e) => handleProfileChange('gender', e.target.value)}
+                >
+                  <option value="">—</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                </select>
               </div>
             </div>
-            <div style={s.profileField}>
-              <label style={s.profileLabel}>Gender</label>
+            <div style={s.profilePair}>
+              <div style={s.profileField}>
+                <label style={s.profileLabel} htmlFor="profile-height">Height (cm)</label>
+                <div style={s.profileInputRow}>
+                  <input
+                    id="profile-height"
+                    type="text"
+                    inputMode="numeric"
+                    style={{ ...s.profileNumber(3), ...missingField(profile.height_cm) }}
+                    value={profile.height_cm}
+                    onChange={(e) => handleProfileNumber('height_cm', e.target.value)}
+                    placeholder="—"
+                  />
+                  {profile.height_cm !== '' && <button style={s.clearFieldBtn} onClick={() => handleClearProfileField('height_cm')}>×</button>}
+                </div>
+              </div>
+              <div style={s.profileField}>
+                <label style={s.profileLabel} htmlFor="profile-weight">Weight (kg)</label>
+                <div style={s.profileInputRow}>
+                  <input
+                    id="profile-weight"
+                    type="text"
+                    inputMode="decimal"
+                    style={{ ...s.profileNumber(5), ...missingField(profile.weight_kg) }}
+                    value={profile.weight_kg}
+                    onChange={(e) => handleProfileNumber('weight_kg', e.target.value)}
+                    placeholder="—"
+                  />
+                  {profile.weight_kg !== '' && <button style={s.clearFieldBtn} onClick={() => handleClearProfileField('weight_kg')}>×</button>}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style={s.profileWideRow}>
+            <div style={s.profileWideField}>
+              <label style={s.profileLabel} htmlFor="profile-activity">Activity Level</label>
               <select
-                style={{ ...s.select, ...missingField(profile.gender) }}
-                value={profile.gender}
-                onChange={(e) => handleProfileChange('gender', e.target.value)}
+                id="profile-activity"
+                style={{ ...s.profileWideSelect, ...missingField(profile.activity_level) }}
+                value={profile.activity_level}
+                onChange={(e) => handleProfileChange('activity_level', e.target.value)}
               >
                 <option value="">—</option>
-                <option value="male">Male</option>
-                <option value="female">Female</option>
+                <option value="sedentary">Sedentary</option>
+                <option value="light">Light</option>
+                <option value="moderate">Moderate</option>
+                <option value="active">Active</option>
+                <option value="very_active">Very Active</option>
               </select>
             </div>
+            {/* Optional: tells the AI what's in season; not part of the incomplete-profile dot.
+                The list shows "Germany (DE)", the closed box only "DE"; the name is what's saved. */}
             <div style={s.profileField}>
-              <label style={s.profileLabel}>Height (cm)</label>
-              <div style={s.profileInputRow}>
-                <input
-                  type="number"
-                  min="1"
-                  style={{ ...s.input, ...missingField(profile.height_cm) }}
-                  value={profile.height_cm}
-                  onChange={(e) => handleProfileChange('height_cm', e.target.value)}
-                  placeholder="—"
-                />
-                {profile.height_cm !== '' && <button style={s.clearFieldBtn} onClick={() => handleClearProfileField('height_cm')}>×</button>}
-              </div>
+              <label style={s.profileLabel} htmlFor="profile-country">Country</label>
+              <span style={s.countryPicker}>
+                <span style={s.countryText} aria-hidden="true">
+                  {countryCode(profile.country) || profile.country || '—'}
+                </span>
+                <span aria-hidden="true">▾</span>
+                <select
+                  id="profile-country"
+                  style={s.countrySelect}
+                  value={profile.country}
+                  onChange={(e) => handleProfileChange('country', e.target.value)}
+                >
+                  <option value="">—</option>
+                  {profile.country && !countryCode(profile.country) && (
+                    <option value={profile.country}>{profile.country}</option>
+                  )}
+                  {COUNTRIES.map(({ name, code }) => <option key={code} value={name}>{name} ({code})</option>)}
+                </select>
+              </span>
             </div>
-            <div style={s.profileField}>
-              <label style={s.profileLabel}>Weight (kg)</label>
-              <div style={s.profileInputRow}>
-                <input
-                  type="number"
-                  min="0.1"
-                  step="0.1"
-                  style={{ ...s.input, ...missingField(profile.weight_kg) }}
-                  value={profile.weight_kg}
-                  onChange={(e) => handleProfileChange('weight_kg', e.target.value)}
-                  placeholder="—"
-                />
-                {profile.weight_kg !== '' && <button style={s.clearFieldBtn} onClick={() => handleClearProfileField('weight_kg')}>×</button>}
-              </div>
-            </div>
-          </div>
-          <div style={s.profileField}>
-            <label style={s.profileLabel}>Activity Level</label>
-            <select
-              style={{ ...s.select, ...missingField(profile.activity_level) }}
-              value={profile.activity_level}
-              onChange={(e) => handleProfileChange('activity_level', e.target.value)}
-            >
-              <option value="">—</option>
-              <option value="sedentary">Sedentary</option>
-              <option value="light">Light</option>
-              <option value="moderate">Moderate</option>
-              <option value="active">Active</option>
-              <option value="very_active">Very Active</option>
-            </select>
-          </div>
-          {/* Optional: tells the AI what's in season; not part of the incomplete-profile dot */}
-          <div style={s.profileField}>
-            <label style={s.profileLabel} htmlFor="profile-country">Country</label>
-            <select
-              id="profile-country"
-              style={s.select}
-              value={profile.country}
-              onChange={(e) => handleProfileChange('country', e.target.value)}
-            >
-              <option value="">—</option>
-              {profile.country && !COUNTRIES.includes(profile.country) && (
-                <option value={profile.country}>{profile.country}</option>
-              )}
-              {COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
           </div>
           {profileDirty && (
             <button style={s.saveBtn} onClick={handleSaveProfile}>Save Profile</button>

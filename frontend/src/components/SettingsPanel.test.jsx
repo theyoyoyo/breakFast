@@ -1,7 +1,8 @@
 /**
  * Tests for Settings: supplements start as Daily with no frequency picker, show
  * "Occasional" for occasional ones, and can be edited with ✏️; the theme picker offers all five themes;
- * the tab title is the app name; the optional country saves with the profile.
+ * the tab title is the app name; the optional country saves with the profile, listed as
+ * "Name (CODE)" and shown as its code; the profile boxes can shrink to a phone's width.
  * API calls are mocked — no real network calls are made.
  */
 
@@ -84,6 +85,57 @@ describe('SettingsPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save Profile' }))
     await waitFor(() => expect(api.upsertProfile).toHaveBeenCalledWith(
       expect.objectContaining({ country: 'Türkiye' }),
+    ))
+  })
+
+  // The list shows "Germany (DE)", the closed box shows "DE", and the name is what's saved
+  it('lists countries with their code, shows the code once chosen and saves the name', async () => {
+    render(<SettingsPanel visible />)
+    const country = await screen.findByLabelText('Country')
+    expect(screen.getByRole('option', { name: 'Germany (DE)' })).toHaveValue('Germany')
+    fireEvent.change(country, { target: { value: 'Germany' } })
+    expect(country.parentElement).toHaveTextContent(/^DE▾/)
+    fireEvent.click(screen.getByRole('button', { name: 'Save Profile' }))
+    await waitFor(() => expect(api.upsertProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ country: 'Germany' }),
+    ))
+  })
+
+  // A saved country that isn't in the list (an older name) stays selectable and shows as written
+  it('keeps a saved country that is not in the list', async () => {
+    api.getProfile.mockResolvedValue({ country: 'Atlantis' })
+    render(<SettingsPanel visible />)
+    const country = await screen.findByLabelText('Country')
+    await waitFor(() => expect(country).toHaveValue('Atlantis'))
+    expect(country.parentElement).toHaveTextContent(/^Atlantis▾/)
+  })
+
+  // At 320 px nothing may keep its native width: the columns shrink and the boxes are content-sized
+  it('lets every profile box shrink to fit a 320 px screen', async () => {
+    render(<SettingsPanel visible />)
+    for (const label of ['Age', 'Gender', 'Height (cm)', 'Weight (kg)', 'Activity Level', 'Country']) {
+      const box = await screen.findByLabelText(label)
+      expect(['0', '0px'].includes(box.style.minWidth) || box.style.width === '100%', label).toBe(true)
+    }
+    for (const label of ['Age', 'Height (cm)', 'Weight (kg)']) {
+      expect(screen.getByLabelText(label).style.width).toMatch(/^calc\(\d+ch \+ 22px\)$/)
+    }
+    const pair = screen.getByLabelText('Age').closest('div').parentElement.parentElement
+    expect(pair.style.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))')
+  })
+
+  // Number boxes take digits only, and weight one decimal (a comma counts as the point)
+  it('keeps profile numbers to digits', async () => {
+    render(<SettingsPanel visible />)
+    const age = await screen.findByLabelText('Age')
+    fireEvent.change(age, { target: { value: '3a5' } })
+    expect(age).toHaveValue('35')
+    const weight = screen.getByLabelText('Weight (kg)')
+    fireEvent.change(weight, { target: { value: '72,55' } })
+    expect(weight).toHaveValue('72.5')
+    fireEvent.click(screen.getByRole('button', { name: 'Save Profile' }))
+    await waitFor(() => expect(api.upsertProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ age: 35, weight_kg: 72.5 }),
     ))
   })
 
