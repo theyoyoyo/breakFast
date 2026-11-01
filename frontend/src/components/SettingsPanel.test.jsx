@@ -1,7 +1,7 @@
 /**
- * Tests for Settings: supplements start as Daily with no frequency picker, and show
- * "Occasional" for occasional ones; the theme picker offers all five themes; the tab title is the app name;
- * the optional country saves with the profile.
+ * Tests for Settings: supplements start as Daily with no frequency picker, show
+ * "Occasional" for occasional ones, and can be edited with ✏️; the theme picker offers all five themes;
+ * the tab title is the app name; the optional country saves with the profile.
  * API calls are mocked — no real network calls are made.
  */
 
@@ -50,6 +50,20 @@ describe('SettingsPanel', () => {
     render(<SettingsPanel visible />)
     expect(await screen.findByRole('button', { name: 'Occasional' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Daily' })).toBeInTheDocument()
+  })
+
+  // ✏️ opens an editor for the name and contents and saves both, keeping the frequency
+  it("edits a supplement's name and contents", async () => {
+    api.getSupplements.mockResolvedValue([{ id: 4, name: 'Vitamn D', contents: '', frequency: 'sometimes' }])
+    render(<SettingsPanel visible />)
+    fireEvent.click(await screen.findByTitle('Edit supplement'))
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Vitamin D' } })
+    fireEvent.change(screen.getByLabelText('Contents'), { target: { value: 'D3 1000 IU' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.updateSupplement).toHaveBeenCalledWith(
+      4, { name: 'Vitamin D', contents: 'D3 1000 IU', frequency: 'sometimes' },
+    ))
+    await waitFor(() => expect(screen.queryByLabelText('Contents')).toBeNull())
   })
 
   it('titles the tab with the app name, like Chat', async () => {

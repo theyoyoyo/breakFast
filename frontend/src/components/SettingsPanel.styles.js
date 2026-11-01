@@ -83,6 +83,17 @@ export const suppContents = {
   fontSize: 11,
 }
 
+// ✏️ on a supplement row, between the frequency and the ×
+export const editBtn = {
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  fontSize: 13,
+  padding: '0 2px',
+  lineHeight: 1,
+  flexShrink: 0,
+}
+
 export const suppFreq = (freq) => ({
   fontSize: 10,
   fontWeight: 700,
@@ -285,6 +296,49 @@ export const overlayPanel = {
   maxHeight: '80dvh',
   display: 'flex',
   flexDirection: 'column',
+}
+
+// Small overlay editor (a supplement's name and contents): title, fields, Close / Save
+export const overlayTitle = {
+  fontSize: 18,
+  fontWeight: 700,
+  color: 'var(--accent)',
+  textAlign: 'center',
+  marginBottom: 16,
+}
+
+export const overlayForm = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 6,
+}
+
+export const overlayActions = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  gap: 10,
+  marginTop: 16,
+}
+
+export const overlayCloseBtn = {
+  background: 'var(--surface2)',
+  border: '1px solid var(--border)',
+  borderRadius: 10,
+  padding: '12px 24px',
+  color: 'var(--text-muted)',
+  fontSize: 15,
+  cursor: 'pointer',
+}
+
+export const overlaySaveBtn = {
+  background: secondaryColor,
+  border: 'none',
+  borderRadius: 10,
+  padding: '12px 24px',
+  color: '#fff',
+  fontSize: 15,
+  fontWeight: 600,
+  cursor: 'pointer',
 }
 
 export const analysisDropdown = {

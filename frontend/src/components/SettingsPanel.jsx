@@ -17,6 +17,7 @@ import { THEMES, applyTheme, storedTheme } from '../utils/theme'
 import { applyLanguage } from '../utils/language'
 import { COUNTRIES } from '../utils/countries'
 import { useLanguage } from '../hooks/useLanguage'
+import { useSyncNotice } from '../hooks/useSyncNotice'
 import * as s from './SettingsPanel.styles'
 
 // Display names for the stored supplement frequency values
@@ -43,6 +44,8 @@ export default function SettingsPanel({ visible }) {
   const [supplements, setSupplements] = useState([])
   const [newSuppName, setNewSuppName] = useState('')
   const [newSuppContents, setNewSuppContents] = useState('')
+  // Supplement open in the ✏️ editor: { id, name, contents, frequency, error }
+  const [editingSupp, setEditingSupp] = useState(null)
 
   // Meal history state
   const [meals, setMeals] = useState([])
@@ -139,6 +142,11 @@ export default function SettingsPanel({ visible }) {
   // Reload data when the Settings tab becomes visible
   useEffect(() => { if (visible) load() }, [visible]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Another device changed a supplement: reload only the supplements, so an unsaved profile edit stays
+  useSyncNotice('supplements_updated', () => {
+    getSupplements().then(setSupplements).catch(() => {})
+  })
+
   // Rating handlers
   const handleAddRating = async () => {
     const v = newProduct.trim()
@@ -233,6 +241,22 @@ export default function SettingsPanel({ visible }) {
     } catch {
       setError('Failed to update supplement')
       load()
+    }
+  }
+
+  // ✏️ editor: fix a supplement's name or contents without deleting it
+  const handleSaveSupplementEdit = async () => {
+    const name = editingSupp.name.trim()
+    if (!name) return
+    try {
+      await updateSupplement(editingSupp.id, { name, contents: editingSupp.contents.trim(), frequency: editingSupp.frequency })
+      setEditingSupp(null)
+      load()
+    } catch (e) {
+      const error = String(e?.message).includes('409')
+        ? 'Another supplement already has this name'
+        : 'Failed to save supplement'
+      setEditingSupp(prev => prev && { ...prev, error })
     }
   }
 
@@ -710,9 +734,49 @@ export default function SettingsPanel({ visible }) {
                 onClick={() => handleToggleFrequency(sup)}
                 title="Tap to switch between Daily and Occasional"
               >{FREQUENCY_LABELS[sup.frequency] || sup.frequency}</button>
+              <button
+                style={s.editBtn}
+                onClick={() => setEditingSupp({ id: sup.id, name: sup.name, contents: sup.contents || '', frequency: sup.frequency, error: null })}
+                title="Edit supplement"
+              >✏️</button>
               <button style={s.tagX} onClick={() => handleDeleteSupplement(sup.id)}>×</button>
             </div>
           ))}
+          {editingSupp && (
+            <div style={s.overlay} onClick={(e) => { if (e.target === e.currentTarget) setEditingSupp(null) }}>
+              <div style={s.overlayPanel}>
+                <div style={s.overlayTitle}>Edit supplement</div>
+                <div style={s.overlayForm}>
+                  <label style={s.profileLabel} htmlFor="supp-edit-name">Name</label>
+                  <input
+                    id="supp-edit-name"
+                    style={s.input}
+                    value={editingSupp.name}
+                    onChange={(e) => setEditingSupp(prev => ({ ...prev, name: e.target.value, error: null }))}
+                    autoFocus
+                  />
+                  <label style={s.profileLabel} htmlFor="supp-edit-contents">Contents</label>
+                  <input
+                    id="supp-edit-contents"
+                    style={s.input}
+                    value={editingSupp.contents}
+                    onChange={(e) => setEditingSupp(prev => ({ ...prev, contents: e.target.value, error: null }))}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveSupplementEdit()}
+                    placeholder="e.g. Vitamin D3 1000IU, K2 100mcg, Zinc 15mg"
+                  />
+                  {editingSupp.error && <div style={s.error}>{editingSupp.error}</div>}
+                </div>
+                <div style={s.overlayActions}>
+                  <button style={s.overlayCloseBtn} onClick={() => setEditingSupp(null)}>Close</button>
+                  <button
+                    style={s.overlaySaveBtn}
+                    onClick={handleSaveSupplementEdit}
+                    disabled={!editingSupp.name.trim()}
+                  >Save</button>
+                </div>
+              </div>
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={s.addRow}>
               <input
