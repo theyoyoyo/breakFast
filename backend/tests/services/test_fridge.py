@@ -31,14 +31,15 @@ def test_collects_flat_format_ingredients():
     assert meal_ingredient_names(meal) == ["Bread", "Butter"]
 
 
-# Everything in the fridge, ignoring case and plurals or shorter than its fridge name, is not flagged
-def test_fridge_items_match_by_shorter_or_equal_name():
+# Everything in the fridge, ignoring case and plurals, is not flagged
+def test_fridge_items_match_by_exact_name():
+    inventory = [{"name": n} for n in ("Eggs", "Tomatoes", "Cream cheese", "Olive")]
     meal = _meal(
-        {"name": "Menemen", "ingredients": [{"name": "yumurta"}, {"name": "DOMATES"}]},
-        {"name": "Olives", "amount": 10, "unit": "adet", "ingredients": []},
-        {"name": "Peynir", "amount": 50, "unit": "g", "ingredients": []},
+        {"name": "Omelette", "ingredients": [{"name": "egg"}, {"name": "TOMATO"}]},
+        {"name": "Olives", "amount": 10, "unit": "pcs", "ingredients": []},
+        {"name": "cream cheese", "amount": 50, "unit": "g", "ingredients": []},
     )
-    assert find_missing_ingredients(meal, INVENTORY) == []
+    assert find_missing_ingredients(meal, inventory) == []
 
 
 # A name longer than its fridge name is another or a prepared item, so it's flagged (#115)
@@ -52,6 +53,31 @@ def test_longer_names_are_not_their_fridge_item():
     assert find_missing_ingredients(meal, inventory) == [
         "Poached egg", "Simit with tahini dipping sauce", "White cheese (peynir)", "Greek yogurt or milk",
     ]
+
+
+# A shorter name may be another product, so it's flagged even when it is a fridge name's start or end
+def test_shorter_names_are_not_their_fridge_item():
+    inventory = [{"name": n} for n in ("Olive oil", "Cream cheese", "Cooked rice", "White cheese", "Blueberries")]
+    meal = _meal(
+        {"name": "Olives", "amount": 10, "unit": "pcs", "ingredients": []},
+        {"name": "Cheese", "amount": 50, "unit": "g", "ingredients": []},
+        {"name": "Bowl", "ingredients": [{"name": "Cream"}, {"name": "Rice"}, {"name": "Blueberry"}]},
+    )
+    assert find_missing_ingredients(meal, inventory) == ["Olives", "Cheese", "Cream", "Rice"]
+
+
+# Avoided dishes and ingredients are found by exact name, so a longer name the user hasn't banned passes
+def test_find_avoided_matches_exact_names():
+    from services.fridge import find_avoided
+    meal = _meal(
+        {"name": "Granola bowl", "ingredients": [{"name": "Granola"}, {"name": "Almond milk"}]},
+        {"name": "almond", "amount": 20, "unit": "g", "ingredients": []},
+        {"name": "Beyaz peynir", "amount": 50, "unit": "g", "ingredients": []},
+    )
+    assert find_avoided(meal, ["Almonds", "Peynir"]) == ["almond"]
+    assert find_avoided(meal, ["Granola bowl", "Almond milk"]) == ["Granola bowl", "Almond milk"]
+    assert find_avoided(meal, []) == []
+    assert find_avoided(None, ["Almonds"]) == []
 
 
 # Pantry-group items count as fridge items
@@ -99,6 +125,7 @@ def test_same_name_ignores_case_letters_and_plurals():
     assert same_name("Zeytinler", "zeytin")
     assert same_name("Şeftali", "seftali")
     assert same_name("Eggs", "Egg")
+    assert same_name("Blueberry", "Blueberries")
 
 
 # Every word counts, so a longer or shorter name is a different product

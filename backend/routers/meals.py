@@ -124,7 +124,7 @@ async def generate_weekly_review(user_id: int = Depends(require_user)):
     async with get_db() as db:
         async with db.execute(
             """
-            SELECT meal_name, ingredients, nutrition_note, logged_at
+            SELECT meal_name, ingredients, menu_items, nutrition_note, logged_at
             FROM meal_history
             WHERE user_id = ? AND date(logged_at) >= ? AND date(logged_at) <= ?
             ORDER BY logged_at ASC

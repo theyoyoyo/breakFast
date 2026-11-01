@@ -2,14 +2,18 @@
 Fridge check — which ingredients of a suggested meal are not in the user's fridge.
 
 Plain code, not the LLM: the suggestion pipeline runs this on the draft and
-hands the result to the refine step as a hard rule. Names are compared one
-way round (case, Turkish letters and simple plurals aside): a meal name may
-be shorter than a fridge name ("Peynir" for "Beyaz peynir"), never longer.
-A longer name is another or a prepared item: "Poached egg", "Simit with
-tahini" and "White cheese (peynir)" aren't "Egg", "Simit" or "White cheese",
-so they come back as dishes with their fridge ingredients (#115). Nothing is
-assumed: basics like salt and oil count only when they are logged (usually
-in the Pantry group).
+hands the result to the refine step as a hard rule. Names are compared
+exactly (same_name: case, Turkish letters and simple plurals aside), because
+an extra or missing word can name another product: "Cheese" isn't "White
+cheese" and "Olives" isn't "Olive oil". A prepared item is a dish: "Poached
+egg", "Simit with tahini" and "White cheese (peynir)" aren't "Egg", "Simit"
+or "White cheese", so they come back as dishes with their fridge ingredients
+(#115). Nothing is assumed: basics like salt and oil count only when they are
+logged (usually in the Pantry group).
+
+The avoid list and the shopping dedupe use the same exact match: a user who
+bans "Cheese" and then sees "White cheese" bans that too, or states a habit,
+rather than code guessing which products an item is in.
 """
 
 import re
@@ -32,23 +36,17 @@ def _is_water(name: str) -> bool:
 
 
 def _tokens(name: str) -> list[set[str]]:
-    """Words of a name, each with its simple plural-stripped variants."""
+    """Words of a name, each with its simple plural-stripped variants (berries → berry too)."""
     result = []
     for w in _words(name):
         variants = {w}
         for suffix in ("es", "s", "ler", "lar"):
             if w.endswith(suffix) and len(w) - len(suffix) >= 3:
                 variants.add(w[: -len(suffix)])
+        if w.endswith("ies") and len(w) > 4:
+            variants.add(w[:-3] + "y")
         result.append(variants)
     return result
-
-
-def _contains(hay: list[set[str]], needle: list[set[str]]) -> bool:
-    """True when the needle's words appear in a row inside hay."""
-    n = len(needle)
-    return n > 0 and any(
-        all(hay[i + j] & needle[j] for j in range(n)) for i in range(len(hay) - n + 1)
-    )
 
 
 def same_name(a: str, b: str) -> bool:
@@ -58,9 +56,6 @@ def same_name(a: str, b: str) -> bool:
     "Strawberries" are different items while "Strawberry" and "strawberries" are not.
     """
     wa, wb = _tokens(a), _tokens(b)
-    for words in (wa, wb):
-        for variants in words:
-            variants |= {w[:-3] + "y" for w in list(variants) if w.endswith("ies") and len(w) > 4}
     return len(wa) == len(wb) > 0 and all(x & y for x, y in zip(wa, wb))
 
 
@@ -83,14 +78,20 @@ def find_missing_ingredients(meal: dict | None, inventory: list[dict]) -> list[s
     """Ingredients of the meal that are not in the inventory."""
     if not isinstance(meal, dict):
         return []
-    stock = [_tokens(i["name"]) for i in inventory if i.get("name")]
+    stock = [i["name"] for i in inventory if i.get("name")]
     missing = []
     for name in meal_ingredient_names(meal):
-        if _is_water(name):
-            continue
-        words = _tokens(name)
-        if any(_contains(s, words) for s in stock):  # the name sits inside a fridge name
+        if _is_water(name) or any(same_name(name, s) for s in stock):
             continue
         if name not in missing:
             missing.append(name)
     return missing
+
+
+def find_avoided(meal: dict | None, avoid_list: list[str]) -> list[str]:
+    """Names in the meal, its dishes and their ingredients, that are on the avoid list."""
+    if not isinstance(meal, dict):
+        return []
+    dishes = [i.get("name", "") for i in meal.get("menu") or [] if isinstance(i, dict) and i.get("ingredients")]
+    names = dict.fromkeys(n for n in dishes + meal_ingredient_names(meal) if n)
+    return [n for n in names if any(same_name(n, a) for a in avoid_list)]

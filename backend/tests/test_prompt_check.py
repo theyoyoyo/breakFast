@@ -77,10 +77,12 @@ def test_renamed_items_told_from_missing_ones():
     )
 
 
-# A name shorter than its fridge name is that item
-def test_shorter_names_pass():
-    text = _reply({"name": "Peynir", "amount": 50, "unit": "g", "ingredients": []})
-    assert is_clean(check_reply(text, TR))
+# A name shorter than its fridge name may be another product, so it's missing, not renamed
+def test_shorter_names_are_missing():
+    text = _reply({"name": "Cheese", "amount": 50, "unit": "g", "ingredients": []})
+    issues = check_reply(text, EN)["issues"]
+    assert issues["missing"] == ["Cheese"]
+    assert issues["renamed"] == []
 
 
 # Units the app can't show as a listed unit are reported once each; known spellings (gr, pieces) pass

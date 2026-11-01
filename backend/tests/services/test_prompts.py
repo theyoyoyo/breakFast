@@ -57,9 +57,10 @@ class TestFormatters:
     def test_format_history_with_limit(self):
         meals = [{"meal_name": f"meal_{i}"} for i in range(10)]
         result = _format_history(meals, limit=3)
-        # Should include last 3
-        assert "meal_7" in result
-        assert "meal_9" in result
+        # History comes newest first, so the first 3 are the newest
+        assert "meal_0" in result
+        assert "meal_2" in result
+        assert "meal_3" not in result
 
     def test_format_preferences_empty(self):
         assert _format_preferences({}) == "none set yet"
@@ -219,12 +220,13 @@ class TestChatPrompt:
         assert "NEVER" in prompt
 
     def test_history_limit_is_3(self):
-        """Chat persona uses last 3 meals only (lighter context)."""
+        """Chat persona uses the newest 3 meals only (lighter context); history comes newest first."""
         meals = [{"meal_name": f"meal_{i}"} for i in range(10)]
         prompt = build_chat_prompt([], meals, {}, [])
-        assert "meal_9" in prompt
-        assert "meal_7" in prompt
-        assert "meal_0" not in prompt
+        assert "meal_0" in prompt
+        assert "meal_2" in prompt
+        assert "meal_3" not in prompt
+        assert "meal_9" not in prompt
 
 
 # ---------------------------------------------------------------------------
@@ -242,13 +244,13 @@ class TestSuggestionPrompt:
         assert "dietitian" in prompt.lower() or "professional" in prompt.lower()
 
     def test_history_limit_is_4(self):
-        """Suggestion persona uses the last 4 meals."""
+        """Suggestion persona uses the newest 4 meals; history comes newest first."""
         meals = [{"meal_name": f"meal_{i}"} for i in range(15)]
         prompt = build_suggestion_prompt([], meals, {}, [])
-        assert "meal_14" in prompt
-        assert "meal_11" in prompt
-        assert "meal_10" not in prompt
-        assert "meal_0" not in prompt
+        assert "meal_0" in prompt
+        assert "meal_3" in prompt
+        assert "meal_4" not in prompt
+        assert "meal_14" not in prompt
 
     def test_includes_health_rules(self):
         prompt = build_suggestion_prompt(

@@ -15,6 +15,20 @@ def test_food_preferences_drop_settings_and_avoid_entries():
     assert _food_preferences(prefs) == {"fav:1": "olives"}
 
 
+# The chat context's history carries each meal's menu, so the pipeline's reviewer sees what recent meals had
+async def test_chat_history_has_menu_items(client, db):
+    from services.context import load_chat_context
+    from services.knowledge import format_history_detailed
+
+    menu = [{"name": "Menemen", "ingredients": [{"name": "Eggs", "amount": 2, "unit": "pcs"}]}]
+    await client.post("/meals/", json={"meal_name": "Weekend", "ingredients": [], "menu_items": menu})
+    async with db.execute("SELECT id FROM users WHERE name = 'testuser'") as cur:
+        user_id = (await cur.fetchone())[0]
+
+    chat = await load_chat_context(db, user_id)
+    assert format_history_detailed(chat["history"]) == "- Weekend: Menemen (Eggs)"
+
+
 # The profile's country reaches the chat and shopping contexts, but not the profile text the analysts read
 async def test_country_in_contexts(client, db):
     from services.context import load_chat_context, load_shopping_context
