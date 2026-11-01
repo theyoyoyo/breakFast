@@ -61,6 +61,24 @@ export const brandTitle = {
 
 export const brandHeader = { ...panelHeader, ...brandTitle }
 
+// Preferences, Favorites and Settings: the app name at the left and the tab's name at the right,
+// so a phone (icons only in the tab bar) shows which tab is open
+export const brandHeaderRow = {
+  ...brandHeader,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 8,
+}
+
+export const tabName = {
+  fontSize: 12,
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  letterSpacing: '0.08em',
+  color: 'var(--text-muted)',
+}
+
 // Sub-page header (← back + page name), the Weekly Summary look, shared by every sub-page
 export const subPageHeader = {
   fontSize: 18,

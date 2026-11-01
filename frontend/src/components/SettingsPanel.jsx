@@ -630,7 +630,10 @@ export default function SettingsPanel({ visible }) {
   // --- Main settings view ---
   return (
     <div style={s.container}>
-      <div style={s.brandHeader}>break FAST</div>
+      <div style={s.brandHeaderRow}>
+        <span>break FAST</span>
+        <span style={s.tabName}>Settings</span>
+      </div>
 
       <div style={s.body}>
         {error && <div style={s.error}>{error}</div>}

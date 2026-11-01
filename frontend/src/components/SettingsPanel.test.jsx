@@ -1,7 +1,7 @@
 /**
  * Tests for Settings: supplements start as Daily with no frequency picker, show
  * "Occasional" for occasional ones, and can be edited with ✏️; the theme picker offers all five themes;
- * the tab title is the app name; the optional country saves with the profile, listed as
+ * the header shows the app name and the tab's name; the optional country saves with the profile, listed as
  * "Name (CODE)" and shown as its code; the profile boxes can shrink to a phone's width.
  * API calls are mocked — no real network calls are made.
  */
@@ -67,10 +67,11 @@ describe('SettingsPanel', () => {
     await waitFor(() => expect(screen.queryByLabelText('Contents')).toBeNull())
   })
 
-  it('titles the tab with the app name, like Chat', async () => {
+  // The header shows the app name, like Chat, and the tab's name at the right
+  it('titles the tab with the app name and the tab name', async () => {
     render(<SettingsPanel visible />)
-    expect(await screen.findByText('break FAST')).toBeInTheDocument()
-    expect(screen.queryByText('Settings')).toBeNull()
+    const title = await screen.findByText('break FAST')
+    expect(title.nextSibling).toHaveTextContent('Settings')
   })
 
   it('names the weekly review toggle after what it does', async () => {

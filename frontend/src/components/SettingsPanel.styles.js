@@ -1,5 +1,5 @@
 import {
-  panelContainer, brandHeader, subPageHeader, subPageBackBtn, panelBody,
+  panelContainer, brandHeaderRow, tabName, subPageHeader, subPageBackBtn, panelBody,
   section, sectionLabel, input, addRow, addBtn,
   tagX, empty, error, select, secondaryColor, colors, deleteBtn,
 } from '../styles/common'
@@ -7,7 +7,7 @@ import {
 export { section, sectionLabel, tagX, empty, error, select }
 
 export const container = panelContainer
-export { brandHeader, subPageHeader }
+export { brandHeaderRow, tabName, subPageHeader }
 export const body = panelBody
 
 export { input, addRow, addBtn }

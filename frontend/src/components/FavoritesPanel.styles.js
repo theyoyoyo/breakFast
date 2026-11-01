@@ -1,4 +1,4 @@
-import { secondaryColor, colors, brandHeader, deleteBtn } from '../styles/common'
+import { secondaryColor, colors, brandHeaderRow, tabName, deleteBtn } from '../styles/common'
 
 export const container = {
   display: 'flex',
@@ -9,7 +9,8 @@ export const container = {
   overflow: 'hidden',
 }
 
-export const header = brandHeader
+export const header = brandHeaderRow
+export { tabName }
 
 export const empty = {
   padding: 20,
@@ -54,6 +55,13 @@ export const cardName = {
   fontWeight: 600,
   fontSize: 14,
   color: 'var(--text)',
+}
+
+// The favorite's id beside its name
+export const cardId = {
+  fontSize: 11,
+  color: 'var(--text-muted)',
+  flexShrink: 0,
 }
 
 export const cardMeta = {

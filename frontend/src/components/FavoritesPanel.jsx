@@ -14,6 +14,15 @@ function FavoriteIcon({ fav, checkKey }) {
   return <ReadinessIcon emoji={emojiFor(fav.id)} readiness={readiness} stillMissing={stillMissing} />
 }
 
+function Header() {
+  return (
+    <div style={s.header}>
+      <span>break FAST</span>
+      <span style={s.tabName}>Favorites</span>
+    </div>
+  )
+}
+
 export default function FavoritesPanel({ visible, onSendToChat }) {
   const [favorites, setFavorites] = useState([])
   const [expandedId, setExpandedId] = useState(null)
@@ -58,7 +67,7 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
   if (favorites.length === 0) {
     return (
       <div style={s.container}>
-        <div style={s.header}>break FAST</div>
+        <Header />
         <div style={s.empty}>No favorites yet. Use ⭐ Fav on a meal to save it here.</div>
       </div>
     )
@@ -66,7 +75,7 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
 
   return (
     <div style={s.container}>
-      <div style={s.header}>break FAST</div>
+      <Header />
       <div style={s.list}>
         {favorites.map(fav => {
           const expanded = expandedId === fav.id
@@ -84,6 +93,7 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
                 <span style={s.cardTitle}>
                   <FavoriteIcon fav={fav} checkKey={visible} />
                   <span style={s.cardName}>{fav.meal_name}</span>
+                  <span style={s.cardId}>#{fav.id}</span>
                 </span>
                 <span style={s.cardMeta}>
                   {fav.prep_time_min && `⏱ ${fav.prep_time_min}m`}
