@@ -101,6 +101,7 @@ CREATE TABLE IF NOT EXISTS health_rules (
 CREATE TABLE IF NOT EXISTS chat_sessions (
     id          TEXT    PRIMARY KEY,
     user_id     INTEGER NOT NULL REFERENCES users(id),
+    selected_message_id INTEGER,    -- the meal card selected for today, the same on every device
     created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
     updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
@@ -394,6 +395,14 @@ async def init_db() -> None:
         try:
             await db.execute(
                 "ALTER TABLE user_profiles ADD COLUMN country TEXT"
+            )
+        except Exception:
+            pass  # Column already exists
+
+        # Migrate: add selected_message_id column to chat_sessions if missing
+        try:
+            await db.execute(
+                "ALTER TABLE chat_sessions ADD COLUMN selected_message_id INTEGER"
             )
         except Exception:
             pass  # Column already exists

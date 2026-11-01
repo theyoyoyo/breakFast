@@ -86,7 +86,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
           <button
             style={s.checkbox(checked)}
             onClick={(e) => { e.stopPropagation(); onCheck?.() }}
-            title={checked ? 'Selected as today\'s meal' : 'Select as today\'s meal'}
+            title={checked ? 'Selected as today\'s meal — tap to unselect' : 'Select as today\'s meal'}
           >
             {checked ? '☑' : '☐'}
           </button>

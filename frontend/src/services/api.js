@@ -275,9 +275,14 @@ export const listSessions = () =>
 export const getSessionMessages = (sessionId) =>
   apiFetch(`${BASE_URL}/sessions/${sessionId}/messages`)
 
-// → { status, id }; the user's open chats are told the session changed
-export const saveSessionMessage = (sessionId, role, content) =>
-  apiFetch(`${BASE_URL}/sessions/${sessionId}/messages`, json('POST', { role, content }))
+// → { status, id }; the user's open chats are told the session changed.
+// select: true also makes it the selected meal card (a meal sent to chat)
+export const saveSessionMessage = (sessionId, role, content, select = false) =>
+  apiFetch(`${BASE_URL}/sessions/${sessionId}/messages`, json('POST', select ? { role, content, select } : { role, content }))
+
+// Select a meal card for today (its message id), or none (null); the user's other devices follow
+export const selectSessionMessage = (sessionId, messageId) =>
+  apiFetch(`${BASE_URL}/sessions/${sessionId}/selected`, json('PUT', { message_id: messageId }))
 
 // Replace a saved message's content (a meal card edit rewrites its meal block)
 export const updateSessionMessage = (sessionId, messageId, content) =>

@@ -4,7 +4,8 @@
  * or a streaming reply; analysis results and meal card edits are saved to the session;
  * the 💊 list reloads on a supplements push and when the page becomes visible, and other
  * notices reach the rest of the app; "Today I ate" saves its version with the card, opens
- * from it, and drops unsaved edits on Close.
+ * from it, and drops unsaved edits on Close; the selected meal card is the same on every
+ * device, and a second tap unselects it.
  * API calls and the chat socket are mocked — no real network calls are made.
  */
 
@@ -13,7 +14,7 @@ import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import ChatInterface from './ChatInterface'
 import {
   createChatSocket, getActiveSession, listSessions, getSessionMessages,
-  saveSessionMessage, updateSessionMessage, saveAteDraft, analyzeMeal, getTodaySupplements,
+  saveSessionMessage, updateSessionMessage, saveAteDraft, selectSessionMessage, analyzeMeal, getTodaySupplements,
   checkMissingIngredients, getRatings,
 } from '../services/api'
 import { SYNC_NOTICE_EVENT } from '../hooks/useSyncNotice'
@@ -28,6 +29,7 @@ vi.mock('../services/api', () => ({
   saveSessionMessage: vi.fn(),
   updateSessionMessage: vi.fn(),
   saveAteDraft: vi.fn(),
+  selectSessionMessage: vi.fn(),
   getTodaySupplements: vi.fn(),
   toggleSupplement: vi.fn(),
   analyzeMeal: vi.fn(),
@@ -42,9 +44,10 @@ vi.mock('../services/api', () => ({
 
 // The card itself is MealBlock's and MealEditor's business; here it only exposes its callbacks
 vi.mock('./MealBlock', () => ({
-  default: ({ meal, onSave, onAnalyze, onCheck }) => (
+  default: ({ meal, checked, onSave, onAnalyze, onCheck }) => (
     <div>
       <span>Card: {meal.menu_name}</span>
+      {checked && <span>Selected</span>}
       <button onClick={() => onSave({ ...meal, menu_name: 'Edited Breakfast' })}>Save card</button>
       <button onClick={onAnalyze}>Analyze card</button>
       <button onClick={onCheck}>Select card</button>
@@ -104,6 +107,7 @@ describe('ChatInterface sync', () => {
     updateSessionMessage.mockResolvedValue({ status: 'ok' })
     getTodaySupplements.mockResolvedValue([])
     saveAteDraft.mockResolvedValue({ status: 'ok' })
+    selectSessionMessage.mockResolvedValue({ status: 'ok' })
     checkMissingIngredients.mockResolvedValue({ missing: [] })
     getRatings.mockResolvedValue([])
   })
@@ -279,6 +283,31 @@ describe('ChatInterface sync', () => {
     await openTodayIAte()
     expect(screen.getByText('Honey')).toBeInTheDocument()
     expect(screen.queryByText('Olives')).toBeNull()
+  })
+
+  // Selecting a card tells the server (so other devices follow), and a second tap unselects it
+  it('selects a card on every device and unselects it with a second tap', async () => {
+    getSessionMessages.mockReset().mockResolvedValue([HELLO, MEAL_MSG])
+    await renderChat()
+    const select = await screen.findByRole('button', { name: 'Select card' })
+    fireEvent.click(select)
+    expect(screen.getByText('Selected')).toBeInTheDocument()
+    expect(selectSessionMessage).toHaveBeenLastCalledWith('s1', 3)
+    fireEvent.click(select)
+    expect(screen.queryByText('Selected')).toBeNull()
+    expect(selectSessionMessage).toHaveBeenLastCalledWith('s1', null)
+  })
+
+  // A card selected on another device arrives with the messages and is selected here too
+  it('follows the card selected on another device', async () => {
+    getSessionMessages.mockReset()
+      .mockResolvedValueOnce([HELLO, MEAL_MSG])
+      .mockResolvedValue([HELLO, { ...MEAL_MSG, selected: true }])
+    await renderChat()
+    await screen.findByText('Card: Test Breakfast')
+    expect(screen.queryByText('Selected')).toBeNull()
+    pushSessionUpdated('s1')
+    expect(await screen.findByText('Selected')).toBeInTheDocument()
   })
 
   // An analysis result is saved to the session, so reloads and the other device show it

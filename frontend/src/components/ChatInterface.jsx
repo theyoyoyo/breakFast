@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react'
-import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, saveSessionMessage, updateSessionMessage, saveAteDraft, getTodaySupplements, toggleSupplement, analyzeMeal, getSchedule } from '../services/api'
+import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, saveSessionMessage, updateSessionMessage, saveAteDraft, selectSessionMessage, getTodaySupplements, toggleSupplement, analyzeMeal, getSchedule } from '../services/api'
 import { useVoice } from '../hooks/useVoice'
 import { emitSyncNotice, useSyncNotice } from '../hooks/useSyncNotice'
 import SuggestButton from './SuggestButton'
@@ -77,9 +77,17 @@ function withJsonBlock(text, meal) {
 }
 
 // Saved session messages as chat messages after the welcome line; the id lets a card edit save,
-// and ateDraft is the card's saved "Today I ate" version
+// ateDraft is the card's saved "Today I ate" version, and selected marks the card selected for today
 function toChatMessages(msgs) {
-  return [WELCOME_MSG, ...msgs.map(m => ({ id: m.id, role: m.role, content: m.content, ateDraft: m.ate_draft ?? null }))]
+  return [WELCOME_MSG, ...msgs.map(m => ({
+    id: m.id, role: m.role, content: m.content, ateDraft: m.ate_draft ?? null, selected: !!m.selected,
+  }))]
+}
+
+// Index of the meal card the server has selected for today, or null
+function selectedIndex(msgs, blocks) {
+  const idx = msgs.findIndex((m, i) => m.selected && blocks[i])
+  return idx === -1 ? null : idx
 }
 
 const sameDraft = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
@@ -195,7 +203,8 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       return newMsgs
     })
     if (sessionIdRef.current) {
-      saveSessionMessage(sessionIdRef.current, 'assistant', fullContent)
+      // Saved as the selected card, so the user's other devices select it too
+      saveSessionMessage(sessionIdRef.current, 'assistant', fullContent, true)
         .then(({ id }) => setMessages(prev => prev.map(m => (m === msg ? { ...m, id } : m))))
         .catch(() => {})
     }
@@ -280,9 +289,10 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
         const msgs = await getSessionMessages(session.id)
         if (cancelled) return
         const allMsgs = toChatMessages(msgs)
+        const blocks = parseMealBlocksFromMessages(allMsgs)
         setMessages(allMsgs)
-        setMealBlocks(parseMealBlocksFromMessages(allMsgs))
-        setCheckedMealIdx(null)
+        setMealBlocks(blocks)
+        setCheckedMealIdx(selectedIndex(allMsgs, blocks))
         await refreshNavState(session.id)
       } catch {
         // Backend not available yet — will work once connected
@@ -315,7 +325,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     const blocks = parseMealBlocksFromMessages(allMsgs)
     setMessages(prev => (sameMessages(prev, allMsgs) ? prev : allMsgs))
     setMealBlocks(prev => keepUnchangedBlocks(prev, blocks))
-    setCheckedMealIdx(idx => (idx !== null && blocks[idx] ? idx : null))
+    setCheckedMealIdx(selectedIndex(allMsgs, blocks))
     refreshNavState(id)
   }, [parseMealBlocksFromMessages, refreshNavState])
 
@@ -509,9 +519,10 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     setSessionId(targetId)
     const msgs = await getSessionMessages(targetId)
     const allMsgs = toChatMessages(msgs)
+    const blocks = parseMealBlocksFromMessages(allMsgs)
     setMessages(allMsgs)
-    setMealBlocks(parseMealBlocksFromMessages(allMsgs))
-    setCheckedMealIdx(null)
+    setMealBlocks(blocks)
+    setCheckedMealIdx(selectedIndex(allMsgs, blocks))
     setStreamBuffer(null)
     setInput('')
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -668,6 +679,16 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     }
   }, [mealBlocks, schedulingIdx, streamBuffer, appendSavedMessage])
 
+  // Select a meal card for today, or none (null), on every device. A card whose message has
+  // no id yet (not saved) is selected on this device only.
+  const selectCard = (idx) => {
+    setCheckedMealIdx(idx)
+    const msg = idx !== null ? messages[idx] : null
+    if (sessionIdRef.current && (idx === null || msg?.id)) {
+      selectSessionMessage(sessionIdRef.current, msg?.id ?? null).catch(() => {})
+    }
+  }
+
   // Save a card's "Today I ate" version with its message, so the panel opens from it on every device.
   // A card whose message has no id yet (not saved) keeps it on this device only.
   const handleSaveAteDraft = async (idx, meal) => {
@@ -749,7 +770,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
                 <MealBlock
                   meal={mealBlocks[i]}
                   checked={checkedMealIdx === i}
-                  onCheck={() => setCheckedMealIdx(i)}
+                  onCheck={() => selectCard(checkedMealIdx === i ? null : i)}
                   onSave={(updated) => handleMealSave(i, m, updated)}
                   onAnalyze={() => handleAnalyze(i)}
                   analyzing={analyzingIdx === i}
@@ -783,7 +804,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
           onClose={() => setDecideOpen(false)}
           onConfirm={() => {
             setDecideOpen(false)
-            setCheckedMealIdx(null)
+            selectCard(null)
           }}
         />
       )}
