@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
 from unittest.mock import patch, AsyncMock
-from services.llm import check_llm_availability, chat_stream, LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE, FallbackLyricCycler, FALLBACK_LYRICS, lyric_cycler
+from services.llm import check_llm_availability, chat_stream, LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE, FallbackLyricCycler, FALLBACK_LYRICS, OLLAMA_NUM_CTX, lyric_cycler
 
 
 @pytest.mark.asyncio
@@ -112,7 +112,7 @@ async def test_chat_json_sends_schema_as_format():
     assert reply == '{"items": []}'
     assert payload["format"] == schema
     assert payload["stream"] is False
-    assert payload["options"] == {"temperature": 0.6}
+    assert payload["options"] == {"num_ctx": OLLAMA_NUM_CTX, "temperature": 0.6}
 
 
 @pytest.mark.asyncio
