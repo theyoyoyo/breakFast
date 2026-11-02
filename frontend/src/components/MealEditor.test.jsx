@@ -1,18 +1,18 @@
 /**
  * Tests for MealEditor's fridge check: missing ingredients are underlined, never removed,
  * and can be marked as obtained for the meal (yellow → green), a dish's all at once with a tap
- * on its name. Also the header (☆ favorites toggle, prep time in min) and units that follow
- * the AI language.
+ * on its name. Also the header (☆ filled when a favorite has the meal's name, prep time in min)
+ * and units that follow the AI language.
  * The backend check is mocked — no real network calls are made.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, within, act } from '@testing-library/react'
 import MealEditor from './MealEditor'
-import { checkMissingIngredients } from '../services/api'
+import { checkMissingIngredients, getFavorites } from '../services/api'
 import { applyLanguage } from '../utils/language'
 
-vi.mock('../services/api', () => ({ checkMissingIngredients: vi.fn() }))
+vi.mock('../services/api', () => ({ checkMissingIngredients: vi.fn(), getFavorites: vi.fn(() => Promise.resolve([])) }))
 
 const MISSING = 'Not in your fridge — tap once you have it'
 const OBTAINED = 'Marked as obtained — tap to undo'
@@ -213,6 +213,7 @@ describe('MealEditor header', () => {
     render(<MealEditor meal={MEAL} menuMode onFavorite={onFavorite} onUnfavorite={onUnfavorite} />)
     const star = screen.getByRole('button', { name: 'Add to favorites' })
     expect(star.nextSibling).toHaveValue('Test Breakfast') // just left of the name
+    await waitFor(() => expect(star).toBeEnabled()) // once the favorites are loaded
     fireEvent.click(star)
     await waitFor(() => expect(star).toHaveAttribute('aria-pressed', 'true'))
     expect(onFavorite.mock.calls[0][0].menu_name).toBe('Test Breakfast')
@@ -220,6 +221,24 @@ describe('MealEditor header', () => {
     fireEvent.click(star)
     await waitFor(() => expect(star).toHaveAttribute('aria-pressed', 'false'))
     expect(onUnfavorite).toHaveBeenCalledWith(7)
+  })
+
+  // A meal saved earlier opens with a filled star (its name matches a favorite, any case), and the
+  // star follows the name as it's edited
+  it('fills the star for a meal that is already a favorite', async () => {
+    getFavorites.mockResolvedValueOnce([{ id: 3, meal_name: 'test breakfast' }, { id: 4, meal_name: 'Pancakes' }])
+    const onUnfavorite = vi.fn(() => Promise.resolve())
+    render(<MealEditor meal={MEAL} menuMode onFavorite={vi.fn()} onUnfavorite={onUnfavorite} />)
+    const star = await screen.findByRole('button', { name: 'Remove from favorites' })
+    expect(star).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.change(screen.getByDisplayValue('Test Breakfast'), { target: { value: 'Pancakes ' } })
+    expect(star).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.change(screen.getByDisplayValue('Pancakes'), { target: { value: 'Waffles' } })
+    expect(star).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.change(screen.getByDisplayValue('Waffles'), { target: { value: 'Test Breakfast' } })
+    fireEvent.click(star)
+    await waitFor(() => expect(onUnfavorite).toHaveBeenCalledWith(3))
+    await waitFor(() => expect(star).toHaveAttribute('aria-pressed', 'false'))
   })
 
   // Without a favorites action there's no star; the prep time reads "min", with no clock and no id

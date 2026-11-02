@@ -18,6 +18,7 @@ vi.mock('../services/api', () => ({
   logMeal: vi.fn(() => Promise.resolve({})),
   addFavorite: vi.fn(() => Promise.resolve({ id: 12 })),
   deleteFavorite: vi.fn(() => Promise.resolve()),
+  getFavorites: vi.fn(() => Promise.resolve([])),
 }))
 
 const MEAL = {
@@ -74,6 +75,7 @@ describe('DecidePanel', () => {
     checkMissingIngredients.mockResolvedValue({ missing: [] })
     render(<DecidePanel meal={MEAL} onClose={() => {}} />)
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull() // no card to save to
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Add to favorites' })).toBeEnabled())
     fireEvent.click(screen.getByRole('button', { name: 'Add to favorites' }))
     const star = await screen.findByRole('button', { name: 'Remove from favorites' })
     expect(star).toHaveAttribute('aria-pressed', 'true')

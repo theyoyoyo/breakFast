@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Star } from 'lucide-react'
 import { normalizeItem, unitsFor, countUnit, localizeUnit, unitWithSize, resolveUnit, rememberUnit } from '../utils/ingredients'
-import { checkMissingIngredients } from '../services/api'
+import { checkMissingIngredients, getFavorites } from '../services/api'
 import { useLanguage } from '../hooks/useLanguage'
 import * as s from './MealEditor.styles'
 
@@ -30,7 +30,8 @@ const DISH_OBTAINED_HINT = 'Missing ingredients are marked as obtained — tap t
  *   onMissingChange — (names) => void — missing ingredients not marked as obtained, after each check
  *   onChange     — (currentMeal) => void — called with the live editor state after each change
  *   onFavorite   — async (currentMeal) => favoriteId — the ☆ left of the name adds the meal to favorites
- *   onUnfavorite — async (favoriteId) => void — a second tap on the filled ⭐ removes that favorite
+ *   onUnfavorite — async (favoriteId) => void — the filled ⭐ removes the favorite with the meal's name
+ *   (the star is filled when a favorite has the meal's name, so it's right for meals saved earlier too)
  *
  * extraActions may be a function: (buildCurrentMeal) => ReactNode
  */
@@ -56,8 +57,8 @@ export default function MealEditor({
   const [openDishIdx, setOpenDishIdx] = useState(null)
   const [newSubItem, setNewSubItem] = useState('')
   const [favSaving, setFavSaving] = useState(false)
-  // The favorite this editor added (its id), so a second tap on the star can remove it
-  const [favId, setFavId] = useState(null)
+  // The user's favorites ({ id, meal_name }), loaded when the star is shown; null until loaded
+  const [favorites, setFavorites] = useState(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
   // Missing ingredients the user marked as obtained for this meal (yellow → green)
   const [obtained, setObtained] = useState(() => new Set(meal?.obtained || []))
@@ -72,10 +73,20 @@ export default function MealEditor({
     setNewItem('')
     setOpenDishIdx(null)
     setNewSubItem('')
-    setFavId(null)
     setDetailsOpen(false)
     setObtained(new Set(meal?.obtained || []))
   }, [meal, menuMode])
+
+  // Load the favorites once, so the star shows whether a favorite already has this meal's name
+  const showStar = !!onFavorite
+  useEffect(() => {
+    if (!showStar) return
+    let cancelled = false
+    getFavorites()
+      .then(list => { if (!cancelled) setFavorites(list.map(f => ({ id: f.id, meal_name: f.meal_name }))) })
+      .catch(() => { /* offline — the star stays off until the editor opens again */ })
+    return () => { cancelled = true }
+  }, [showStar])
 
   // Ask the backend which ingredients aren't in the fridge — on open and shortly after each edit.
   // null until the first answer, so nothing is reported (or unblocked) before the check is done.
@@ -303,20 +314,26 @@ export default function MealEditor({
         .filter(({ method, notes }) => method || notes.length > 0)
     : []
 
-  // ☆ adds the meal as it is now to favorites; a second tap on the filled ⭐ removes that favorite
+  // The favorite with this meal's name (as typed now), matched like other names: exact, any case
+  const favName = (mealName.trim() || meal?.meal_name || meal?.menu_name || 'Meal').toLocaleLowerCase()
+  const favMatch = favorites?.find(f => (f.meal_name || '').trim().toLocaleLowerCase() === favName)
+  const isFav = !!favMatch
+
+  // ☆ adds the meal as it is now to favorites; the filled ⭐ removes the favorite with its name
   const handleFavorite = async () => {
     setFavSaving(true)
     try {
-      if (favId !== null) {
-        await onUnfavorite?.(favId)
-        setFavId(null)
+      if (favMatch) {
+        await onUnfavorite?.(favMatch.id)
+        setFavorites(prev => prev.filter(f => f.id !== favMatch.id))
       } else {
-        setFavId(await onFavorite?.(buildCurrentMeal()) ?? true)
+        const current = buildCurrentMeal()
+        const id = await onFavorite?.(current)
+        setFavorites(prev => [...(prev || []), { id, meal_name: current.meal_name }])
       }
     } catch { /* ignore */ }
     setFavSaving(false)
   }
-  const isFav = favId !== null
 
   // ── Render ───────────────────────────────────────────────────────────────
 
@@ -327,7 +344,7 @@ export default function MealEditor({
           <button
             style={s.favStar}
             onClick={handleFavorite}
-            disabled={favSaving || (isFav && (!onUnfavorite || favId === true))}
+            disabled={favSaving || favorites === null || (isFav && (!onUnfavorite || favMatch.id == null))}
             title={isFav ? 'Remove from favorites' : 'Add to favorites'}
             aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
             aria-pressed={isFav}

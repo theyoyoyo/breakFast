@@ -19,7 +19,7 @@ vi.mock('../services/api', () => {
     getSupplements: ok([]), createSupplement: ok({}), updateSupplement: ok({}), deleteSupplement: ok({}),
     getMeals: ok([]), updateMeal: ok({}), deleteMeal: ok({}), deleteOldMeals: ok({}),
     getHealthRules: ok([]), createHealthRule: ok({}), updateHealthRule: ok({}), deleteHealthRule: ok({}),
-    addFavorite: ok({}),
+    addFavorite: ok({}), deleteFavorite: ok({}), getFavorites: ok([]),
     getPreferences: ok([]), setPreference: ok({}),
     analyzeMeal: ok({}),
     getWeeklyReview: ok(null), generateWeeklyReview: ok({}),

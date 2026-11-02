@@ -39,13 +39,6 @@ export const titlePrep = {
   whiteSpace: 'nowrap',
 }
 
-export const titleId = {
-  fontSize: 9,
-  color: 'var(--text-muted)',
-  opacity: 0.5,
-  flexShrink: 0,
-}
-
 export const blockRow = {
   display: 'flex',
   alignItems: 'center',

@@ -66,7 +66,6 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
           <ReadinessIcon emoji={emoji} readiness={readiness} stillMissing={stillMissing} />
           <span style={s.titleName}>{mealName}</span>
           {meal?.prep_time_min && <span style={s.titlePrep}>⏱ {meal.prep_time_min}m</span>}
-          {meal?.id && <span style={s.titleId}>#{meal.id}</span>}
         </div>
         <div style={s.blockRow}>
           <button

@@ -41,6 +41,7 @@ vi.mock('../services/api', () => ({
   logMeal: vi.fn(),
   addFavorite: vi.fn(),
   deleteFavorite: vi.fn(),
+  getFavorites: vi.fn(() => Promise.resolve([])),
 }))
 
 // The card itself is MealBlock's and MealEditor's business; here it only exposes its callbacks
