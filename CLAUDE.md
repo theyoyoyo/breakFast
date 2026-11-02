@@ -32,7 +32,7 @@ Multiple users share one instance, each fully isolated. Auth is simple (pin/name
 |---|---|
 | Frontend | React PWA (Vite) |
 | Backend | Python / FastAPI |
-| Local LLM | Ollama + Qwen 2.5 7B (`OLLAMA_MODEL`) |
+| Local LLM | Ollama + Qwen 2.5 7B (`OLLAMA_MODEL`), 8192-token context (`OLLAMA_NUM_CTX`) |
 | LLM Fallback | Song lyric cycling |
 | Database | SQLite (aiosqlite) |
 | Voice | Web Speech API |
@@ -143,6 +143,7 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 - **Avoid list**: hard ban. Never suggest avoided ingredients. Code matches it by exact name only (shopping dedupe, suggestion fallback): a user who bans "Peynir" and then sees "Beyaz peynir" bans that too or states a habit ("no cheese, milk included"); code doesn't guess which products an item is in.
 - **Fridge constraint**: suggestions use only the inventory. Nothing is assumed: basics (salt, oil, spices) and long-life items (flour, sesame, oats…) are logged like anything else, usually in the 🫙 Pantry group. A planned Fridge quick-add button will make logging them easy. Water is a utility like electricity and gas: recipes may list it and the check skips it. The suggestion prompt doesn't mention water, so the model isn't drawn to serving it on its own. Ingredient names in the meal JSON must match the inventory as written, one item per name (a cut or form like "rolled" goes in the ingredient's `prep`), so the code check can compare them. The check matches exact names (`same_name`: case, Turkish letters and plurals only), like the avoid list and the shopping dedupe: an extra or missing word can be another product ("Cheese" isn't "White cheese", "Poached egg" isn't "Egg"), so code never guesses.
 - **Date and country**: today's date and the optional Country from Settings → Profile (`user_profiles.country`, list in `utils/countries.js` with ISO 3166-1 alpha-2 codes) go into the shopping and suggestion prompts (`format_today`), so "in season" means something. The selector lists "Germany (DE)" and shows only "DE" once chosen; the saved value is the name. The profile text the analysts read leaves the country out.
+- **Context length**: every Ollama call sends the same `num_ctx` (`OLLAMA_NUM_CTX`, 8192 by default, `_options` in `services/llm.py`). Chat history is about 6000 tokens and Ollama's own 4096 drops the oldest messages silently; one value for all calls keeps Ollama from reloading the model. The KV cache fits a 6 GB GPU (`docs/SETUPALL.md`, Step 1).
 - **CORS**: configurable via `CORS_ORIGINS` env var (comma-separated).
 - **Demo user**: only created when `DEMO_USER=true` (empty PIN). A newly created demo account gets a starter fridge (`DEMO_FRIDGE` in `models/ingredient.py`, basics included). Never enable it on a reachable instance.
 - **Language**: the UI is English only; the setting changes AI replies. User data is often Turkish and pulls a 7B model toward Turkish, so every user-facing prompt ends with a `FINAL REMINDER` restating the language directive. Code-built text in replies (e.g. prep plan labels) follows the same setting, and so do units.

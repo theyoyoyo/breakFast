@@ -78,6 +78,50 @@ Make sure these are installed before starting. If any are missing, install them 
 > laptop GPU, it will use it — no extra configuration needed. You can verify with
 > `ollama ps` after running a query to see if it says "GPU" in the processor column.
 
+### Context length and GPU memory
+
+The backend sends the same context length with every call: `OLLAMA_NUM_CTX` in `.env`,
+8192 tokens by default. Ollama's own default is 4096, and the app needs more. Measured
+on qwen2.5:7b:
+
+| Call | Tokens |
+|---|---|
+| Chat (system prompt plus 20 messages) | about 6000 |
+| Suggestion refine, with its reply | 3600–3800 |
+| Suggestion draft, with its reply | 3100–3300 |
+| Suggestion review | 1500–1800 |
+| Shopping | 1500–1700 |
+| Prep plan | 550–590 |
+
+At 4096, Ollama drops the oldest chat messages without saying so, and a bigger fridge or
+a longer history pushes the refine step over too. Every call uses the same value because
+Ollama reloads the model whenever it changes.
+
+The context costs GPU memory: for qwen2.5:7b the KV cache takes about 57 KB per token,
+so about 0.46 GB at 8192, and the model uses about 5.5–5.7 GB in total. That fits a 6 GB
+GPU. To check, run one Suggest and then:
+
+```
+ollama ps
+```
+
+The processor column should say `100% GPU`. If it shows a CPU share, the model doesn't
+fit and every reply gets much slower. Then, on the Ollama server:
+
+1. Set these environment variables in a terminal:
+
+   ```
+   setx OLLAMA_FLASH_ATTENTION 1
+   setx OLLAMA_KV_CACHE_TYPE q8_0
+   setx OLLAMA_NUM_PARALLEL 1
+   ```
+
+   The first two halve the KV cache: q8_0 stores it at half size and needs flash
+   attention. The third keeps one request at a time, because Ollama reserves the
+   context once per parallel request.
+
+2. Quit Ollama from the tray icon, start it again, and check `ollama ps` once more.
+
 ---
 
 ## Step 2 — Clone the Repository
@@ -109,6 +153,8 @@ containing `backend/`, `frontend/`, `CLAUDE.md`, etc.).
    # Ollama — these should be correct out of the box
    OLLAMA_BASE_URL=http://localhost:11434
    OLLAMA_MODEL=qwen2.5:7b
+   # Context length, see Step 1 (Context length and GPU memory)
+   OLLAMA_NUM_CTX=8192
 
    # Database — stored in the backend folder
    DATABASE_PATH=./breakFAST.db
@@ -397,6 +443,8 @@ limited RAM), it might time out. Check:
 
 - `ollama ps` — shows if the model is loaded and which processor it's using.
   If it says "CPU", responses will be much slower (~30-60 seconds per step).
+  A CPU share next to the GPU means the context doesn't fit: see Step 1 (Context length
+  and GPU memory).
 - If you have an NVIDIA GPU, make sure NVIDIA drivers are up to date. Ollama
   detects CUDA automatically.
 
@@ -610,6 +658,7 @@ minute, a `--draft` run about 15 seconds.
 | List users | `cd backend && python manage.py list-users` |
 | Backup DB | `cd backend && python manage.py backup-db` |
 | Check Ollama | `ollama list` |
+| Model fits the GPU | `ollama ps` shows `100% GPU` |
 | Test Ollama | `ollama run qwen2.5:7b "Good morning"` |
 | Prompt test (dev PC) | `cd backend && python -m tools.prompt_check --url http://100.x.x.x:11434` |
 | Health check | `curl http://localhost:8000/health` |
