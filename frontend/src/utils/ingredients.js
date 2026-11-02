@@ -163,3 +163,29 @@ export function normalizeMeal(meal) {
       )
   return menu ? { ...meal, meal_name: name, menu, ingredients } : { ...meal, meal_name: name, ingredients }
 }
+
+// A meal's food as one string, so two copies of a meal compare equal whatever their order: each
+// item is its name (any case), amount and unit (in English), a dish lists its ingredients the same
+// way, and both lists are sorted. Marks, times, notes, methods and prep words don't count.
+export function menuKey(meal) {
+  if (!meal) return ''
+  const menu = meal.menu?.length ? meal.menu : meal.menu_items
+  const items = menu?.length
+    ? menu
+    : (meal.ingredients || []).map(ing => (typeof ing === 'object' && ing !== null
+        ? { name: ing.name, amount: ing.quantity ?? ing.amount, unit: ing.unit }
+        : { name: String(ing) }))
+  const name = (x) => String(x.name ?? '').trim().toLowerCase()
+  const part = (x) => {
+    const amount = parseFloat(x.amount ?? 1)
+    const unit = localizeUnit(String(x.unit || 'pcs'), 'en').trim().toLowerCase()
+    return `${name(x)}|${isNaN(amount) ? '' : Math.round(amount * 100) / 100}|${unit}`
+  }
+  return items
+    // A simple item has an amount; one with neither amount nor ingredients is a simple item ×1
+    .map(item => (item.amount != null || !item.ingredients?.length
+      ? part(item)
+      : `${name(item)}[${item.ingredients.map(part).sort().join(';')}]`))
+    .sort()
+    .join('\n')
+}

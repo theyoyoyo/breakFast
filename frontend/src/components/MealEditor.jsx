@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Star } from 'lucide-react'
-import { normalizeItem, unitsFor, countUnit, localizeUnit, unitWithSize, resolveUnit, rememberUnit } from '../utils/ingredients'
+import { normalizeItem, unitsFor, countUnit, localizeUnit, unitWithSize, resolveUnit, rememberUnit, menuKey } from '../utils/ingredients'
 import { checkMissingIngredients, getFavorites } from '../services/api'
 import { useLanguage } from '../hooks/useLanguage'
 import * as s from './MealEditor.styles'
@@ -30,8 +30,9 @@ const DISH_OBTAINED_HINT = 'Missing ingredients are marked as obtained — tap t
  *   onMissingChange — (names) => void — missing ingredients not marked as obtained, after each check
  *   onChange     — (currentMeal) => void — called with the live editor state after each change
  *   onFavorite   — async (currentMeal) => favoriteId — the ☆ left of the name adds the meal to favorites
- *   onUnfavorite — async (favoriteId) => void — the filled ⭐ removes the favorite with the meal's name
- *   (the star is filled when a favorite has the meal's name, so it's right for meals saved earlier too)
+ *   onUnfavorite — async (favoriteId) => void — the filled ⭐ removes that favorite
+ *   (the star is filled when a favorite has the meal's name and food, so it's right for meals saved
+ *   earlier too; a name another favorite has saves nothing and shows a note)
  *
  * extraActions may be a function: (buildCurrentMeal) => ReactNode
  */
@@ -57,8 +58,10 @@ export default function MealEditor({
   const [openDishIdx, setOpenDishIdx] = useState(null)
   const [newSubItem, setNewSubItem] = useState('')
   const [favSaving, setFavSaving] = useState(false)
-  // The user's favorites ({ id, meal_name }), loaded when the star is shown; null until loaded
+  // The user's favorites ({ id, meal_name, key }), loaded when the star is shown; null until loaded
   const [favorites, setFavorites] = useState(null)
+  // The name the "already in Favorites" note was shown for; it hides once the name changes
+  const [takenNoteFor, setTakenNoteFor] = useState(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
   // Missing ingredients the user marked as obtained for this meal (yellow → green)
   const [obtained, setObtained] = useState(() => new Set(meal?.obtained || []))
@@ -77,13 +80,13 @@ export default function MealEditor({
     setObtained(new Set(meal?.obtained || []))
   }, [meal, menuMode])
 
-  // Load the favorites once, so the star shows whether a favorite already has this meal's name
+  // Load the favorites once, so the star shows whether this meal is already one of them
   const showStar = !!onFavorite
   useEffect(() => {
     if (!showStar) return
     let cancelled = false
     getFavorites()
-      .then(list => { if (!cancelled) setFavorites(list.map(f => ({ id: f.id, meal_name: f.meal_name }))) })
+      .then(list => { if (!cancelled) setFavorites(list.map(f => ({ id: f.id, meal_name: f.meal_name, key: menuKey(f) }))) })
       .catch(() => { /* offline — the star stays off until the editor opens again */ })
     return () => { cancelled = true }
   }, [showStar])
@@ -316,13 +319,24 @@ export default function MealEditor({
         .filter(({ method, notes }) => method || notes.length > 0)
     : []
 
-  // The favorite with this meal's name (as typed now), matched like other names: exact, any case
-  const favName = (mealName.trim() || meal?.meal_name || meal?.menu_name || 'Meal').toLocaleLowerCase()
-  const favMatch = favorites?.find(f => (f.meal_name || '').trim().toLocaleLowerCase() === favName)
+  // This meal is a favorite when one has its name (as typed now: exact, any case, like the server's
+  // check) and the same food (menuKey: any order). Favorite names are unique, so another favorite
+  // with this name means the name is taken.
+  const favName = (mealName.trim() || meal?.meal_name || meal?.menu_name || 'Meal').toLowerCase()
+  const sameName = (f) => (f.meal_name || '').trim().toLowerCase() === favName
+  const currentKey = favorites ? menuKey(buildCurrentMeal()) : ''
+  const favMatch = favorites?.find(f => sameName(f) && f.key === currentKey)
+  const nameTaken = !!favorites?.some(sameName)
   const isFav = !!favMatch
+  const showTakenNote = !isFav && takenNoteFor === favName
 
-  // ☆ adds the meal as it is now to favorites; the filled ⭐ removes the favorite with its name
+  // ☆ adds the meal as it is now to favorites; the filled ⭐ removes that favorite. A taken name
+  // saves nothing: the note asks for a new name, or an edit of that favorite in Favorites.
   const handleFavorite = async () => {
+    if (!favMatch && nameTaken) {
+      setTakenNoteFor(favName)
+      return
+    }
     setFavSaving(true)
     try {
       if (favMatch) {
@@ -331,9 +345,12 @@ export default function MealEditor({
       } else {
         const current = buildCurrentMeal()
         const id = await onFavorite?.(current)
-        setFavorites(prev => [...(prev || []), { id, meal_name: current.meal_name }])
+        setFavorites(prev => [...(prev || []), { id, meal_name: current.meal_name, key: menuKey(current) }])
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      // Another device saved a favorite with this name meanwhile
+      if (err?.status === 409) setTakenNoteFor(favName)
+    }
     setFavSaving(false)
   }
 
@@ -387,6 +404,12 @@ export default function MealEditor({
           >ℹ️</button>
         )}
       </div>
+
+      {showTakenNote && (
+        <div style={s.favNote} role="status">
+          "{mealName.trim()}" is already in Favorites. Rename this meal to save it, or edit that favorite in Favorites.
+        </div>
+      )}
 
       {detailsOpen && prepDetails.length > 0 && (
         <div style={s.detailsBox}>

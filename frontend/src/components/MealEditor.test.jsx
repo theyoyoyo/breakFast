@@ -1,8 +1,8 @@
 /**
  * Tests for MealEditor's fridge check: missing ingredients are underlined, never removed,
  * and can be marked as obtained for the meal (yellow → green), a dish's all at once with a tap
- * on its name. Also the header (☆ filled when a favorite has the meal's name, prep time in min)
- * and units that follow the AI language.
+ * on its name. Also the header (☆ filled when a favorite has the meal's name and food, a note
+ * when another favorite has the name, prep time in min) and units that follow the AI language.
  * The backend check is mocked — no real network calls are made.
  */
 
@@ -238,10 +238,14 @@ describe('MealEditor header', () => {
     expect(onUnfavorite).toHaveBeenCalledWith(7)
   })
 
-  // A meal saved earlier opens with a filled star (its name matches a favorite, any case), and the
-  // star follows the name as it's edited
+  // A meal saved earlier opens with a filled star: a favorite has its name (any case) and its food
+  // (any order), and the star follows the name and the food as they're edited
   it('fills the star for a meal that is already a favorite', async () => {
-    getFavorites.mockResolvedValueOnce([{ id: 3, meal_name: 'test breakfast' }, { id: 4, meal_name: 'Pancakes' }])
+    const reordered = [MEAL.menu[1], { ...MEAL.menu[0], ingredients: [...MEAL.menu[0].ingredients].reverse() }]
+    getFavorites.mockResolvedValueOnce([
+      { id: 3, meal_name: 'test breakfast', menu_items: reordered },
+      { id: 4, meal_name: 'Pancakes', menu_items: MEAL.menu },
+    ])
     const onUnfavorite = vi.fn(() => Promise.resolve())
     render(<MealEditor meal={MEAL} menuMode onFavorite={vi.fn()} onUnfavorite={onUnfavorite} />)
     const star = await screen.findByRole('button', { name: 'Remove from favorites' })
@@ -251,9 +255,43 @@ describe('MealEditor header', () => {
     fireEvent.change(screen.getByDisplayValue('Pancakes'), { target: { value: 'Waffles' } })
     expect(star).toHaveAttribute('aria-pressed', 'false')
     fireEvent.change(screen.getByDisplayValue('Waffles'), { target: { value: 'Test Breakfast' } })
+    expect(star).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByText('▲')) // one more olive: other food
+    expect(star).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(screen.getByText('▼'))
+    expect(star).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(star)
     await waitFor(() => expect(onUnfavorite).toHaveBeenCalledWith(3))
     await waitFor(() => expect(star).toHaveAttribute('aria-pressed', 'false'))
+  })
+
+  // Another favorite with this name and other food: the star stays empty, and a tap saves nothing
+  // and shows a note until the meal gets a new name
+  it('asks for a new name when another favorite has this one', async () => {
+    getFavorites.mockResolvedValueOnce([{ id: 3, meal_name: 'Test Breakfast', menu_items: [MEAL.menu[1]] }])
+    const onFavorite = vi.fn(() => Promise.resolve(8))
+    render(<MealEditor meal={MEAL} menuMode onFavorite={onFavorite} onUnfavorite={vi.fn()} />)
+    const star = screen.getByRole('button', { name: 'Add to favorites' })
+    await waitFor(() => expect(star).toBeEnabled())
+    fireEvent.click(star)
+    expect(screen.getByText(/"Test Breakfast" is already in Favorites/)).toBeInTheDocument()
+    expect(onFavorite).not.toHaveBeenCalled()
+    fireEvent.change(screen.getByDisplayValue('Test Breakfast'), { target: { value: 'Test Breakfast 2' } })
+    expect(screen.queryByText(/is already in Favorites/)).toBeNull()
+    fireEvent.click(star)
+    await waitFor(() => expect(star).toHaveAttribute('aria-pressed', 'true'))
+    expect(onFavorite.mock.calls[0][0].menu_name).toBe('Test Breakfast 2')
+  })
+
+  // The server's refusal (another device took the name meanwhile) shows the same note
+  it('shows the note when the server refuses a taken name', async () => {
+    const onFavorite = vi.fn(() => Promise.reject(Object.assign(new Error('API error 409'), { status: 409 })))
+    render(<MealEditor meal={MEAL} menuMode onFavorite={onFavorite} onUnfavorite={vi.fn()} />)
+    const star = screen.getByRole('button', { name: 'Add to favorites' })
+    await waitFor(() => expect(star).toBeEnabled())
+    fireEvent.click(star)
+    expect(await screen.findByText(/"Test Breakfast" is already in Favorites/)).toBeInTheDocument()
+    expect(star).toHaveAttribute('aria-pressed', 'false')
   })
 
   // Without a favorites action there's no star; the prep time reads "min", with no clock and no id

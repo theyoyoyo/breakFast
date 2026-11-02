@@ -43,6 +43,14 @@ export const favStar = {
 export const favStarOn = { color: colors.goldStar, fill: colors.goldStar }
 export const favStarOff = { color: 'var(--text-muted)', fill: 'none' }
 
+// Under the header when ☆ is tapped on a name another favorite has
+export const favNote = {
+  margin: '-8px 0 12px',
+  fontSize: 13,
+  lineHeight: 1.5,
+  color: 'var(--text-muted)',
+}
+
 export const prepTimeGroup = {
   display: 'flex',
   alignItems: 'center',
