@@ -1,13 +1,13 @@
 /**
  * Tests for the Favorites list: the readiness badge (same as chat cards), each favorite's id
- * beside its name, and the tab's name in the header.
+ * beside its name, the tab's name in the header, and a rename to a taken name.
  * API calls are mocked — no real network calls are made.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import FavoritesPanel from './FavoritesPanel'
-import { getFavorites, checkMissingIngredients } from '../services/api'
+import { getFavorites, checkMissingIngredients, updateFavorite } from '../services/api'
 
 vi.mock('../services/api', () => ({
   getFavorites: vi.fn(),
@@ -42,5 +42,19 @@ describe('FavoritesPanel readiness', () => {
     expect((await screen.findByText('Menemen Plate')).nextSibling).toHaveTextContent('#1')
     expect(screen.getByText('Avocado Toast').nextSibling).toHaveTextContent('#2')
     expect(screen.getByText('break FAST').nextSibling).toHaveTextContent('Favorites')
+  })
+
+  // A rename to another favorite's name is refused by the server: the editor stays open with the
+  // typed name and a note
+  it('keeps the editor open when the new name is taken', async () => {
+    updateFavorite.mockRejectedValueOnce(Object.assign(new Error('API error 409'), { status: 409 }))
+    render(<FavoritesPanel visible />)
+    fireEvent.click(await screen.findByText('Avocado Toast'))
+    fireEvent.click(screen.getByText('✏️ Edit'))
+    fireEvent.change(screen.getByDisplayValue('Avocado Toast'), { target: { value: 'Menemen Plate' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText('Another favorite already has this name. Pick a new one to save.')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Menemen Plate')).toBeInTheDocument()
+    expect(updateFavorite.mock.calls[0][0]).toBe(2)
   })
 })

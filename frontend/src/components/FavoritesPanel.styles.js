@@ -152,3 +152,11 @@ export const overlayPanel = {
 
 // Remove-favorite button (shared delete look, sized like its neighbours)
 export const removeBtn = { ...deleteBtn, borderRadius: 8, padding: '6px 10px' }
+
+// Under the editor when Save tried a name another favorite has
+export const takenNote = {
+  marginTop: 10,
+  fontSize: 13,
+  lineHeight: 1.5,
+  color: 'var(--text-muted)',
+}

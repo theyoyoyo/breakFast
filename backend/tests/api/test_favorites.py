@@ -84,16 +84,58 @@ async def test_update_not_found(client):
     assert r.status_code == 404
 
 
-@pytest.mark.asyncio
-async def test_multiple_same_name(client):
-    """Same meal name can be favorited multiple times with different ingredients."""
-    meal2 = {**SAMPLE_MEAL, "ingredients": [{"name": "Yumurta", "quantity": 2, "unit": "adet"}]}
-    await client.post("/favorites/", json=SAMPLE_MEAL)
-    await client.post("/favorites/", json=meal2)
+async def _second_user_auth():
+    """Auth header for a second user in the same test database."""
+    import aiosqlite
+    import database
+    from auth import hash_pin, create_token
 
-    r = await client.get("/favorites/")
-    favs = r.json()
-    assert len(favs) == 2
-    # Both have the same name but different ingredients
-    names = [f["meal_name"] for f in favs]
-    assert names == ["Serpme Kahvaltı", "Serpme Kahvaltı"]
+    async with aiosqlite.connect(database.DATABASE_PATH) as conn:
+        cur = await conn.execute(
+            "INSERT INTO users (name, pin_hash, is_admin) VALUES (?, ?, ?)", ("user2", hash_pin("5678"), 0),
+        )
+        await conn.commit()
+    return {"Authorization": f"Bearer {create_token(cur.lastrowid)}"}
+
+
+# A second favorite with a name already taken (any case, extra spaces) is refused, whatever its food
+@pytest.mark.asyncio
+async def test_same_name_refused(client):
+    meal2 = {**SAMPLE_MEAL, "meal_name": "  SERPME kahvaltı ", "ingredients": [{"name": "Yumurta", "quantity": 2, "unit": "adet"}]}
+    assert (await client.post("/favorites/", json=SAMPLE_MEAL)).status_code == 201
+    r = await client.post("/favorites/", json=meal2)
+    assert r.status_code == 409
+    favs = (await client.get("/favorites/")).json()
+    assert [f["meal_name"] for f in favs] == ["Serpme Kahvaltı"]
+
+
+# Names are unique per user: another user may save a favorite with the same name
+@pytest.mark.asyncio
+async def test_other_user_can_use_name(client):
+    await client.post("/favorites/", json=SAMPLE_MEAL)
+    r = await client.post("/favorites/", json=SAMPLE_MEAL, headers=await _second_user_auth())
+    assert r.status_code == 201
+
+
+# A rename to another favorite's name is refused and leaves the favorite as it was
+@pytest.mark.asyncio
+async def test_rename_to_taken_name_refused(client):
+    await client.post("/favorites/", json=SAMPLE_MEAL)
+    other_id = (await client.post("/favorites/", json={**SAMPLE_MEAL, "meal_name": "Omlet"})).json()["id"]
+    r = await client.put(f"/favorites/{other_id}", json={**SAMPLE_MEAL, "meal_name": "serpme kahvaltı"})
+    assert r.status_code == 409
+    favs = {f["id"]: f["meal_name"] for f in (await client.get("/favorites/")).json()}
+    assert favs[other_id] == "Omlet"
+
+
+# Favorites that shared a name before the rule can still be edited when they keep their name
+@pytest.mark.asyncio
+async def test_old_duplicates_keep_their_name(client, db):
+    for _ in range(2):
+        await db.execute(
+            "INSERT INTO favorite_meals (user_id, meal_name, ingredients, steps) VALUES (1, 'Serpme Kahvaltı', '[]', '[]')"
+        )
+    await db.commit()
+    fav_id = (await client.get("/favorites/")).json()[0]["id"]
+    r = await client.put(f"/favorites/{fav_id}", json={**SAMPLE_MEAL, "prep_time_min": 12})
+    assert r.status_code == 200

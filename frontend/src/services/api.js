@@ -41,7 +41,12 @@ async function apiFetch(url, options = {}) {
   } catch {
     throw new NetworkError()
   }
-  if (!r.ok) throw new Error(`API error ${r.status}: ${url}`)
+  if (!r.ok) {
+    // The status lets a caller tell a refusal (like 409, a name already taken) from other errors
+    const err = new Error(`API error ${r.status}: ${url}`)
+    err.status = r.status
+    throw err
+  }
   if (r.status === 204) return undefined
   return r.json()
 }
