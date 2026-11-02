@@ -1,6 +1,8 @@
 """
 /profile — user physical profile and supplement management.
 All queries are scoped to the authenticated user.
+Every supplement change and daily toggle tells the user's open chats (services/chat_sync),
+so the 💊 menu on another device shows it.
 """
 
 from datetime import date as date_type
@@ -9,9 +11,12 @@ from database import get_db
 from fastapi import APIRouter, Depends, HTTPException
 from auth import require_user
 from pydantic import BaseModel, Field, field_validator
+from services import chat_sync
 
 
 router = APIRouter(prefix="/profile", tags=["profile"])
+
+SUPPLEMENTS_UPDATED = {"type": "supplements_updated"}
 
 
 # ---------------------------------------------------------------------------
@@ -145,28 +150,35 @@ async def create_supplement(body: SupplementIn, user_id: int = Depends(require_u
         async with db.execute(
             "SELECT * FROM user_supplements WHERE id = last_insert_rowid()"
         ) as cur:
-            return dict(await cur.fetchone())
+            created = dict(await cur.fetchone())
+    await chat_sync.notify_user(user_id, SUPPLEMENTS_UPDATED)
+    return created
 
 
 @router.put("/supplements/{supp_id}", response_model=SupplementOut)
 async def update_supplement(supp_id: int, body: SupplementIn, user_id: int = Depends(require_user)):
     async with get_db() as db:
-        await db.execute(
-            """
-            UPDATE user_supplements SET name = ?, contents = ?, frequency = ?
-            WHERE id = ? AND user_id = ?
-            """,
-            (body.name, body.contents, body.frequency, supp_id, user_id),
-        )
-        await db.commit()
+        try:
+            await db.execute(
+                """
+                UPDATE user_supplements SET name = ?, contents = ?, frequency = ?
+                WHERE id = ? AND user_id = ?
+                """,
+                (body.name, body.contents, body.frequency, supp_id, user_id),
+            )
+            await db.commit()
+        except aiosqlite.IntegrityError:
+            # Renamed to another supplement's name
+            raise HTTPException(status_code=409, detail="Supplement already exists")
         async with db.execute(
             "SELECT * FROM user_supplements WHERE id = ? AND user_id = ?",
             (supp_id, user_id),
         ) as cur:
             row = await cur.fetchone()
-            if not row:
-                raise HTTPException(status_code=404, detail="Supplement not found")
-            return dict(row)
+    if not row:
+        raise HTTPException(status_code=404, detail="Supplement not found")
+    await chat_sync.notify_user(user_id, SUPPLEMENTS_UPDATED)
+    return dict(row)
 
 
 @router.delete("/supplements/{supp_id}", status_code=204)
@@ -182,6 +194,7 @@ async def delete_supplement(supp_id: int, user_id: int = Depends(require_user)):
             (supp_id, user_id),
         )
         await db.commit()
+    await chat_sync.notify_user(user_id, SUPPLEMENTS_UPDATED)
 
 
 # ---------------------------------------------------------------------------
@@ -231,4 +244,5 @@ async def toggle_supplement_today(
                 (user_id, supp_id, today),
             )
         await db.commit()
+    await chat_sync.notify_user(user_id, SUPPLEMENTS_UPDATED)
     return {"status": "ok", "taken": body.taken}

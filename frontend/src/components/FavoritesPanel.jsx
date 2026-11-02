@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { getFavorites, deleteFavorite, updateFavorite } from '../services/api'
 import { formatIngredient, localizeUnit } from '../utils/ingredients'
 import { emojiFor } from '../utils/emoji'
@@ -14,11 +14,29 @@ function FavoriteIcon({ fav, checkKey }) {
   return <ReadinessIcon emoji={emojiFor(fav.id)} readiness={readiness} stillMissing={stillMissing} />
 }
 
+function Header() {
+  return (
+    <div style={s.header}>
+      <span>break FAST</span>
+      <span style={s.tabName}>Favorites</span>
+    </div>
+  )
+}
+
 export default function FavoritesPanel({ visible, onSendToChat }) {
   const [favorites, setFavorites] = useState([])
   const [expandedId, setExpandedId] = useState(null)
   const [editingId, setEditingId] = useState(null)
+  // Set when Save tried another favorite's name; the editor stays open for a new one
+  const [nameTaken, setNameTaken] = useState(false)
   const language = useLanguage()
+
+  // One meal object per edit, so a re-render (like the taken-name note) keeps the editor's edits
+  const editingMeal = useMemo(() => {
+    const fav = favorites.find(f => f.id === editingId)
+    return fav ? { ...fav, menu: fav.menu_items || undefined } : null
+  }, [favorites, editingId])
+  useEffect(() => { setNameTaken(false) }, [editingId])
 
   const load = useCallback(async () => {
     try {
@@ -51,22 +69,27 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
         menu_items: updated.menu || updated.menu_items || null,
       })
       setFavorites(prev => prev.map(f => f.id === editingId ? { ...f, ...updated } : f))
-    } catch { /* ignore */ }
+    } catch (err) {
+      if (err?.status === 409) {
+        setNameTaken(true)
+        return
+      }
+    }
     setEditingId(null)
   }
 
   if (favorites.length === 0) {
     return (
       <div style={s.container}>
-        <div style={s.header}>break FAST</div>
-        <div style={s.empty}>No favorites yet. Use ⭐ Save on a meal to save it here.</div>
+        <Header />
+        <div style={s.empty}>No favorites yet. Use the ☆ beside a meal's name to save it here.</div>
       </div>
     )
   }
 
   return (
     <div style={s.container}>
-      <div style={s.header}>break FAST</div>
+      <Header />
       <div style={s.list}>
         {favorites.map(fav => {
           const expanded = expandedId === fav.id
@@ -84,6 +107,7 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
                 <span style={s.cardTitle}>
                   <FavoriteIcon fav={fav} checkKey={visible} />
                   <span style={s.cardName}>{fav.meal_name}</span>
+                  <span style={s.cardId}>#{fav.id}</span>
                 </span>
                 <span style={s.cardMeta}>
                   {fav.prep_time_min && `⏱ ${fav.prep_time_min}m`}
@@ -124,7 +148,7 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
                 <div style={s.overlay} onClick={(e) => { if (e.target === e.currentTarget) setEditingId(null) }}>
                   <div style={s.overlayPanel}>
                     <MealEditor
-                      meal={{ ...fav, menu: fav.menu_items || undefined }}
+                      meal={editingMeal}
                       onSave={handleEditorSave}
                       onClose={() => setEditingId(null)}
                       showPrepTime={true}
@@ -133,6 +157,11 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
                       checkFridge
                       canMarkObtained={false}
                     />
+                    {nameTaken && (
+                      <div style={s.takenNote} role="status">
+                        Another favorite already has this name. Pick a new one to save.
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

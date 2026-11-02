@@ -1,4 +1,4 @@
-import { secondaryColor, colors, brandHeader, deleteBtn } from '../styles/common'
+import { secondaryColor, colors, brandHeaderRow, tabName, deleteBtn } from '../styles/common'
 
 export const container = {
   display: 'flex',
@@ -9,7 +9,8 @@ export const container = {
   overflow: 'hidden',
 }
 
-export const header = brandHeader
+export const header = brandHeaderRow
+export { tabName }
 
 export const empty = {
   padding: 20,
@@ -54,6 +55,13 @@ export const cardName = {
   fontWeight: 600,
   fontSize: 14,
   color: 'var(--text)',
+}
+
+// The favorite's id beside its name
+export const cardId = {
+  fontSize: 11,
+  color: 'var(--text-muted)',
+  flexShrink: 0,
 }
 
 export const cardMeta = {
@@ -144,3 +152,11 @@ export const overlayPanel = {
 
 // Remove-favorite button (shared delete look, sized like its neighbours)
 export const removeBtn = { ...deleteBtn, borderRadius: 8, padding: '6px 10px' }
+
+// Under the editor when Save tried a name another favorite has
+export const takenNote = {
+  marginTop: 10,
+  fontSize: 13,
+  lineHeight: 1.5,
+  color: 'var(--text-muted)',
+}

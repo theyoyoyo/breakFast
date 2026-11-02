@@ -1,5 +1,5 @@
 import {
-  panelContainer, brandHeader, subPageHeader, subPageBackBtn, panelBody,
+  panelContainer, brandHeaderRow, tabName, subPageHeader, subPageBackBtn, panelBody,
   section, sectionLabel, input, addRow, addBtn,
   tagX, empty, error, select, secondaryColor, colors, deleteBtn,
 } from '../styles/common'
@@ -7,14 +7,25 @@ import {
 export { section, sectionLabel, tagX, empty, error, select }
 
 export const container = panelContainer
-export { brandHeader, subPageHeader }
+export { brandHeaderRow, tabName, subPageHeader }
 export const body = panelBody
 
 export { input, addRow, addBtn }
 
-export const profileGrid = {
+// Age + Gender and Height + Weight are two pairs: side by side (four in a row) where both fit,
+// one under the other (two by two) on a phone. Columns shrink (minmax 0), so the boxes, sized
+// for their content, never push the page wider than the screen.
+export const profileRow = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 8,
+}
+
+export const profilePair = {
+  flex: '1 1 200px',
+  minWidth: 0,
   display: 'grid',
-  gridTemplateColumns: '1fr 1fr',
+  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
   gap: 8,
 }
 
@@ -22,6 +33,68 @@ export const profileField = {
   display: 'flex',
   flexDirection: 'column',
   gap: 3,
+  minWidth: 0,
+}
+
+// Activity Level fills the row, Country (a code once chosen) sits beside it
+export const profileWideRow = {
+  display: 'flex',
+  gap: 8,
+}
+
+export const profileWideField = {
+  ...profileField,
+  flex: 1,
+}
+
+// A compact box `chars` characters wide (padding and border included)
+export const profileNumber = (chars) => ({
+  ...input,
+  flex: '0 1 auto',
+  width: `calc(${chars}ch + 22px)`,
+  minWidth: 0,
+  textAlign: 'center',
+})
+
+export const profileSelect = {
+  ...select,
+  maxWidth: '100%',
+  minWidth: 0,
+  alignSelf: 'flex-start',
+}
+
+export const profileWideSelect = {
+  ...select,
+  width: '100%',
+  minWidth: 0,
+}
+
+// Country: the code (or "—") with ▾ over a transparent native select, so a tap opens the
+// phone's list of full names ("Germany (DE)") while the closed box stays narrow
+export const countryPicker = {
+  ...select,
+  position: 'relative',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  cursor: 'pointer',
+  maxWidth: '12ch',
+}
+
+export const countryText = {
+  minWidth: '2ch',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+}
+
+export const countrySelect = {
+  position: 'absolute',
+  inset: 0,
+  width: '100%',
+  opacity: 0,
+  fontSize: 12,
+  cursor: 'pointer',
 }
 
 export const profileLabel = {
@@ -81,6 +154,17 @@ export const suppContents = {
   flex: 1,
   color: 'var(--text-muted)',
   fontSize: 11,
+}
+
+// ✏️ on a supplement row, between the frequency and the ×
+export const editBtn = {
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  fontSize: 13,
+  padding: '0 2px',
+  lineHeight: 1,
+  flexShrink: 0,
 }
 
 export const suppFreq = (freq) => ({
@@ -285,6 +369,49 @@ export const overlayPanel = {
   maxHeight: '80dvh',
   display: 'flex',
   flexDirection: 'column',
+}
+
+// Small overlay editor (a supplement's name and contents): title, fields, Close / Save
+export const overlayTitle = {
+  fontSize: 18,
+  fontWeight: 700,
+  color: 'var(--accent)',
+  textAlign: 'center',
+  marginBottom: 16,
+}
+
+export const overlayForm = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 6,
+}
+
+export const overlayActions = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  gap: 10,
+  marginTop: 16,
+}
+
+export const overlayCloseBtn = {
+  background: 'var(--surface2)',
+  border: '1px solid var(--border)',
+  borderRadius: 10,
+  padding: '12px 24px',
+  color: 'var(--text-muted)',
+  fontSize: 15,
+  cursor: 'pointer',
+}
+
+export const overlaySaveBtn = {
+  background: secondaryColor,
+  border: 'none',
+  borderRadius: 10,
+  padding: '12px 24px',
+  color: '#fff',
+  fontSize: 15,
+  fontWeight: 600,
+  cursor: 'pointer',
 }
 
 export const analysisDropdown = {

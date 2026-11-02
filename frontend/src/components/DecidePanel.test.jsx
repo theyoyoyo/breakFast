@@ -1,21 +1,24 @@
 /**
- * Tests for "Today I ate": Confirm waits until nothing is missing, Ate out marks missing items
- * as obtained (no logging), ⭐ Save stores the menu in favorites, and edits survive
- * closing, going back from rating and re-opening.
+ * Tests for "Today I ate": Confirm waits until nothing is missing and comes last, the ☆ adds
+ * the menu to favorites and a second tap removes it, Save stores the edited meal with its
+ * chat card, the panel opens from the card's saved version, edits survive going back from
+ * rating, Skip logs without ratings, and a changed card never resets an open panel.
  * API calls are mocked — no real network calls are made.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import DecidePanel from './DecidePanel'
-import { checkMissingIngredients, getRatings, logMeal, addFavorite } from '../services/api'
+import { checkMissingIngredients, getRatings, createRating, logMeal, addFavorite, deleteFavorite } from '../services/api'
 
 vi.mock('../services/api', () => ({
   checkMissingIngredients: vi.fn(),
   getRatings: vi.fn(),
   createRating: vi.fn(() => Promise.resolve({})),
   logMeal: vi.fn(() => Promise.resolve({})),
-  addFavorite: vi.fn(() => Promise.resolve({})),
+  addFavorite: vi.fn(() => Promise.resolve({ id: 12 })),
+  deleteFavorite: vi.fn(() => Promise.resolve()),
+  getFavorites: vi.fn(() => Promise.resolve([])),
 }))
 
 const MEAL = {
@@ -27,7 +30,6 @@ const MEAL = {
 }
 
 const confirmBtn = () => screen.getByRole('button', { name: 'Confirm' })
-const ateOutBtn = () => screen.getByRole('button', { name: 'Ate out' })
 
 describe('DecidePanel', () => {
   beforeEach(() => {
@@ -40,7 +42,7 @@ describe('DecidePanel', () => {
     render(<DecidePanel meal={MEAL} onClose={() => {}} />)
     await screen.findByText(/Not in your fridge: Olives\./)
     expect(confirmBtn()).toBeDisabled()
-    expect(ateOutBtn()).toBeEnabled()
+    expect(screen.queryByRole('button', { name: 'Ate out' })).toBeNull()
   })
 
   it('enables Confirm once the missing item is removed, without resetting edits', async () => {
@@ -52,17 +54,12 @@ describe('DecidePanel', () => {
     expect(screen.queryByText('Olives')).toBeNull()
   })
 
-  it('Ate out marks every missing item as obtained and keeps the panel open', async () => {
-    checkMissingIngredients.mockResolvedValue({ missing: ['Olives', 'Bread'] })
-    const onConfirm = vi.fn()
-    render(<DecidePanel meal={MEAL} onClose={() => {}} onConfirm={onConfirm} />)
-    await screen.findByText(/Not in your fridge: Olives, Bread\./)
-    fireEvent.click(ateOutBtn())
-    await waitFor(() => expect(confirmBtn()).toBeEnabled())
-    expect(screen.getByText('Olives')).toHaveAttribute('title', 'Marked as obtained — tap to undo')
-    expect(logMeal).not.toHaveBeenCalled()
-    expect(onConfirm).not.toHaveBeenCalled()
-    expect(ateOutBtn()).toBeDisabled() // nothing left to mark
+  // Close, Save, Confirm: Confirm, which logs the meal, is the last button
+  it('puts Confirm at the end', async () => {
+    checkMissingIngredients.mockResolvedValue({ missing: [] })
+    render(<DecidePanel meal={MEAL} onSave={vi.fn()} onClose={() => {}} />)
+    const row = confirmBtn().parentElement
+    expect([...row.querySelectorAll('button')].map(b => b.textContent)).toEqual(['Close', 'Save', 'Confirm'])
   })
 
   it('carries marks from the selected chat meal', async () => {
@@ -73,24 +70,52 @@ describe('DecidePanel', () => {
     await waitFor(() => expect(confirmBtn()).toBeEnabled())
   })
 
-  it('saves the menu to favorites with ⭐ Save and logs nothing', async () => {
+  // The ☆ left of the name adds the menu to favorites; a second tap removes that favorite
+  it('adds the menu to favorites with the star and removes it with a second tap', async () => {
     checkMissingIngredients.mockResolvedValue({ missing: [] })
     render(<DecidePanel meal={MEAL} onClose={() => {}} />)
-    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: /Save/ }))
-    await waitFor(() => expect(addFavorite).toHaveBeenCalledTimes(1))
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull() // no card to save to
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Add to favorites' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: 'Add to favorites' }))
+    const star = await screen.findByRole('button', { name: 'Remove from favorites' })
+    expect(star).toHaveAttribute('aria-pressed', 'true')
+    expect(addFavorite).toHaveBeenCalledTimes(1)
+    fireEvent.click(star)
+    await waitFor(() => expect(deleteFavorite).toHaveBeenCalledWith(12))
+    expect(await screen.findByRole('button', { name: 'Add to favorites' })).toHaveAttribute('aria-pressed', 'false')
     expect(logMeal).not.toHaveBeenCalled()
   })
 
-  it('reports edits as a draft and starts from that draft when reopened', async () => {
+  // Save sends the edited meal, then closes the panel; nothing is logged
+  it('Save sends the current meal and closes', async () => {
     checkMissingIngredients.mockResolvedValue({ missing: [] })
-    const onDraftChange = vi.fn()
-    const { unmount } = render(<DecidePanel meal={MEAL} onDraftChange={onDraftChange} onClose={() => {}} />)
+    const onSave = vi.fn(() => Promise.resolve())
+    const onClose = vi.fn()
+    render(<DecidePanel meal={MEAL} onSave={onSave} onClose={onClose} />)
     fireEvent.click(screen.getAllByTitle('Delete')[0]) // remove Olives
-    await waitFor(() => expect(onDraftChange.mock.calls.at(-1)[0].menu.map(i => i.name)).toEqual(['Bread']))
-    const draft = onDraftChange.mock.calls.at(-1)[0]
-    unmount() // close
-    render(<DecidePanel meal={MEAL} draft={draft} onClose={() => {}} />) // reopen
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
+    expect(onSave).toHaveBeenCalledTimes(1)
+    expect(onSave.mock.calls[0][0].menu.map(i => i.name)).toEqual(['Bread'])
+    expect(logMeal).not.toHaveBeenCalled()
+  })
+
+  // A failed Save says so, stays open and lets the user try again
+  it('stays open and tells the user when Save fails', async () => {
+    checkMissingIngredients.mockResolvedValue({ missing: [] })
+    const onClose = vi.fn()
+    render(<DecidePanel meal={MEAL} onSave={() => Promise.reject(new Error('offline'))} onClose={onClose} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText(/Couldn't save/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  // Opening starts from the card's saved version, not the card
+  it('opens from the saved version', async () => {
+    checkMissingIngredients.mockResolvedValue({ missing: [] })
+    const saved = { ...MEAL, menu: [MEAL.menu[1]] } // Bread only
+    render(<DecidePanel meal={MEAL} saved={saved} onSave={vi.fn()} onClose={() => {}} />)
     expect(screen.queryByText('Olives')).toBeNull()
     expect(screen.getByText('Bread')).toBeInTheDocument()
   })
@@ -107,13 +132,46 @@ describe('DecidePanel', () => {
     expect(screen.queryByText('Olives')).toBeNull()
   })
 
-  it('starts over when another chat meal is selected', async () => {
+  // The rating step logs the meal with Confirm, like the button that logs it when there's nothing to rate
+  it('names the rating step\'s button Confirm', async () => {
+    checkMissingIngredients.mockResolvedValue({ missing: [] })
+    getRatings.mockResolvedValue([])
+    const onConfirm = vi.fn()
+    render(<DecidePanel meal={MEAL} onClose={() => {}} onConfirm={onConfirm} />)
+    await waitFor(() => expect(confirmBtn()).toBeEnabled())
+    fireEvent.click(confirmBtn())
+    expect(await screen.findByText('Rate')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+    fireEvent.click(confirmBtn())
+    await waitFor(() => expect(logMeal).toHaveBeenCalledTimes(1))
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+  })
+
+  // Skip, between Back and Confirm, logs the meal without saving any rating
+  it('logs the meal without ratings on Skip', async () => {
+    checkMissingIngredients.mockResolvedValue({ missing: [] })
+    getRatings.mockResolvedValue([])
+    const onConfirm = vi.fn()
+    render(<DecidePanel meal={MEAL} onClose={() => {}} onConfirm={onConfirm} />)
+    await waitFor(() => expect(confirmBtn()).toBeEnabled())
+    fireEvent.click(confirmBtn())
+    const skip = await screen.findByRole('button', { name: 'Skip' })
+    expect([...skip.parentElement.querySelectorAll('button')].map(b => b.textContent)).toEqual(['Back', 'Skip', 'Confirm'])
+    fireEvent.click(skip)
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(1))
+    expect(logMeal).toHaveBeenCalledTimes(1)
+    expect(createRating).not.toHaveBeenCalled()
+  })
+
+  // A push from another device (a new card or saved version) never resets an open panel
+  it('keeps its edits when the card changes while open', async () => {
     checkMissingIngredients.mockResolvedValue({ missing: [] })
     const other = { menu_name: 'Other', menu: [{ name: 'Honey', amount: 1, unit: 'adet', ingredients: [] }] }
     const { rerender } = render(<DecidePanel meal={MEAL} onClose={() => {}} />)
-    fireEvent.click(screen.getAllByTitle('Delete')[0])
-    rerender(<DecidePanel meal={other} onClose={() => {}} />)
-    expect(await screen.findByText('Honey')).toBeInTheDocument()
-    expect(screen.queryByText('Bread')).toBeNull()
+    fireEvent.click(screen.getAllByTitle('Delete')[0]) // remove Olives
+    rerender(<DecidePanel meal={other} saved={other} onClose={() => {}} />)
+    expect(screen.getByText('Bread')).toBeInTheDocument()
+    expect(screen.queryByText('Honey')).toBeNull()
+    expect(screen.queryByText('Olives')).toBeNull()
   })
 })

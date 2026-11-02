@@ -1,6 +1,8 @@
 """
 Tests for live chat sync — a user's other chat sockets get session_updated after a reply,
-a REST save or a message edit, and no other user's socket does.
+a REST save, a message edit, a saved "Today I ate" version or a selected meal card,
+supplements_updated after a supplement change and shopping_suggestions_updated after
+a suggestions list change; no other user's socket does.
 """
 
 import sys
@@ -74,8 +76,8 @@ def _chat(ws, message="hello", session_id=None):
             return received
 
 
-def _pushes(received):
-    return [m for m in received if m["type"] == "session_updated"]
+def _pushes(received, kind="session_updated"):
+    return [m for m in received if m["type"] == kind]
 
 
 # The user's other socket is told about the saved reply, without its tokens; the socket that asked isn't told.
@@ -156,6 +158,151 @@ async def test_message_edit_replaces_content_and_notifies(sync_setup):
             headers={"Authorization": f"Bearer {bob_token}"},
         )
         assert r.status_code == 404
+
+
+# A card's "Today I ate" version is stored on its message, comes back with the messages and pushes
+# to the user's sockets; a later card edit keeps it, and another user can't write it.
+@pytest.mark.asyncio
+async def test_ate_draft_saved_on_message_and_pushed(sync_setup):
+    app, users = sync_setup
+    ada_token, _, ada_session = users["ada"]
+    bob_token, _, _ = users["bob"]
+    ada_auth = {"Authorization": f"Bearer {ada_token}"}
+    draft = {"menu_name": "Test Breakfast", "menu": [{"name": "Olives", "amount": 5, "unit": "pcs", "ingredients": []}]}
+    url = f"/sessions/{ada_session}/messages"
+    with _fake_llm(), TestClient(app) as client:
+        message_id = client.post(url, json={"role": "assistant", "content": "card"}, headers=ada_auth).json()["id"]
+        assert client.get(url, headers=ada_auth).json()[0]["ate_draft"] is None
+
+        with client.websocket_connect(f"/chat?token={ada_token}") as ada:
+            r = client.put(f"{url}/{message_id}", json={"ate_draft": draft}, headers=ada_auth)
+            assert r.status_code == 200
+            assert _pushes(_chat(ada)) == [{"type": "session_updated", "session_id": ada_session}]
+
+        client.put(f"{url}/{message_id}", json={"content": "edited card"}, headers=ada_auth)
+        saved = client.get(url, headers=ada_auth).json()[0]
+        assert (saved["content"], saved["ate_draft"]) == ("edited card", draft)
+
+        r = client.put(f"{url}/{message_id}", json={"ate_draft": {"menu_name": "Hijacked"}},
+                       headers={"Authorization": f"Bearer {bob_token}"})
+        assert r.status_code == 404
+        assert client.get(url, headers=ada_auth).json()[0]["ate_draft"] == draft
+
+
+# A message update with nothing to change, or a draft that isn't a meal object, is refused
+@pytest.mark.asyncio
+async def test_message_update_validates_body(sync_setup):
+    app, users = sync_setup
+    ada_token, _, ada_session = users["ada"]
+    ada_auth = {"Authorization": f"Bearer {ada_token}"}
+    url = f"/sessions/{ada_session}/messages"
+    with TestClient(app) as client:
+        message_id = client.post(url, json={"role": "assistant", "content": "card"}, headers=ada_auth).json()["id"]
+        assert client.put(f"{url}/{message_id}", json={}, headers=ada_auth).status_code == 422
+        assert client.put(f"{url}/{message_id}", json={"ate_draft": "Olives"}, headers=ada_auth).status_code == 422
+        assert client.get(url, headers=ada_auth).json()[0]["content"] == "card"
+
+
+# The selected meal card is stored on the session, marked in the messages and pushed; null clears it,
+# and another user's session or a message from another session can't be selected.
+@pytest.mark.asyncio
+async def test_selected_card_saved_and_pushed(sync_setup):
+    app, users = sync_setup
+    ada_token, _, ada_session = users["ada"]
+    bob_token, _, bob_session = users["bob"]
+    ada_auth = {"Authorization": f"Bearer {ada_token}"}
+    bob_auth = {"Authorization": f"Bearer {bob_token}"}
+    url = f"/sessions/{ada_session}/messages"
+    with _fake_llm(), TestClient(app) as client:
+        first = client.post(url, json={"role": "assistant", "content": "card 1"}, headers=ada_auth).json()["id"]
+        second = client.post(url, json={"role": "assistant", "content": "card 2"}, headers=ada_auth).json()["id"]
+        assert [m["selected"] for m in client.get(url, headers=ada_auth).json()] == [False, False]
+
+        with client.websocket_connect(f"/chat?token={ada_token}") as ada:
+            r = client.put(f"/sessions/{ada_session}/selected", json={"message_id": second}, headers=ada_auth)
+            assert r.status_code == 200
+            assert _pushes(_chat(ada)) == [{"type": "session_updated", "session_id": ada_session}]
+        assert [m["id"] for m in client.get(url, headers=ada_auth).json() if m["selected"]] == [second]
+
+        client.put(f"/sessions/{ada_session}/selected", json={"message_id": None}, headers=ada_auth)
+        assert not any(m["selected"] for m in client.get(url, headers=ada_auth).json())
+
+        bob_card = client.post(f"/sessions/{bob_session}/messages", json={"role": "assistant", "content": "x"},
+                               headers=bob_auth).json()["id"]
+        assert client.put(f"/sessions/{ada_session}/selected", json={"message_id": first}, headers=bob_auth).status_code == 404
+        assert client.put(f"/sessions/{ada_session}/selected", json={"message_id": bob_card}, headers=ada_auth).status_code == 404
+        assert client.put(f"/sessions/{ada_session}/selected", json={"message_id": "1"}, headers=ada_auth).status_code == 422
+
+
+# A meal sent to chat with select: true becomes the selected card
+@pytest.mark.asyncio
+async def test_saved_message_can_be_selected(sync_setup):
+    app, users = sync_setup
+    ada_token, _, ada_session = users["ada"]
+    ada_auth = {"Authorization": f"Bearer {ada_token}"}
+    url = f"/sessions/{ada_session}/messages"
+    with TestClient(app) as client:
+        client.post(url, json={"role": "assistant", "content": "older card"}, headers=ada_auth)
+        client.post(url, json={"role": "assistant", "content": "favorite sent to chat", "select": True}, headers=ada_auth)
+        assert [m["selected"] for m in client.get(url, headers=ada_auth).json()] == [False, True]
+
+
+# A new suggestion with a meal block becomes the selected card, so the user's other devices select it too
+@pytest.mark.asyncio
+async def test_suggestion_becomes_selected_card(sync_setup):
+    app, users = sync_setup
+    ada_token, _, ada_session = users["ada"]
+    meal = {"menu_name": "Test Breakfast", "menu": [{"name": "Olives", "amount": 5, "unit": "pcs", "ingredients": []}]}
+    reply = "Try this.\n\n```json\n" + json.dumps(meal) + "\n```"
+
+    async def pipeline(**kwargs):
+        yield {"type": "done", "content": reply}
+
+    with patch("routers.chat.run_suggestion_pipeline", pipeline), TestClient(app) as client:
+        with client.websocket_connect(f"/chat?token={ada_token}") as ws:
+            ws.send_text(json.dumps({"message": "Suggest Breakfast", "type": "suggest", "session_id": ada_session}))
+            while ws.receive_json()["type"] != "meal_logged":
+                pass
+        messages = client.get(f"/sessions/{ada_session}/messages", headers={"Authorization": f"Bearer {ada_token}"}).json()
+    assert [(m["role"], m["selected"]) for m in messages] == [("user", False), ("assistant", True)]
+
+
+# Marking a pill and every supplement change in Settings tell the user's sockets, and no other user's.
+@pytest.mark.asyncio
+async def test_supplement_changes_notify_users_sockets(sync_setup):
+    app, users = sync_setup
+    ada_token, _, _ = users["ada"]
+    bob_token, _, _ = users["bob"]
+    ada_auth = {"Authorization": f"Bearer {ada_token}"}
+    with _fake_llm(), TestClient(app) as client:
+        with client.websocket_connect(f"/chat?token={ada_token}") as ada, \
+             client.websocket_connect(f"/chat?token={bob_token}") as bob:
+            supp_id = client.post("/profile/supplements", json={"name": "Vitamin D"}, headers=ada_auth).json()["id"]
+            edit = {"name": "Vitamin D3", "contents": "1000 IU", "frequency": "sometimes"}
+            assert client.put(f"/profile/supplements/{supp_id}", json=edit, headers=ada_auth).status_code == 200
+            assert client.post(f"/profile/supplements/{supp_id}/toggle", json={"taken": True}, headers=ada_auth).status_code == 200
+            assert client.delete(f"/profile/supplements/{supp_id}", headers=ada_auth).status_code == 204
+
+            assert _pushes(_chat(ada), "supplements_updated") == [{"type": "supplements_updated"}] * 4
+            assert _pushes(_chat(bob), "supplements_updated") == []
+
+
+# A shopping suggestions change tells the user's sockets, and no other user's.
+@pytest.mark.asyncio
+async def test_shopping_suggestions_change_notifies_users_sockets(sync_setup):
+    app, users = sync_setup
+    ada_token, _, _ = users["ada"]
+    bob_token, _, _ = users["bob"]
+    with _fake_llm(), TestClient(app) as client:
+        with client.websocket_connect(f"/chat?token={ada_token}") as ada,              client.websocket_connect(f"/chat?token={bob_token}") as bob:
+            r = client.put(
+                "/shopping/suggestions",
+                json={"items": [{"name": "Salmon", "reason": "Omega-3"}]},
+                headers={"Authorization": f"Bearer {ada_token}"},
+            )
+            assert r.status_code == 200
+            assert _pushes(_chat(ada), "shopping_suggestions_updated") == [{"type": "shopping_suggestions_updated"}]
+            assert _pushes(_chat(bob), "shopping_suggestions_updated") == []
 
 
 class _DroppingSocket:

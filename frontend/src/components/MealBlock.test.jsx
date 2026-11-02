@@ -11,6 +11,8 @@ import { checkMissingIngredients } from '../services/api'
 vi.mock('../services/api', () => ({
   checkMissingIngredients: vi.fn(),
   addFavorite: vi.fn(),
+  deleteFavorite: vi.fn(),
+  getFavorites: vi.fn(() => Promise.resolve([])),
 }))
 
 const MEAL = {
@@ -28,6 +30,14 @@ describe('MealBlock readiness', () => {
     checkMissingIngredients.mockResolvedValue({ missing: ['Olives'] })
     render(<MealBlock meal={MEAL} />)
     expect(await screen.findByTitle('Not ready — missing: Olives')).toBeInTheDocument()
+  })
+
+  // The card's title shows the name and prep time, without the meal's id
+  it('shows no id on the card', async () => {
+    checkMissingIngredients.mockResolvedValue({ missing: [] })
+    render(<MealBlock meal={{ ...MEAL, id: 7, prep_time_min: 15 }} />)
+    expect(await screen.findByText('Test Breakfast')).toBeInTheDocument()
+    expect(screen.queryByText('#7')).toBeNull()
   })
 
   it('shows "ready" when everything is in the fridge', async () => {

@@ -5,7 +5,7 @@ import {
   getSupplements, createSupplement, updateSupplement, deleteSupplement,
   getMeals, updateMeal, deleteMeal, deleteOldMeals,
   getHealthRules, createHealthRule, updateHealthRule, deleteHealthRule,
-  addFavorite,
+  addFavorite, deleteFavorite,
   getPreferences, setPreference,
   analyzeMeal,
 } from '../services/api'
@@ -15,12 +15,21 @@ import MealEditor from './MealEditor'
 import StarRating from './StarRating'
 import { THEMES, applyTheme, storedTheme } from '../utils/theme'
 import { applyLanguage } from '../utils/language'
-import { COUNTRIES } from '../utils/countries'
+import { COUNTRIES, countryCode } from '../utils/countries'
 import { useLanguage } from '../hooks/useLanguage'
+import { useSyncNotice } from '../hooks/useSyncNotice'
 import * as s from './SettingsPanel.styles'
 
 // Display names for the stored supplement frequency values
 const FREQUENCY_LABELS = { daily: 'Daily', sometimes: 'Occasional' }
+
+// Profile numbers are typed in compact text boxes (no spinner), like the meal editor's amounts:
+// whole numbers up to 3 digits, and weight with one decimal ("72.5"; a comma works too)
+function cleanProfileNumber(field, value) {
+  const text = value.replace(',', '.').replace(field === 'weight_kg' ? /[^\d.]/g : /\D/g, '')
+  const [whole, ...decimals] = text.split('.')
+  return decimals.length ? `${whole.slice(0, 3)}.${decimals.join('').slice(0, 1)}` : whole.slice(0, 3)
+}
 
 const PRIORITY_OPTIONS = [
   { value: 'low', label: "Don't really care" },
@@ -43,6 +52,8 @@ export default function SettingsPanel({ visible }) {
   const [supplements, setSupplements] = useState([])
   const [newSuppName, setNewSuppName] = useState('')
   const [newSuppContents, setNewSuppContents] = useState('')
+  // Supplement open in the ✏️ editor: { id, name, contents, frequency, error }
+  const [editingSupp, setEditingSupp] = useState(null)
 
   // Meal history state
   const [meals, setMeals] = useState([])
@@ -139,6 +150,11 @@ export default function SettingsPanel({ visible }) {
   // Reload data when the Settings tab becomes visible
   useEffect(() => { if (visible) load() }, [visible]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Another device changed a supplement: reload only the supplements, so an unsaved profile edit stays
+  useSyncNotice('supplements_updated', () => {
+    getSupplements().then(setSupplements).catch(() => {})
+  })
+
   // Rating handlers
   const handleAddRating = async () => {
     const v = newProduct.trim()
@@ -180,6 +196,8 @@ export default function SettingsPanel({ visible }) {
     setProfile((prev) => ({ ...prev, [field]: value }))
     setProfileDirty(true)
   }
+
+  const handleProfileNumber = (field, value) => handleProfileChange(field, cleanProfileNumber(field, value))
 
   const handleClearProfileField = (field) => {
     setProfile((prev) => ({ ...prev, [field]: '' }))
@@ -233,6 +251,22 @@ export default function SettingsPanel({ visible }) {
     } catch {
       setError('Failed to update supplement')
       load()
+    }
+  }
+
+  // ✏️ editor: fix a supplement's name or contents without deleting it
+  const handleSaveSupplementEdit = async () => {
+    const name = editingSupp.name.trim()
+    if (!name) return
+    try {
+      await updateSupplement(editingSupp.id, { name, contents: editingSupp.contents.trim(), frequency: editingSupp.frequency })
+      setEditingSupp(null)
+      load()
+    } catch (e) {
+      const error = String(e?.message).includes('409')
+        ? 'Another supplement already has this name'
+        : 'Failed to save supplement'
+      setEditingSupp(prev => prev && { ...prev, error })
     }
   }
 
@@ -338,9 +372,10 @@ export default function SettingsPanel({ visible }) {
     }
   }
 
-  // Receives current editor state (not stale meal prop) via MealEditor's onFavorite
+  // Receives current editor state (not stale meal prop) via MealEditor's onFavorite;
+  // returns the favorite's id, so a second tap on the star can remove it
   const handleCopyToFavorites = async (currentMeal) => {
-    await addFavorite({
+    const { id } = await addFavorite({
       meal_name: currentMeal.menu_name || currentMeal.meal_name,
       description: currentMeal.description,
       ingredients: Array.isArray(currentMeal.ingredients) ? currentMeal.ingredients : [],
@@ -349,6 +384,7 @@ export default function SettingsPanel({ visible }) {
       nutrition_note: currentMeal.nutrition_note,
       menu_items: currentMeal.menu || currentMeal.menu_items || null,
     })
+    return id
   }
 
   const handleAnalyzeMeal = async (meal) => {
@@ -478,6 +514,7 @@ export default function SettingsPanel({ visible }) {
                         editPrepTime={true}
                         menuMode={isMenuFormat}
                         onFavorite={handleCopyToFavorites}
+                        onUnfavorite={deleteFavorite}
                       />
                     </div>
                   </div>
@@ -593,7 +630,10 @@ export default function SettingsPanel({ visible }) {
   // --- Main settings view ---
   return (
     <div style={s.container}>
-      <div style={s.brandHeader}>break FAST</div>
+      <div style={s.brandHeaderRow}>
+        <span>break FAST</span>
+        <span style={s.tabName}>Settings</span>
+      </div>
 
       <div style={s.body}>
         {error && <div style={s.error}>{error}</div>}
@@ -604,93 +644,111 @@ export default function SettingsPanel({ visible }) {
             Profile
             {profileIncomplete && <span style={{ color: '#e74c3c', marginLeft: 6, fontSize: 10 }}>●</span>}
           </div>
-          <div style={s.profileGrid}>
-            <div style={s.profileField}>
-              <label style={s.profileLabel}>Age</label>
-              <div style={s.profileInputRow}>
-                <input
-                  type="number"
-                  min="1"
-                  style={{ ...s.input, ...missingField(profile.age) }}
-                  value={profile.age}
-                  onChange={(e) => handleProfileChange('age', e.target.value)}
-                  placeholder="—"
-                />
-                {profile.age !== '' && <button style={s.clearFieldBtn} onClick={() => handleClearProfileField('age')}>×</button>}
+          {/* Age + Gender and Height + Weight: four in a row where they fit, two by two on a phone */}
+          <div style={s.profileRow}>
+            <div style={s.profilePair}>
+              <div style={s.profileField}>
+                <label style={s.profileLabel} htmlFor="profile-age">Age</label>
+                <div style={s.profileInputRow}>
+                  <input
+                    id="profile-age"
+                    type="text"
+                    inputMode="numeric"
+                    style={{ ...s.profileNumber(3), ...missingField(profile.age) }}
+                    value={profile.age}
+                    onChange={(e) => handleProfileNumber('age', e.target.value)}
+                    placeholder="—"
+                  />
+                  {profile.age !== '' && <button style={s.clearFieldBtn} onClick={() => handleClearProfileField('age')}>×</button>}
+                </div>
+              </div>
+              <div style={s.profileField}>
+                <label style={s.profileLabel} htmlFor="profile-gender">Gender</label>
+                <select
+                  id="profile-gender"
+                  style={{ ...s.profileSelect, ...missingField(profile.gender) }}
+                  value={profile.gender}
+                  onChange={(e) => handleProfileChange('gender', e.target.value)}
+                >
+                  <option value="">—</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                </select>
               </div>
             </div>
-            <div style={s.profileField}>
-              <label style={s.profileLabel}>Gender</label>
+            <div style={s.profilePair}>
+              <div style={s.profileField}>
+                <label style={s.profileLabel} htmlFor="profile-height">Height (cm)</label>
+                <div style={s.profileInputRow}>
+                  <input
+                    id="profile-height"
+                    type="text"
+                    inputMode="numeric"
+                    style={{ ...s.profileNumber(3), ...missingField(profile.height_cm) }}
+                    value={profile.height_cm}
+                    onChange={(e) => handleProfileNumber('height_cm', e.target.value)}
+                    placeholder="—"
+                  />
+                  {profile.height_cm !== '' && <button style={s.clearFieldBtn} onClick={() => handleClearProfileField('height_cm')}>×</button>}
+                </div>
+              </div>
+              <div style={s.profileField}>
+                <label style={s.profileLabel} htmlFor="profile-weight">Weight (kg)</label>
+                <div style={s.profileInputRow}>
+                  <input
+                    id="profile-weight"
+                    type="text"
+                    inputMode="decimal"
+                    style={{ ...s.profileNumber(5), ...missingField(profile.weight_kg) }}
+                    value={profile.weight_kg}
+                    onChange={(e) => handleProfileNumber('weight_kg', e.target.value)}
+                    placeholder="—"
+                  />
+                  {profile.weight_kg !== '' && <button style={s.clearFieldBtn} onClick={() => handleClearProfileField('weight_kg')}>×</button>}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style={s.profileWideRow}>
+            <div style={s.profileWideField}>
+              <label style={s.profileLabel} htmlFor="profile-activity">Activity Level</label>
               <select
-                style={{ ...s.select, ...missingField(profile.gender) }}
-                value={profile.gender}
-                onChange={(e) => handleProfileChange('gender', e.target.value)}
+                id="profile-activity"
+                style={{ ...s.profileWideSelect, ...missingField(profile.activity_level) }}
+                value={profile.activity_level}
+                onChange={(e) => handleProfileChange('activity_level', e.target.value)}
               >
                 <option value="">—</option>
-                <option value="male">Male</option>
-                <option value="female">Female</option>
+                <option value="sedentary">Sedentary</option>
+                <option value="light">Light</option>
+                <option value="moderate">Moderate</option>
+                <option value="active">Active</option>
+                <option value="very_active">Very Active</option>
               </select>
             </div>
+            {/* Optional: tells the AI what's in season; not part of the incomplete-profile dot.
+                The list shows "Germany (DE)", the closed box only "DE"; the name is what's saved. */}
             <div style={s.profileField}>
-              <label style={s.profileLabel}>Height (cm)</label>
-              <div style={s.profileInputRow}>
-                <input
-                  type="number"
-                  min="1"
-                  style={{ ...s.input, ...missingField(profile.height_cm) }}
-                  value={profile.height_cm}
-                  onChange={(e) => handleProfileChange('height_cm', e.target.value)}
-                  placeholder="—"
-                />
-                {profile.height_cm !== '' && <button style={s.clearFieldBtn} onClick={() => handleClearProfileField('height_cm')}>×</button>}
-              </div>
+              <label style={s.profileLabel} htmlFor="profile-country">Country</label>
+              <span style={s.countryPicker}>
+                <span style={s.countryText} aria-hidden="true">
+                  {countryCode(profile.country) || profile.country || '—'}
+                </span>
+                <span aria-hidden="true">▾</span>
+                <select
+                  id="profile-country"
+                  style={s.countrySelect}
+                  value={profile.country}
+                  onChange={(e) => handleProfileChange('country', e.target.value)}
+                >
+                  <option value="">—</option>
+                  {profile.country && !countryCode(profile.country) && (
+                    <option value={profile.country}>{profile.country}</option>
+                  )}
+                  {COUNTRIES.map(({ name, code }) => <option key={code} value={name}>{name} ({code})</option>)}
+                </select>
+              </span>
             </div>
-            <div style={s.profileField}>
-              <label style={s.profileLabel}>Weight (kg)</label>
-              <div style={s.profileInputRow}>
-                <input
-                  type="number"
-                  min="0.1"
-                  step="0.1"
-                  style={{ ...s.input, ...missingField(profile.weight_kg) }}
-                  value={profile.weight_kg}
-                  onChange={(e) => handleProfileChange('weight_kg', e.target.value)}
-                  placeholder="—"
-                />
-                {profile.weight_kg !== '' && <button style={s.clearFieldBtn} onClick={() => handleClearProfileField('weight_kg')}>×</button>}
-              </div>
-            </div>
-          </div>
-          <div style={s.profileField}>
-            <label style={s.profileLabel}>Activity Level</label>
-            <select
-              style={{ ...s.select, ...missingField(profile.activity_level) }}
-              value={profile.activity_level}
-              onChange={(e) => handleProfileChange('activity_level', e.target.value)}
-            >
-              <option value="">—</option>
-              <option value="sedentary">Sedentary</option>
-              <option value="light">Light</option>
-              <option value="moderate">Moderate</option>
-              <option value="active">Active</option>
-              <option value="very_active">Very Active</option>
-            </select>
-          </div>
-          {/* Optional: tells the AI what's in season; not part of the incomplete-profile dot */}
-          <div style={s.profileField}>
-            <label style={s.profileLabel} htmlFor="profile-country">Country</label>
-            <select
-              id="profile-country"
-              style={s.select}
-              value={profile.country}
-              onChange={(e) => handleProfileChange('country', e.target.value)}
-            >
-              <option value="">—</option>
-              {profile.country && !COUNTRIES.includes(profile.country) && (
-                <option value={profile.country}>{profile.country}</option>
-              )}
-              {COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
           </div>
           {profileDirty && (
             <button style={s.saveBtn} onClick={handleSaveProfile}>Save Profile</button>
@@ -710,9 +768,49 @@ export default function SettingsPanel({ visible }) {
                 onClick={() => handleToggleFrequency(sup)}
                 title="Tap to switch between Daily and Occasional"
               >{FREQUENCY_LABELS[sup.frequency] || sup.frequency}</button>
+              <button
+                style={s.editBtn}
+                onClick={() => setEditingSupp({ id: sup.id, name: sup.name, contents: sup.contents || '', frequency: sup.frequency, error: null })}
+                title="Edit supplement"
+              >✏️</button>
               <button style={s.tagX} onClick={() => handleDeleteSupplement(sup.id)}>×</button>
             </div>
           ))}
+          {editingSupp && (
+            <div style={s.overlay} onClick={(e) => { if (e.target === e.currentTarget) setEditingSupp(null) }}>
+              <div style={s.overlayPanel}>
+                <div style={s.overlayTitle}>Edit supplement</div>
+                <div style={s.overlayForm}>
+                  <label style={s.profileLabel} htmlFor="supp-edit-name">Name</label>
+                  <input
+                    id="supp-edit-name"
+                    style={s.input}
+                    value={editingSupp.name}
+                    onChange={(e) => setEditingSupp(prev => ({ ...prev, name: e.target.value, error: null }))}
+                    autoFocus
+                  />
+                  <label style={s.profileLabel} htmlFor="supp-edit-contents">Contents</label>
+                  <input
+                    id="supp-edit-contents"
+                    style={s.input}
+                    value={editingSupp.contents}
+                    onChange={(e) => setEditingSupp(prev => ({ ...prev, contents: e.target.value, error: null }))}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveSupplementEdit()}
+                    placeholder="e.g. Vitamin D3 1000IU, K2 100mcg, Zinc 15mg"
+                  />
+                  {editingSupp.error && <div style={s.error}>{editingSupp.error}</div>}
+                </div>
+                <div style={s.overlayActions}>
+                  <button style={s.overlayCloseBtn} onClick={() => setEditingSupp(null)}>Close</button>
+                  <button
+                    style={s.overlaySaveBtn}
+                    onClick={handleSaveSupplementEdit}
+                    disabled={!editingSupp.name.trim()}
+                  >Save</button>
+                </div>
+              </div>
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={s.addRow}>
               <input

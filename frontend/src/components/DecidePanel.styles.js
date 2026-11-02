@@ -165,16 +165,6 @@ export const actions = {
   flexShrink: 0,
 }
 
-export const backBtn = {
-  background: 'var(--surface2)',
-  border: '1px solid var(--border)',
-  borderRadius: 10,
-  padding: '12px 24px',
-  color: 'var(--text-muted)',
-  fontSize: 15,
-  cursor: 'pointer',
-}
-
 export const confirmBtn = {
   background: secondaryColor,
   border: 'none',
@@ -186,7 +176,8 @@ export const confirmBtn = {
   cursor: 'pointer',
 }
 
-export const ateOutBtn = {
+// Save, Skip and Back: outlined in the theme color, beside the filled Confirm
+export const outlineBtn = {
   ...confirmBtn,
   padding: '12px 16px',
   background: 'transparent',
@@ -194,17 +185,19 @@ export const ateOutBtn = {
   color: 'var(--text)',
 }
 
-// Ate out has nothing to do when no item is missing
-export const ateOutBtnIdle = {
-  ...ateOutBtn,
-  opacity: 0.45,
-  cursor: 'default',
-}
+export const backBtn = { ...outlineBtn, padding: '12px 24px' }
 
 export const confirmBtnBlocked = {
   ...confirmBtn,
   opacity: 0.45,
   cursor: 'not-allowed',
+}
+
+export const saveNote = {
+  marginTop: 10,
+  fontSize: 13,
+  lineHeight: 1.5,
+  color: colors.error,
 }
 
 export const missingNote = {

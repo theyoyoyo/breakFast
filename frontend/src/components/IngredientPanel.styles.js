@@ -542,6 +542,7 @@ export const suggestSection = {
 
 export const suggestBtn = {
   width: '100%',
+  minHeight: 36,
   padding: '9px 16px',
   background: secondaryColor, // follows the theme
   color: '#fff',
@@ -576,26 +577,57 @@ export const suggestNote = {
 }
 
 export const suggestionsPanel = {
-  borderTop: '1px solid var(--border)',
   background: 'var(--surface)',
   display: 'flex',
   flexDirection: 'column',
-  maxHeight: '45%',
+  maxHeight: '55%',
 }
 
+// The header is a bar as big as Suggest Shopping, in the theme color, and the ▲/▼ toggle:
+// helpers at the left, the title in the middle, ▲/▼ at the right
 export const suggestionsPanelHeader = {
-  display: 'flex',
-  justifyContent: 'space-between',
+  ...suggestBtn,
+  padding: '7px 12px', // same height as Suggest Shopping, with the helper chips
+  display: 'grid',
+  gridTemplateColumns: '1fr auto 1fr',
   alignItems: 'center',
-  padding: '8px 12px 4px',
+  userSelect: 'none',
+}
+
+export const suggestionsHelpers = {
+  display: 'flex',
+  gap: 6,
+  justifySelf: 'start',
+}
+
+// Small dark chips on the theme-colored bar, readable in every theme
+export const suggestionsHelperBtn = {
+  background: 'var(--surface)',
+  border: 'none',
+  borderRadius: 6,
+  color: 'var(--text)',
+  width: 26,
+  height: 22,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  cursor: 'pointer',
+  padding: 0,
+}
+
+// Delete all: red, like every delete
+export const suggestionsClearBtn = {
+  ...suggestionsHelperBtn,
+  color: colors.danger,
+}
+
+export const collapseIcon = {
+  justifySelf: 'end',
+  fontSize: 11,
 }
 
 export const suggestionsPanelTitle = {
-  fontSize: 12,
-  fontWeight: 700,
-  textTransform: 'uppercase',
-  letterSpacing: '0.06em',
-  color: 'var(--text-muted)',
+  whiteSpace: 'nowrap',
 }
 
 export const suggestionsList = {
@@ -609,7 +641,28 @@ export const suggestionRow = {
   alignItems: 'flex-start',
   padding: '6px 8px',
   gap: 10,
+}
+
+// Checkbox and text: tapping either toggles the check
+export const suggestionLabel = {
+  display: 'flex',
+  alignItems: 'flex-start',
+  gap: 10,
+  flex: 1,
+  minWidth: 0,
   cursor: 'pointer',
+}
+
+// × at the end of a row — red, since it removes the item
+export const suggestionRemoveBtn = {
+  background: 'none',
+  border: 'none',
+  color: colors.danger,
+  fontSize: 18,
+  lineHeight: 1,
+  cursor: 'pointer',
+  padding: '0 4px',
+  flexShrink: 0,
 }
 
 export const suggestionName = {
@@ -625,9 +678,17 @@ export const suggestionReason = {
   lineHeight: 1.3,
 }
 
+// Send to List and Suggest More side by side under the list
+export const suggestionsActions = {
+  display: 'flex',
+  gap: 8,
+  padding: '6px 12px 10px',
+}
+
 export const sendToListBtn = {
-  margin: '6px 12px 10px',
-  padding: '8px 16px',
+  flex: 1,
+  minWidth: 0,
+  padding: '8px 12px',
   background: secondaryColor, // follows the theme
   color: '#fff',
   border: 'none',
@@ -638,4 +699,10 @@ export const sendToListBtn = {
   alignItems: 'center',
   justifyContent: 'center',
   gap: 6,
+}
+
+export const suggestMoreBtn = { ...sendToListBtn }
+
+export const suggestionsNotes = {
+  padding: '0 12px 8px',
 }

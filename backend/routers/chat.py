@@ -246,10 +246,17 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                 enriched_json = json.dumps(meal_data, ensure_ascii=False)
                 saved_text = response_text[:response_text.rfind("```json")] + "```json\n" + enriched_json + "\n```"
 
-            # Persist both messages to DB
+            # Persist both messages to DB; a new suggestion becomes the selected meal card,
+            # on every device (this one selects it when meal_logged arrives)
             async with get_db() as db:
                 await _save_message(db, session_id, user_id, "user", user_message)
                 message_id = await _save_message(db, session_id, user_id, "assistant", saved_text)
+                if meal_data and prompt_type == "suggest":
+                    await db.execute(
+                        "UPDATE chat_sessions SET selected_message_id = ? WHERE id = ? AND user_id = ?",
+                        (message_id, session_id, user_id),
+                    )
+                    await db.commit()
 
             # The user's other devices reload this chat (they never get the tokens)
             await chat_sync.notify_session_updated(user_id, session_id, exclude=websocket)

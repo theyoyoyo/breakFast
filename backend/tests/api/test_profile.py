@@ -154,6 +154,14 @@ async def test_update_supplement(client):
     assert r2.json()["frequency"] == "sometimes"
 
 
+# Renaming a supplement to another one's name is refused like adding a duplicate
+async def test_rename_to_existing_supplement_returns_409(client):
+    await client.post("/profile/supplements", json={"name": "Zinc"})
+    sid = (await client.post("/profile/supplements", json={"name": "Iron"})).json()["id"]
+    r = await client.put(f"/profile/supplements/{sid}", json={"name": "Zinc", "contents": "", "frequency": "daily"})
+    assert r.status_code == 409
+
+
 async def test_update_nonexistent_returns_404(client):
     r = await client.put("/profile/supplements/9999", json={"name": "X", "contents": "", "frequency": "daily"})
     assert r.status_code == 404

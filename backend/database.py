@@ -101,6 +101,7 @@ CREATE TABLE IF NOT EXISTS health_rules (
 CREATE TABLE IF NOT EXISTS chat_sessions (
     id          TEXT    PRIMARY KEY,
     user_id     INTEGER NOT NULL REFERENCES users(id),
+    selected_message_id INTEGER,    -- the meal card selected for today, the same on every device
     created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
     updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
@@ -111,6 +112,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     user_id     INTEGER NOT NULL REFERENCES users(id),
     role        TEXT    NOT NULL CHECK(role IN ('user', 'assistant')),
     content     TEXT    NOT NULL,
+    ate_draft   TEXT,           -- JSON meal: the card's "Today I ate" version, saved with Save
     created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -190,6 +192,19 @@ CREATE TABLE IF NOT EXISTS shopping_list (
     UNIQUE(user_id, item_name)
 );
 
+-- Fridge tab's shopping suggestions, the same on every device. A row with removed_at
+-- was removed with ×: it is left out of new suggestions for 7 days.
+CREATE TABLE IF NOT EXISTS shopping_suggestions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES users(id),
+    name        TEXT    NOT NULL,
+    reason      TEXT    NOT NULL DEFAULT '',
+    checked     INTEGER NOT NULL DEFAULT 1,
+    position    INTEGER NOT NULL DEFAULT 0,
+    removed_at  TEXT,
+    UNIQUE(user_id, name)
+);
+
 CREATE TABLE IF NOT EXISTS user_kitchen_appliances (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id         INTEGER NOT NULL REFERENCES users(id),
@@ -209,6 +224,7 @@ CREATE TABLE IF NOT EXISTS weekly_summaries (
 
 -- Indices on frequently-filtered foreign key columns
 CREATE INDEX IF NOT EXISTS idx_shopping_list_user ON shopping_list(user_id);
+CREATE INDEX IF NOT EXISTS idx_shopping_suggestions_user ON shopping_suggestions(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_kitchen_appliances_user ON user_kitchen_appliances(user_id);
 CREATE INDEX IF NOT EXISTS idx_ingredient_inventory_user ON ingredient_inventory(user_id);
 CREATE INDEX IF NOT EXISTS idx_ingredient_group_memory_user ON ingredient_group_memory(user_id);
@@ -379,6 +395,22 @@ async def init_db() -> None:
         try:
             await db.execute(
                 "ALTER TABLE user_profiles ADD COLUMN country TEXT"
+            )
+        except Exception:
+            pass  # Column already exists
+
+        # Migrate: add selected_message_id column to chat_sessions if missing
+        try:
+            await db.execute(
+                "ALTER TABLE chat_sessions ADD COLUMN selected_message_id INTEGER"
+            )
+        except Exception:
+            pass  # Column already exists
+
+        # Migrate: add ate_draft column to chat_messages if missing
+        try:
+            await db.execute(
+                "ALTER TABLE chat_messages ADD COLUMN ate_draft TEXT"
             )
         except Exception:
             pass  # Column already exists

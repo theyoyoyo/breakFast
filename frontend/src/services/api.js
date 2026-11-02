@@ -41,7 +41,12 @@ async function apiFetch(url, options = {}) {
   } catch {
     throw new NetworkError()
   }
-  if (!r.ok) throw new Error(`API error ${r.status}: ${url}`)
+  if (!r.ok) {
+    // The status lets a caller tell a refusal (like 409, a name already taken) from other errors
+    const err = new Error(`API error ${r.status}: ${url}`)
+    err.status = r.status
+    throw err
+  }
   if (r.status === 204) return undefined
   return r.json()
 }
@@ -109,6 +114,14 @@ export const handleExpiredAction = (delete_ids, keep_ids, shopping_ids) =>
 
 export const getShoppingSuggestions = (exclude = []) =>
   apiFetch(`${BASE_URL}/ingredients/shopping-suggestions`, json('POST', { exclude }))
+
+// The Fridge tab's suggestions list, kept on the server → { items: [{ name, reason, checked }] }
+export const getSuggestionList = () =>
+  apiFetch(`${BASE_URL}/shopping/suggestions`)
+
+// Replace the list; `removed` names were removed with × and stay out of suggestions for 7 days
+export const saveSuggestionList = (items, removed = []) =>
+  apiFetch(`${BASE_URL}/shopping/suggestions`, json('PUT', { items, removed }))
 
 // ---------------------------------------------------------------------------
 // Shopping List
@@ -267,13 +280,22 @@ export const listSessions = () =>
 export const getSessionMessages = (sessionId) =>
   apiFetch(`${BASE_URL}/sessions/${sessionId}/messages`)
 
-// → { status, id }; the user's open chats are told the session changed
-export const saveSessionMessage = (sessionId, role, content) =>
-  apiFetch(`${BASE_URL}/sessions/${sessionId}/messages`, json('POST', { role, content }))
+// → { status, id }; the user's open chats are told the session changed.
+// select: true also makes it the selected meal card (a meal sent to chat)
+export const saveSessionMessage = (sessionId, role, content, select = false) =>
+  apiFetch(`${BASE_URL}/sessions/${sessionId}/messages`, json('POST', select ? { role, content, select } : { role, content }))
+
+// Select a meal card for today (its message id), or none (null); the user's other devices follow
+export const selectSessionMessage = (sessionId, messageId) =>
+  apiFetch(`${BASE_URL}/sessions/${sessionId}/selected`, json('PUT', { message_id: messageId }))
 
 // Replace a saved message's content (a meal card edit rewrites its meal block)
 export const updateSessionMessage = (sessionId, messageId, content) =>
   apiFetch(`${BASE_URL}/sessions/${sessionId}/messages/${messageId}`, json('PUT', { content }))
+
+// Save a meal card's "Today I ate" version with its message; the user's other devices get it
+export const saveAteDraft = (sessionId, messageId, meal) =>
+  apiFetch(`${BASE_URL}/sessions/${sessionId}/messages/${messageId}`, json('PUT', { ate_draft: meal }))
 
 // ---------------------------------------------------------------------------
 // Health Rules
@@ -328,9 +350,10 @@ export const getSchedule = (meal_name, steps, ingredients, meal_id = null, menu 
 /**
  * Open a WebSocket to /chat with auth token as query param.
  * onDone gets the reply and its saved message id; onSessionUpdated gets the id of a
- * session another device (or a REST save) changed.
+ * session another device (or a REST save) changed; onNotice gets any other notice
+ * ({ type: 'supplements_updated' }, …) for the rest of the app.
  */
-export function createChatSocket(onToken, onDone, onMealLogged, onError, onClose, onProgress, onMealUpdated, onSessionUpdated) {
+export function createChatSocket(onToken, onDone, onMealLogged, onError, onClose, onProgress, onMealUpdated, onSessionUpdated, onNotice) {
   const token = getToken()
   const ws = new WebSocket(`${WS_URL}/chat?token=${token}`)
 
@@ -343,6 +366,7 @@ export function createChatSocket(onToken, onDone, onMealLogged, onError, onClose
       else if (msg.type === 'meal_updated') onMealUpdated?.(msg.meal)
       else if (msg.type === 'progress') onProgress?.(msg.step)
       else if (msg.type === 'session_updated') onSessionUpdated?.(msg.session_id)
+      else if (msg.type) onNotice?.(msg)
     } catch {
       // ignore unparseable frames
     }

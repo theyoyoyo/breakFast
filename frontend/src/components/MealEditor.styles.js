@@ -28,12 +28,27 @@ export const nameInput = {
   outline: 'none',
 }
 
-export const mealId = {
-  fontSize: 9,
-  color: 'var(--text-muted)',
-  opacity: 0.5,
+// ☆ left of the meal name: empty until the meal is added to favorites, then a gold ⭐
+// (stars are semantic gold, not the theme color)
+export const favStar = {
+  background: 'none',
+  border: 'none',
+  padding: 2,
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
   flexShrink: 0,
-  whiteSpace: 'nowrap',
+}
+
+export const favStarOn = { color: colors.goldStar, fill: colors.goldStar }
+export const favStarOff = { color: 'var(--text-muted)', fill: 'none' }
+
+// Under the header when ☆ is tapped on a name another favorite has
+export const favNote = {
+  margin: '-8px 0 12px',
+  fontSize: 13,
+  lineHeight: 1.5,
+  color: 'var(--text-muted)',
 }
 
 export const prepTimeGroup = {
@@ -41,10 +56,6 @@ export const prepTimeGroup = {
   alignItems: 'center',
   gap: 3,
   flexShrink: 0,
-}
-
-export const prepTimeLabel = {
-  fontSize: 14,
 }
 
 export const prepTimeInput = {
@@ -69,7 +80,7 @@ export const prepTimeUnit = {
   color: 'var(--text-muted)',
 }
 
-// ℹ️ beside the time and id: opens how the suggestion meant each dish to be made
+// ℹ️ beside the time: opens how the suggestion meant each dish to be made
 export const detailsBtn = (isOpen) => ({
   background: isOpen ? 'var(--surface2)' : 'none',
   border: '1px solid var(--border)',
@@ -332,12 +343,13 @@ export const actions = {
   flexShrink: 0,
 }
 
+// Close: an outlined button in the theme color, like Save in "Today I ate"
 export const closeBtn = {
-  background: 'var(--surface2)',
-  border: '1px solid var(--border)',
+  background: 'transparent',
+  border: `1px solid ${secondaryColor}`,
   borderRadius: 10,
   padding: '12px 24px',
-  color: 'var(--text-muted)',
+  color: 'var(--text)',
   fontSize: 15,
   cursor: 'pointer',
 }
@@ -353,28 +365,4 @@ export const saveBtn = {
   cursor: 'pointer',
 }
 
-export const copyToFavBtn = {
-  background: colors.gold,
-  border: `1px solid ${colors.goldBorder}`,
-  borderRadius: 10,
-  padding: '12px 16px',
-  fontSize: 13,
-  fontWeight: 600,
-  color: colors.goldText,
-  cursor: 'pointer',
-  transition: 'background 0.15s',
-  whiteSpace: 'nowrap',
-}
 
-export const copyToFavBtnDone = {
-  background: colors.success,
-  border: `1px solid ${colors.successBorder}`,
-  borderRadius: 10,
-  padding: '12px 16px',
-  fontSize: 13,
-  fontWeight: 600,
-  color: colors.successText,
-  cursor: 'default',
-  opacity: 0.8,
-  whiteSpace: 'nowrap',
-}

@@ -1,12 +1,17 @@
 """
 /sessions endpoints — chat session management and message persistence.
 Saving or editing a message tells the user's open chat sockets (services/chat_sync).
+A meal card's message also keeps the card's "Today I ate" version (`ate_draft`), saved
+with that panel's Save button, and each session remembers its selected meal card
+(`selected_message_id`), so every device shows the same one.
 """
 
+import json
 import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from database import get_db
+from db_helpers import parse_json_field
 from auth import require_user
 from services import chat_sync
 
@@ -89,23 +94,35 @@ async def delete_session(session_id: str, user_id: int = Depends(require_user)):
 
 @router.get("/{session_id}/messages")
 async def get_messages(session_id: str, user_id: int = Depends(require_user)):
-    """Get all messages for a session. The id lets a meal card edit update its message."""
+    """Get all messages for a session. The id lets a meal card edit update its message;
+    `ate_draft` is the card's saved "Today I ate" version, or null; `selected` marks the
+    meal card selected for today."""
     async with get_db() as db:
         async with db.execute(
+            "SELECT selected_message_id FROM chat_sessions WHERE id = ? AND user_id = ?",
+            (session_id, user_id),
+        ) as cur:
+            session = await cur.fetchone()
+        selected_id = session["selected_message_id"] if session else None
+        async with db.execute(
             """
-            SELECT id, role, content, created_at FROM chat_messages
+            SELECT id, role, content, ate_draft, created_at FROM chat_messages
             WHERE session_id = ? AND user_id = ?
             ORDER BY created_at ASC, id ASC
             """,
             (session_id, user_id),
         ) as cur:
             rows = await cur.fetchall()
-    return [dict(r) for r in rows]
+    return [
+        {**dict(r), "ate_draft": parse_json_field(r["ate_draft"], default=None), "selected": r["id"] == selected_id}
+        for r in rows
+    ]
 
 
 @router.post("/{session_id}/messages")
 async def save_message(session_id: str, body: dict, user_id: int = Depends(require_user)):
-    """Save a message to a session (meals sent to chat, analysis and prep plan results)."""
+    """Save a message to a session (meals sent to chat, analysis and prep plan results).
+    `select: true` also makes it the selected meal card (a meal sent to chat)."""
     role = body.get("role", "assistant")
     content = body.get("content", "")
     async with get_db() as db:
@@ -117,6 +134,11 @@ async def save_message(session_id: str, body: dict, user_id: int = Depends(requi
             "UPDATE chat_sessions SET updated_at = datetime('now') WHERE id = ?",
             (session_id,),
         )
+        if body.get("select"):
+            await db.execute(
+                "UPDATE chat_sessions SET selected_message_id = ? WHERE id = ? AND user_id = ?",
+                (cur.lastrowid, session_id, user_id),
+            )
         await db.commit()
     await chat_sync.notify_session_updated(user_id, session_id)
     return {"status": "ok", "id": cur.lastrowid}
@@ -124,14 +146,52 @@ async def save_message(session_id: str, body: dict, user_id: int = Depends(requi
 
 @router.put("/{session_id}/messages/{message_id}")
 async def update_message(session_id: str, message_id: int, body: dict, user_id: int = Depends(require_user)):
-    """Replace a message's content (a meal card edit rewrites the message's meal block)."""
+    """Change a message: `content` replaces its text (a meal card edit rewrites the message's
+    meal block), `ate_draft` stores the card's "Today I ate" version (null clears it).
+    Only the fields sent change; the last save wins."""
+    updates = {}
+    if "content" in body:
+        updates["content"] = body["content"] or ""
+    if "ate_draft" in body:
+        draft = body["ate_draft"]
+        if draft is not None and not isinstance(draft, dict):
+            raise HTTPException(status_code=422, detail="ate_draft must be a meal object or null")
+        updates["ate_draft"] = json.dumps(draft, ensure_ascii=False) if draft is not None else None
+    if not updates:
+        raise HTTPException(status_code=422, detail="Nothing to update")
+    set_clause = ", ".join(f"{column} = ?" for column in updates)
     async with get_db() as db:
         cur = await db.execute(
-            "UPDATE chat_messages SET content = ? WHERE id = ? AND session_id = ? AND user_id = ?",
-            (body.get("content", ""), message_id, session_id, user_id),
+            f"UPDATE chat_messages SET {set_clause} WHERE id = ? AND session_id = ? AND user_id = ?",
+            (*updates.values(), message_id, session_id, user_id),
         )
         await db.commit()
     if cur.rowcount == 0:
         raise HTTPException(status_code=404, detail="Message not found")
+    await chat_sync.notify_session_updated(user_id, session_id)
+    return {"status": "ok"}
+
+
+@router.put("/{session_id}/selected")
+async def select_message(session_id: str, body: dict, user_id: int = Depends(require_user)):
+    """Select a meal card for today (`message_id`), or none (null). The user's devices follow."""
+    message_id = body.get("message_id")
+    if message_id is not None and not isinstance(message_id, int):
+        raise HTTPException(status_code=422, detail="message_id must be a number or null")
+    async with get_db() as db:
+        if message_id is not None:
+            async with db.execute(
+                "SELECT 1 FROM chat_messages WHERE id = ? AND session_id = ? AND user_id = ?",
+                (message_id, session_id, user_id),
+            ) as cur:
+                if not await cur.fetchone():
+                    raise HTTPException(status_code=404, detail="Message not found")
+        cur = await db.execute(
+            "UPDATE chat_sessions SET selected_message_id = ? WHERE id = ? AND user_id = ?",
+            (message_id, session_id, user_id),
+        )
+        await db.commit()
+    if cur.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Session not found")
     await chat_sync.notify_session_updated(user_id, session_id)
     return {"status": "ok"}

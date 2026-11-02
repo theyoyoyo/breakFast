@@ -100,3 +100,17 @@ async def test_llm_unavailable_returns_lyric(client):
         data = await _suggest(client)
     assert data["suggestions"] == []
     assert data["lyric"]
+
+
+# An item removed from the suggestions list is left out for 7 days, then it may come back
+async def test_removed_item_left_out_for_seven_days(client, db):
+    await client.put("/shopping/suggestions", json={"items": [], "removed": ["Salmon"]})
+    with _llm(_reply("Salmon", "Kiwi")):
+        data = await _suggest(client)
+    assert [s["name"] for s in data["suggestions"]] == ["Kiwi"]
+
+    await db.execute("UPDATE shopping_suggestions SET removed_at = datetime('now', '-8 days')")
+    await db.commit()
+    with _llm(_reply("Salmon", "Kiwi")):
+        data = await _suggest(client)
+    assert [s["name"] for s in data["suggestions"]] == ["Salmon", "Kiwi"]

@@ -28,7 +28,7 @@ USER_TABLES = [
     "product_ratings", "favorite_meals", "suggested_meals", "chat_messages",
     "ingredient_inventory", "ingredient_group_memory", "favorite_ingredients",
     "meal_history", "user_preferences", "user_habits", "health_rules",
-    "shopping_list", "user_kitchen_appliances", "weekly_summaries",
+    "shopping_list", "shopping_suggestions", "user_kitchen_appliances", "weekly_summaries",
     "chat_sessions",
 ]
 

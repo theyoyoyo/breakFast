@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { getRatings, createRating, logMeal, addFavorite } from '../services/api'
+import { getRatings, createRating, logMeal, addFavorite, deleteFavorite } from '../services/api'
 import { countUnit } from '../utils/ingredients'
 import MealEditor from './MealEditor'
 import StarRating from './StarRating'
@@ -9,12 +9,14 @@ import * as s from './DecidePanel.styles'
  * "Today I ate" panel.
  *
  * Props:
- *   meal          — the chat meal selected for today (its obtained marks carry over)
- *   draft         — the user's earlier edits of that same meal, if any; used instead of meal
- *   onDraftChange — (draftMeal) => void — live editor state, so the parent can keep the draft
- *   onClose / onConfirm
+ *   meal      — the chat meal selected for today (its obtained marks carry over)
+ *   saved     — that card's saved "Today I ate" version, if any; the editor starts from it
+ *   onSave    — async (meal) => void — Save stores the current meal with the card, then the panel
+ *               closes (no Save without it)
+ *   onClose   — Close drops unsaved edits
+ *   onConfirm — the meal was logged (with ratings, or with Skip on the rating step)
  */
-export default function DecidePanel({ meal, draft, onDraftChange, onClose, onConfirm }) {
+export default function DecidePanel({ meal, saved, onSave, onClose, onConfirm }) {
   // Phase: 'edit' = MealEditor open, 'rate' = star-rating unrated items
   const [phase, setPhase] = useState('edit')
   const [ratings, setRatings] = useState({})
@@ -25,20 +27,13 @@ export default function DecidePanel({ meal, draft, onDraftChange, onClose, onCon
   const [missing, setMissing] = useState(null)
   // Holds the meal state captured from MealEditor when proceeding to rating
   const pendingMealRef = useRef(null)
-  // What the editor starts from: the draft if there is one, else the selected meal.
-  // Only changes on purpose (Back from rating, another meal selected), never on every edit.
-  const [base, setBase] = useState(() => draft || meal)
-
-  // Another meal selected while open → start over from it
-  const sourceRef = useRef(meal)
-  useEffect(() => {
-    if (sourceRef.current === meal) return
-    sourceRef.current = meal
-    setBase(meal)
-    setPhase('edit')
-    setRatings({})
-    pendingMealRef.current = null
-  }, [meal])
+  // What the editor starts from: the card's saved version if there is one, else the card.
+  // Read once when the panel opens, so a push from another device never resets an open panel;
+  // only Back from rating changes it, to return to the edited menu. `edited` marks a meal the
+  // editor built (saved, or Back from rating): its menu is used as is, even when emptied.
+  const [base, setBase] = useState(() => ({ meal: saved || meal, edited: !!saved }))
+  // Save: 'idle' → 'saving' → closed, or 'error' (stays open to try again)
+  const [saveState, setSaveState] = useState('idle')
 
   // Load existing ratings to skip already-rated products in the rate phase
   useEffect(() => {
@@ -52,11 +47,12 @@ export default function DecidePanel({ meal, draft, onDraftChange, onClose, onCon
   // simple menu items. If it's empty, MealEditor starts blank.
   // Memoized: MealEditor resets its edits whenever it receives a new meal object
   const editorMeal = useMemo(() => {
-    const menu = base?.menu || base?.menu_items
-    if (menu && menu.length > 0) return { ...base, menu }
-    const flat = base?.ingredients || []
+    const { meal: start, edited } = base
+    const menu = start?.menu || start?.menu_items
+    if (menu && (menu.length > 0 || edited)) return { ...start, menu }
+    const flat = start?.ingredients || []
     return {
-      ...base,
+      ...start,
       menu: flat.map(ing => ({
         name: ing.name,
         amount: ing.quantity ?? ing.amount ?? 1,
@@ -70,14 +66,26 @@ export default function DecidePanel({ meal, draft, onDraftChange, onClose, onCon
     setMissing(prev => (prev && prev.join('\n') === names.join('\n') ? prev : names))
   }, [])
 
-  // Keep the parent's draft in step with every edit (the latest callback, without re-renders)
-  const draftCallbackRef = useRef(onDraftChange)
-  draftCallbackRef.current = onDraftChange
-  const handleEditorChange = useCallback((current) => draftCallbackRef.current?.(current), [])
+  // An edit after a failed Save clears its note
+  const handleEditorChange = useCallback(() => {
+    setSaveState(prev => (prev === 'error' ? 'idle' : prev))
+  }, [])
+
+  // Save stores the current meal with the card and closes the panel; a failed save stays open
+  const handleSave = async (current) => {
+    setSaveState('saving')
+    try {
+      await onSave(current)
+    } catch {
+      setSaveState('error')
+      return
+    }
+    onClose()
+  }
 
   // Back from rating returns to the edited menu, not the original
   const handleBackToEdit = () => {
-    if (pendingMealRef.current) setBase(pendingMealRef.current)
+    if (pendingMealRef.current) setBase({ meal: pendingMealRef.current, edited: true })
     setPhase('edit')
   }
 
@@ -104,9 +112,10 @@ export default function DecidePanel({ meal, draft, onDraftChange, onClose, onCon
     setSaving(false)
   }, [doLogMeal])
 
-  // MealEditor's ⭐ Save → keep the menu in favorites for later; nothing is logged
+  // MealEditor's ☆ → keep the menu in favorites for later; nothing is logged.
+  // Returns the favorite's id, so a second tap can remove it.
   const handleFavorite = useCallback(async (currentMeal) => {
-    await addFavorite({
+    const { id } = await addFavorite({
       meal_name: currentMeal.menu_name || currentMeal.meal_name || 'Breakfast',
       description: currentMeal.description,
       ingredients: currentMeal.ingredients || [],
@@ -115,6 +124,7 @@ export default function DecidePanel({ meal, draft, onDraftChange, onClose, onCon
       nutrition_note: currentMeal.nutrition_note,
       menu_items: currentMeal.menu || currentMeal.menu_items || null,
     })
+    return id
   }, [])
 
   // "Confirm" → collect ratings for unrated items, then log (waits until nothing is missing)
@@ -135,7 +145,7 @@ export default function DecidePanel({ meal, draft, onDraftChange, onClose, onCon
     setPhase('rate')
   }, [existingRatings, logWithoutRating])
 
-  // Rating phase Save — persist ratings then log meal
+  // Rating phase Confirm — persist ratings then log meal
   const handleSaveWithRatings = useCallback(async () => {
     setSaving(true)
     try {
@@ -146,6 +156,9 @@ export default function DecidePanel({ meal, draft, onDraftChange, onClose, onCon
     } catch { /* ignore */ }
     setSaving(false)
   }, [ratings, meal, doLogMeal])
+
+  // Rating phase Skip — log the meal without rating anything (the items are asked again next time)
+  const handleSkipRatings = useCallback(() => logWithoutRating(pendingMealRef.current || meal), [meal, logWithoutRating])
 
   const handleOverlayClick = (e) => {
     if (e.target === e.currentTarget) onClose()
@@ -172,8 +185,11 @@ export default function DecidePanel({ meal, draft, onDraftChange, onClose, onCon
           </div>
           <div style={s.actions}>
             <button style={s.backBtn} onClick={handleBackToEdit}>Back</button>
+            <button style={s.outlineBtn} onClick={handleSkipRatings} disabled={saving} title="Log the meal without rating">
+              Skip
+            </button>
             <button style={s.confirmBtn} onClick={handleSaveWithRatings} disabled={saving}>
-              {saving ? '...' : 'Save'}
+              {saving ? '...' : 'Confirm'}
             </button>
           </div>
         </div>
@@ -190,6 +206,7 @@ export default function DecidePanel({ meal, draft, onDraftChange, onClose, onCon
         <MealEditor
           meal={editorMeal}
           onFavorite={handleFavorite}
+          onUnfavorite={deleteFavorite}
           onClose={onClose}
           showPrepTime={true}
           editPrepTime={true}
@@ -197,16 +214,18 @@ export default function DecidePanel({ meal, draft, onDraftChange, onClose, onCon
           checkFridge
           onMissingChange={handleMissingChange}
           onChange={handleEditorChange}
-          extraActions={(buildCurrentMeal, { markAllObtained }) => (
+          extraActions={(buildCurrentMeal) => (
             <>
-              <button
-                style={missing?.length ? s.ateOutBtn : s.ateOutBtnIdle}
-                onClick={markAllObtained}
-                disabled={saving || !missing?.length}
-                title="Ate out: mark every missing item as obtained"
-              >
-                Ate out
-              </button>
+              {onSave && (
+                <button
+                  style={s.outlineBtn}
+                  onClick={() => handleSave(buildCurrentMeal())}
+                  disabled={saving || saveState === 'saving'}
+                  title="Keep these edits with this chat meal, on every device, and close"
+                >
+                  {saveState === 'saving' ? '...' : 'Save'}
+                </button>
+              )}
               <button
                 style={missing?.length === 0 ? s.confirmBtn : s.confirmBtnBlocked}
                 onClick={() => handleProceedToRating(buildCurrentMeal())}
@@ -220,9 +239,12 @@ export default function DecidePanel({ meal, draft, onDraftChange, onClose, onCon
             </>
           )}
         />
+        {saveState === 'error' && (
+          <div style={s.saveNote}>Couldn't save. Check the connection and try again.</div>
+        )}
         {missing?.length > 0 && (
           <div style={s.missingNote}>
-            Not in your fridge: {missing.join(', ')}. Tap an item once you have it, remove it, or use Ate out if you ate somewhere else.
+            Not in your fridge: {missing.join(', ')}. Tap an item, or a dish's name, once you have it, or remove it.
           </div>
         )}
       </div>

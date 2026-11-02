@@ -1,16 +1,18 @@
 /**
  * Tests for MealEditor's fridge check: missing ingredients are underlined, never removed,
- * and can be marked as obtained for the meal (yellow → green). Also units that follow the AI language.
+ * and can be marked as obtained for the meal (yellow → green), a dish's all at once with a tap
+ * on its name. Also the header (☆ filled when a favorite has the meal's name and food, a note
+ * when another favorite has the name, prep time in min) and units that follow the AI language.
  * The backend check is mocked — no real network calls are made.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, within, act } from '@testing-library/react'
 import MealEditor from './MealEditor'
-import { checkMissingIngredients } from '../services/api'
+import { checkMissingIngredients, getFavorites } from '../services/api'
 import { applyLanguage } from '../utils/language'
 
-vi.mock('../services/api', () => ({ checkMissingIngredients: vi.fn() }))
+vi.mock('../services/api', () => ({ checkMissingIngredients: vi.fn(), getFavorites: vi.fn(() => Promise.resolve([])) }))
 
 const MISSING = 'Not in your fridge — tap once you have it'
 const OBTAINED = 'Marked as obtained — tap to undo'
@@ -64,13 +66,13 @@ describe('MealEditor fridge check', () => {
   it('gives a dish a dotted mark that turns green once its missing sub-ingredients are obtained', async () => {
     checkMissingIngredients.mockResolvedValue({ missing: ['Avocado'] })
     render(<MealEditor meal={MEAL} menuMode checkFridge />)
-    const dish = await screen.findByTitle('Some ingredients are not in your fridge')
+    const dish = await screen.findByTitle('Some ingredients are not in your fridge — tap the name once you have them')
     expect(dish).toHaveTextContent('Menemen')
     expect(dish.style.textDecorationStyle).toBe('dotted')
     fireEvent.click(screen.getByText('▶ Ingredients'))
     expect(screen.getByText('Yumurta')).not.toHaveAttribute('title')
     fireEvent.click(screen.getByText('Avocado'))
-    expect(screen.getByText('Menemen')).toHaveAttribute('title', 'Missing ingredients are marked as obtained')
+    expect(screen.getByText('Menemen')).toHaveAttribute('title', 'Missing ingredients are marked as obtained — tap to undo')
   })
 
   it('starts with marks the meal already carries, and saves them', async () => {
@@ -82,19 +84,44 @@ describe('MealEditor fridge check', () => {
     expect(onSave.mock.calls[0][0].obtained).toEqual(['Olives'])
   })
 
-  it('lets extra actions mark every missing item as obtained at once', async () => {
-    checkMissingIngredients.mockResolvedValue({ missing: ['Olives', 'Avocado'] })
+  // A tap on a dish's name marks all of its missing items (name included) and a second tap unmarks
+  // them, without opening the dish
+  it('marks all of a dish\'s missing items with a tap on its name', async () => {
+    checkMissingIngredients.mockResolvedValue({ missing: ['Menemen', 'Avocado', 'Olives'] })
     const onMissingChange = vi.fn()
-    render(
-      <MealEditor
-        meal={MEAL} menuMode checkFridge onMissingChange={onMissingChange}
-        extraActions={(_build, { markAllObtained }) => <button onClick={markAllObtained}>Mark all</button>}
-      />,
-    )
-    await waitFor(() => expect(onMissingChange).toHaveBeenLastCalledWith(['Olives', 'Avocado']))
-    fireEvent.click(screen.getByRole('button', { name: 'Mark all' }))
-    await waitFor(() => expect(onMissingChange).toHaveBeenLastCalledWith([]))
-    expect(screen.getByText('Olives')).toHaveAttribute('title', OBTAINED)
+    render(<MealEditor meal={MEAL} menuMode checkFridge onMissingChange={onMissingChange} />)
+    await waitFor(() => expect(onMissingChange).toHaveBeenLastCalledWith(['Menemen', 'Avocado', 'Olives']))
+    fireEvent.click(screen.getByText('Menemen'))
+    await waitFor(() => expect(onMissingChange).toHaveBeenLastCalledWith(['Olives']))
+    expect(screen.getByText('Menemen')).toHaveAttribute('title', OBTAINED)
+    expect(screen.queryByText('Yumurta')).toBeNull()
+    fireEvent.click(screen.getByText('Menemen'))
+    await waitFor(() => expect(onMissingChange).toHaveBeenLastCalledWith(['Menemen', 'Avocado', 'Olives']))
+  })
+
+  // Only the name's text marks: a tap on the space beside it opens the dish and changes no mark
+  it('opens a dish with a tap beside its marked name', async () => {
+    checkMissingIngredients.mockResolvedValue({ missing: ['Avocado', 'Olives'] })
+    const onMissingChange = vi.fn()
+    render(<MealEditor meal={MEAL} menuMode checkFridge onMissingChange={onMissingChange} />)
+    const dish = await screen.findByTitle('Some ingredients are not in your fridge — tap the name once you have them')
+    fireEvent.click(dish.parentElement) // the cell the name sits in, which fills the row
+    expect(screen.getByText('Yumurta')).toBeInTheDocument()
+    expect(dish).toHaveAttribute('title', 'Some ingredients are not in your fridge — tap the name once you have them')
+    await waitFor(() => expect(onMissingChange).toHaveBeenLastCalledWith(['Avocado', 'Olives']))
+    const olives = screen.getByText('Olives')
+    fireEvent.click(olives.parentElement) // beside a simple item's name: no mark either
+    expect(olives).toHaveAttribute('title', MISSING)
+  })
+
+  // In a template (favorites) a dish name only shows the mark; a tap opens the dish as usual
+  it('opens a template dish on a name tap instead of marking it', async () => {
+    checkMissingIngredients.mockResolvedValue({ missing: ['Avocado'] })
+    render(<MealEditor meal={MEAL} menuMode checkFridge canMarkObtained={false} />)
+    const dish = await screen.findByTitle('Some ingredients are not in your fridge')
+    expect(dish).not.toHaveAttribute('role')
+    fireEvent.click(dish)
+    expect(screen.getByText('Yumurta')).toBeInTheDocument()
   })
 
   it('only underlines missing items in templates (favorites), with no tap to mark', async () => {
@@ -188,6 +215,92 @@ describe('MealEditor dish rows', () => {
     fireEvent.click(name)
     expect(name).toHaveAttribute('title', OBTAINED)
     expect(screen.queryByText('Yumurta')).toBeNull()
+  })
+})
+
+describe('MealEditor header', () => {
+  beforeEach(() => { vi.mocked(checkMissingIngredients).mockReset() })
+
+  // The ☆ left of the name adds the current meal; once added it's a filled star, and a second tap removes it
+  it('adds and removes a favorite with the star', async () => {
+    const onFavorite = vi.fn(() => Promise.resolve(7))
+    const onUnfavorite = vi.fn(() => Promise.resolve())
+    render(<MealEditor meal={MEAL} menuMode onFavorite={onFavorite} onUnfavorite={onUnfavorite} />)
+    const star = screen.getByRole('button', { name: 'Add to favorites' })
+    expect(star.nextSibling).toHaveValue('Test Breakfast') // just left of the name
+    await waitFor(() => expect(star).toBeEnabled()) // once the favorites are loaded
+    fireEvent.click(star)
+    await waitFor(() => expect(star).toHaveAttribute('aria-pressed', 'true'))
+    expect(onFavorite.mock.calls[0][0].menu_name).toBe('Test Breakfast')
+    expect(star).toHaveAccessibleName('Remove from favorites')
+    fireEvent.click(star)
+    await waitFor(() => expect(star).toHaveAttribute('aria-pressed', 'false'))
+    expect(onUnfavorite).toHaveBeenCalledWith(7)
+  })
+
+  // A meal saved earlier opens with a filled star: a favorite has its name (any case) and its food
+  // (any order), and the star follows the name and the food as they're edited
+  it('fills the star for a meal that is already a favorite', async () => {
+    const reordered = [MEAL.menu[1], { ...MEAL.menu[0], ingredients: [...MEAL.menu[0].ingredients].reverse() }]
+    getFavorites.mockResolvedValueOnce([
+      { id: 3, meal_name: 'test breakfast', menu_items: reordered },
+      { id: 4, meal_name: 'Pancakes', menu_items: MEAL.menu },
+    ])
+    const onUnfavorite = vi.fn(() => Promise.resolve())
+    render(<MealEditor meal={MEAL} menuMode onFavorite={vi.fn()} onUnfavorite={onUnfavorite} />)
+    const star = await screen.findByRole('button', { name: 'Remove from favorites' })
+    expect(star).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.change(screen.getByDisplayValue('Test Breakfast'), { target: { value: 'Pancakes ' } })
+    expect(star).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.change(screen.getByDisplayValue('Pancakes'), { target: { value: 'Waffles' } })
+    expect(star).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.change(screen.getByDisplayValue('Waffles'), { target: { value: 'Test Breakfast' } })
+    expect(star).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByText('▲')) // one more olive: other food
+    expect(star).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(screen.getByText('▼'))
+    expect(star).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(star)
+    await waitFor(() => expect(onUnfavorite).toHaveBeenCalledWith(3))
+    await waitFor(() => expect(star).toHaveAttribute('aria-pressed', 'false'))
+  })
+
+  // Another favorite with this name and other food: the star stays empty, and a tap saves nothing
+  // and shows a note until the meal gets a new name
+  it('asks for a new name when another favorite has this one', async () => {
+    getFavorites.mockResolvedValueOnce([{ id: 3, meal_name: 'Test Breakfast', menu_items: [MEAL.menu[1]] }])
+    const onFavorite = vi.fn(() => Promise.resolve(8))
+    render(<MealEditor meal={MEAL} menuMode onFavorite={onFavorite} onUnfavorite={vi.fn()} />)
+    const star = screen.getByRole('button', { name: 'Add to favorites' })
+    await waitFor(() => expect(star).toBeEnabled())
+    fireEvent.click(star)
+    expect(screen.getByText(/"Test Breakfast" is already in Favorites/)).toBeInTheDocument()
+    expect(onFavorite).not.toHaveBeenCalled()
+    fireEvent.change(screen.getByDisplayValue('Test Breakfast'), { target: { value: 'Test Breakfast 2' } })
+    expect(screen.queryByText(/is already in Favorites/)).toBeNull()
+    fireEvent.click(star)
+    await waitFor(() => expect(star).toHaveAttribute('aria-pressed', 'true'))
+    expect(onFavorite.mock.calls[0][0].menu_name).toBe('Test Breakfast 2')
+  })
+
+  // The server's refusal (another device took the name meanwhile) shows the same note
+  it('shows the note when the server refuses a taken name', async () => {
+    const onFavorite = vi.fn(() => Promise.reject(Object.assign(new Error('API error 409'), { status: 409 })))
+    render(<MealEditor meal={MEAL} menuMode onFavorite={onFavorite} onUnfavorite={vi.fn()} />)
+    const star = screen.getByRole('button', { name: 'Add to favorites' })
+    await waitFor(() => expect(star).toBeEnabled())
+    fireEvent.click(star)
+    expect(await screen.findByText(/"Test Breakfast" is already in Favorites/)).toBeInTheDocument()
+    expect(star).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  // Without a favorites action there's no star; the prep time reads "min", with no clock and no id
+  it('shows the prep time in min, with no star, clock or id', () => {
+    render(<MealEditor meal={{ ...MEAL, id: 42, prep_time_min: 15 }} menuMode />)
+    expect(screen.queryByRole('button', { name: 'Add to favorites' })).toBeNull()
+    expect(screen.getByDisplayValue('15').nextSibling).toHaveTextContent('min')
+    expect(screen.queryByText('⏱')).toBeNull()
+    expect(screen.queryByText('#42')).toBeNull()
   })
 })
 

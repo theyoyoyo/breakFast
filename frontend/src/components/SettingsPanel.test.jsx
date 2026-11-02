@@ -1,7 +1,8 @@
 /**
- * Tests for Settings: supplements start as Daily with no frequency picker, and show
- * "Occasional" for occasional ones; the theme picker offers all five themes; the tab title is the app name;
- * the optional country saves with the profile.
+ * Tests for Settings: supplements start as Daily with no frequency picker, show
+ * "Occasional" for occasional ones, and can be edited with ✏️; the theme picker offers all five themes;
+ * the header shows the app name and the tab's name; the optional country saves with the profile, listed as
+ * "Name (CODE)" and shown as its code; the profile boxes can shrink to a phone's width.
  * API calls are mocked — no real network calls are made.
  */
 
@@ -18,7 +19,7 @@ vi.mock('../services/api', () => {
     getSupplements: ok([]), createSupplement: ok({}), updateSupplement: ok({}), deleteSupplement: ok({}),
     getMeals: ok([]), updateMeal: ok({}), deleteMeal: ok({}), deleteOldMeals: ok({}),
     getHealthRules: ok([]), createHealthRule: ok({}), updateHealthRule: ok({}), deleteHealthRule: ok({}),
-    addFavorite: ok({}),
+    addFavorite: ok({}), deleteFavorite: ok({}), getFavorites: ok([]),
     getPreferences: ok([]), setPreference: ok({}),
     analyzeMeal: ok({}),
     getWeeklyReview: ok(null), generateWeeklyReview: ok({}),
@@ -52,10 +53,25 @@ describe('SettingsPanel', () => {
     expect(screen.getByRole('button', { name: 'Daily' })).toBeInTheDocument()
   })
 
-  it('titles the tab with the app name, like Chat', async () => {
+  // ✏️ opens an editor for the name and contents and saves both, keeping the frequency
+  it("edits a supplement's name and contents", async () => {
+    api.getSupplements.mockResolvedValue([{ id: 4, name: 'Vitamn D', contents: '', frequency: 'sometimes' }])
     render(<SettingsPanel visible />)
-    expect(await screen.findByText('break FAST')).toBeInTheDocument()
-    expect(screen.queryByText('Settings')).toBeNull()
+    fireEvent.click(await screen.findByTitle('Edit supplement'))
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Vitamin D' } })
+    fireEvent.change(screen.getByLabelText('Contents'), { target: { value: 'D3 1000 IU' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.updateSupplement).toHaveBeenCalledWith(
+      4, { name: 'Vitamin D', contents: 'D3 1000 IU', frequency: 'sometimes' },
+    ))
+    await waitFor(() => expect(screen.queryByLabelText('Contents')).toBeNull())
+  })
+
+  // The header shows the app name, like Chat, and the tab's name at the right
+  it('titles the tab with the app name and the tab name', async () => {
+    render(<SettingsPanel visible />)
+    const title = await screen.findByText('break FAST')
+    expect(title.nextSibling).toHaveTextContent('Settings')
   })
 
   it('names the weekly review toggle after what it does', async () => {
@@ -70,6 +86,57 @@ describe('SettingsPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save Profile' }))
     await waitFor(() => expect(api.upsertProfile).toHaveBeenCalledWith(
       expect.objectContaining({ country: 'Türkiye' }),
+    ))
+  })
+
+  // The list shows "Germany (DE)", the closed box shows "DE", and the name is what's saved
+  it('lists countries with their code, shows the code once chosen and saves the name', async () => {
+    render(<SettingsPanel visible />)
+    const country = await screen.findByLabelText('Country')
+    expect(screen.getByRole('option', { name: 'Germany (DE)' })).toHaveValue('Germany')
+    fireEvent.change(country, { target: { value: 'Germany' } })
+    expect(country.parentElement).toHaveTextContent(/^DE▾/)
+    fireEvent.click(screen.getByRole('button', { name: 'Save Profile' }))
+    await waitFor(() => expect(api.upsertProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ country: 'Germany' }),
+    ))
+  })
+
+  // A saved country that isn't in the list (an older name) stays selectable and shows as written
+  it('keeps a saved country that is not in the list', async () => {
+    api.getProfile.mockResolvedValue({ country: 'Atlantis' })
+    render(<SettingsPanel visible />)
+    const country = await screen.findByLabelText('Country')
+    await waitFor(() => expect(country).toHaveValue('Atlantis'))
+    expect(country.parentElement).toHaveTextContent(/^Atlantis▾/)
+  })
+
+  // At 320 px nothing may keep its native width: the columns shrink and the boxes are content-sized
+  it('lets every profile box shrink to fit a 320 px screen', async () => {
+    render(<SettingsPanel visible />)
+    for (const label of ['Age', 'Gender', 'Height (cm)', 'Weight (kg)', 'Activity Level', 'Country']) {
+      const box = await screen.findByLabelText(label)
+      expect(['0', '0px'].includes(box.style.minWidth) || box.style.width === '100%', label).toBe(true)
+    }
+    for (const label of ['Age', 'Height (cm)', 'Weight (kg)']) {
+      expect(screen.getByLabelText(label).style.width).toMatch(/^calc\(\d+ch \+ 22px\)$/)
+    }
+    const pair = screen.getByLabelText('Age').closest('div').parentElement.parentElement
+    expect(pair.style.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))')
+  })
+
+  // Number boxes take digits only, and weight one decimal (a comma counts as the point)
+  it('keeps profile numbers to digits', async () => {
+    render(<SettingsPanel visible />)
+    const age = await screen.findByLabelText('Age')
+    fireEvent.change(age, { target: { value: '3a5' } })
+    expect(age).toHaveValue('35')
+    const weight = screen.getByLabelText('Weight (kg)')
+    fireEvent.change(weight, { target: { value: '72,55' } })
+    expect(weight).toHaveValue('72.5')
+    fireEvent.click(screen.getByRole('button', { name: 'Save Profile' }))
+    await waitFor(() => expect(api.upsertProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ age: 35, weight_kg: 72.5 }),
     ))
   })
 

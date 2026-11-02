@@ -5,11 +5,46 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import {
   normalizeMeal, formatIngredient, localizeUnit, unitWithSize, unitsFor, countUnit, getSmartUnit, resolveUnit, rememberUnit,
+  menuKey,
 } from './ingredients'
 import { applyLanguage } from './language'
 
 beforeEach(() => localStorage.clear())
 afterEach(() => applyLanguage('en'))
+
+describe('menuKey', () => {
+  // The same food in another order, case or unit language gives the same key; methods and prep words don't count
+  it('ignores order, case and the unit language', () => {
+    const a = { menu: [
+      { name: 'Menemen', ingredients: [{ name: 'Egg', amount: 2, unit: 'pcs' }, { name: 'Tomato', amount: 1, unit: 'pcs', prep: 'diced' }] },
+      { name: 'Olives', amount: 10, unit: 'pcs', ingredients: [] },
+    ] }
+    const b = { menu_items: [
+      { name: 'olives ', amount: '10', unit: 'adet', ingredients: [] },
+      { name: 'MENEMEN', method: 'Fry', ingredients: [{ name: 'Tomato', amount: 1, unit: 'adet' }, { name: 'egg', amount: 2, unit: 'adet' }] },
+    ] }
+    expect(menuKey(a)).toBe(menuKey(b))
+  })
+
+  // Another amount, unit, item or dish ingredient is other food
+  it('changes with the food', () => {
+    const olives = { name: 'Olives', amount: 10, unit: 'pcs' }
+    const toast = { name: 'Toast', ingredients: [{ name: 'Bread', amount: 2, unit: 'slice' }] }
+    const key = menuKey({ menu: [olives, toast] })
+    expect(menuKey({ menu: [{ ...olives, amount: 11 }, toast] })).not.toBe(key)
+    expect(menuKey({ menu: [{ ...olives, unit: 'g' }, toast] })).not.toBe(key)
+    expect(menuKey({ menu: [olives] })).not.toBe(key)
+    expect(menuKey({ menu: [olives, { name: 'Toast', ingredients: [{ name: 'Bread', amount: 3, unit: 'slice' }] }] })).not.toBe(key)
+  })
+
+  // An old flat meal compares like a menu of simple items, and an item with no amount counts as one
+  it('reads flat ingredients and missing amounts like the editor does', () => {
+    expect(menuKey({ ingredients: [{ name: 'Egg', quantity: 2, unit: 'pcs' }] }))
+      .toBe(menuKey({ menu: [{ name: 'Egg', amount: 2, unit: 'pcs', ingredients: [] }] }))
+    expect(menuKey({ menu: [{ name: 'Ayran', ingredients: [] }] }))
+      .toBe(menuKey({ menu: [{ name: 'Ayran', amount: 1, unit: 'pcs', ingredients: [] }] }))
+  })
+})
 
 describe('normalizeMeal', () => {
   it('turns a dish with no ingredients and no amount into a simple item', () => {

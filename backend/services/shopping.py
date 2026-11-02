@@ -7,12 +7,19 @@ already shown or on the avoid list is dropped, and so are names that aren't one
 product and the user's own dishes (a safety net: the prompt asks for a dish's
 ingredients instead of the dish). Product names are specific, so names are
 compared exactly (see fridge.same_name), not loosely.
+
+Items the user removed from the suggestions list with × are left out for
+REMOVED_DAYS (recently_removed); after that they may come back. The avoid list is
+the permanent ban.
 """
 
 import json
 import re
 
 from services.fridge import same_name
+
+# A suggestion removed with × stays out of new suggestions this long
+REMOVED_DAYS = 7
 
 SUGGESTIONS_SCHEMA = {
     "type": "object",
@@ -104,3 +111,13 @@ def new_suggestions(items: list[dict], known: list[str], dishes: list[str] = ())
         seen.append(item["name"])
         result.append(item)
     return result
+
+
+async def recently_removed(db, user_id: int) -> list[str]:
+    """Names the user removed from the suggestions list in the last REMOVED_DAYS days."""
+    async with db.execute(
+        """SELECT name FROM shopping_suggestions
+           WHERE user_id = ? AND removed_at >= datetime('now', ?)""",
+        (user_id, f"-{REMOVED_DAYS} days"),
+    ) as cur:
+        return [r["name"] for r in await cur.fetchall()]
