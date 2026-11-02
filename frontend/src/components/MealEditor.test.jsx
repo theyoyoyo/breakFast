@@ -99,6 +99,21 @@ describe('MealEditor fridge check', () => {
     await waitFor(() => expect(onMissingChange).toHaveBeenLastCalledWith(['Menemen', 'Avocado', 'Olives']))
   })
 
+  // Only the name's text marks: a tap on the space beside it opens the dish and changes no mark
+  it('opens a dish with a tap beside its marked name', async () => {
+    checkMissingIngredients.mockResolvedValue({ missing: ['Avocado', 'Olives'] })
+    const onMissingChange = vi.fn()
+    render(<MealEditor meal={MEAL} menuMode checkFridge onMissingChange={onMissingChange} />)
+    const dish = await screen.findByTitle('Some ingredients are not in your fridge — tap the name once you have them')
+    fireEvent.click(dish.parentElement) // the cell the name sits in, which fills the row
+    expect(screen.getByText('Yumurta')).toBeInTheDocument()
+    expect(dish).toHaveAttribute('title', 'Some ingredients are not in your fridge — tap the name once you have them')
+    await waitFor(() => expect(onMissingChange).toHaveBeenLastCalledWith(['Avocado', 'Olives']))
+    const olives = screen.getByText('Olives')
+    fireEvent.click(olives.parentElement) // beside a simple item's name: no mark either
+    expect(olives).toHaveAttribute('title', MISSING)
+  })
+
   // In a template (favorites) a dish name only shows the mark; a tap opens the dish as usual
   it('opens a template dish on a name tap instead of marking it', async () => {
     checkMissingIngredients.mockResolvedValue({ missing: ['Avocado'] })

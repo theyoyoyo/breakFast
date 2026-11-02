@@ -128,20 +128,22 @@ export default function MealEditor({
 
   // Missing names are tappable: yellow until marked as obtained, then green
   // (templates only show the yellow underline)
-  const nameProps = (name, extraStyle = {}) => {
-    if (!isMissing(name)) return { style: { ...s.itemText, ...extraStyle } }
-    if (!canMarkObtained) {
-      return { style: { ...s.itemText, ...extraStyle, ...s.missingName() }, title: TEMPLATE_MISSING_HINT }
-    }
+  const markProps = (name) => {
+    if (!isMissing(name)) return {}
+    if (!canMarkObtained) return { style: s.missingName(), title: TEMPLATE_MISSING_HINT }
     const got = isObtained(name)
     return {
-      style: { ...s.itemText, ...extraStyle, ...s.missingName({ obtained: got }), cursor: 'pointer' },
+      style: { ...s.missingName({ obtained: got }), cursor: 'pointer' },
       title: got ? OBTAINED_HINT : MISSING_HINT,
       role: 'button',
-      // Stops here so a missing dish name doesn't also open the dish
       onClick: (e) => { e.stopPropagation(); toggleObtained(name) },
     }
   }
+
+  // The name's cell fills the row, while the mark and its tap stay on the text itself
+  const nameCell = (name) => (
+    <span style={s.itemText}><span {...markProps(name)}>{name}</span></span>
+  )
 
   // ── Top-level item handlers ──────────────────────────────────────────────
 
@@ -416,32 +418,30 @@ export default function MealEditor({
             <div key={idx}>
               {isDish ? (
                 // ── Dish row ──────────────────────────────────────────────
-                // A tap opens or closes the ingredients; its buttons and a missing name's mark keep the tap to themselves
+                // A tap opens or closes the ingredients, the space beside the name included; its buttons
+                // and the marked name itself keep the tap to themselves
                 <div style={s.dishRow} onClick={() => toggleDish(idx)}>
                   <span style={s.dishBadge}>🍳</span>
-                  {dishMarks.length === 0 ? (
-                    <span style={{ ...s.itemText, fontWeight: 500 }}>{item.name}</span>
-                  ) : !canMarkObtained ? (
-                    <span
-                      style={{ ...s.itemText, fontWeight: 500, ...s.missingName({ dotted: !dishNameMissing }) }}
-                      title={dishNameMissing ? TEMPLATE_MISSING_HINT : DISH_MISSING_HINT}
-                    >{item.name}</span>
-                  ) : (
-                    <span
-                      style={{
-                        ...s.itemText,
-                        fontWeight: 500,
-                        ...s.missingName({ dotted: !dishNameMissing, obtained: dishMarked }),
-                        cursor: 'pointer',
-                      }}
-                      title={dishNameMissing
-                        ? (dishMarked ? OBTAINED_HINT : MISSING_HINT)
-                        : (dishMarked ? DISH_OBTAINED_HINT : DISH_MISSING_TAP_HINT)}
-                      role="button"
-                      // Stops here so marking doesn't also open the dish
-                      onClick={(e) => { e.stopPropagation(); setObtainedAll(dishMarks, !dishMarked) }}
-                    >{item.name}</span>
-                  )}
+                  <span style={{ ...s.itemText, fontWeight: 500 }}>
+                    {dishMarks.length === 0 ? (
+                      <span>{item.name}</span>
+                    ) : !canMarkObtained ? (
+                      <span
+                        style={s.missingName({ dotted: !dishNameMissing })}
+                        title={dishNameMissing ? TEMPLATE_MISSING_HINT : DISH_MISSING_HINT}
+                      >{item.name}</span>
+                    ) : (
+                      <span
+                        style={{ ...s.missingName({ dotted: !dishNameMissing, obtained: dishMarked }), cursor: 'pointer' }}
+                        title={dishNameMissing
+                          ? (dishMarked ? OBTAINED_HINT : MISSING_HINT)
+                          : (dishMarked ? DISH_OBTAINED_HINT : DISH_MISSING_TAP_HINT)}
+                        role="button"
+                        // Stops here so marking doesn't also open the dish
+                        onClick={(e) => { e.stopPropagation(); setObtainedAll(dishMarks, !dishMarked) }}
+                      >{item.name}</span>
+                    )}
+                  </span>
                   <div style={s.itemActions}>
                     <button
                       style={s.expandBtn(isOpen)}
@@ -469,7 +469,7 @@ export default function MealEditor({
                     <button style={s.arrowBtn} onClick={() => handleQtyStep(idx, 1)}>▲</button>
                   </div>
                   <UnitSelect unit={item.unit} units={units} language={language} onChange={(unit) => handleUnitChange(idx, unit)} />
-                  <span {...nameProps(item.name)}>{item.name}</span>
+                  {nameCell(item.name)}
                   <div style={s.itemActions}>
                     <button style={s.deleteBtn} onClick={() => handleDelete(idx)} title="Delete">🗑️</button>
                   </div>
@@ -494,7 +494,7 @@ export default function MealEditor({
                         <button style={s.arrowBtn} onClick={() => handleSubQtyStep(idx, si, 1)}>▲</button>
                       </div>
                       <UnitSelect unit={sub.unit} units={units} language={language} onChange={(unit) => handleSubUnitChange(idx, si, unit)} />
-                      <span {...nameProps(sub.name)}>{sub.name}</span>
+                      {nameCell(sub.name)}
                       <div style={s.itemActions}>
                         <button style={s.deleteBtn} onClick={() => handleSubDelete(idx, si)} title="Delete">🗑️</button>
                       </div>
