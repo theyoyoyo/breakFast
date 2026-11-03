@@ -219,6 +219,19 @@ async def test_login_rate_limit_per_name_and_ip(unauth_client, clock):
         assert await _login(unauth_client, "Bob", "246813") == 200
 
 
+# A PIN longer than 10 digits, set before the 6-10 rule, still logs in
+async def test_login_takes_long_old_pin(unauth_client):
+    await _add_sha256_user("Bob", "135792468024")
+    assert await _login(unauth_client, "Bob", "135792468024") == 200
+
+
+# A name over 100 characters or a PIN over 64 is refused before it is hashed or counted as a failure
+async def test_login_refuses_overlong_input(unauth_client):
+    assert await _login(unauth_client, "A" * 101, "999999") == 422
+    assert await _login(unauth_client, "Alice", "9" * 65) == 422
+    assert auth._login_failures == {}
+
+
 async def test_endpoints_require_auth(unauth_client):
     """All data endpoints should return 401/422 without auth token."""
     r = await unauth_client.get("/ingredients/")

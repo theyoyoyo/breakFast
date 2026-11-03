@@ -67,11 +67,11 @@ def cli_db(tmp_path, monkeypatch):
     return db_path
 
 
-# A new or changed PIN needs 6+ ASCII digits
+# A new or changed PIN needs 6-10 ASCII digits
 def test_pin_problem():
     assert pin_problem("135792") is None
     assert pin_problem("1357924680") is None
-    for pin in ("", "13579", "abcdef", "13579a", "135 792", "١٢٣٤٥٦"):
+    for pin in ("", "13579", "13579246801", "abcdef", "13579a", "135 792", "١٢٣٤٥٦"):
         assert pin_problem(pin), pin
 
 
@@ -80,7 +80,7 @@ async def test_add_user_refuses_short_pin(cli_db, capsys):
     await database.init_db()
     with pytest.raises(SystemExit):
         await manage.add_user("alice", "13579")
-    assert "6 digits" in capsys.readouterr().err
+    assert "6-10 digits" in capsys.readouterr().err
     async with aiosqlite.connect(cli_db) as db:
         async with db.execute("SELECT COUNT(*) FROM users") as cur:
             assert (await cur.fetchone())[0] == 0

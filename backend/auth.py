@@ -28,8 +28,9 @@ SCRYPT_P = 3
 _SALT_BYTES = 16
 _HASH_BYTES = 32
 
-# New or changed PINs need this many digits; shorter PINs set before the rule still log in
+# New or changed PINs take this many digits; shorter PINs set before the rule still log in
 MIN_PIN_LENGTH = 6
+MAX_PIN_LENGTH = 10
 
 # Login rate limit, per user name on each client IP: the 5th failure in a row locks that name on
 # that IP for 30 s, and each further one doubles the wait up to 15 min. Failures are forgotten
@@ -96,10 +97,10 @@ def unknown_user_hash() -> str:
 
 
 def pin_problem(pin: str) -> str | None:
-    """Why a new or changed PIN is refused, or None when it has 6+ digits.
+    """Why a new or changed PIN is refused, or None when it has 6-10 digits.
     Digits only, because the login screen opens the number pad on phones."""
-    if not (pin.isascii() and pin.isdigit()) or len(pin) < MIN_PIN_LENGTH:
-        return f"A PIN needs at least {MIN_PIN_LENGTH} digits (0-9 only)."
+    if not (pin.isascii() and pin.isdigit()) or not MIN_PIN_LENGTH <= len(pin) <= MAX_PIN_LENGTH:
+        return f"A PIN needs {MIN_PIN_LENGTH}-{MAX_PIN_LENGTH} digits (0-9 only)."
     return None
 
 
