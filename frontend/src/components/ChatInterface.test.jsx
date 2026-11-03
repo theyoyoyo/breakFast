@@ -5,13 +5,16 @@
  * the 💊 list reloads on a supplements push and when the page becomes visible, and other
  * notices reach the rest of the app; "Today I ate" saves its version with the card, opens
  * from it, and drops unsaved edits on Close; the selected meal card is the same on every
- * device, and a second tap unselects it.
+ * device, and a second tap unselects it. Prep plans in the new format are colored by dish,
+ * while older plans and lyric fallbacks render as plain Markdown.
  * API calls and the chat socket are mocked — no real network calls are made.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import ChatInterface from './ChatInterface'
+import MarkdownText from './MarkdownText'
+import { LYRIC_PLAN, OLD_PLAN, PLAN } from '../utils/prepPlan.fixtures'
 import {
   createChatSocket, getActiveSession, listSessions, getSessionMessages,
   saveSessionMessage, updateSessionMessage, saveAteDraft, selectSessionMessage, analyzeMeal, getTodaySupplements,
@@ -338,5 +341,34 @@ describe('ChatInterface sync', () => {
 
     await screen.findByText('Lots of protein.', { exact: false })
     expect(saveSessionMessage).toHaveBeenCalledWith('s1', 'assistant', '📊 Test Breakfast — Nutrition Analysis\n\nLots of protein.')
+  })
+})
+
+describe('ChatInterface prep plans', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    Element.prototype.scrollIntoView = vi.fn()
+    createChatSocket.mockReturnValue({ readyState: WebSocket.OPEN, send: vi.fn(), close: vi.fn(), addEventListener: vi.fn() })
+    getActiveSession.mockResolvedValue({ id: 's1' })
+    listSessions.mockResolvedValue([{ id: 's1' }])
+    getTodaySupplements.mockResolvedValue([])
+    getSessionMessages.mockResolvedValue([
+      HELLO,
+      { id: 4, role: 'assistant', content: PLAN },
+      { id: 5, role: 'assistant', content: OLD_PLAN },
+      { id: 6, role: 'assistant', content: LYRIC_PLAN },
+    ])
+  })
+
+  // A plan in the new format shows its dishes in color, while older plans and lyrics render as before
+  it('colors new plans by dish and leaves older plans and lyrics plain', async () => {
+    await renderChat()
+    expect(screen.getByText('Greek omelette').style.color).toBe('var(--dish-2)')
+
+    const bubbles = [['0:00 — Hard-boil eggs (7 min) [Stove]', OLD_PLAN], ['🎵 Here comes the sun, doo-doo-doo-doo', LYRIC_PLAN]]
+      .map(([line, plan]) => [screen.getByText(line).closest('div[style*="border-radius"]').innerHTML, plan])
+    for (const [shown, plan] of bubbles) {
+      expect(shown).toBe(render(<MarkdownText text={plan} />).container.innerHTML)
+    }
   })
 })

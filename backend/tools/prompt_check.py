@@ -19,7 +19,8 @@ Personas, each run for a sample user (tools/prompt_samples.py):
   the same prompt, reply schema and code dedupe.
 - plan: one Prep Plan press per menu in PLAN_CASES (every menu by default), with the
   planner's real prompt and menu message. It flags food the menu doesn't list and a
-  dish cooked another way than its method says (fry vs boil).
+  dish cooked another way than its method says (fry vs boil), and notes how many
+  steps each dish got.
 Nothing touches the database. Every test is kept locally in tools/runs/ (git-ignored): a log with the
 replies and the exact prompts sent, and a line in history.jsonl that later tests are
 compared against, so a prompt change can't quietly make things worse.
@@ -289,13 +290,12 @@ def _menu_names(menu: list[dict]) -> list[str]:
     return [n for item in menu for n in [item["name"], *(s["name"] for s in item.get("ingredients") or [])]]
 
 
-def _plan_tasks(plan: dict) -> list[str]:
-    """Each task of a plan as one line: prep tasks with their detail, timed tasks with their end action."""
-    tasks = []
-    for group, extra in (("prep", "detail"), ("timed", "end_action")):
-        for t in plan.get(group) or []:
-            tasks.append(" ".join(str(t.get(k) or "") for k in ("task", extra)).strip() if isinstance(t, dict) else str(t))
-    return tasks
+def _plan_dishes(plan: dict) -> list[tuple[str, list[str]]]:
+    """Each dish of a plan with its step actions in order: [("Egg sandwich", ["Boil the eggs", …]), …]."""
+    return [
+        (str(d.get("dish") or ""), [str(s.get("action") or "") if isinstance(s, dict) else str(s) for s in d.get("steps") or []])
+        for d in plan["dishes"] if isinstance(d, dict)
+    ]
 
 
 def unlisted_food(tasks: list[str], case: dict) -> list[str]:
@@ -319,40 +319,46 @@ def _cooking(words: list[str]) -> set[str]:
     return {way for way, starts in _COOKING.items() if any(w.startswith(starts) for w in words)}
 
 
-def contradicted_methods(tasks: list[str], case: dict) -> list[str]:
-    """Tasks that cook a dish's food another way than its method says, as "Fry the eggs (Egg sandwich:
-    boil)". A dish whose method names both ways or neither is skipped."""
+def contradicted_methods(dishes: list[tuple[str, list[str]]], case: dict) -> list[str]:
+    """Steps that cook a dish's food another way than its method says, as "Fry the eggs (Egg sandwich:
+    boil)". A plan dish's steps are checked against the menu dish it names, or every menu dish when it
+    names none, so an omelette's fried eggs aren't held to the boiled eggs beside it. A menu dish whose
+    method names both ways or neither is skipped."""
     found = []
-    for dish in case["menu"]:
-        ways = _cooking(_folded(dish.get("method") or ""))
-        if len(ways) != 1:
-            continue
-        # The dish's own words, plural-stripped: its name and its ingredients
-        names = [dish["name"], *(s["name"] for s in dish.get("ingredients") or [])]
-        roots = tuple(r for name in names for r in (min(v, key=lambda w: (len(w), w)) for v in _tokens(name)) if len(r) >= 3)
-        for task in tasks:
-            words = _folded(task)
-            if any(w.startswith(roots) for w in words) and _cooking(words) and not _cooking(words) & ways:
-                found.append(f"{task} ({dish['name']}: {next(iter(ways))})")
+    menu = [d for d in case["menu"] if d.get("ingredients")]
+    for dish_name, actions in dishes:
+        for dish in [d for d in menu if same_name(d["name"], dish_name)] or menu:
+            ways = _cooking(_folded(dish.get("method") or ""))
+            if len(ways) != 1:
+                continue
+            # The dish's own words, plural-stripped: its name and its ingredients
+            names = [dish["name"], *(s["name"] for s in dish["ingredients"])]
+            roots = tuple(r for name in names for r in (min(v, key=lambda w: (len(w), w)) for v in _tokens(name)) if len(r) >= 3)
+            for action in actions:
+                words = _folded(action)
+                if any(w.startswith(roots) for w in words) and _cooking(words) and not _cooking(words) & ways:
+                    found.append(f"{action} ({dish['name']}: {next(iter(ways))})")
     return found
 
 
 def check_plan(text: str, case: dict) -> dict:
-    """Score one prep plan reply: does its JSON parse, does it plan only the menu, and each dish as designed."""
+    """Score one prep plan reply: does its JSON parse, does it plan only the menu, and each dish as designed.
+    The note counts each dish's steps, so a plan of one step per dish shows in the log."""
     plan = extract_json_block(text or "")
-    if not isinstance(plan, dict) or not any(isinstance(plan.get(k), list) for k in ("prep", "timed")):
+    if not isinstance(plan, dict) or not isinstance(plan.get("dishes"), list):
         return _no_json("plan")
-    tasks = _plan_tasks(plan)
+    dishes = _plan_dishes(plan)
     fridge = {"language": case["language"], "ingredients": [{"name": n} for n in _menu_names(case["menu"])]}
     return {
         "json": True,
-        # The plan's tasks, to count distinct plans across runs
-        "dishes": sorted(t.lower() for t in tasks),
+        # The plan's steps, to count distinct plans across runs
+        "dishes": sorted(f"{name}: {action}".lower() for name, actions in dishes for action in actions),
         "issues": {
-            "unlisted": unlisted_food(tasks, case),
-            "method": contradicted_methods(tasks, case),
+            "unlisted": unlisted_food([text for name, actions in dishes for text in (name, *actions)], case),
+            "method": contradicted_methods(dishes, case),
             "turkish": turkish_words(text, fridge),
         },
+        "note": "steps " + (", ".join(f"{name or '?'} {len(actions)}" for name, actions in dishes) or "none"),
     }
 
 
