@@ -11,6 +11,8 @@ load_shopping_context() return them, so the real prompts run without a database.
 - sparse: a nearly empty fridge.
 - vegan: a plant-based fridge with animal products on the avoid list.
 Simit sits in the en, tr and mixed fridges without tahini, to catch prepared items (#115).
+The en, picky and big_fridge users have saved favorite meals; Avocado toast (en) and Salmon
+bagel (big_fridge) need an item the fridge lacks, which shopping may suggest (#130).
 
 Five users from the 15-fridge test (2026-10-30), whose replies looked clean but weren't (#131):
 - picky: nuts avoided with almond milk in the fridge, dislikes, favorites mode with saved
@@ -94,6 +96,10 @@ SAMPLES = {
             {"meal_name": "Cheese omelette"},
             {"meal_name": "Oatmeal with banana and honey"},
             {"meal_name": "Menemen"},
+        ],
+        "favorite_meals": [
+            _favorite("Menemen", ("Menemen", ["Eggs", "Tomatoes", "Green peppers", "Olive oil"]), "Bread"),
+            _favorite("Avocado toast", ("Avocado toast", ["Bread", "Avocado", "Eggs"])),
         ],
     },
     "tr": {
@@ -280,6 +286,10 @@ SAMPLES = {
             _meal("Avocado toast", "Whole wheat bread", "Avocado", "Eggs"),
             _meal("Blueberry pancakes", "Flour", "Eggs", "Milk", "Blueberries", "Maple syrup"),
             _meal("Yogurt parfait", "Greek yogurt", "Granola", "Strawberries"),
+        ],
+        "favorite_meals": [
+            _favorite("Salmon bagel", ("Salmon bagel", ["Bagels", "Cream cheese", "Smoked salmon"])),
+            _favorite("Berry smoothie", ("Berry smoothie", ["Greek yogurt", "Blueberries", "Bananas", "Almond milk"])),
         ],
     },
     "greek": {

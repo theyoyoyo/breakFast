@@ -268,7 +268,8 @@ def test_shopping_checks():
     assert describe(score_shopping({"suggest": "not json"}, mixed)["suggest"]) == "no JSON"
 
 
-# One shopping run asks twice, the second time with the first reply's new items as already shown
+# One shopping run asks twice, the second time with the first reply's new items as already shown,
+# and each press draws its share of the fridge from a seeded source, so every run sends the same
 async def test_shop_once_asks_for_more_with_what_was_shown():
     requests = []
 
@@ -276,13 +277,16 @@ async def test_shop_once_asks_for_more_with_what_was_shown():
         requests.append(messages[0]["content"])
         return _shopping_reply("Spinach", "Domates") if len(requests) == 1 else _shopping_reply("Kale")
 
-    sent = {}
     with patch("services.llm.chat_json", fake_chat_json):
-        replies = await shop_once(SAMPLES["mixed"], sent)
+        replies = await shop_once(SAMPLES["mixed"], {})
+        first = list(requests)
+        requests.clear()
+        await shop_once(SAMPLES["mixed"], {})
     assert list(replies) == ["suggest", "more"]
-    assert requests[0] == "Generate shopping suggestions for me, in English."
-    assert requests[1].endswith("which I've already seen: Spinach.")  # Domates is in the fridge
-    assert len(sent) == 1  # the system prompt stays the same
+    assert first[0].startswith("Some of what I have now: ")
+    assert first[0].endswith("\nGenerate shopping suggestions for me, in English.")
+    assert first[1].endswith("which I've already seen: Spinach.")  # Domates is in the fridge
+    assert requests == first
 
 
 # The shopping summary uses the shopping stages and problem columns

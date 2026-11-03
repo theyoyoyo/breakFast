@@ -29,6 +29,7 @@ import argparse
 import asyncio
 import hashlib
 import json
+import random
 import re
 import subprocess
 import sys
@@ -46,7 +47,7 @@ from services.fridge import _FOLD, _tokens, _words, find_avoided, find_missing_i
 from services.personas import build_scheduler_prompt, build_scheduler_user_message
 from services.personas.shopping import build_shopping_prompt
 from services.shopping import (
-    SUGGESTIONS_SCHEMA, dish_names, new_suggestions, parse_suggestions, shopping_request,
+    SUGGESTIONS_SCHEMA, dish_names, new_suggestions, parse_suggestions, pick_input, shopping_request,
 )
 from tools.prompt_samples import PLAN_CASES, SAMPLE_MODES, SAMPLES
 from utils import extract_json_block
@@ -70,6 +71,8 @@ SUGGEST_MESSAGES = {
 
 # Suggest Shopping's temperature (routers/ingredients.py, get_shopping_suggestions)
 SHOPPING_TEMPERATURE = 0.6
+# Seeds the share of fridge items and taste hints each press shows, so tests compare
+SHOPPING_SEED = 130
 # The Prep Plan button's temperature (routers/scheduler.py, get_schedule)
 PLAN_TEMPERATURE = 0.3
 
@@ -263,8 +266,8 @@ def check_shopping(text: str, sample: dict, shown: list[str]) -> tuple[dict, lis
 
 
 def _dishes(sample: dict) -> list[str]:
-    """The sample's own dishes, which the endpoint drops from suggestions."""
-    return dish_names(sample.get("history") or [])
+    """The sample's own dishes from its logged and favorite meals, which the endpoint drops from suggestions."""
+    return dish_names((sample.get("history") or []) + (sample.get("favorite_meals") or []))
 
 
 def score_shopping(replies: dict, sample: dict) -> dict:
@@ -389,20 +392,16 @@ async def suggest_once(sample: dict, mode: str | None, draft_only: bool) -> dict
     return replies
 
 
-def shopping_prompt(sample: dict) -> str:
-    """The shopping system prompt, built the way routers/ingredients.py builds it."""
+def shopping_prompt(sample: dict, hints: list[str]) -> str:
+    """The shopping system prompt with this press's taste hints, built the way routers/ingredients.py builds it."""
     return build_shopping_prompt(
-        ingredient_inventory=sample["ingredients"],
-        recent_meal_history=sample["history"],
+        taste_hints=hints,
         user_preferences=sample["preferences"],
-        stated_habits=sample["stated_habits"],
-        inferred_habits=sample["inferred_habits"],
         health_rules=sample["health_rules"],
         user_profile=sample["user_profile"],
         supplements=sample["supplements"],
         avoid_list=sample["avoid_list"],
         shopping_list=sample["shopping_list"],
-        favorites=sample["favorites"],
         ratings=sample["ratings"],
         language=sample["language"],
         country=sample.get("country"),
@@ -411,15 +410,19 @@ def shopping_prompt(sample: dict) -> str:
 
 async def shop_once(sample: dict, sent: dict) -> dict:
     """Suggest Shopping, then Suggest More with what it showed: {"suggest": reply, "more": reply}.
-    The endpoint's one retry after an all-repeat reply is left out; repeats are scored instead."""
+    Each press draws its share of fridge items and taste hints like the endpoint, from a seeded
+    source so tests compare. The endpoint's one retry after an all-repeat reply is left out;
+    repeats are scored instead."""
     replies, shown = {}, []
     known = [i["name"] for i in sample["ingredients"]] + sample["shopping_list"] + sample["avoid_list"]
+    rng = random.Random(SHOPPING_SEED)
     for stage in PERSONAS["shopping"]["stages"]:
-        prompt = shopping_prompt(sample)
+        fridge, hints = pick_input(sample, rng)
+        prompt = shopping_prompt(sample, hints)
         sent.setdefault(prompt, None)
         replies[stage] = await llm.chat_json(
             system_prompt=prompt,
-            messages=[{"role": "user", "content": shopping_request(sample["language"], shown)}],
+            messages=[{"role": "user", "content": shopping_request(sample["language"], shown, fridge)}],
             schema=SUGGESTIONS_SCHEMA,
             temperature=SHOPPING_TEMPERATURE,
         )
