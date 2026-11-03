@@ -114,11 +114,14 @@ fit and every reply gets much slower. Then, on the Ollama server:
    setx OLLAMA_FLASH_ATTENTION 1
    setx OLLAMA_KV_CACHE_TYPE q8_0
    setx OLLAMA_NUM_PARALLEL 1
+   setx LLAMA_ARG_FIT_TARGET 512
    ```
 
    The first two halve the KV cache: q8_0 stores it at half size and needs flash
    attention. The third keeps one request at a time, because Ollama reserves the
-   context once per parallel request.
+   context once per parallel request. The last sets how much GPU memory (in MiB) stays
+   free when the model is fitted to the GPU: the default is 1024, and 512 leaves room
+   for the model with its 8192 context on a 6 GB GPU.
 
 2. Quit Ollama from the tray icon, start it again, and check `ollama ps` once more.
 
