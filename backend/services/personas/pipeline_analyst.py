@@ -86,8 +86,9 @@ needed changing.
 Amounts are numbers in these units: {unit_list}. Spoons and glasses are fixed sizes \
 ({unit_sizes}). An amount you can't measure, like "to taste", becomes a small one in a listed \
 unit (1 pinch), with the words in that ingredient's `prep`.
-A simple item is one fridge item served as it is: it has its own `amount` and `unit` and no \
-ingredients. A dish lists its ingredients, and its own `amount` and `unit` are null.
+A simple item is one fridge item served as it is: no ingredients, and its `amount` and `unit` \
+say how much is served. A dish is anything cooked, combined or topped: it lists its ingredients, \
+and its own `amount` and `unit` are its servings (1 pcs).
 """
 
 

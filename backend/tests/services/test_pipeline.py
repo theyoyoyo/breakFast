@@ -152,16 +152,16 @@ class TestRevisionSchema:
         item = meal["properties"]["menu"]["items"]
         assert list(item["properties"])[:2] == ["ingredients", "name"]
 
-    # Amounts are numbers and units come from the language's list; a dish's own amount and unit may be null
+    # Every item and ingredient has a numeric amount and a unit from the language's list, so no simple item lacks one
     def test_amounts_and_units(self):
         item = revision_schema("en")["properties"]["meal"]["properties"]["menu"]["items"]
         ingredient = item["properties"]["ingredients"]["items"]
-        assert ingredient["properties"]["amount"] == {"type": "number"}
-        assert "tbsp" in ingredient["properties"]["unit"]["enum"]
-        assert item["properties"]["amount"]["type"] == ["number", "null"]
-        assert None in item["properties"]["unit"]["enum"]
+        for shape in (item, ingredient):
+            assert shape["properties"]["amount"] == {"type": "number"}
+            assert "tbsp" in shape["properties"]["unit"]["enum"]
+            assert {"amount", "unit"} <= set(shape["required"])
         tr_unit = revision_schema("tr")["properties"]["meal"]["properties"]["menu"]["items"]
-        assert "tbsp" not in tr_unit["properties"]["ingredients"]["items"]["properties"]["unit"]["enum"]
+        assert "tbsp" not in tr_unit["properties"]["unit"]["enum"]
 
 
 # ---------------------------------------------------------------------------
@@ -210,17 +210,30 @@ class TestPipelineOrchestrator:
         assert next(c for c in calls if c["kind"] == "json")["message"].endswith("Code check:\n- Nothing found.")
         assert next(e["content"] for e in events if e["type"] == "review") == "- No changes."
 
-    # The revised meal reaches the app's format: a dish loses its null amount and unit, a simple item its method
+    # The revised meal reaches the app's format: a dish loses its servings, a simple item its method
     @pytest.mark.asyncio
     async def test_revised_meal_is_cleaned(self):
         revised = _meal({"name": "eggs", "amount": 2, "unit": "pcs", "prep": ""})
-        revised["menu"][0].update({"amount": None, "unit": None, "method": "Boil for 8 minutes"})
+        revised["menu"][0].update({"amount": 1, "unit": "pcs", "method": "Boil for 8 minutes"})
         revised["menu"].append({"ingredients": [], "name": "eggs", "method": "Serve", "amount": 1, "unit": "pcs"})
         events, _ = await _run(_draft(_meal(EGGS)), _revision(revised))
         dish, simple = extract_json_block(_final(events))["menu"]
         assert dish == {"name": "Boiled eggs", "ingredients": [{"name": "eggs", "amount": 2, "unit": "pcs"}],
                         "method": "Boil for 8 minutes"}
         assert simple == {"ingredients": [], "name": "eggs", "amount": 1, "unit": "pcs"}
+
+    # A "dish" made of one item named as itself (Banana: Banana) is that item served as it is
+    @pytest.mark.asyncio
+    async def test_self_named_dish_becomes_a_simple_item(self):
+        revised = _meal(EGGS)
+        revised["menu"].append({
+            "ingredients": [{"name": "Bananas", "amount": 100, "unit": "g"}],
+            "name": "Banana", "method": "Peel and slice", "amount": 1, "unit": "pcs",
+        })
+        context = {**SAMPLE_CONTEXT, "ingredients": [{"name": "eggs"}, {"name": "Bananas"}]}
+        events, _ = await _run(_draft(_meal(EGGS)), _revision(revised), context=context)
+        banana = extract_json_block(_final(events))["menu"][1]
+        assert banana == {"ingredients": [], "name": "Banana", "amount": 100, "unit": "g"}
 
     # A revised meal with more fridge or unit problems than the draft loses to the draft's meal
     @pytest.mark.asyncio

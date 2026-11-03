@@ -24,7 +24,7 @@ import re
 from typing import AsyncGenerator
 
 from models.units import unknown_units, units_for
-from services.fridge import find_avoided, find_missing_ingredients
+from services.fridge import find_avoided, find_missing_ingredients, same_name
 from services.llm import chat_json
 from services.suggestion import (
     build_suggestion_prompt,
@@ -42,8 +42,10 @@ _FENCED_RE = re.compile(r"```[\s\S]*?(```|$)")
 
 
 def revision_schema(language: str) -> dict:
-    """The reviser's reply: its changes first, then the meal. A dish's ingredients come before its
-    name, so the name is written after what goes in; amounts are numbers in the app's units."""
+    """The reviser's reply: its changes first, then the meal. Each menu item lists its ingredients
+    before its name, so a dish's name is written after what goes in, and every item has a numeric
+    amount in the app's units (a dish's servings, which code drops; a simple item's portion). One
+    item shape for both: offered a choice of shapes, the 7B model dropped a dish's ingredients."""
     units = units_for(language)
     ingredient = {
         "type": "object",
@@ -61,8 +63,8 @@ def revision_schema(language: str) -> dict:
             "ingredients": {"type": "array", "items": ingredient},
             "name": {"type": "string"},
             "method": {"type": "string"},
-            "amount": {"type": ["number", "null"]},
-            "unit": {"type": ["string", "null"], "enum": [*units, None]},
+            "amount": {"type": "number"},
+            "unit": {"type": "string", "enum": units},
         },
         "required": ["ingredients", "name", "method", "amount", "unit"],
     }
@@ -110,10 +112,14 @@ def _code_check(meal: dict, context: dict) -> list[str]:
 
 def _clean_meal(meal: dict) -> dict:
     """The reviser's meal in the app's format: a dish has no amount or unit of its own, a simple
-    item no method, and empty prep words or methods are left out."""
+    item no method, and empty prep words or methods are left out. A "dish" that is one item named
+    as itself (Banana: Banana) is that item served as it is, so it becomes a simple item."""
     for item in meal["menu"]:
         if not isinstance(item, dict):
             continue
+        sub = item.get("ingredients") or []
+        if len(sub) == 1 and isinstance(sub[0], dict) and same_name(str(sub[0].get("name", "")), str(item.get("name", ""))):
+            item.update(amount=sub[0].get("amount"), unit=sub[0].get("unit"), ingredients=[])
         if item.get("ingredients"):
             item.pop("amount", None)
             item.pop("unit", None)
