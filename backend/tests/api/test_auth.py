@@ -13,6 +13,7 @@ import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 
+import auth
 import config
 import database
 from auth import hash_pin, verify_pin, needs_rehash
@@ -126,6 +127,83 @@ async def test_login_keeps_current_hash(unauth_client):
     r = await unauth_client.post("/auth/login", json={"name": "Alice", "pin": "1234"})
     assert r.status_code == 200
     assert await _pin_hash("Alice") == before
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    """The rate limit's clock, moved forward by adding seconds to clock[0]."""
+    now = [1000.0]
+    monkeypatch.setattr(auth, "_clock", lambda: now[0])
+    return now
+
+
+async def _login(client, name: str, pin: str) -> int:
+    return (await client.post("/auth/login", json={"name": name, "pin": pin})).status_code
+
+
+# The 5th failure in a row gets 429 with Retry-After, and even the right PIN waits it out
+async def test_login_rate_limit_kicks_in(unauth_client, clock):
+    for _ in range(4):
+        assert await _login(unauth_client, "Alice", "999999") == 401
+    r = await unauth_client.post("/auth/login", json={"name": "Alice", "pin": "999999"})
+    assert r.status_code == 429
+    assert r.headers["Retry-After"] == "30"
+    assert "30 seconds" in r.json()["detail"]
+
+    assert await _login(unauth_client, "Alice", "1234") == 429
+    clock[0] += 31
+    assert await _login(unauth_client, "Alice", "1234") == 200
+
+
+# Each failure after the limit doubles the wait, up to 15 minutes
+async def test_login_rate_limit_wait_grows(unauth_client, clock):
+    waits = []
+    for _ in range(10):
+        r = await unauth_client.post("/auth/login", json={"name": "Alice", "pin": "999999"})
+        if r.status_code == 429:
+            waits.append(int(r.headers["Retry-After"]))
+            clock[0] += waits[-1]
+    assert waits == [30, 60, 120, 240, 480, 900]
+
+
+# A successful login clears the count, so the next failures start from zero
+async def test_login_success_resets_rate_limit(unauth_client, clock):
+    for _ in range(4):
+        assert await _login(unauth_client, "Alice", "999999") == 401
+    assert await _login(unauth_client, "Alice", "1234") == 200
+    for _ in range(4):
+        assert await _login(unauth_client, "Alice", "999999") == 401
+
+
+# Failures more than an hour apart don't add up
+async def test_login_failures_forgotten_after_window(unauth_client, clock):
+    for _ in range(4):
+        assert await _login(unauth_client, "Alice", "999999") == 401
+    clock[0] += 3601
+    for _ in range(4):
+        assert await _login(unauth_client, "Alice", "999999") == 401
+
+
+# A locked name is locked from every IP, and a locked IP is locked for every name
+async def test_login_rate_limit_per_name_and_ip(unauth_client, clock):
+    from main import app
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app, client=("127.0.0.2", 50000)), base_url="http://test"
+    ) as other_ip:
+        # Five wrong names from the default IP lock that IP, not the names
+        for name in ("Bob", "Carol", "Dave", "Erin"):
+            assert await _login(unauth_client, name, "999999") == 401
+        assert await _login(unauth_client, "Frank", "999999") == 429
+        assert await _login(unauth_client, "Alice", "1234") == 429
+        assert await _login(other_ip, "Alice", "1234") == 200
+
+        # Five wrong PINs for Alice from the other IP lock Alice everywhere
+        clock[0] += 31
+        for _ in range(4):
+            assert await _login(other_ip, "Alice", "999999") == 401
+        assert await _login(other_ip, "Alice", "999999") == 429
+        assert await _login(unauth_client, "Alice", "1234") == 429
 
 
 async def test_endpoints_require_auth(unauth_client):
