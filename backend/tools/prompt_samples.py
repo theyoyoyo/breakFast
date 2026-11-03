@@ -14,7 +14,7 @@ Simit sits in the en, tr and mixed fridges without tahini, to catch prepared ite
 
 Five users from the 15-fridge test (2026-10-30), whose replies looked clean but weren't (#131):
 - picky: nuts avoided with almond milk in the fridge, dislikes, favorites mode with saved
-  favorite meals and staples made from its fridge (#132).
+  favorite meals, staples and ratings from its fridge (#132).
 - diabetic: a critical blood sugar rule, with white bread and honey in the fridge.
 - student: no stove (microwave, kettle, toaster), ten minutes on weekdays.
 - big_fridge: about 50 items and every appliance.
@@ -199,6 +199,11 @@ SAMPLES = {
             ),
         ],
         "favorites": ["Cheddar", "Strawberries", "Maple syrup", "Bagels"],
+        "ratings": [
+            {"product_name": "Strawberries", "rating": 9},
+            {"product_name": "Cream cheese", "rating": 8},
+            {"product_name": "Oats", "rating": 3},
+        ],
     },
     "diabetic": {
         **_BASE,
