@@ -112,7 +112,7 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate       # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-python manage.py add-user "Alice"   # asks for a PIN of 6+ digits
+python manage.py add-user "Alice"   # asks for a PIN of 6-10 digits
 python -m uvicorn main:app --host 0.0.0.0 --port 8000
 
 # Frontend (in a second terminal)
@@ -157,7 +157,7 @@ Users are managed on the server; there is no sign-up page.
 
 ```bash
 cd backend
-python manage.py add-user "Alice"                      # asks for a 6+ digit PIN; add --admin for an admin user
+python manage.py add-user "Alice"                      # asks for a 6-10 digit PIN; add --admin for an admin user
 python manage.py set-pin "Alice"                       # change a PIN (or reset a forgotten one)
 python manage.py list-users
 python manage.py delete-user "Alice"                   # also deletes all of Alice's data
@@ -203,8 +203,8 @@ All backend settings are environment variables, documented in [`.env.example`](.
 
 break FAST is built for a trusted home network (LAN or Tailscale), not the open internet:
 
-- Users log in with a name and a PIN of 6 or more digits, stored as a salted scrypt hash. Hashes from older versions (plain SHA-256) still work and are upgraded on the next login, and PINs shorter than 6 digits from before the rule keep working until `set-pin` replaces them.
-- Five failed logins in a row for a name, or from one IP, lock logins for 30 seconds, doubling with each further failure up to 15 minutes.
+- Users log in with a name and a PIN of 6 to 10 digits, stored as a salted scrypt hash. Hashes from older versions (plain SHA-256) still work and are upgraded on the next login, and PINs shorter than 6 digits from before the rule keep working until `set-pin` replaces them.
+- Five failed logins in a row for a name from one IP lock that name on that IP for 30 seconds, doubling with each further failure up to 15 minutes. Other users on that device, and the same user on other devices, can still log in.
 - Session tokens are random 256-bit values kept in memory, so everyone logs in again after a server restart.
 - Do not expose port 8000 to the public internet. Use Tailscale for remote access.
 

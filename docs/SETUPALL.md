@@ -208,8 +208,8 @@ cd backend
 python manage.py add-user "Alice" --admin
 ```
 
-Replace `"Alice"` with your name. The CLI asks for a PIN twice without showing it: at
-least 6 digits, digits only. The `--admin` flag gives you admin privileges (needed for
+Replace `"Alice"` with your name. The CLI asks for a PIN twice without showing it: 6 to
+10 digits, digits only. The `--admin` flag gives you admin privileges (needed for
 user management).
 
 **Verify:**
@@ -223,9 +223,9 @@ You should see your user listed.
 > **Adding more users later:** Run `add-user` again with a different name/pin.
 > Each user gets fully isolated data (ingredients, meals, preferences, etc.).
 
-> **Changing a PIN:** `python manage.py set-pin "Alice"` asks for the new one (6+ digits).
-> Use it to move a user who still has a shorter PIN from before the 6-digit rule (old
-> PINs keep working until then), or to reset a forgotten one.
+> **Changing a PIN:** `python manage.py set-pin "Alice"` asks for the new one (6-10 digits).
+> Use it to move a user who still has a PIN from before the rule (old PINs keep working
+> until then), or to reset a forgotten one.
 
 ---
 
@@ -263,10 +263,10 @@ curl -X POST http://localhost:8000/auth/login -H "Content-Type: application/json
 Put your PIN in place of `YOUR_PIN`. It should return JSON with a `token` field. Copy
 this token — you'll need it for the next test.
 
-> **Locked out after typos?** The 5th failed login in a row for a name (or from one
-> device) is answered with `429 Too Many Requests` and a `Retry-After` wait: 30 seconds,
-> doubling with each further failure up to 15 minutes. Wait it out, or restart the
-> backend, which clears the count.
+> **Locked out after typos?** The 5th failed login in a row for a name from one device
+> is answered with `429 Too Many Requests` and a `Retry-After` wait: 30 seconds, doubling
+> with each further failure up to 15 minutes. Only that name on that device waits: wait
+> it out, log in from another device, or restart the backend, which clears the count.
 
 **Test the Ollama connection through the backend:**
 
@@ -667,7 +667,7 @@ minute, a `--draft` run about 15 seconds.
 |---|---|
 | Start backend | `cd backend && python -m uvicorn main:app --host 0.0.0.0 --port 8000` |
 | Build frontend | `cd frontend && npm run build` |
-| Add user | `cd backend && python manage.py add-user "Name" --admin` (asks for a 6+ digit PIN) |
+| Add user | `cd backend && python manage.py add-user "Name" --admin` (asks for a 6-10 digit PIN) |
 | Change a PIN | `cd backend && python manage.py set-pin "Name"` |
 | List users | `cd backend && python manage.py list-users` |
 | Backup DB | `cd backend && python manage.py backup-db` |
