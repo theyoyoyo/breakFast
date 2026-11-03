@@ -75,9 +75,10 @@ async def _save_message(db, session_id: str, user_id: int, role: str, content: s
         "INSERT INTO chat_messages (session_id, user_id, role, content) VALUES (?, ?, ?, ?)",
         (session_id, user_id, role, content),
     )
+    # The session id comes from the client, so only the user's own session is touched
     await db.execute(
-        "UPDATE chat_sessions SET updated_at = datetime('now') WHERE id = ?",
-        (session_id,),
+        "UPDATE chat_sessions SET updated_at = datetime('now') WHERE id = ? AND user_id = ?",
+        (session_id, user_id),
     )
     await db.commit()
     return cur.lastrowid

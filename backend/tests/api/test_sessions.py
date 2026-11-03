@@ -125,3 +125,32 @@ async def test_messages_persist_via_websocket(client, tmp_path, monkeypatch):
     assert messages[0]["role"] == "user"
     assert messages[0]["content"] == "hello"
     assert messages[1]["role"] == "assistant"
+
+
+async def _add_session(db, user_name: str, session_id: str) -> None:
+    """A session for the named user (created if missing) last touched long ago."""
+    await db.execute("INSERT OR IGNORE INTO users (name, pin_hash) VALUES (?, 'unused')", (user_name,))
+    await db.execute(
+        "INSERT INTO chat_sessions (id, user_id, updated_at) "
+        "SELECT ?, id, '2026-01-01 08:00:00' FROM users WHERE name = ?",
+        (session_id, user_name),
+    )
+    await db.commit()
+
+
+async def _updated_at(db, session_id: str) -> str:
+    async with db.execute("SELECT updated_at FROM chat_sessions WHERE id = ?", (session_id,)) as cur:
+        return (await cur.fetchone())[0]
+
+
+# Saving a message touches the user's own session, but not another user's session with that id
+async def test_save_message_touches_only_own_session(client, db):
+    await _add_session(db, "testuser", "own-session")
+    await _add_session(db, "Bob", "bob-session")
+
+    for sid in ("own-session", "bob-session"):
+        r = await client.post(f"/sessions/{sid}/messages", json={"role": "assistant", "content": "Menemen"})
+        assert r.status_code == 200
+
+    assert await _updated_at(db, "own-session") != "2026-01-01 08:00:00"
+    assert await _updated_at(db, "bob-session") == "2026-01-01 08:00:00"
