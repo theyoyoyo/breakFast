@@ -155,6 +155,19 @@ async def test_login_rate_limit_kicks_in(unauth_client, clock):
     assert await _login(unauth_client, "Alice", "1234") == 200
 
 
+# A page on another origin (the dev server's port) may read Retry-After from a 429
+async def test_login_rate_limit_exposes_retry_after(unauth_client, clock):
+    for _ in range(4):
+        assert await _login(unauth_client, "Alice", "999999") == 401
+    r = await unauth_client.post(
+        "/auth/login",
+        json={"name": "Alice", "pin": "999999"},
+        headers={"Origin": "http://localhost:5173"},
+    )
+    assert r.status_code == 429
+    assert "retry-after" in r.headers["access-control-expose-headers"].lower()
+
+
 # Each failure after the limit doubles the wait, up to 15 minutes
 async def test_login_rate_limit_wait_grows(unauth_client, clock):
     waits = []

@@ -33,6 +33,8 @@ app.add_middleware(
     allow_credentials=CORS_ALLOW_CREDENTIALS,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
+    # The login screen reads the wait from a rate-limited login (dev runs on another port)
+    expose_headers=["Retry-After"],
 )
 
 app.include_router(analyst.router)
