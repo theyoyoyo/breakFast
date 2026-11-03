@@ -5,7 +5,7 @@ On server restart, users simply re-login.
 
 PINs are stored as salted scrypt hashes (`scrypt$n$r$p$salt$hash`, hex). Plain SHA-256 hashes
 from before scrypt still verify, and a successful login re-hashes them with scrypt.
-Failed logins are counted in memory too, per user name and per client IP.
+Failed logins are counted in memory too, per user name on each client IP.
 """
 
 import hashlib
@@ -31,9 +31,11 @@ _HASH_BYTES = 32
 # New or changed PINs need this many digits; shorter PINs set before the rule still log in
 MIN_PIN_LENGTH = 6
 
-# Login rate limit, per user name and per client IP: the 5th failure in a row locks logins for
-# 30 s, and each further one doubles the wait up to 15 min. Failures are forgotten after an hour
-# without one, and a successful login clears them.
+# Login rate limit, per user name on each client IP: the 5th failure in a row locks that name on
+# that IP for 30 s, and each further one doubles the wait up to 15 min. Failures are forgotten
+# after an hour without one, and a successful login clears them. One counter per pair, so typos
+# on one device don't lock other users there, and nobody can lock a user out of their own device.
+# Guessing from many IPs would take many devices on the server's own network (Tailscale or LAN).
 MAX_LOGIN_FAILURES = 5
 LOGIN_BASE_WAIT = 30
 LOGIN_MAX_WAIT = 15 * 60
@@ -50,8 +52,8 @@ class _Failures:
     locked_until: float = 0.0
 
 
-# {"name:<name>" or "ip:<host>": its failed logins}
-_login_failures: dict[str, _Failures] = {}
+# {(name, client IP): its failed logins}
+_login_failures: dict[tuple[str, str | None], _Failures] = {}
 
 
 def _scrypt(pin: str, salt: bytes, n: int, r: int, p: int, dklen: int = _HASH_BYTES) -> bytes:
@@ -101,39 +103,30 @@ def pin_problem(pin: str) -> str | None:
     return None
 
 
-def _login_keys(name: str, ip: str | None) -> list[str]:
-    return [f"name:{name}"] + ([f"ip:{ip}"] if ip else [])
-
-
 def login_wait(name: str, ip: str | None) -> int:
-    """Seconds until this name and IP may try to log in again (0 = now)."""
-    now = _clock()
-    wait = max(
-        (f.locked_until - now for key in _login_keys(name, ip) if (f := _login_failures.get(key))),
-        default=0,
-    )
+    """Seconds until this name may try to log in again from this IP (0 = now)."""
+    f = _login_failures.get((name, ip))
+    wait = f.locked_until - _clock() if f else 0
     return math.ceil(wait) if wait > 0 else 0
 
 
 def record_login_failure(name: str, ip: str | None) -> None:
-    """Count a failed login for the name and the IP, locking them once there are too many."""
+    """Count a failed login for the name on this IP, locking the pair once there are too many."""
     now = _clock()
     # Drop counters quiet for a whole window (longer than any lock), so the store stays small
     for key in [k for k, f in _login_failures.items() if now - f.last > LOGIN_FAILURE_WINDOW]:
         del _login_failures[key]
-    for key in _login_keys(name, ip):
-        f = _login_failures.setdefault(key, _Failures())
-        f.count += 1
-        f.last = now
-        if f.count >= MAX_LOGIN_FAILURES:
-            doublings = min(f.count - MAX_LOGIN_FAILURES, 10)
-            f.locked_until = now + min(LOGIN_BASE_WAIT * 2**doublings, LOGIN_MAX_WAIT)
+    f = _login_failures.setdefault((name, ip), _Failures())
+    f.count += 1
+    f.last = now
+    if f.count >= MAX_LOGIN_FAILURES:
+        doublings = min(f.count - MAX_LOGIN_FAILURES, 10)
+        f.locked_until = now + min(LOGIN_BASE_WAIT * 2**doublings, LOGIN_MAX_WAIT)
 
 
 def clear_login_failures(name: str, ip: str | None) -> None:
-    """Forget the failed logins of a name and an IP (after a successful login)."""
-    for key in _login_keys(name, ip):
-        _login_failures.pop(key, None)
+    """Forget the failed logins of a name on this IP (after a successful login)."""
+    _login_failures.pop((name, ip), None)
 
 
 def create_token(user_id: int) -> str:

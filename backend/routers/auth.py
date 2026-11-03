@@ -26,7 +26,7 @@ def _too_many_failures(wait: int) -> HTTPException:
 @router.post("/login", response_model=TokenOut)
 async def login(body: UserLogin, request: Request):
     """Authenticate with name + pin, get a session token.
-    Too many failures for the name or the client IP get 429 with Retry-After."""
+    Too many failures for the name on the client's IP get 429 with Retry-After."""
     ip = request.client.host if request.client else None
     wait = login_wait(body.name, ip)
     if wait:

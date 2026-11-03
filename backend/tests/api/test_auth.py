@@ -197,26 +197,26 @@ async def test_login_failures_forgotten_after_window(unauth_client, clock):
         assert await _login(unauth_client, "Alice", "999999") == 401
 
 
-# A locked name is locked from every IP, and a locked IP is locked for every name
+# A lock holds one name on one IP: the same name from another IP and another name from the same IP still log in
 async def test_login_rate_limit_per_name_and_ip(unauth_client, clock):
     from main import app
+
+    async with database.get_db() as db:
+        await db.execute(
+            "INSERT INTO users (name, pin_hash, is_admin) VALUES (?, ?, 0)", ("Bob", hash_pin("246813")),
+        )
+        await db.commit()
 
     async with AsyncClient(
         transport=ASGITransport(app=app, client=("127.0.0.2", 50000)), base_url="http://test"
     ) as other_ip:
-        # Five wrong names from the default IP lock that IP, not the names
-        for name in ("Bob", "Carol", "Dave", "Erin"):
-            assert await _login(unauth_client, name, "999999") == 401
-        assert await _login(unauth_client, "Frank", "999999") == 429
-        assert await _login(unauth_client, "Alice", "1234") == 429
-        assert await _login(other_ip, "Alice", "1234") == 200
-
-        # Five wrong PINs for Alice from the other IP lock Alice everywhere
-        clock[0] += 31
         for _ in range(4):
-            assert await _login(other_ip, "Alice", "999999") == 401
-        assert await _login(other_ip, "Alice", "999999") == 429
+            assert await _login(unauth_client, "Alice", "999999") == 401
+        assert await _login(unauth_client, "Alice", "999999") == 429
         assert await _login(unauth_client, "Alice", "1234") == 429
+
+        assert await _login(other_ip, "Alice", "1234") == 200
+        assert await _login(unauth_client, "Bob", "246813") == 200
 
 
 async def test_endpoints_require_auth(unauth_client):
