@@ -2,17 +2,19 @@
 Tests for auth — login, token management, endpoint protection.
 """
 
+import hashlib
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import aiosqlite
+import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 
 import database
-from auth import hash_pin
+from auth import hash_pin, verify_pin, needs_rehash
 from models.ingredient import DEMO_FRIDGE
 
 
@@ -56,6 +58,73 @@ async def test_login_wrong_pin(unauth_client):
 async def test_login_unknown_user(unauth_client):
     r = await unauth_client.post("/auth/login", json={"name": "Nobody", "pin": "1234"})
     assert r.status_code == 401
+
+
+async def _pin_hash(name: str) -> str:
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        async with db.execute("SELECT pin_hash FROM users WHERE name = ?", (name,)) as cur:
+            return (await cur.fetchone())[0]
+
+
+async def _add_sha256_user(name: str, pin: str) -> None:
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        await db.execute(
+            "INSERT INTO users (name, pin_hash) VALUES (?, ?)",
+            (name, hashlib.sha256(pin.encode()).hexdigest()),
+        )
+        await db.commit()
+
+
+# The same PIN hashed twice gives two different salted scrypt hashes, and both verify
+def test_hash_pin_is_salted():
+    first, second = hash_pin("482916"), hash_pin("482916")
+    assert first != second
+    assert first.startswith("scrypt$") and second.startswith("scrypt$")
+    assert verify_pin("482916", first) and verify_pin("482916", second)
+
+
+# A wrong PIN fails against a scrypt hash, an old SHA-256 hash and a broken hash
+def test_verify_pin_rejects_wrong_pin():
+    assert not verify_pin("482917", hash_pin("482916"))
+    assert not verify_pin("482917", hashlib.sha256(b"482916").hexdigest())
+    assert not verify_pin("482916", "scrypt$broken")
+
+
+# The production scrypt cost fits the memory limit hashlib gets, so real logins don't fail
+@pytest.mark.real_scrypt
+def test_real_scrypt_cost_hashes_and_verifies():
+    stored = hash_pin("482916")
+    assert stored.startswith("scrypt$32768$8$3$")
+    assert verify_pin("482916", stored)
+    assert not needs_rehash(stored)
+
+
+# An old SHA-256 hash (and its short PIN) still logs in, and that login replaces it with scrypt
+async def test_login_upgrades_sha256_hash(unauth_client):
+    await _add_sha256_user("Bob", "1357")
+    r = await unauth_client.post("/auth/login", json={"name": "Bob", "pin": "1357"})
+    assert r.status_code == 200
+    stored = await _pin_hash("Bob")
+    assert stored.startswith("scrypt$") and verify_pin("1357", stored)
+
+    r = await unauth_client.post("/auth/login", json={"name": "Bob", "pin": "1357"})
+    assert r.status_code == 200
+
+
+# A wrong PIN leaves an old SHA-256 hash as it was
+async def test_wrong_pin_keeps_sha256_hash(unauth_client):
+    await _add_sha256_user("Bob", "1357")
+    r = await unauth_client.post("/auth/login", json={"name": "Bob", "pin": "7531"})
+    assert r.status_code == 401
+    assert await _pin_hash("Bob") == hashlib.sha256(b"1357").hexdigest()
+
+
+# A login with a hash at the current cost doesn't rewrite it
+async def test_login_keeps_current_hash(unauth_client):
+    before = await _pin_hash("Alice")
+    r = await unauth_client.post("/auth/login", json={"name": "Alice", "pin": "1234"})
+    assert r.status_code == 200
+    assert await _pin_hash("Alice") == before
 
 
 async def test_endpoints_require_auth(unauth_client):
