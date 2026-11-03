@@ -27,6 +27,7 @@ from services.suggestion import (
 )
 from services.personas import (
     build_pipeline_analyst_prompt,
+    build_present_prompt,
     build_scheduler_prompt,
     build_scheduler_user_message,
     build_shopping_prompt,
@@ -307,12 +308,20 @@ class TestSuggestionPrompt:
         prompt = build_suggestion_prompt([], [], {}, [])
         assert "widely available" in prompt
 
-    def test_nutrition_note_in_json_block(self):
-        """JSON block should include the short nutrition note and prep time."""
+    def test_json_block_has_prep_time_without_nutrition_note(self):
+        """The JSON block asks for the prep time; the nutrition note is gone, since nothing showed it."""
         prompt = build_suggestion_prompt([], [], {}, [])
-        assert '"nutrition_note"' in prompt
         assert '"prep_time_min"' in prompt
+        assert "nutrition_note" not in prompt
         assert '"nutrition_detail"' not in prompt
+
+    def test_no_example_lists_that_pull_menus_off_the_fridge(self):
+        """The rules stay without example dishes or superfoods, which a 7B model copied into menus."""
+        for mode in (None, "favorites", "explore"):
+            prompt = build_suggestion_prompt([], [], {}, [], mode=mode)
+            assert "Sucuk" not in prompt and "Ayran" not in prompt, mode
+            assert "chia" not in prompt.lower() and "quinoa" not in prompt.lower(), mode
+            assert "Keep proper dish names" in prompt, mode
 
     def test_includes_user_profile(self):
         """Suggestion prompt should render user physical profile."""
@@ -617,13 +626,30 @@ class TestFridgeRule:
         assert "water" not in prompt.lower()
         assert "never appear in the JSON" not in prompt
 
-    # Code checks the fridge, so the reviewer only uses the list to suggest swaps
+    # Code checks the fridge, so the reviser gets the list and code's findings, not a fridge rule of its own
     def test_pipeline_analyst_leaves_fridge_check_to_code(self):
         prompt = build_pipeline_analyst_prompt([], ingredient_inventory=[{"name": "Yumurta"}])
         assert "Yumurta" in prompt
-        assert "suggest swaps only from these" in prompt
+        assert "everything the user has, basics included" in prompt
         assert "FRIDGE CONSTRAINT" not in prompt
         assert "water" not in prompt.lower()
+
+
+# ---------------------------------------------------------------------------
+# Present step: the reply text from the final meal
+# ---------------------------------------------------------------------------
+
+class TestPresentPrompt:
+    # The text talks only about the menu's items and leaves nutrition and prep to their buttons
+    def test_only_the_menu_without_nutrition_or_prep(self):
+        prompt = build_present_prompt()
+        assert "Talk only about the items on this menu" in prompt
+        assert "Nutrition numbers and claims belong to the Analysis button" in prompt
+        assert "prep steps to the Prep Plan" in prompt
+
+    # The text is plain, since the app shows the menu under it
+    def test_plain_text_only(self):
+        assert "Write plain text only" in build_present_prompt()
 
 
 # ---------------------------------------------------------------------------
@@ -637,6 +663,7 @@ class TestLanguageReminder:
             "suggestion": build_suggestion_prompt([], [], {}, [], language=language),
             "suggestion_favorites": build_suggestion_prompt([], [], {}, [], mode="favorites", language=language),
             "suggestion_explore": build_suggestion_prompt([], [], {}, [], mode="explore", language=language),
+            "present": build_present_prompt(language),
             "analyst": build_analyst_prompt([], None, None, None, language=language),
             "weekly_analyst": build_weekly_analyst_prompt_with_meals("Mon: eggs", language=language),
             "scheduler": build_scheduler_prompt("Menemen", [], "eggs", language=language),

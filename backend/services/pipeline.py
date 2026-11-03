@@ -1,41 +1,159 @@
 """
-3-step suggestion pipeline: draft → analyze → refine.
+3-step suggestion pipeline: draft → revise → present.
 
 Orchestrates the Suggestion and Pipeline Analyst personas to produce
 a higher-quality meal suggestion. The user sees progress updates while
 waiting, then the final meal.
 
 Steps:
-1. Suggestion persona drafts a meal (collected internally, not streamed to user).
-2. Pipeline Analyst reviews the draft (a few changes as a JSON list), and plain
-   code lists any draft ingredient that isn't in the fridge.
-3. Suggestion persona refines the meal using that feedback. If code finds more
-   problems in the refined meal than in the draft, the user gets the draft:
-   avoid-list hits first, then fridge misses and unknown units.
+1. Suggestion persona drafts a menu (collected internally, not shown).
+2. Plain code checks the draft's meal (fridge, units, avoid list), and the
+   Pipeline Analyst returns the fixed meal itself through structured outputs
+   (revision_schema): its changes first, then the meal. If code finds more
+   problems in the revised meal than in the draft, or can't read it, the
+   draft's meal is used: avoid-list hits first, then fridge misses and units.
+3. Suggestion persona writes the short reply text from the final meal alone,
+   so the text never promises what the menu doesn't have. If that call fails,
+   code writes the text from the menu name and description.
+The reply keeps its shape: the text, then the meal in a ```json block.
 """
 
+import json
+import logging
+import re
 from typing import AsyncGenerator
 
-from models.units import unknown_units
+from models.units import unknown_units, units_for
 from services.fridge import find_avoided, find_missing_ingredients
+from services.llm import chat_json
 from services.suggestion import (
     build_suggestion_prompt,
     build_pipeline_analyst_prompt,
+    build_present_prompt,
     stream_response,
 )
 from utils import extract_json_block, repair_json_block
 
+# The reviser applies its changes and checks the result, so it runs cool like the old analyst
+REVISE_TEMPERATURE = 0.3
 
-def _meal_problems(text: str, context: dict) -> tuple[float, float]:
-    """Code-checked problems in a reply's meal, compared in order: avoid-list hits (a hard ban,
+# A fenced block in the present step's text; the reply's only ```json block is the meal
+_FENCED_RE = re.compile(r"```[\s\S]*?(```|$)")
+
+
+def revision_schema(language: str) -> dict:
+    """The reviser's reply: its changes first, then the meal. A dish's ingredients come before its
+    name, so the name is written after what goes in; amounts are numbers in the app's units."""
+    units = units_for(language)
+    ingredient = {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "amount": {"type": "number"},
+            "unit": {"type": "string", "enum": units},
+            "prep": {"type": "string"},
+        },
+        "required": ["name", "amount", "unit"],
+    }
+    item = {
+        "type": "object",
+        "properties": {
+            "ingredients": {"type": "array", "items": ingredient},
+            "name": {"type": "string"},
+            "method": {"type": "string"},
+            "amount": {"type": ["number", "null"]},
+            "unit": {"type": ["string", "null"], "enum": [*units, None]},
+        },
+        "required": ["ingredients", "name", "method", "amount", "unit"],
+    }
+    meal = {
+        "type": "object",
+        "properties": {
+            "menu": {"type": "array", "items": item},
+            "menu_name": {"type": "string"},
+            "description": {"type": "string"},
+            "prep_time_min": {"type": "integer"},
+        },
+        "required": ["menu", "menu_name", "description", "prep_time_min"],
+    }
+    return {
+        "type": "object",
+        "properties": {"changes": {"type": "array", "items": {"type": "string"}}, "meal": meal},
+        "required": ["changes", "meal"],
+    }
+
+
+def _readable_meal(meal) -> dict | None:
+    return meal if isinstance(meal, dict) and isinstance(meal.get("menu"), list) and meal["menu"] else None
+
+
+def _meal_problems(meal: dict | None, context: dict) -> tuple[float, float]:
+    """Code-checked problems in a meal, compared in order: avoid-list hits (a hard ban,
     so one outweighs any number of the rest), then fridge misses and units the app can't show.
-    A reply without a meal counts as the worst."""
-    meal = extract_json_block(text)
-    if not isinstance(meal, dict) or not isinstance(meal.get("menu"), list):
+    No meal counts as the worst."""
+    if meal is None:
         return float("inf"), float("inf")
     avoided = find_avoided(meal, context["avoid_list"])
     missing = find_missing_ingredients(meal, context["ingredients"])
     return len(avoided), len(missing) + len(unknown_units(meal, context.get("language", "en")))
+
+
+def _code_check(meal: dict, context: dict) -> list[str]:
+    """What code found in the draft's meal, one line per kind, for the reviser to fix."""
+    checks = [
+        ("Not in the fridge", find_missing_ingredients(meal, context["ingredients"])),
+        ("On the avoid list", find_avoided(meal, context["avoid_list"])),
+        ("Units the app can't show", unknown_units(meal, context.get("language", "en"))),
+    ]
+    return [f"{label}: {', '.join(names)}" for label, names in checks if names]
+
+
+def _clean_meal(meal: dict) -> dict:
+    """The reviser's meal in the app's format: a dish has no amount or unit of its own, a simple
+    item no method, and empty prep words or methods are left out."""
+    for item in meal["menu"]:
+        if not isinstance(item, dict):
+            continue
+        if item.get("ingredients"):
+            item.pop("amount", None)
+            item.pop("unit", None)
+        else:
+            item["ingredients"] = []
+            item.pop("method", None)
+        if not str(item.get("method") or "").strip():
+            item.pop("method", None)
+        for ingredient in item["ingredients"]:
+            if isinstance(ingredient, dict) and not str(ingredient.get("prep") or "").strip():
+                ingredient.pop("prep", None)
+    return meal
+
+
+def _parse_revision(reply: str) -> tuple[list[str], dict | None]:
+    """The reviser's changes and its meal (None when the meal can't be read)."""
+    try:
+        data = json.loads(reply)
+    except (json.JSONDecodeError, TypeError):
+        return [], None
+    if not isinstance(data, dict):
+        return [], None
+    changes = [str(c).strip() for c in data.get("changes") or [] if str(c).strip()]
+    meal = _readable_meal(data.get("meal"))
+    return changes, _clean_meal(meal) if meal else None
+
+
+def _revision_message(draft_text: str, draft_meal: dict | None, problems: list[str]) -> str:
+    if draft_meal is None:
+        draft = f"Draft (its meal block couldn't be read, so build the meal from it):\n{draft_text}"
+    else:
+        draft = f"Draft menu:\n```json\n{json.dumps(draft_meal, ensure_ascii=False, indent=2)}\n```"
+    check = "\n".join(f"- {p}" for p in problems) if problems else "- Nothing found."
+    return f"{draft}\n\nCode check:\n{check}"
+
+
+def _code_text(meal: dict) -> str:
+    """The reply text when the present step fails: the menu name and description."""
+    name, description = str(meal.get("menu_name") or "").strip(), str(meal.get("description") or "").strip()
+    return "\n\n".join(part for part in (f"**{name}**" if name else "", description) if part)
 
 
 async def run_suggestion_pipeline(
@@ -51,8 +169,8 @@ async def run_suggestion_pipeline(
     Yields dicts with:
       {"type": "progress", "step": "drafting"|"analyzing"|"finalizing"}
       {"type": "draft", "content": "..."}   — the full draft (for the prompt test; chat ignores it)
-      {"type": "review", "content": "..."}  — the feedback the refine step gets (same)
-      {"type": "token", "content": "..."}   — the final text, sent once the fallback check is done
+      {"type": "review", "content": "..."}  — the code check and the reviser's changes (same)
+      {"type": "token", "content": "..."}   — the final text, sent once the meal is chosen
       {"type": "done", "content": "..."}    — full final response
 
     context: the full context dict from _load_context() in chat.py
@@ -81,12 +199,15 @@ async def run_suggestion_pipeline(
         ratings=context.get("ratings"),
     )
 
-    analyst_prompt = build_pipeline_analyst_prompt(
+    reviser_prompt = build_pipeline_analyst_prompt(
         recent_meal_history=context["history"],
         user_profile=context["user_profile"],
         supplements=context["supplements"],
         health_rules=context["health_rules"],
         ingredient_inventory=context["ingredients"],
+        avoid_list=context["avoid_list"],
+        preferences=context["preferences"],
+        mode=mode,
         language=language,
     )
 
@@ -109,57 +230,60 @@ async def run_suggestion_pipeline(
     draft_text = "".join(draft_chunks)
     yield {"type": "draft", "content": draft_text}
 
-    # --- Step 2: Analyst review ---
+    # A draft with no meal block at all is a note to the user (the fridge is too small): send it as is
+    draft_meal = _readable_meal(extract_json_block(draft_text))
+    if draft_meal is None and "```json" not in draft_text:
+        yield {"type": "progress", "step": "analyzing"}
+        yield {"type": "review", "content": "- No meal in the draft, so nothing to revise."}
+        yield {"type": "progress", "step": "finalizing"}
+        final_text = repair_json_block(draft_text)
+        yield {"type": "token", "content": final_text}
+        yield {"type": "done", "content": final_text}
+        return
+
+    # --- Step 2: Revise ---
     yield {"type": "progress", "step": "analyzing"}
 
-    analyst_message = f"Draft suggestion:\n\n{draft_text}"
-    analyst_chunks = []
-    async for chunk in stream_response(analyst_prompt, [], analyst_message, temperature=0.3):
-        analyst_chunks.append(chunk)
-    analyst_text = "".join(analyst_chunks)
-
-    # Extract feedback list from analyst response
-    feedback_data = extract_json_block(analyst_text)
-    if feedback_data and "feedback" in feedback_data:
-        feedback_lines = feedback_data["feedback"]
-        feedback_formatted = "\n".join(f"- {line}" for line in feedback_lines)
-    else:
-        # Analyst didn't produce structured JSON — use raw text
-        feedback_formatted = analyst_text
-
-    # The 7B model misses fridge-only violations, so code checks the draft's JSON too
-    missing = find_missing_ingredients(extract_json_block(draft_text), context["ingredients"])
-    if missing:
-        fridge_feedback = (
-            "- FRIDGE CHECK (hard rule, fix this first): these ingredients are not in the fridge: "
-            f"{', '.join(missing)}. Replace each one with an inventory item, writing its name "
-            "exactly as listed, or remove it. Drop a dish only if it can't be made without it."
+    problems = _code_check(draft_meal, context) if draft_meal else []
+    changes, revised_meal = [], None
+    try:
+        reply = await chat_json(
+            system_prompt=reviser_prompt,
+            messages=[{"role": "user", "content": _revision_message(draft_text, draft_meal, problems)}],
+            schema=revision_schema(language),
+            temperature=REVISE_TEMPERATURE,
         )
-        feedback_formatted = f"{fridge_feedback}\n{feedback_formatted}"
-    yield {"type": "review", "content": feedback_formatted}
+        changes, revised_meal = _parse_revision(reply)
+        if revised_meal is None:
+            logging.warning("Suggestion reviser: could not read the meal in %r", reply)
+    except Exception:
+        logging.exception("Suggestion reviser failed; the draft's meal is used")
+    review = [f"- CODE CHECK: {p}" for p in problems] + [f"- {c}" for c in changes]
+    yield {"type": "review", "content": "\n".join(review) or "- No changes."}
 
-    # --- Step 3: Refine ---
+    # The review may only improve the meal: when code finds more problems after it, keep the draft's
+    if _meal_problems(revised_meal, context) <= _meal_problems(draft_meal, context):
+        meal = revised_meal
+    else:
+        meal = draft_meal
+
+    # --- Step 3: Present ---
     yield {"type": "progress", "step": "finalizing"}
 
-    refinement_message = (
-        f"Below is the draft breakfast suggestion you prepared, along with feedback from the "
-        f"nutrition analyst. Make the changes the feedback asks for that work with the available "
-        f"ingredients, and keep everything else exactly as in the draft (items, names, amounts, "
-        f"wording), so the review only improves the meal. Write the result as you would present "
-        f"it to the user.\n\n"
-        f"═══ DRAFT SUGGESTION ═══\n{draft_text}\n\n"
-        f"═══ ANALYST FEEDBACK ═══\n{feedback_formatted}"
-    )
-
-    final_chunks = []
-    async for chunk in stream_response(suggestion_prompt, [], refinement_message, temperature=temperature):
-        final_chunks.append(chunk)
-    final_text = "".join(final_chunks)
-
-    # The review may only improve the meal: when code finds more problems after it, keep the draft
-    if _meal_problems(final_text, context) > _meal_problems(draft_text, context):
-        final_text = draft_text
-    final_text = repair_json_block(final_text)
+    if meal is None:  # neither the draft nor the reviser gave a meal that can be read
+        final_text = repair_json_block(draft_text)
+    else:
+        meal_json = json.dumps(meal, ensure_ascii=False, indent=2)
+        text = ""
+        try:
+            chunks = []
+            present_message = f"Today's menu:\n```json\n{meal_json}\n```"
+            async for chunk in stream_response(build_present_prompt(language), [], present_message, temperature=temperature):
+                chunks.append(chunk)
+            text = _FENCED_RE.sub("", "".join(chunks)).strip()
+        except Exception:
+            logging.exception("Suggestion present step failed; code writes the text")
+        final_text = f"{text or _code_text(meal)}\n\n```json\n{meal_json}\n```"
 
     yield {"type": "token", "content": final_text}
     yield {"type": "done", "content": final_text}

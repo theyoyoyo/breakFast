@@ -1,7 +1,8 @@
 """
-Tests for the 3-step suggestion pipeline (draft → analyze → refine).
+Tests for the 3-step suggestion pipeline (draft → revise → present).
 """
 
+import json
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -11,7 +12,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 import pytest
 
 from services.suggestion import build_pipeline_analyst_prompt
-from services.pipeline import run_suggestion_pipeline
+from services.pipeline import revision_schema, run_suggestion_pipeline
+from utils import extract_json_block
 
 
 # ---------------------------------------------------------------------------
@@ -21,7 +23,7 @@ from services.pipeline import run_suggestion_pipeline
 SAMPLE_CONTEXT = {
     "ingredients": [{"name": "eggs", "quantity": "6", "unit": "pcs"}],
     "history": [{"meal_name": "Menemen", "ingredients": '["eggs", "tomato"]'}],
-    "preferences": {"favorite": "eggs"},
+    "preferences": {"favorite": "eggs", "dislike:olives": "Olives"},
     "stated_habits": ["early breakfast"],
     "inferred_habits": None,
     "health_rules": [{"rule_text": "Favor omega-3", "priority": "high"}],
@@ -30,387 +32,290 @@ SAMPLE_CONTEXT = {
     "avoid_list": ["shellfish"],
 }
 
+EGGS = {"name": "eggs", "amount": 2, "unit": "pcs"}
+
+
+def _meal(*ingredients: dict) -> dict:
+    """A meal with one dish made of the given ingredients."""
+    return {
+        "menu": [{"name": "Boiled eggs", "ingredients": list(ingredients)}],
+        "menu_name": "Eggs", "description": "Warm eggs.", "prep_time_min": 10,
+    }
+
+
+def _draft(meal: dict) -> str:
+    return f"Enjoy!\n```json\n{json.dumps(meal)}\n```"
+
+
+def _revision(meal, changes=()) -> str:
+    return json.dumps({"changes": list(changes), "meal": meal})
+
+
+async def _run(draft, revision, present="A warm start.", context=SAMPLE_CONTEXT, mode=None, temperature=0.6):
+    """Run the pipeline on canned replies (an Exception raises instead); returns the events and every model call."""
+    calls = []
+
+    async def fake_stream(system_prompt, history, message, temperature=None):
+        streamed = [c for c in calls if c["kind"] == "stream"]
+        calls.append({"kind": "stream", "system": system_prompt, "message": message, "temperature": temperature})
+        text = draft if not streamed else present
+        if isinstance(text, Exception):
+            raise text
+        for char in text:
+            yield char
+
+    async def fake_chat_json(system_prompt, messages, schema, temperature=None):
+        calls.append({
+            "kind": "json", "system": system_prompt, "message": messages[0]["content"],
+            "temperature": temperature, "schema": schema,
+        })
+        if isinstance(revision, Exception):
+            raise revision
+        return revision
+
+    with patch("services.pipeline.stream_response", fake_stream), patch("services.pipeline.chat_json", fake_chat_json):
+        events = [
+            e async for e in run_suggestion_pipeline(
+                context=context, user_message="Suggest", mode=mode, temperature=temperature,
+            )
+        ]
+    return events, calls
+
+
+def _final(events) -> str:
+    """The text the user gets: sent as tokens, then done, the same."""
+    done = next(e["content"] for e in events if e["type"] == "done")
+    assert "".join(e["content"] for e in events if e["type"] == "token") == done
+    return done
+
 
 # ---------------------------------------------------------------------------
-# Pipeline analyst prompt builder
+# Reviser prompt and schema
 # ---------------------------------------------------------------------------
 
-class TestPipelineAnalystPrompt:
-    # Prompt contains the internal reviewer identity
-    def test_contains_reviewer_identity(self):
-        prompt = build_pipeline_analyst_prompt(
-            recent_meal_history=SAMPLE_CONTEXT["history"],
-        )
-        assert "harsh" in prompt.lower() or "internal reviewer" in prompt.lower()
+class TestReviserPrompt:
+    # The reviser is an internal step that returns the fixed meal, in the user's language
+    def test_identity_and_language(self):
+        prompt = build_pipeline_analyst_prompt(recent_meal_history=[])
+        assert "meal reviser, an internal step the user never sees" in prompt
         assert "Always respond in English." in prompt
+        assert "Always respond in Turkish." in build_pipeline_analyst_prompt([], language="tr")
 
-    def test_respects_turkish_language_setting(self):
-        prompt = build_pipeline_analyst_prompt(
-            recent_meal_history=SAMPLE_CONTEXT["history"], language="tr",
-        )
-        assert "Always respond in Turkish." in prompt
-
-    # Prompt injects user profile data
-    def test_injects_user_profile(self):
+    # It sees the profile, supplements, health rules and recent meals
+    def test_injects_user_context(self):
         prompt = build_pipeline_analyst_prompt(
             recent_meal_history=SAMPLE_CONTEXT["history"],
             user_profile=SAMPLE_CONTEXT["user_profile"],
-        )
-        assert "180" in prompt
-        assert "75" in prompt
-
-    # Prompt injects supplements
-    def test_injects_supplements(self):
-        prompt = build_pipeline_analyst_prompt(
-            recent_meal_history=SAMPLE_CONTEXT["history"],
             supplements=SAMPLE_CONTEXT["supplements"],
-        )
-        assert "Vitamin D" in prompt
-
-    # Prompt injects health rules
-    def test_injects_health_rules(self):
-        prompt = build_pipeline_analyst_prompt(
-            recent_meal_history=SAMPLE_CONTEXT["history"],
             health_rules=SAMPLE_CONTEXT["health_rules"],
         )
-        assert "omega-3" in prompt.lower()
+        assert "180" in prompt and "Vitamin D" in prompt and "Favor omega-3" in prompt and "Menemen" in prompt
 
-    # Prompt injects meal history
-    def test_injects_history(self):
+    # It gets the avoid list and the dislikes, which the old reviewer never saw
+    def test_gets_avoid_list_and_dislikes(self):
         prompt = build_pipeline_analyst_prompt(
-            recent_meal_history=SAMPLE_CONTEXT["history"],
+            [], avoid_list=["Almonds"], preferences={"fav:eggs": "Eggs", "dislike:tomatoes": "Tomatoes"},
         )
-        assert "Menemen" in prompt
+        assert "NEVER use these ingredients: Almonds" in prompt
+        assert "Dislikes: Tomatoes" in prompt
+        assert "Dislikes: none" in build_pipeline_analyst_prompt([])
 
-    # Prompt requests JSON feedback list output
-    def test_requests_json_feedback_format(self):
-        prompt = build_pipeline_analyst_prompt(
-            recent_meal_history=[],
-        )
-        assert '"feedback"' in prompt
+    # The Suggest mode tells it what to keep: a favorite stays familiar without a fixed recipe, explore stays new
+    def test_mode_line(self):
+        assert "A saved meal is a hint, not a fixed recipe." in build_pipeline_analyst_prompt([], mode="favorites")
+        assert "keep what makes this menu new to them" in build_pipeline_analyst_prompt([], mode="explore")
+        assert "The user asked for a breakfast suggestion." in build_pipeline_analyst_prompt([])
 
-    # Prompt covers all review areas
-    def test_covers_review_areas(self):
-        prompt = build_pipeline_analyst_prompt(
-            recent_meal_history=[],
-        )
-        for keyword in ["MACRONUTRIENT", "MICRONUTRIENT", "INGREDIENT QUALITY", "VARIETY", "SUPPLEMENT", "PRACTICAL"]:
-            assert keyword in prompt.upper(), f"Missing review area: {keyword}"
+    # It fixes what code found and answers narrow questions whose usual answer is no change
+    def test_fixes_code_problems_then_narrow_questions(self):
+        prompt = build_pipeline_analyst_prompt([], ingredient_inventory=[{"name": "Yumurta"}])
+        assert "Yumurta" in prompt
+        assert 'Fix every problem listed under "Code check"' in prompt
+        assert "When none fits, keep it: the app marks it" in prompt
+        assert "The answer is usually no" in prompt
+        assert "three changes at most" in prompt
+        assert "water" not in prompt.lower()
+
+    # Units come from the reply language's list, with the fixed spoon and glass sizes
+    def test_units_follow_the_language(self):
+        assert "tsp, dsp, tbsp" in build_pipeline_analyst_prompt([])
+        assert "tsp, dsp, tbsp" not in build_pipeline_analyst_prompt([], language="tr")
+
+
+class TestRevisionSchema:
+    # The changes come before the meal, the menu before its name, and a dish's ingredients before its name
+    def test_order_puts_contents_before_names(self):
+        schema = revision_schema("en")
+        assert list(schema["properties"]) == ["changes", "meal"]
+        meal = schema["properties"]["meal"]
+        assert list(meal["properties"])[0] == "menu"
+        item = meal["properties"]["menu"]["items"]
+        assert list(item["properties"])[:2] == ["ingredients", "name"]
+
+    # Amounts are numbers and units come from the language's list; a dish's own amount and unit may be null
+    def test_amounts_and_units(self):
+        item = revision_schema("en")["properties"]["meal"]["properties"]["menu"]["items"]
+        ingredient = item["properties"]["ingredients"]["items"]
+        assert ingredient["properties"]["amount"] == {"type": "number"}
+        assert "tbsp" in ingredient["properties"]["unit"]["enum"]
+        assert item["properties"]["amount"]["type"] == ["number", "null"]
+        assert None in item["properties"]["unit"]["enum"]
+        tr_unit = revision_schema("tr")["properties"]["meal"]["properties"]["menu"]["items"]
+        assert "tbsp" not in tr_unit["properties"]["ingredients"]["items"]["properties"]["unit"]["enum"]
 
 
 # ---------------------------------------------------------------------------
 # Pipeline orchestrator
 # ---------------------------------------------------------------------------
 
-# Helper to make a fake stream_response that yields pre-defined chunks
-def _make_fake_stream(responses):
-    """Return an async generator factory that yields from a list of responses in order."""
-    call_count = {"n": 0}
-
-    async def fake_stream(system_prompt, history, message, temperature=None):
-        idx = call_count["n"]
-        call_count["n"] += 1
-        text = responses[idx] if idx < len(responses) else ""
-        for char in text:
-            yield char
-
-    return fake_stream
-
-
-def _meal_reply(ingredient: str) -> str:
-    """A reply whose meal is one dish with the given ingredient JSON."""
-    return f'Enjoy!\n```json\n{{"menu_name": "Eggs", "menu": [{{"name": "Boiled eggs", "ingredients": [{ingredient}]}}]}}\n```'
-
-
-GOOD_MEAL = _meal_reply('{"name": "eggs", "amount": 2, "unit": "pcs"}')
-FEEDBACK = '```json\n{"feedback": ["Change something"]}\n```'
-
-
-async def _final_text(responses: list[str]) -> str:
-    """Run the pipeline on canned replies; the text the user gets (sent as tokens, then done)."""
-    with patch("services.pipeline.stream_response", _make_fake_stream(responses)):
-        events = [e async for e in run_suggestion_pipeline(context=SAMPLE_CONTEXT, user_message="Suggest")]
-    done = next(e["content"] for e in events if e["type"] == "done")
-    assert "".join(e["content"] for e in events if e["type"] == "token") == done
-    return done
-
-
 class TestPipelineOrchestrator:
-    # Pipeline yields progress events in correct order
+    # The events come in order: drafting, the draft, analyzing, the review, finalizing, then the text
     @pytest.mark.asyncio
-    async def test_yields_progress_events_in_order(self):
-        draft = "Draft meal text"
-        analyst_feedback = '```json\n{"feedback": ["Add more protein"]}\n```'
-        final = "Final refined meal"
+    async def test_event_order(self):
+        events, _ = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS), ["Bigger portion"]))
+        kinds = [e.get("step", e["type"]) for e in events]
+        assert kinds == ["drafting", "draft", "analyzing", "review", "finalizing", "token", "done"]
+        assert [e["content"] for e in events if e["type"] == "review"] == ["- Bigger portion"]
 
-        fake_stream = _make_fake_stream([draft, analyst_feedback, final])
-
-        with patch("services.pipeline.stream_response", fake_stream):
-            events = []
-            async for event in run_suggestion_pipeline(
-                context=SAMPLE_CONTEXT,
-                user_message="Bana kahvaltı öner",
-            ):
-                events.append(event)
-
-        # First three unique types should be progress events in order
-        progress_events = [e for e in events if e["type"] == "progress"]
-        assert len(progress_events) == 3
-        assert progress_events[0]["step"] == "drafting"
-        assert progress_events[1]["step"] == "analyzing"
-        assert progress_events[2]["step"] == "finalizing"
-
-    # Pipeline yields token events for the final refined response
+    # The reply is the present step's text, then the revised meal in a json block
     @pytest.mark.asyncio
-    async def test_yields_final_tokens(self):
-        draft = "Draft text"
-        analyst_feedback = '```json\n{"feedback": ["Fix protein"]}\n```'
-        final = "Hello"
+    async def test_reply_is_text_then_revised_meal(self):
+        bigger = _meal({"name": "eggs", "amount": 3, "unit": "pcs"})
+        events, _ = await _run(_draft(_meal(EGGS)), _revision(bigger))
+        final = _final(events)
+        assert final.startswith("A warm start.\n\n```json\n")
+        assert extract_json_block(final)["menu"][0]["ingredients"][0]["amount"] == 3
 
-        fake_stream = _make_fake_stream([draft, analyst_feedback, final])
-
-        with patch("services.pipeline.stream_response", fake_stream):
-            token_events = []
-            async for event in run_suggestion_pipeline(
-                context=SAMPLE_CONTEXT,
-                user_message="Bana kahvaltı öner",
-            ):
-                if event["type"] == "token":
-                    token_events.append(event["content"])
-
-        # Each character of "Hello" should be a token event
-        assert "".join(token_events) == "Hello"
-
-    # Pipeline yields the full draft before the review, and the review's feedback before the refine
+    # The reviser gets the draft's meal as JSON and what code found in it: fridge misses, avoid hits and units
     @pytest.mark.asyncio
-    async def test_yields_draft_and_review(self):
-        fake_stream = _make_fake_stream(["Draft meal", '```json\n{"feedback": ["Add fiber"]}\n```', "Final"])
+    async def test_reviser_gets_draft_meal_and_code_check(self):
+        draft = _meal(
+            EGGS, {"name": "Salt", "amount": 1, "unit": "pinch"},
+            {"name": "Shellfish", "amount": 50, "unit": "g"}, {"name": "eggs", "amount": 1, "unit": "cup"},
+        )
+        events, calls = await _run(_draft(draft), _revision(_meal(EGGS)))
+        reviser = next(c for c in calls if c["kind"] == "json")
+        assert reviser["message"].startswith('Draft menu:\n```json\n{\n  "menu"')
+        assert "- Not in the fridge: Salt, Shellfish" in reviser["message"]
+        assert "- On the avoid list: Shellfish" in reviser["message"]
+        assert "- Units the app can't show: cup" in reviser["message"]
+        assert reviser["schema"] == revision_schema("en")
+        review = next(e["content"] for e in events if e["type"] == "review")
+        assert review.startswith("- CODE CHECK: Not in the fridge: Salt, Shellfish")
 
-        with patch("services.pipeline.stream_response", fake_stream):
-            events = [e async for e in run_suggestion_pipeline(context=SAMPLE_CONTEXT, user_message="Suggest")]
-
-        kinds = [e.get("step", e["type"]) for e in events if e["type"] in ("progress", "draft", "review")]
-        assert kinds == ["drafting", "draft", "analyzing", "review", "finalizing"]
-        assert [e["content"] for e in events if e["type"] == "draft"] == ["Draft meal"]
-        assert [e["content"] for e in events if e["type"] == "review"] == ["- Add fiber"]
-
-    # A final with more fridge or unit problems than the draft is replaced by the draft
+    # A clean draft tells the reviser that code found nothing
     @pytest.mark.asyncio
-    async def test_falls_back_to_draft_when_final_is_worse(self):
-        worse = _meal_reply('{"name": "Poached eggs", "amount": 2, "unit": "cup"}')
-        assert await _final_text([GOOD_MEAL, FEEDBACK, worse]) == GOOD_MEAL
+    async def test_code_check_silent_when_clean(self):
+        events, calls = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)))
+        assert next(c for c in calls if c["kind"] == "json")["message"].endswith("Code check:\n- Nothing found.")
+        assert next(e["content"] for e in events if e["type"] == "review") == "- No changes."
 
-    # A final with a new avoid-list item loses to the draft, even when the draft has more fridge misses
+    # The revised meal reaches the app's format: a dish loses its null amount and unit, a simple item its method
     @pytest.mark.asyncio
-    async def test_falls_back_to_draft_when_final_adds_an_avoided_item(self):
-        draft = _meal_reply('{"name": "Toast", "amount": 1, "unit": "pcs"}, {"name": "Jam", "amount": 1, "unit": "tbsp"}')
-        allergen = _meal_reply('{"name": "Shellfish", "amount": 100, "unit": "g"}')
-        assert await _final_text([draft, FEEDBACK, allergen]) == draft
+    async def test_revised_meal_is_cleaned(self):
+        revised = _meal({"name": "eggs", "amount": 2, "unit": "pcs", "prep": ""})
+        revised["menu"][0].update({"amount": None, "unit": None, "method": "Boil for 8 minutes"})
+        revised["menu"].append({"ingredients": [], "name": "eggs", "method": "Serve", "amount": 1, "unit": "pcs"})
+        events, _ = await _run(_draft(_meal(EGGS)), _revision(revised))
+        dish, simple = extract_json_block(_final(events))["menu"]
+        assert dish == {"name": "Boiled eggs", "ingredients": [{"name": "eggs", "amount": 2, "unit": "pcs"}],
+                        "method": "Boil for 8 minutes"}
+        assert simple == {"ingredients": [], "name": "eggs", "amount": 1, "unit": "pcs"}
 
-    # A meal JSON with fractions ("amount": 1/2) reaches the user with decimals, so the chat can read it again
+    # A revised meal with more fridge or unit problems than the draft loses to the draft's meal
     @pytest.mark.asyncio
-    async def test_final_fractions_become_decimals(self):
-        halves = _meal_reply('{"name": "eggs", "amount": 1/2, "unit": "pcs"}')
-        assert await _final_text([GOOD_MEAL, FEEDBACK, halves]) == halves.replace("1/2", "0.5")
+    async def test_falls_back_to_draft_when_revision_is_worse(self):
+        worse = _meal({"name": "Poached eggs", "amount": 2, "unit": "pcs"})
+        events, _ = await _run(_draft(_meal(EGGS)), _revision(worse))
+        assert extract_json_block(_final(events)) == _meal(EGGS)
 
-    # A final with no more problems than the draft is kept, also when the draft had no meal
+    # A revised meal with a new avoid-list item loses to the draft, even when the draft has more fridge misses
     @pytest.mark.asyncio
-    async def test_keeps_final_when_not_worse(self):
-        bigger = _meal_reply('{"name": "eggs", "amount": 3, "unit": "pcs"}')
-        assert await _final_text([GOOD_MEAL, FEEDBACK, bigger]) == bigger
-        assert await _final_text(["Your fridge is nearly empty.", FEEDBACK, GOOD_MEAL]) == GOOD_MEAL
+    async def test_falls_back_to_draft_when_revision_adds_an_avoided_item(self):
+        draft = _meal({"name": "Toast", "amount": 1, "unit": "pcs"}, {"name": "Jam", "amount": 1, "unit": "tbsp"})
+        allergen = _meal({"name": "Shellfish", "amount": 100, "unit": "g"})
+        events, _ = await _run(_draft(draft), _revision(allergen))
+        assert extract_json_block(_final(events)) == draft
 
-    # Pipeline yields a done event with the full final text
+    # A revision that can't be read, or a reviser that fails, leaves the draft's meal
     @pytest.mark.asyncio
-    async def test_yields_done_event(self):
-        draft = "Draft"
-        analyst = '```json\n{"feedback": ["OK"]}\n```'
-        final = "Final meal"
+    async def test_unreadable_or_failed_revision_keeps_draft_meal(self):
+        from services.llm import LLMUnavailableError
+        for revision in ("not json", json.dumps({"changes": []}), LLMUnavailableError("down")):
+            events, _ = await _run(_draft(_meal(EGGS)), revision)
+            assert extract_json_block(_final(events)) == _meal(EGGS)
 
-        fake_stream = _make_fake_stream([draft, analyst, final])
-
-        with patch("services.pipeline.stream_response", fake_stream):
-            done_events = []
-            async for event in run_suggestion_pipeline(
-                context=SAMPLE_CONTEXT,
-                user_message="Bana kahvaltı öner",
-            ):
-                if event["type"] == "done":
-                    done_events.append(event)
-
-        assert len(done_events) == 1
-        assert done_events[0]["content"] == "Final meal"
-
-    # Pipeline passes analyst feedback to the refinement step
+    # The present step reads only the final meal, not the draft's text, and the mode's temperature
     @pytest.mark.asyncio
-    async def test_passes_feedback_to_refinement(self):
-        draft = "Draft meal with eggs"
-        analyst = '```json\n{"feedback": ["Protein yetersiz, en az 20g olmalı", "Omega-3 kaynağı yok"]}\n```'
-        final = "Refined meal"
+    async def test_present_reads_only_the_final_meal(self):
+        events, calls = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)), temperature=0.9)
+        present = [c for c in calls if c["kind"] == "stream"][1]
+        assert "Introduce it in a few short lines" in present["system"]
+        assert present["message"].startswith("Today's menu:\n```json\n")
+        assert "Enjoy!" not in present["message"]
+        assert present["temperature"] == 0.9
 
-        captured_messages = []
-
-        async def capturing_stream(system_prompt, history, message, temperature=None):
-            captured_messages.append(message)
-            idx = len(captured_messages) - 1
-            texts = [draft, analyst, final]
-            text = texts[idx] if idx < len(texts) else ""
-            for char in text:
-                yield char
-
-        with patch("services.pipeline.stream_response", capturing_stream):
-            async for _ in run_suggestion_pipeline(
-                context=SAMPLE_CONTEXT,
-                user_message="Bana kahvaltı öner",
-            ):
-                pass
-
-        # Third call (refinement) should contain analyst feedback
-        refinement_msg = captured_messages[2]
-        assert "Protein yetersiz" in refinement_msg
-        assert "Omega-3 kaynağı yok" in refinement_msg
-        assert "Draft meal with eggs" in refinement_msg
-
-    # Pipeline falls back to raw text when analyst doesn't produce valid JSON
+    # When the present step fails, code writes the text from the menu name and description
     @pytest.mark.asyncio
-    async def test_fallback_when_analyst_no_json(self):
-        draft = "Draft"
-        analyst = "Protein is too low. Add walnuts for omega-3."
-        final = "Refined"
+    async def test_code_text_when_present_fails(self):
+        events, _ = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)), present=RuntimeError("down"))
+        assert _final(events).startswith("**Eggs**\n\nWarm eggs.\n\n```json\n")
 
-        captured_messages = []
+    # A fenced block in the present step's text is dropped, so the meal is the reply's only json block
+    @pytest.mark.asyncio
+    async def test_present_text_keeps_no_code_block(self):
+        other = 'Enjoy!\n```json\n{"menu": []}\n```'
+        events, _ = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)), present=other)
+        final = _final(events)
+        assert final.startswith("Enjoy!\n\n```json\n")
+        assert extract_json_block(final) == _meal(EGGS)
 
-        async def capturing_stream(system_prompt, history, message, temperature=None):
-            captured_messages.append(message)
-            idx = len(captured_messages) - 1
-            texts = [draft, analyst, final]
-            text = texts[idx] if idx < len(texts) else ""
-            for char in text:
-                yield char
+    # A draft with no meal block is a note to the user, sent as it is without a review
+    @pytest.mark.asyncio
+    async def test_note_without_meal_is_sent_as_is(self):
+        events, calls = await _run("Your fridge is nearly empty.", _revision(_meal(EGGS)))
+        assert _final(events) == "Your fridge is nearly empty."
+        assert [c["kind"] for c in calls] == ["stream"]
 
-        with patch("services.pipeline.stream_response", capturing_stream):
-            async for _ in run_suggestion_pipeline(
-                context=SAMPLE_CONTEXT,
-                user_message="Bana kahvaltı öner",
-            ):
-                pass
+    # A draft whose meal block can't be read goes to the reviser as text, and its meal is used
+    @pytest.mark.asyncio
+    async def test_broken_draft_meal_is_rebuilt_by_the_reviser(self):
+        events, calls = await _run("Enjoy!\n```json\n{\"menu\": [\n```", _revision(_meal(EGGS)))
+        assert "its meal block couldn't be read" in next(c for c in calls if c["kind"] == "json")["message"]
+        assert extract_json_block(_final(events)) == _meal(EGGS)
 
-        # Refinement should still contain the raw analyst text
-        refinement_msg = captured_messages[2]
-        assert "Protein is too low" in refinement_msg
-        assert "Add walnuts" in refinement_msg
+    # A draft meal with fractions ("amount": 1/2) reaches the user with decimals, so the chat can read it again
+    @pytest.mark.asyncio
+    async def test_draft_fractions_become_decimals(self):
+        halves = "Enjoy!\n```json\n" + json.dumps(_meal(EGGS)).replace('"amount": 2', '"amount": 1/2') + "\n```"
+        events, _ = await _run(halves, "not json")
+        assert extract_json_block(_final(events))["menu"][0]["ingredients"][0]["amount"] == 0.5
 
-    # Pipeline passes temperature and mode through to suggestion calls
+    # The draft runs at the mode's temperature with the mode block, and the reviser cool with the mode line
     @pytest.mark.asyncio
     async def test_passes_temperature_and_mode(self):
-        captured_temps = []
-        captured_prompts = []
+        _, calls = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)), mode="explore", temperature=0.9)
+        draft, reviser = calls[0], calls[1]
+        assert draft["temperature"] == 0.9 and "EXPLORE" in draft["system"]
+        assert reviser["temperature"] == 0.3 and "keep what makes this menu new to them" in reviser["system"]
 
-        async def temp_tracking_stream(system_prompt, history, message, temperature=None):
-            captured_temps.append(temperature)
-            captured_prompts.append(system_prompt)
-            for char in "ok":
-                yield char
-
-        with patch("services.pipeline.stream_response", temp_tracking_stream):
-            async for _ in run_suggestion_pipeline(
-                context=SAMPLE_CONTEXT,
-                user_message="Öner",
-                mode="explore",
-                temperature=0.9,
-            ):
-                pass
-
-        # Call 1 (draft): suggestion temp 0.9
-        assert captured_temps[0] == 0.9
-        # Call 2 (analyst): always 0.3
-        assert captured_temps[1] == 0.3
-        # Call 3 (refine): suggestion temp 0.9
-        assert captured_temps[2] == 0.9
-        # Suggestion prompts (1st and 3rd) should contain EXPLORE mode
-        assert "EXPLORE" in captured_prompts[0]
-        assert "EXPLORE" in captured_prompts[2]
-
-    # Favorites mode's draft and refine prompts list the context's saved meals, staples and ratings
+    # Favorites mode's draft prompt lists the context's saved meals, staples and ratings
     @pytest.mark.asyncio
     async def test_favorites_mode_gets_taste_hints(self):
-        captured_prompts = []
-
-        async def prompt_tracking_stream(system_prompt, history, message, temperature=None):
-            captured_prompts.append(system_prompt)
-            for char in "ok":
-                yield char
-
         context = {
             **SAMPLE_CONTEXT,
             "favorite_meals": [{"meal_name": "Egg toast", "ingredients": '["eggs"]'}],
             "favorites": ["eggs"],
             "ratings": [{"product_name": "eggs", "rating": 9}],
         }
-        with patch("services.pipeline.stream_response", prompt_tracking_stream):
-            async for _ in run_suggestion_pipeline(context=context, user_message="Suggest", mode="favorites"):
-                pass
+        _, calls = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)), context=context, mode="favorites")
+        assert "- Egg toast: eggs" in calls[0]["system"]
+        assert "Their favorite ingredients: eggs" in calls[0]["system"]
+        assert "High-rated (favour these): eggs" in calls[0]["system"]
 
-        for prompt in (captured_prompts[0], captured_prompts[2]):
-            assert "- Egg toast: eggs" in prompt
-            assert "Their favorite ingredients: eggs" in prompt
-            assert "High-rated (favour these): eggs" in prompt
-
-    # Pipeline propagates LLMUnavailableError from draft step
+    # Pipeline propagates LLMUnavailableError from the draft step
     @pytest.mark.asyncio
     async def test_propagates_llm_error(self):
         from services.llm import LLMUnavailableError
-
-        async def failing_stream(system_prompt, history, message, temperature=None):
-            raise LLMUnavailableError("Ollama down")
-            yield  # make it a generator
-
-        with patch("services.pipeline.stream_response", failing_stream):
-            with pytest.raises(LLMUnavailableError):
-                async for _ in run_suggestion_pipeline(
-                    context=SAMPLE_CONTEXT,
-                    user_message="Öner",
-                ):
-                    pass
-
-    @staticmethod
-    async def _refinement_message(draft):
-        """Run the pipeline with a fixed draft and return the message sent to the refine step."""
-        analyst = '```json\n{"feedback": ["Add more fiber"]}\n```'
-        captured = []
-
-        async def capturing_stream(system_prompt, history, message, temperature=None):
-            captured.append(message)
-            for char in [draft, analyst, "Refined"][len(captured) - 1]:
-                yield char
-
-        with patch("services.pipeline.stream_response", capturing_stream):
-            async for _ in run_suggestion_pipeline(context=SAMPLE_CONTEXT, user_message="Suggest"):
-                pass
-        return captured[2]
-
-    # Draft ingredients outside the fridge, salt included, are sent to the refine step first
-    @pytest.mark.asyncio
-    async def test_fridge_check_flags_missing_ingredients(self):
-        draft = (
-            'Try this!\n```json\n{"menu_name": "Avocado Eggs", "menu": ['
-            '{"name": "Avocado eggs", "ingredients": [{"name": "eggs"}, {"name": "Avocado"}, {"name": "Salt"}]}'
-            ']}\n```'
-        )
-        msg = await self._refinement_message(draft)
-        fridge_line = next(line for line in msg.splitlines() if "FRIDGE CHECK" in line)
-        assert "Avocado, Salt" in fridge_line
-        assert "eggs" not in fridge_line
-        assert msg.index("FRIDGE CHECK") < msg.index("Add more fiber")
-
-    # A draft that only uses fridge items gets no fridge feedback
-    @pytest.mark.asyncio
-    async def test_fridge_check_silent_when_all_available(self):
-        draft = (
-            '```json\n{"menu_name": "Eggs", "menu": ['
-            '{"name": "Boiled eggs", "ingredients": [{"name": "Eggs"}]}'
-            ']}\n```'
-        )
-        msg = await self._refinement_message(draft)
-        assert "FRIDGE CHECK" not in msg
-        assert "Add more fiber" in msg
+        with pytest.raises(LLMUnavailableError):
+            await _run(LLMUnavailableError("Ollama down"), _revision(_meal(EGGS)))
