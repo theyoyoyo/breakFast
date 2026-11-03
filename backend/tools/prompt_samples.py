@@ -335,6 +335,8 @@ def _served(name: str, amount: float, unit: str) -> dict:
 # - fried: the other way round, so a plan that boils these eggs is caught too.
 # - porridge: simmered, with prep words on its ingredients.
 # - menemen: a Turkish menu with a Turkish reply.
+# - omelette: two cooked dishes, so one dish's steps can fill the other's wait (#144); both use eggs,
+#   cooked two ways.
 PLAN_CASES = {
     "boiled": {
         "language": "en",
@@ -378,6 +380,19 @@ PLAN_CASES = {
                   ("Zeytinyağı", 1, "yemek kaşığı")),
             _served("Beyaz peynir", 50, "g"),
             _served("Ekmek", 2, "dilim"),
+        ],
+    },
+    "omelette": {
+        "language": "en",
+        "kitchen_appliances": _BASE["kitchen_appliances"],
+        "meal_name": "Two egg plates",
+        "menu": [
+            _dish("Greek omelette", "Whisk the eggs with the feta, pour into the oiled pan over the tomato, fold",
+                  ("Eggs", 3, "pcs"), ("Feta", 30, "g", "crumbled"), ("Tomatoes", 1, "pcs", "chopped"),
+                  ("Olive oil", 1, "tbsp")),
+            _dish("Boiled eggs", "Boil the eggs, cool them in cold water, peel and halve",
+                  ("Eggs", 2, "pcs"), ("Salt", 1, "pinch")),
+            _served("Bread", 1, "slice"),
         ],
     },
 }
