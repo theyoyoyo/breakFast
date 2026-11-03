@@ -6,7 +6,9 @@ import SuggestButton from './SuggestButton'
 import DecidePanel from './DecidePanel'
 import MealBlock from './MealBlock'
 import MarkdownText from './MarkdownText'
+import PrepPlanText from './PrepPlanText'
 import { normalizeMeal } from '../utils/ingredients'
+import { isPrepPlan } from '../utils/prepPlan'
 import * as s from './ChatInterface.styles'
 
 const WELCOME_MSG = { role: 'assistant', content: "Good morning! Tell me what's in your fridge and I'll plan your breakfast." }
@@ -758,7 +760,9 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
             <div key={i} style={s.messageWrapper(m.role)}>
               {displayText && (
                 <div style={s.bubble(m.role)}>
-                  {m.role === 'assistant' ? <MarkdownText text={displayText} /> : displayText}
+                  {m.role !== 'assistant' ? displayText
+                    : isPrepPlan(displayText) ? <PrepPlanText text={displayText} />
+                    : <MarkdownText text={displayText} />}
                 </div>
               )}
               {hasMealBlock && (
