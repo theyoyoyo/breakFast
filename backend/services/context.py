@@ -56,6 +56,16 @@ async def fetch_history(db, user_id: int, limit: int = 10, include_ingredients: 
         return [dict(r) for r in await cur.fetchall()]
 
 
+async def fetch_favorite_meals(db, user_id: int, limit: int = 10) -> list[dict]:
+    """The newest meals saved in Favorites, with their menu, shaped like fetch_history's meals."""
+    async with db.execute(
+        "SELECT meal_name, ingredients, menu_items FROM favorite_meals WHERE user_id = ? "
+        "ORDER BY created_at DESC, id DESC LIMIT ?",
+        (user_id, limit),
+    ) as cur:
+        return [dict(r) for r in await cur.fetchall()]
+
+
 async def fetch_preferences(db, user_id: int) -> dict:
     async with db.execute(
         "SELECT key, value FROM user_preferences WHERE user_id = ?",
@@ -114,7 +124,7 @@ async def load_chat_context(db, user_id: int) -> dict:
         ingredients, history, prefs,
         (stated_habits, inferred_habits),
         health_rules, user_profile, supplements,
-        kitchen_appliances,
+        kitchen_appliances, favorite_meals, favorites,
     ) = await asyncio.gather(
         fetch_ingredients(db, user_id),
         # With their items: the pipeline's reviewer reads what recent meals had
@@ -125,6 +135,9 @@ async def load_chat_context(db, user_id: int) -> dict:
         fetch_profile(db, user_id),
         fetch_supplements(db, user_id),
         fetch_kitchen_appliances(db, user_id),
+        # Favorites mode builds from these
+        fetch_favorite_meals(db, user_id),
+        fetch_favorite_ingredients(db, user_id),
     )
     avoid_list = [v for k, v in prefs.items() if k.startswith("avoid:")]
     filtered_prefs = _food_preferences(prefs)
@@ -146,6 +159,8 @@ async def load_chat_context(db, user_id: int) -> dict:
         "avoid_list": avoid_list,
         "kitchen_appliances": kitchen_appliances,
         "weekly_summary": weekly_summary,
+        "favorite_meals": favorite_meals,
+        "favorites": favorites,
         "country": (user_profile or {}).get("country"),
         "language": language,
     }

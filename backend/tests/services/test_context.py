@@ -43,3 +43,45 @@ async def test_country_in_contexts(client, db):
     assert chat["country"] == "Türkiye"
     assert shopping["country"] == "Türkiye"
     assert "Türkiye" not in format_user_profile(chat["user_profile"])
+
+
+# The favorite meals loader returns this user's newest ten saved meals with their menus, newest first
+async def test_favorite_meals_newest_ten_for_this_user(client, db):
+    import json
+    from services.context import fetch_favorite_meals
+    from services.knowledge import format_meal_items
+
+    async with db.execute("SELECT id FROM users WHERE name = 'testuser'") as cur:
+        user_id = (await cur.fetchone())[0]
+    cur = await db.execute("INSERT INTO users (name, pin_hash) VALUES ('other', 'x')")
+    other_id = cur.lastrowid
+    menu = json.dumps([{"name": "Menemen", "ingredients": [{"name": "Eggs", "amount": 2, "unit": "pcs"}]}])
+    for i in range(12):
+        await db.execute(
+            "INSERT INTO favorite_meals (user_id, meal_name, menu_items, created_at) VALUES (?, ?, ?, ?)",
+            (user_id, f"Meal {i}", menu, f"2026-11-01 08:{i:02d}:00"),
+        )
+    await db.execute(
+        "INSERT INTO favorite_meals (user_id, meal_name, created_at) VALUES (?, 'Not mine', '2026-11-02 08:00:00')",
+        (other_id,),
+    )
+    await db.commit()
+
+    meals = await fetch_favorite_meals(db, user_id)
+    assert [m["meal_name"] for m in meals] == [f"Meal {i}" for i in range(11, 1, -1)]
+    assert format_meal_items(meals[0]) == "Menemen (Eggs)"
+
+
+# The chat context carries the saved favorite meals and the staples, which favorites mode lists
+async def test_chat_context_has_favorites(client, db):
+    from services.context import load_chat_context
+
+    menu = [{"name": "Cheddar toast", "ingredients": [{"name": "Bread", "amount": 2, "unit": "slice"}]}]
+    await client.post("/favorites/", json={"menu_name": "Cheddar toast", "menu": menu})
+    await client.post("/favorite-ingredients/", json={"ingredient_name": "Cheddar"})
+    async with db.execute("SELECT id FROM users WHERE name = 'testuser'") as cur:
+        user_id = (await cur.fetchone())[0]
+
+    chat = await load_chat_context(db, user_id)
+    assert [m["meal_name"] for m in chat["favorite_meals"]] == ["Cheddar toast"]
+    assert chat["favorites"] == ["Cheddar"]
