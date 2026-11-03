@@ -366,6 +366,29 @@ class TestSuggestionPrompt:
         assert "FAVORITES" in prompt
         assert "comfort" in prompt.lower()
 
+    SAVED = [{"meal_name": "Cheddar toast", "menu_items": [
+        {"name": "Cheddar toast", "ingredients": [{"name": "Bread"}, {"name": "Cheddar"}]},
+        {"name": "Orange juice", "amount": 1, "unit": "glass", "ingredients": []},
+    ]}]
+
+    def test_mode_favorites_lists_saved_meals_and_staples(self):
+        """Favorites mode lists the saved favorite meals with their items and the staples to build from."""
+        prompt = build_suggestion_prompt(
+            [], [], {}, [], mode="favorites", favorite_meals=self.SAVED, favorites=["Bagels", "Cheddar"],
+        )
+        assert "- Cheddar toast: Cheddar toast (Bread, Cheddar), Orange juice" in prompt
+        assert "Their favorite ingredients: Bagels, Cheddar" in prompt
+        assert "one saved favorite meal that the available ingredients can make" in prompt
+
+    def test_other_modes_leave_saved_favorites_out(self):
+        """Plain Suggest and explore mode don't list the saved favorites."""
+        for mode in (None, "explore"):
+            prompt = build_suggestion_prompt(
+                [], [], {}, [], mode=mode, favorite_meals=self.SAVED, favorites=["Bagels"],
+            )
+            assert "Cheddar toast" not in prompt, mode
+            assert "Bagels" not in prompt, mode
+
     def test_mode_explore_appends_discovery_instructions(self):
         """Explore mode should add world cuisine/discovery instructions."""
         prompt = build_suggestion_prompt([], [], {}, [], mode="explore")

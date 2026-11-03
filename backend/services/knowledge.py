@@ -211,6 +211,13 @@ def format_meal_detail(meal: dict) -> str:
     return f"{meal.get('meal_name', 'Unknown')}: {format_meal_items(meal)}"
 
 
+def format_favorite_meals(meals: list[dict] | None) -> str:
+    """Meals saved in Favorites, one per line with their items."""
+    if not meals:
+        return "none saved yet"
+    return "\n".join(f"- {format_meal_detail(m)}" for m in meals)
+
+
 def format_history_detailed(history: list[dict], limit: int = 5) -> str:
     """The newest meals with their items (for analyst use); history comes newest first."""
     if not history:

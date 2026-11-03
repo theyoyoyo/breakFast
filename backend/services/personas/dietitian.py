@@ -11,6 +11,8 @@ from datetime import date
 from services.knowledge import (
     format_ingredients,
     format_history,
+    format_favorite_meals,
+    format_favorites,
     format_preferences,
     format_habits,
     format_health_rules,
@@ -220,10 +222,16 @@ MODE_INSTRUCTIONS = {
         "\n\n═══════════════════════════════════════════════════════════════\n"
         "MODE: FAVORITES (comfort)\n"
         "═══════════════════════════════════════════════════════════════\n"
-        "The user asked for a suggestion based on their FAVORITE ingredients and meals.\n"
-        "Prioritize ingredients and meal patterns from their favorites list.\n"
-        "Stay within the user's comfort zone — familiar flavors, proven combinations.\n"
-        "If the favorites list is empty, use their meal history to infer what they enjoy most."
+        "The user asked for one of their FAVORITE breakfasts.\n"
+        "Meals they saved in Favorites:\n"
+        "{favorite_meals}\n"
+        "Their favorite ingredients: {favorite_ingredients}\n"
+        "Build the menu around one saved favorite meal that the available ingredients can make, "
+        "keeping its name and items, so the user gets a breakfast they already know they love. "
+        "When every saved meal needs something the fridge doesn't have, or none are saved, build a "
+        "familiar meal from their favorite ingredients, the favorites in their preferences and their "
+        "meal history instead.\n"
+        "Stay within the user's comfort zone — familiar flavors, proven combinations."
     ),
     "explore": (
         "\n\n═══════════════════════════════════════════════════════════════\n"
@@ -255,8 +263,11 @@ def build_suggestion_prompt(
     language: str = "en",
     country: str | None = None,
     today: date | None = None,
+    favorite_meals: list[dict] | None = None,
+    favorites: list[str] | None = None,
 ) -> str:
-    """Build the suggestion persona system prompt."""
+    """Build the suggestion persona system prompt. Favorites mode lists the saved favorite meals
+    and the staples (favorite ingredients)."""
     appliance_str = ", ".join(kitchen_appliances) if kitchen_appliances else "Not configured"
     base = SUGGESTION_TEMPLATE.format(
         lang_instruction=_lang(language),
@@ -277,5 +288,8 @@ def build_suggestion_prompt(
         weekly_summary=format_weekly_summary(weekly_summary),
         today=format_today(today, country),
     )
-    mode_instruction = MODE_INSTRUCTIONS.get(mode, "")
+    mode_instruction = MODE_INSTRUCTIONS.get(mode, "").format(
+        favorite_meals=format_favorite_meals(favorite_meals),
+        favorite_ingredients=format_favorites(favorites or []),
+    )
     return base + mode_instruction + FINAL_REMINDER.format(lang_instruction=_lang(language))
