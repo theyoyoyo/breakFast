@@ -15,6 +15,7 @@ it out of the shell history.
 import argparse
 import asyncio
 import getpass
+import io
 import shutil
 import sys
 from datetime import datetime
@@ -41,7 +42,7 @@ USER_TABLES = [
 def _check_pin(pin: str) -> None:
     problem = pin_problem(pin)
     if problem:
-        print(f"✗ {problem}", file=sys.stderr)
+        print(f"Error: {problem}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -49,7 +50,7 @@ def _ask_pin() -> str:
     """Ask for a PIN twice without showing it."""
     pin = getpass.getpass("PIN (6-10 digits): ")
     if getpass.getpass("PIN again: ") != pin:
-        print("✗ The PINs don't match.", file=sys.stderr)
+        print("Error: the PINs don't match.", file=sys.stderr)
         sys.exit(1)
     return pin
 
@@ -65,9 +66,9 @@ async def add_user(name: str, pin: str, is_admin: bool = False) -> None:
             )
             await db.commit()
             role = "admin" if is_admin else "user"
-            print(f"✓ {role} '{name}' created.")
+            print(f"{role.capitalize()} '{name}' created.")
         except aiosqlite.IntegrityError:
-            print(f"✗ User '{name}' already exists.", file=sys.stderr)
+            print(f"Error: user '{name}' already exists.", file=sys.stderr)
             sys.exit(1)
 
 
@@ -79,9 +80,9 @@ async def set_pin(name: str, pin: str) -> None:
         cur = await db.execute("UPDATE users SET pin_hash = ? WHERE name = ?", (hash_pin(pin), name))
         await db.commit()
     if not cur.rowcount:
-        print(f"✗ User '{name}' not found.", file=sys.stderr)
+        print(f"Error: user '{name}' not found.", file=sys.stderr)
         sys.exit(1)
-    print(f"✓ PIN changed for '{name}'.")
+    print(f"PIN changed for '{name}'.")
 
 
 async def list_users() -> None:
@@ -109,7 +110,7 @@ async def delete_user(name: str) -> None:
         async with db.execute("SELECT id FROM users WHERE name = ?", (name,)) as cur:
             row = await cur.fetchone()
         if not row:
-            print(f"✗ User '{name}' not found.", file=sys.stderr)
+            print(f"Error: user '{name}' not found.", file=sys.stderr)
             sys.exit(1)
 
         user_id = row[0]
@@ -118,22 +119,31 @@ async def delete_user(name: str) -> None:
 
         await db.execute("DELETE FROM users WHERE id = ?", (user_id,))
         await db.commit()
-        print(f"✓ User '{name}' and all their data deleted.")
+        print(f"User '{name}' and all their data deleted.")
 
 
 def backup_db() -> None:
     src = Path(DATABASE_PATH)
     if not src.exists():
-        print(f"✗ Database not found at {src}", file=sys.stderr)
+        print(f"Error: database not found at {src}", file=sys.stderr)
         sys.exit(1)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     dst = src.parent / f"breakFAST_backup_{timestamp}.db"
     shutil.copy2(src, dst)
-    print(f"✓ Backup created: {dst}")
+    print(f"Backup created: {dst}")
+
+
+def _safe_output() -> None:
+    """Print what the output can't show as '?' instead of crashing: on Windows a pipe or a
+    redirect is cp1252, which has no room for a name like 'Ayşe'."""
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(errors="replace")
 
 
 def main():
+    _safe_output()
     parser = argparse.ArgumentParser(description="break FAST admin CLI")
     sub = parser.add_subparsers(dest="command")
 

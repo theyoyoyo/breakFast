@@ -1,5 +1,9 @@
 """Tests for the admin CLI (manage.py)."""
 
+import asyncio
+import io
+import sys
+
 import aiosqlite
 import pytest
 
@@ -120,3 +124,15 @@ def test_ask_pin_needs_matching_answers(monkeypatch):
     answers = iter(["135792", "135793"])
     with pytest.raises(SystemExit):
         manage._ask_pin()
+
+
+# A name Windows' cp1252 pipes can't show prints with "?" instead of crashing, and is stored as typed
+def test_cli_output_survives_cp1252(cli_db, monkeypatch):
+    out = io.TextIOWrapper(io.BytesIO(), encoding="cp1252", newline="\n")
+    monkeypatch.setattr(sys, "stdout", out)
+    monkeypatch.setattr(sys, "stderr", io.TextIOWrapper(io.BytesIO(), encoding="cp1252"))
+    monkeypatch.setattr(sys, "argv", ["manage.py", "add-user", "Ayşe", "--pin", "135792"])
+    manage.main()
+    out.flush()
+    assert out.buffer.getvalue() == b"User 'Ay?e' created.\n"
+    assert verify_pin("135792", asyncio.run(_pin_hash(cli_db, "Ayşe")))
