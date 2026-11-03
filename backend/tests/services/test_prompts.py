@@ -379,7 +379,9 @@ class TestSuggestionPrompt:
             [], [], {}, [], mode="favorites",
             favorite_meals=self.SAVED, favorites=["Bagels", "Cheddar"], ratings=self.RATINGS,
         )
-        assert "- Cheddar toast: Cheddar toast (Bread, Cheddar), Orange juice" in prompt
+        # One plain item list, so the model doesn't copy "Cheddar toast (Bread, …)" into dish names
+        assert "- Cheddar toast: Bread, Cheddar, Orange juice" in prompt
+        assert "Cheddar toast (" not in prompt
         assert "Their favorite ingredients: Bagels, Cheddar" in prompt
         assert "High-rated (favour these): Strawberries" in prompt
         assert "Low-rated (avoid or minimise): Oats" in prompt
