@@ -11,6 +11,7 @@ from typing import AsyncGenerator
 from config import (
     OLLAMA_BASE_URL,
     OLLAMA_MODEL,
+    OLLAMA_NUM_CTX,
 )
 
 
@@ -110,9 +111,8 @@ async def chat_json(
         "messages": [{"role": "system", "content": system_prompt}] + messages,
         "stream": False,
         "format": schema,
+        "options": _options(temperature),
     }
-    if temperature is not None:
-        payload["options"] = {"temperature": temperature}
     async with httpx.AsyncClient(timeout=120.0) as client:
         response = await client.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload)
         try:
@@ -126,6 +126,14 @@ async def chat_json(
 # Ollama
 # ---------------------------------------------------------------------------
 
+def _options(temperature: float | None) -> dict:
+    """Options for one call: the same num_ctx every time, so Ollama never reloads the model."""
+    options = {"num_ctx": OLLAMA_NUM_CTX}
+    if temperature is not None:
+        options["temperature"] = temperature
+    return options
+
+
 async def _ollama_stream(
     system_prompt: str,
     messages: list[dict],
@@ -135,9 +143,8 @@ async def _ollama_stream(
         "model": OLLAMA_MODEL,
         "messages": [{"role": "system", "content": system_prompt}] + messages,
         "stream": True,
+        "options": _options(temperature),
     }
-    if temperature is not None:
-        payload["options"] = {"temperature": temperature}
     async with httpx.AsyncClient(timeout=120.0) as client:
         async with client.stream(
             "POST",
