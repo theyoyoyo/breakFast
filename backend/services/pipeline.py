@@ -78,6 +78,7 @@ async def run_suggestion_pipeline(
         country=context.get("country"),
         favorite_meals=context.get("favorite_meals"),
         favorites=context.get("favorites"),
+        ratings=context.get("ratings"),
     )
 
     analyst_prompt = build_pipeline_analyst_prompt(

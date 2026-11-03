@@ -72,16 +72,18 @@ async def test_favorite_meals_newest_ten_for_this_user(client, db):
     assert format_meal_items(meals[0]) == "Menemen (Eggs)"
 
 
-# The chat context carries the saved favorite meals and the staples, which favorites mode lists
-async def test_chat_context_has_favorites(client, db):
+# The chat context carries the saved favorite meals, the staples and the ratings, which favorites mode lists
+async def test_chat_context_has_taste_hints(client, db):
     from services.context import load_chat_context
 
     menu = [{"name": "Cheddar toast", "ingredients": [{"name": "Bread", "amount": 2, "unit": "slice"}]}]
     await client.post("/favorites/", json={"menu_name": "Cheddar toast", "menu": menu})
     await client.post("/favorite-ingredients/", json={"ingredient_name": "Cheddar"})
+    await client.post("/ratings/", json={"product_name": "Cheddar", "rating": 9})
     async with db.execute("SELECT id FROM users WHERE name = 'testuser'") as cur:
         user_id = (await cur.fetchone())[0]
 
     chat = await load_chat_context(db, user_id)
     assert [m["meal_name"] for m in chat["favorite_meals"]] == ["Cheddar toast"]
     assert chat["favorites"] == ["Cheddar"]
+    assert chat["ratings"] == [{"product_name": "Cheddar", "rating": 9}]

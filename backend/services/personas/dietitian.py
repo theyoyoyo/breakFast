@@ -13,6 +13,7 @@ from services.knowledge import (
     format_history,
     format_favorite_meals,
     format_favorites,
+    format_ratings,
     format_preferences,
     format_habits,
     format_health_rules,
@@ -222,16 +223,17 @@ MODE_INSTRUCTIONS = {
         "\n\n═══════════════════════════════════════════════════════════════\n"
         "MODE: FAVORITES (comfort)\n"
         "═══════════════════════════════════════════════════════════════\n"
-        "The user asked for one of their FAVORITE breakfasts.\n"
+        "The user asked for a FAVORITE: a breakfast that fits their taste — familiar flavors, "
+        "proven combinations.\n"
+        "Everything you know about them hints at that taste: the meals they saved, their favorite "
+        "ingredients and their ratings below, and their preferences, habits, patterns and recent "
+        "meals above. Weigh all of it together and design the menu that fits them best today, so "
+        "it feels like theirs; a saved meal may be made as it is or inspire something close to it.\n"
         "Meals they saved in Favorites:\n"
         "{favorite_meals}\n"
         "Their favorite ingredients: {favorite_ingredients}\n"
-        "Build the menu around one saved favorite meal that the available ingredients can make, "
-        "keeping its name and items, so the user gets a breakfast they already know they love. "
-        "When every saved meal needs something the fridge doesn't have, or none are saved, build a "
-        "familiar meal from their favorite ingredients, the favorites in their preferences and their "
-        "meal history instead.\n"
-        "Stay within the user's comfort zone — familiar flavors, proven combinations."
+        "Their ratings of items they ate:\n"
+        "{ratings}"
     ),
     "explore": (
         "\n\n═══════════════════════════════════════════════════════════════\n"
@@ -265,9 +267,10 @@ def build_suggestion_prompt(
     today: date | None = None,
     favorite_meals: list[dict] | None = None,
     favorites: list[str] | None = None,
+    ratings: list[dict] | None = None,
 ) -> str:
-    """Build the suggestion persona system prompt. Favorites mode lists the saved favorite meals
-    and the staples (favorite ingredients)."""
+    """Build the suggestion persona system prompt. Favorites mode also lists the saved favorite
+    meals, the staples (favorite ingredients) and the item ratings."""
     appliance_str = ", ".join(kitchen_appliances) if kitchen_appliances else "Not configured"
     base = SUGGESTION_TEMPLATE.format(
         lang_instruction=_lang(language),
@@ -291,5 +294,6 @@ def build_suggestion_prompt(
     mode_instruction = MODE_INSTRUCTIONS.get(mode, "").format(
         favorite_meals=format_favorite_meals(favorite_meals),
         favorite_ingredients=format_favorites(favorites or []),
+        ratings=format_ratings(ratings or []),
     )
     return base + mode_instruction + FINAL_REMINDER.format(lang_instruction=_lang(language))

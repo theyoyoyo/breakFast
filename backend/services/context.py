@@ -124,7 +124,7 @@ async def load_chat_context(db, user_id: int) -> dict:
         ingredients, history, prefs,
         (stated_habits, inferred_habits),
         health_rules, user_profile, supplements,
-        kitchen_appliances, favorite_meals, favorites,
+        kitchen_appliances, favorite_meals, favorites, ratings,
     ) = await asyncio.gather(
         fetch_ingredients(db, user_id),
         # With their items: the pipeline's reviewer reads what recent meals had
@@ -135,9 +135,10 @@ async def load_chat_context(db, user_id: int) -> dict:
         fetch_profile(db, user_id),
         fetch_supplements(db, user_id),
         fetch_kitchen_appliances(db, user_id),
-        # Favorites mode builds from these
+        # Taste hints favorites mode lists
         fetch_favorite_meals(db, user_id),
         fetch_favorite_ingredients(db, user_id),
+        fetch_ratings(db, user_id),
     )
     avoid_list = [v for k, v in prefs.items() if k.startswith("avoid:")]
     filtered_prefs = _food_preferences(prefs)
@@ -161,6 +162,7 @@ async def load_chat_context(db, user_id: int) -> dict:
         "weekly_summary": weekly_summary,
         "favorite_meals": favorite_meals,
         "favorites": favorites,
+        "ratings": ratings,
         "country": (user_profile or {}).get("country"),
         "language": language,
     }

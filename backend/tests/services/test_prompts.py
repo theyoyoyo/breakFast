@@ -371,23 +371,29 @@ class TestSuggestionPrompt:
         {"name": "Orange juice", "amount": 1, "unit": "glass", "ingredients": []},
     ]}]
 
-    def test_mode_favorites_lists_saved_meals_and_staples(self):
-        """Favorites mode lists the saved favorite meals with their items and the staples to build from."""
+    RATINGS = [{"product_name": "Strawberries", "rating": 9}, {"product_name": "Oats", "rating": 3}]
+
+    def test_mode_favorites_lists_taste_hints(self):
+        """Favorites mode lists the saved meals with their items, the staples and the ratings as hints to weigh."""
         prompt = build_suggestion_prompt(
-            [], [], {}, [], mode="favorites", favorite_meals=self.SAVED, favorites=["Bagels", "Cheddar"],
+            [], [], {}, [], mode="favorites",
+            favorite_meals=self.SAVED, favorites=["Bagels", "Cheddar"], ratings=self.RATINGS,
         )
         assert "- Cheddar toast: Cheddar toast (Bread, Cheddar), Orange juice" in prompt
         assert "Their favorite ingredients: Bagels, Cheddar" in prompt
-        assert "one saved favorite meal that the available ingredients can make" in prompt
+        assert "High-rated (favour these): Strawberries" in prompt
+        assert "Low-rated (avoid or minimise): Oats" in prompt
+        assert "Weigh all of it together" in prompt
 
-    def test_other_modes_leave_saved_favorites_out(self):
-        """Plain Suggest and explore mode don't list the saved favorites."""
+    def test_other_modes_leave_taste_hints_out(self):
+        """Plain Suggest and explore mode don't list the saved meals, staples or ratings."""
         for mode in (None, "explore"):
             prompt = build_suggestion_prompt(
-                [], [], {}, [], mode=mode, favorite_meals=self.SAVED, favorites=["Bagels"],
+                [], [], {}, [], mode=mode, favorite_meals=self.SAVED, favorites=["Bagels"], ratings=self.RATINGS,
             )
             assert "Cheddar toast" not in prompt, mode
             assert "Bagels" not in prompt, mode
+            assert "Strawberries" not in prompt, mode
 
     def test_mode_explore_appends_discovery_instructions(self):
         """Explore mode should add world cuisine/discovery instructions."""

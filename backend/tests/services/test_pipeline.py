@@ -331,9 +331,9 @@ class TestPipelineOrchestrator:
         assert "EXPLORE" in captured_prompts[0]
         assert "EXPLORE" in captured_prompts[2]
 
-    # Favorites mode's draft and refine prompts list the context's saved favorite meals and staples
+    # Favorites mode's draft and refine prompts list the context's saved meals, staples and ratings
     @pytest.mark.asyncio
-    async def test_favorites_mode_gets_saved_favorites(self):
+    async def test_favorites_mode_gets_taste_hints(self):
         captured_prompts = []
 
         async def prompt_tracking_stream(system_prompt, history, message, temperature=None):
@@ -345,6 +345,7 @@ class TestPipelineOrchestrator:
             **SAMPLE_CONTEXT,
             "favorite_meals": [{"meal_name": "Egg toast", "ingredients": '["eggs"]'}],
             "favorites": ["eggs"],
+            "ratings": [{"product_name": "eggs", "rating": 9}],
         }
         with patch("services.pipeline.stream_response", prompt_tracking_stream):
             async for _ in run_suggestion_pipeline(context=context, user_message="Suggest", mode="favorites"):
@@ -353,6 +354,7 @@ class TestPipelineOrchestrator:
         for prompt in (captured_prompts[0], captured_prompts[2]):
             assert "- Egg toast: eggs" in prompt
             assert "Their favorite ingredients: eggs" in prompt
+            assert "High-rated (favour these): eggs" in prompt
 
     # Pipeline propagates LLMUnavailableError from draft step
     @pytest.mark.asyncio
