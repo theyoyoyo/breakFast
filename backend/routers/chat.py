@@ -7,6 +7,7 @@ Each open socket is registered in services/chat_sync, so a saved reply reaches t
 """
 
 import json
+import logging
 import uuid
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from database import get_db
@@ -199,6 +200,7 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                 except LLMUnavailableError:
                     response_text = lyric_cycler.next()
                 except Exception:
+                    logging.exception("Suggestion pipeline failed; replying with a lyric")
                     response_text = lyric_cycler.next()
             else:
                 system_prompt = build_chat_prompt(
@@ -228,6 +230,7 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                 except LLMUnavailableError:
                     response_text = lyric_cycler.next()
                 except Exception:
+                    logging.exception("Chat reply failed; replying with a lyric")
                     response_text = lyric_cycler.next()
 
             # Save suggestion if the response contains a ```json meal block.

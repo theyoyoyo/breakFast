@@ -242,3 +242,46 @@ async def test_save_message_touches_only_own_session(ws_setup):
     assert updated["own-session"] != "2026-01-01 08:00:00"
     assert updated["bob-session"] == "2026-01-01 08:00:00"
 
+
+# A crashing chat reply is logged with its traceback, and the user still gets a lyric
+@pytest.mark.asyncio
+async def test_websocket_logs_chat_reply_crash(ws_setup, caplog):
+    app, token, _ = ws_setup
+    from starlette.testclient import TestClient
+    from unittest.mock import patch
+    from services.llm import FALLBACK_LYRICS
+
+    async def mock_stream_crash(*args, **kwargs):
+        raise RuntimeError("chat boom")
+        yield
+
+    with patch("routers.chat.build_chat_prompt", return_value="test prompt"),          patch("routers.chat.stream_response", mock_stream_crash):
+        with TestClient(app).websocket_connect(f"/chat?token={token}") as ws:
+            ws.send_text(json.dumps({"message": "hello"}))
+            msg = ws.receive_json()
+
+    assert msg["type"] == "done" and msg["content"] in FALLBACK_LYRICS
+    record = next(r for r in caplog.records if r.getMessage() == "Chat reply failed; replying with a lyric")
+    assert "chat boom" in str(record.exc_info[1])
+
+
+# A crashing suggestion pipeline is logged with its traceback, and the user still gets a lyric
+@pytest.mark.asyncio
+async def test_websocket_logs_suggestion_crash(ws_setup, caplog):
+    app, token, _ = ws_setup
+    from starlette.testclient import TestClient
+    from unittest.mock import patch
+    from services.llm import FALLBACK_LYRICS
+
+    async def mock_pipeline_crash(*args, **kwargs):
+        raise RuntimeError("pipeline boom")
+        yield
+
+    with patch("routers.chat.run_suggestion_pipeline", mock_pipeline_crash):
+        with TestClient(app).websocket_connect(f"/chat?token={token}") as ws:
+            ws.send_text(json.dumps({"message": "Suggest breakfast", "type": "suggest", "mode": "favorites"}))
+            msg = ws.receive_json()
+
+    assert msg["type"] == "done" and msg["content"] in FALLBACK_LYRICS
+    record = next(r for r in caplog.records if r.getMessage() == "Suggestion pipeline failed; replying with a lyric")
+    assert "pipeline boom" in str(record.exc_info[1])
