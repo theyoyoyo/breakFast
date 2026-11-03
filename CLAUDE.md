@@ -147,7 +147,7 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 - **CORS**: configurable via `CORS_ORIGINS` env var (comma-separated).
 - **Demo user**: only created when `DEMO_USER=true` (empty PIN). A newly created demo account gets a starter fridge (`DEMO_FRIDGE` in `models/ingredient.py`, basics included). Never enable it on a reachable instance.
 - **Language**: the UI is English only; the setting changes AI replies. User data is often Turkish and pulls a 7B model toward Turkish, so every user-facing prompt ends with a `FINAL REMINDER` restating the language directive. Code-built text in replies (e.g. prep plan labels) follows the same setting, and so do units.
-- **Theme**: Settings → Theme (orange default, then green, teal, blue, purple: hues spread around the wheel, each nudged warm, all WCAG AA) changes only `--accent`, `--accent2`, `--secondary` / `--secondary-soft` and the assistant bubble `--bubble` (`index.css`, `:root[data-theme=…]`). Use those variables or `secondaryColor`, never a hard-coded accent hex. Semantic colors never follow the theme: red (`colors.danger*`) means delete/remove, health-rule priorities are a traffic light (red top priority, yellow care a lot, green don't really care), plus expiry warnings and stars. Saved as the `theme` preference and cached in `localStorage` (`utils/theme.js`).
+- **Theme**: Settings → Theme (orange default, then green, teal, blue, purple: hues spread around the wheel, each nudged warm, all WCAG AA) changes only `--accent`, `--accent2`, `--secondary` / `--secondary-soft`, the assistant bubble `--bubble` and the prep plan's dish colors `--dish-1` … `--dish-4` (`index.css`, `:root[data-theme=…]`). Use those variables or `secondaryColor`, never a hard-coded accent hex. `--dish-1` is the accent and the other three are hues spread around the wheel from it at the accent's lightness (the secondaries fail AA on the bubble and share the accent's hue), kept away from the delete red and the missing-item yellow, each AA on its bubble (a theme test checks the contrast). A plan in the new format (`⏱ Plan (` heading, `utils/prepPlan.js`) gets a thin bar per dish down the left of its lines, ↳ lines included, and the dish name on a time line in the same color; dishes take colors in order of first appearance and a fifth reuses the first. Older plans and lyric fallbacks render as plain Markdown, and nothing is added to the plan text. Semantic colors never follow the theme: red (`colors.danger*`) means delete/remove, health-rule priorities are a traffic light (red top priority, yellow care a lot, green don't really care), plus expiry warnings and stars. Saved as the `theme` preference and cached in `localStorage` (`utils/theme.js`).
 - **App settings vs food preferences**: settings stored as preferences (`SETTING_KEYS` in `services/context.py`: language, theme, weekly-summary toggle) are kept out of prompts.
 - **Line endings**: `.gitattributes` normalizes to LF in repo, CRLF on Windows checkout.
 
@@ -220,6 +220,7 @@ breakFAST/
     ├── utils/ingredients.js         ← ingredient helpers, units per language + unit memory
     ├── utils/language.js            ← AI language store (cached per device, like the theme)
     ├── utils/countries.js           ← Country list (name + ISO code) for Settings → Profile
+    ├── utils/prepPlan.js            ← reads new-format prep plans: the dish and dish color of each line
     ├── styles/common.js             ← shared styles
     ├── services/api.js              ← all REST + WebSocket calls
     ├── hooks/useVoice.js            ← Web Speech API
@@ -230,6 +231,7 @@ breakFAST/
         ├── ChatInterface.jsx        ← main chat UI
         ├── MealBlock.jsx            ← inline meal block in chat
         ├── MealEditor.jsx           ← shared meal editor (used everywhere)
+        ├── PrepPlanText.jsx         ← prep plan message with a colored bar per dish
         ├── DecidePanel.jsx          ← "Today I ate" flow
         ├── SuggestButton.jsx        ← suggest button + mode picker
         ├── IngredientPanel.jsx      ← Fridge tab
