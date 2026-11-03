@@ -117,13 +117,15 @@ describe('IngredientPanel shopping suggestions', () => {
     expect(screen.queryByRole('button', { name: 'Delete all' })).toBeNull()
   })
 
-  // ▲/▼ hides the list and shows it again, without clearing it
+  // ▲/▼ hides the list and shows it again, without clearing it: ▼ while open, ▲ while closed
   it('hides and shows the list without clearing it', async () => {
     await renderWithList([SALMON, KIWI])
     expect(header()).toHaveAttribute('aria-expanded', 'true')
+    expect(within(header()).getByText('▼')).toBeInTheDocument()
     fireEvent.click(header())
     expect(screen.queryByText('Salmon')).toBeNull()
     expect(header()).toHaveAttribute('aria-expanded', 'false')
+    expect(within(header()).getByText('▲')).toBeInTheDocument()
     fireEvent.click(header())
     expect(screen.getByText('Salmon')).toBeInTheDocument()
     expect(api.saveSuggestionList).not.toHaveBeenCalled()
