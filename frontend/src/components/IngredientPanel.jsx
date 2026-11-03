@@ -80,7 +80,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
 
   // Shopping state: the suggestions list is [{ name, reason, checked }], kept on the server
   const [suggestions, setSuggestions] = useState([])
-  // The list starts collapsed (▼) and opens when new suggestions arrive
+  // The list starts collapsed (▲) and opens when new suggestions arrive
   const [suggestionsCollapsed, setSuggestionsCollapsed] = useState(true)
   const [suggestionsLoading, setSuggestionsLoading] = useState(false)
   const [shoppingListOpen, setShoppingListOpen] = useState(false)
@@ -764,7 +764,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
       {suggestions.length > 0 && (
         <div style={s.suggestionsPanel}>
           {/* As big as Suggest Shopping: helpers at the left (open list only), the title in the
-              middle, ▲/▼ at the right; a tap anywhere else opens or closes the list */}
+              middle, ▲ (closed) / ▼ (open) at the right; a tap anywhere else opens or closes the list */}
           <div style={s.suggestSection}>
             <div
               style={s.suggestionsPanelHeader}
@@ -800,7 +800,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
                 )}
               </span>
               <span style={s.suggestionsPanelTitle}>Suggestions ({suggestions.length})</span>
-              <span style={s.collapseIcon} aria-hidden="true">{suggestionsCollapsed ? '▼' : '▲'}</span>
+              <span style={s.collapseIcon} aria-hidden="true">{suggestionsCollapsed ? '▲' : '▼'}</span>
             </div>
           </div>
           {!suggestionsCollapsed && (

@@ -214,15 +214,16 @@ async def fetch_dishes(db, user_id: int) -> list[str]:
 
 
 async def load_shopping_context(db, user_id: int) -> dict:
-    """Load full context for the shopping persona."""
+    """Load full context for the shopping persona. Saved favorite meals stand where recent meals
+    were: they're the meals the user chose to keep."""
     (
-        ingredients, history, prefs,
+        ingredients, favorite_meals, prefs,
         (stated_habits, inferred_habits),
         health_rules, user_profile, supplements,
         shopping_list, favorites, ratings, dishes,
     ) = await asyncio.gather(
         fetch_ingredients(db, user_id),
-        fetch_history(db, user_id, limit=10, include_ingredients=True),
+        fetch_favorite_meals(db, user_id),
         fetch_preferences(db, user_id),
         fetch_habits(db, user_id),
         fetch_health_rules(db, user_id),
@@ -239,7 +240,7 @@ async def load_shopping_context(db, user_id: int) -> dict:
 
     return {
         "ingredients": ingredients,
-        "history": history,
+        "favorite_meals": favorite_meals,
         "dishes": dishes,
         "preferences": filtered_prefs,
         "stated_habits": stated_habits,

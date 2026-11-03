@@ -11,12 +11,18 @@ compared exactly (see fridge.same_name), not loosely.
 Items the user removed from the suggestions list with × are left out for
 REMOVED_DAYS (recently_removed); after that they may come back. The avoid list is
 the permanent ban.
+
+Each press shows the model a random share of the fridge and of the user's taste
+hints (pick_input), so suggestions start from a different place each time. Code
+still drops anything in the whole fridge.
 """
 
 import json
+import random
 import re
 
 from services.fridge import same_name
+from services.knowledge import format_favorite_meal
 
 # A suggestion removed with × stays out of new suggestions this long
 REMOVED_DAYS = 7
@@ -59,15 +65,50 @@ def parse_suggestions(reply: str) -> list[dict] | None:
     return result
 
 
-def shopping_request(language: str, shown: list[str] = ()) -> str:
+# The share of the fridge items and of the taste hints one press shows
+INPUT_SHARE = 0.7
+# Ratings at or above this are taste hints; at or below LOW_RATING they're limits (as in format_ratings)
+HIGH_RATING, LOW_RATING = 7, 4
+
+
+def random_share(items: list, rng: random.Random, share: float = INPUT_SHARE) -> list:
+    """A random ~70% of the items in random order, at least one when there are any."""
+    return rng.sample(items, max(1, round(len(items) * share))) if items else []
+
+
+def taste_hints(ctx: dict) -> list[str]:
+    """Every hint about what the user enjoys, one line each: liked items, staples, saved favorite
+    meals with their items, habits, behavior patterns and high-rated items."""
+    prefs = ctx.get("preferences") or {}
+    hints = [f"Likes {v}" for k, v in prefs.items() if k.startswith("fav:")]
+    hints += [f"Keeps around: {s}" for s in ctx.get("favorites") or []]
+    hints += [f"Saved favorite meal: {format_favorite_meal(m)}" for m in ctx.get("favorite_meals") or []]
+    hints += [f"Habit: {h}" for h in ctx.get("stated_habits") or []]
+    hints += [f"Pattern: {h}" for h in ctx.get("inferred_habits") or []]
+    hints += [
+        f"Rated {r['rating']}/10: {r['product_name']}" for r in ctx.get("ratings") or []
+        if r.get("rating", 0) >= HIGH_RATING
+    ]
+    return hints
+
+
+def pick_input(ctx: dict, rng: random.Random) -> tuple[list[str], list[str]]:
+    """One press's fridge items and taste hints, a random share of each. Limits (health rules,
+    avoid list, dislikes, low ratings) aren't drawn: the prompt always has them."""
+    fridge = random_share([i["name"] for i in ctx["ingredients"]], rng)
+    return fridge, random_share(taste_hints(ctx), rng)
+
+
+def shopping_request(language: str, shown: list[str] = (), fridge: list[str] = ()) -> str:
     """The user message for the shopping call. A 7B model writing JSON follows the last message
-    better than the system prompt, so it names the reply language and, for Suggest More, the
-    items the user has already seen."""
+    better than the system prompt, so it lists this press's share of the fridge and names the
+    reply language and, for Suggest More, the items the user has already seen."""
     name = "English" if language == "en" else "Turkish"
+    have = f"Some of what I have now: {', '.join(fridge)}.\n" if fridge else ""
     if not shown:
-        return f"Generate shopping suggestions for me, in {name}."
+        return f"{have}Generate shopping suggestions for me, in {name}."
     return (
-        f"Generate more shopping suggestions for me, in {name}, all different from these, "
+        f"{have}Generate more shopping suggestions for me, in {name}, all different from these, "
         f"which I've already seen: {', '.join(shown)}."
     )
 
