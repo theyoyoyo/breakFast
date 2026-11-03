@@ -21,6 +21,7 @@ from services.suggestion import stream_response
 from services.personas import build_scheduler_prompt, build_scheduler_user_message
 from services.personas.scheduler import DEFAULT_APPLIANCES
 from services.llm import LLMUnavailableError, lyric_cycler
+from services.fridge import same_name
 from services.knowledge import format_ingredient_item
 from utils import extract_json_block
 
@@ -69,24 +70,28 @@ def _clean(text) -> str:
 
 
 def _minutes(value, hands_on: bool) -> int:
-    """Whole minutes for a step, rounded up; the default when the estimate isn't a positive number."""
+    """Whole minutes for a step, rounded up and at least one; the default when the estimate is
+    missing, negative or not a number."""
     try:
         minutes = float(value)
     except (TypeError, ValueError):
-        minutes = 0
-    if isinstance(value, bool) or not 0 < minutes < math.inf:  # NaN fails the comparison too
+        minutes = -1
+    if isinstance(value, bool) or not 0 <= minutes < math.inf:  # NaN fails the comparison too
         return _DEFAULT_MINUTES[hands_on]
-    return min(math.ceil(minutes), _MAX_MINUTES)
+    return min(max(math.ceil(minutes), 1), _MAX_MINUTES)
 
 
-def _read_dishes(raw: dict, language: str, appliances: list[str] | None) -> list[dict]:
+def _read_dishes(raw: dict, language: str, appliances: list[str] | None, served: list[str]) -> list[dict]:
     """The LLM's dishes with their steps in order. Dish names lose their colons, so the app can read
-    the dish as the text before the first colon of a time line. An appliance outside the user's list
-    is dropped (None keeps any), and a step without hands_on is waiting when it has an appliance."""
+    the dish as the text before the first colon of a time line. A dish named like an item the menu
+    serves as it is gets no steps. An appliance outside the user's list is dropped (None keeps any),
+    and a step without hands_on is waiting when it has an appliance."""
     known = None if appliances is None else {a.lower(): a for a in appliances}
     entries = raw.get("dishes") if isinstance(raw.get("dishes"), list) else []
     dishes = []
     for entry in (e for e in entries if isinstance(e, dict)):
+        if any(same_name(str(entry.get("dish") or ""), item) for item in served):
+            continue
         steps = []
         for step in entry.get("steps") or []:
             if not isinstance(step, dict) or not _clean(step.get("action")):
@@ -177,16 +182,17 @@ def _clock(minutes: int) -> str:
     return f"{minutes // 60}:{minutes % 60:02d}"
 
 
-def _build_plan(raw: dict, language: str = "en", appliances: list[str] | None = None) -> dict:
+def _build_plan(raw: dict, language: str = "en", appliances: list[str] | None = None, served: list[str] = ()) -> dict:
     """
     Take the LLM's {dishes: [{dish, steps}]} output and produce a formatted plan.
 
     One list in time order under one heading: a time line names its dish before the step, the
     dish's steps that follow right after it sit under it as ↳ lines, waiting steps show their
-    minutes and appliance, and the Ready line ends it.
+    minutes and appliance, and the Ready line ends it. `served` names the menu's items served
+    as they are, which go straight to the table.
     """
     labels = _labels(language)
-    dishes = _read_dishes(raw, language, appliances)
+    dishes = _read_dishes(raw, language, appliances, served)
     total = _schedule(dishes)
     timeline = _in_time_order(dishes)
 
@@ -278,8 +284,10 @@ async def get_schedule(body: ScheduleRequest, user_id: int = Depends(require_use
             formatted=_labels(language)["unreadable"],
         )
 
-    # Build the schedule ourselves
-    result = _build_plan(raw_plan, language, appliances)
+    # Build the schedule ourselves; the model sometimes gives a served item a "serve" step
+    served = [i.get("name") or "" if isinstance(i, dict) else i for i in body.menu
+              if not (isinstance(i, dict) and i.get("ingredients"))]
+    result = _build_plan(raw_plan, language, appliances, served)
 
     # Cache if meal_id was provided
     if body.meal_id is not None:

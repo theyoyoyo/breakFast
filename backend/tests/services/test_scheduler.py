@@ -148,19 +148,33 @@ def test_menu_with_no_cooking():
 
 
 def test_estimates_code_cant_use_get_defaults():
-    """Missing or negative minutes get a default, fractions round up, and an appliance outside
-    the user's list is dropped instead of failing."""
+    """Missing or negative minutes get a default, fractions round up, a step takes at least a
+    minute, and an appliance outside the user's list is dropped instead of failing."""
     raw = {"dishes": [_dish("Eggs on toast",
                             {"action": "Crack 2 eggs into a bowl"},
                             _step("Fry the eggs", -3, False, "Stove"),
                             _step("Toast the bread", "2.5", False, "Grill"),
                             {"action": "Slide the eggs onto the toast", "minutes": None, "appliance": "stove"},
+                            _step("Add a pinch of salt", 0),
                             {"minutes": 4},
                             "Serve")]}
     timeline = _build_plan(raw, appliances=["Stove"])["timeline"]
     assert [(s["duration_min"], s["hands_on"], s["resource"]) for s in timeline] == [
-        (2, True, ""), (5, False, "Stove"), (3, False, ""), (5, False, "Stove"),
+        (2, True, ""), (5, False, "Stove"), (3, False, ""), (5, False, "Stove"), (1, True, ""),
     ]
+
+
+def test_items_served_as_they_are_get_no_steps():
+    """A plan dish named like an item the menu serves as it is (any case, plurals) is left out,
+    as in the prompt test where the model gave the cheese and olives a "serve" step."""
+    raw = {"dishes": [
+        _dish("Egg sandwich", _step("Boil 2 eggs", 10, False, "Stove"), _step("Slice the eggs into the bread", 2)),
+        _dish("White Cheese", _step("Serve 50 g white cheese", 0, False)),
+        _dish("Olive", _step("Serve 8 olives", 0, False)),
+    ]}
+    result = _build_plan(raw, served=["White cheese", "Olives"])
+    assert {s["dish"] for s in result["timeline"]} == {"Egg sandwich"}
+    assert result["makespan_min"] == 12
 
 
 # ---------------------------------------------------------------------------

@@ -32,11 +32,13 @@ MENEMEN_MENU = [
 
 
 async def test_plan_from_menu_without_steps(client):
-    """A menu-format meal with no steps still gets a plan from the LLM, its units in the reply language."""
+    """A menu-format meal with no steps still gets a plan from the LLM, its units in the reply language,
+    and the item it serves as it is stays out of the plan."""
     reply = (
         '```json\n{"dishes": [{"dish": "Menemen", "steps": ['
         '{"action": "Sauté the peppers", "minutes": 4, "hands_on": true, "appliance": "Stove"}, '
-        '{"action": "Stir in 2 eggs and cook", "minutes": 6, "hands_on": false, "appliance": "Stove"}]}]}\n```'
+        '{"action": "Stir in 2 eggs and cook", "minutes": 6, "hands_on": false, "appliance": "Stove"}]}, '
+        '{"dish": "White cheese", "steps": [{"action": "Serve 50 g", "minutes": 0, "hands_on": false}]}]}\n```'
     )
     with patch("routers.scheduler.stream_response", side_effect=_mock_stream(reply)) as llm:
         r = await client.post("/scheduler/plan", json={
