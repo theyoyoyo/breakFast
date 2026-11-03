@@ -1,12 +1,16 @@
 """
-/scheduler endpoint — kitchen prep timeline for a specific meal.
+/scheduler endpoint — kitchen prep plan for a specific meal.
 
-LLM extracts a structured plan (prep + timed tasks). We handle the scheduling
-math: timed tasks are scheduled backwards so everything finishes together.
+The LLM lists each dish's steps (hands-on or waiting, with minutes and an appliance). We do
+the scheduling math: steps are placed backwards from the finish so the dishes are ready
+together, and the plan reads as one list in time order, dishes interleaved.
 Supports caching via meal_history.schedule column.
 """
 
 import json
+import math
+from collections import Counter
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import Union
@@ -15,6 +19,7 @@ from auth import require_user
 from database import get_db
 from services.suggestion import stream_response
 from services.personas import build_scheduler_prompt, build_scheduler_user_message
+from services.personas.scheduler import DEFAULT_APPLIANCES
 from services.llm import LLMUnavailableError, lyric_cycler
 from services.knowledge import format_ingredient_item
 from utils import extract_json_block
@@ -37,87 +42,173 @@ class ScheduleResponse(BaseModel):
     cached: bool = False
 
 
-# Fixed labels in the formatted plan, per response language
+# Fixed labels in the formatted plan, per response language. The app colors plans whose
+# heading is "⏱ Plan (" by dish (#145), so older plans keep their look.
 _PLAN_LABELS = {
-    "en": {"prep": "🔪 Prep", "timeline": "⏱ Timeline", "min": "min", "ready": "Ready! ✓",
+    "en": {"plan": "⏱ Plan", "min": "min", "ready": "Ready! ✓", "dish": "Dish",
            "unreadable": "Couldn't read the plan. Please try again."},
-    "tr": {"prep": "🔪 Hazırlık", "timeline": "⏱ Zamanlama", "min": "dk", "ready": "Hazır! ✓",
+    "tr": {"plan": "⏱ Plan", "min": "dk", "ready": "Hazır! ✓", "dish": "Yemek",
            "unreadable": "Plan ayrıştırılamadı. Lütfen tekrar dene."},
 }
+
+# Steps an appliance holds at once: the stove has two pans, every other appliance one step
+_CAPACITY = {"stove": 2}
+# Minutes for a step whose estimate code can't use, by hands-on (True) or waiting (False)
+_DEFAULT_MINUTES = {True: 2, False: 5}
+# The longest step code plans, so a wild estimate can't stretch the plan for hours
+_MAX_MINUTES = 120
 
 
 def _labels(language: str) -> dict:
     return _PLAN_LABELS.get(language, _PLAN_LABELS["en"])
 
 
-def _build_plan(raw: dict, language: str = "en") -> dict:
-    """
-    Take the LLM's {prep, timed} output and produce a formatted plan.
+def _clean(text) -> str:
+    """One line of text, whitespace collapsed, so a step can't break the plan's layout."""
+    return " ".join(str(text or "").split())
 
-    Timed tasks are scheduled backwards so they all finish at the same time.
+
+def _minutes(value, hands_on: bool) -> int:
+    """Whole minutes for a step, rounded up; the default when the estimate isn't a positive number."""
+    try:
+        minutes = float(value)
+    except (TypeError, ValueError):
+        minutes = 0
+    if isinstance(value, bool) or not 0 < minutes < math.inf:  # NaN fails the comparison too
+        return _DEFAULT_MINUTES[hands_on]
+    return min(math.ceil(minutes), _MAX_MINUTES)
+
+
+def _read_dishes(raw: dict, language: str, appliances: list[str] | None) -> list[dict]:
+    """The LLM's dishes with their steps in order. Dish names lose their colons, so the app can read
+    the dish as the text before the first colon of a time line. An appliance outside the user's list
+    is dropped (None keeps any), and a step without hands_on is waiting when it has an appliance."""
+    known = None if appliances is None else {a.lower(): a for a in appliances}
+    entries = raw.get("dishes") if isinstance(raw.get("dishes"), list) else []
+    dishes = []
+    for entry in (e for e in entries if isinstance(e, dict)):
+        steps = []
+        for step in entry.get("steps") or []:
+            if not isinstance(step, dict) or not _clean(step.get("action")):
+                continue
+            appliance = _clean(step.get("appliance"))
+            if known is not None:
+                appliance = known.get(appliance.lower(), "")
+            hands_on = step.get("hands_on")
+            if not isinstance(hands_on, bool):
+                hands_on = not appliance
+            steps.append({
+                "task": _clean(step["action"]),
+                "duration_min": _minutes(step.get("minutes"), hands_on),
+                "hands_on": hands_on,
+                "resource": appliance,
+            })
+        if steps:
+            name = _clean(str(entry.get("dish") or "").replace(":", " "))
+            dishes.append({"name": name or f"{_labels(language)['dish']} {len(dishes) + 1}", "steps": steps})
+    return dishes
+
+
+def _schedule(dishes: list[dict]) -> int:
+    """Give every step a start minute and return the total minutes.
+
+    Works backwards from the finish so the dishes are ready together: each dish's steps stay
+    in order, one cook does the hands-on steps one at a time, and an appliance holds one step
+    (the stove two). Waiting steps need no cook, so other dishes' hands-on steps fill them.
+    Times inside count minutes before the finish."""
+    cook, used = set(), Counter()  # minutes the cook is busy; steps on each (appliance, minute)
+    left = [len(d["steps"]) for d in dishes]  # steps still to place, per dish
+    ready = [0] * len(dishes)  # where each dish's earliest placed step starts
+
+    def fits(step: dict, at: int) -> bool:
+        minutes = range(at, at + step["duration_min"])
+        capacity = _CAPACITY.get(step["resource"].lower(), 1)
+        return (not step["hands_on"] or cook.isdisjoint(minutes)) and (
+            not step["resource"] or all(used[step["resource"], m] < capacity for m in minutes))
+
+    def latest(i: int) -> int:
+        """The closest to the finish dish i's next step can end without a clash."""
+        step, at = dishes[i]["steps"][left[i] - 1], ready[i]
+        while not fits(step, at):
+            at += 1
+        return at
+
+    while any(left):
+        # The step that can end closest to the finish goes next; on a tie, the dish with the most work left
+        at, _, i = min(
+            (latest(i), -sum(s["duration_min"] for s in dishes[i]["steps"][:left[i]]), i)
+            for i in range(len(dishes)) if left[i]
+        )
+        step = dishes[i]["steps"][left[i] - 1]
+        for m in range(at, at + step["duration_min"]):
+            if step["hands_on"]:
+                cook.add(m)
+            if step["resource"]:
+                used[step["resource"], m] += 1
+        step["end_before"] = at
+        ready[i] = at + step["duration_min"]
+        left[i] -= 1
+
+    total = max(ready, default=0)
+    for dish in dishes:
+        for step in dish["steps"]:
+            step["start_min"] = total - step.pop("end_before") - step["duration_min"]
+    return total
+
+
+def _in_time_order(dishes: list[dict]) -> list[dict]:
+    """Every step in time order. On a tie the dish just shown goes on, then waiting steps
+    (start them, then work while they cook), then menu order."""
+    pending = [{**s, "dish": d["name"], "order": i} for i, d in enumerate(dishes) for s in d["steps"]]
+    ordered = []
+    while pending:
+        first = min(s["start_min"] for s in pending)
+        last = ordered[-1]["order"] if ordered else None
+        step = min(
+            (s for s in pending if s["start_min"] == first),
+            key=lambda s: (s["order"] != last, s["hands_on"], s["order"]),
+        )
+        pending.remove(step)
+        ordered.append(step)
+    return ordered
+
+
+def _clock(minutes: int) -> str:
+    return f"{minutes // 60}:{minutes % 60:02d}"
+
+
+def _build_plan(raw: dict, language: str = "en", appliances: list[str] | None = None) -> dict:
+    """
+    Take the LLM's {dishes: [{dish, steps}]} output and produce a formatted plan.
+
+    One list in time order under one heading: a time line names its dish before the step, the
+    dish's steps that follow right after it sit under it as ↳ lines, waiting steps show their
+    minutes and appliance, and the Ready line ends it.
     """
     labels = _labels(language)
-    prep = raw.get("prep", [])
-    timed = raw.get("timed", [])
+    dishes = _read_dishes(raw, language, appliances)
+    total = _schedule(dishes)
+    timeline = _in_time_order(dishes)
 
-    if not timed:
-        makespan = 0
-    else:
-        makespan = max(t.get("duration_min", 0) for t in timed)
-
-    # Build timeline: timed tasks start at (makespan - duration) so they all end together
-    timeline = []
-    for t in timed:
-        dur = t.get("duration_min", 0)
-        start = makespan - dur
-        timeline.append({
-            "start_min": round(start, 1),
-            "task": t.get("task", "?"),
-            "duration_min": dur,
-            "resource": t.get("resource", ""),
-            "end_action": t.get("end_action", ""),
-        })
-
-    # Sort by start time (earliest first), then by duration desc for ties
-    timeline.sort(key=lambda t: (t["start_min"], -t["duration_min"]))
-
-    # Format
-    lines = []
-
-    if prep:
-        lines.append(labels["prep"])
-        for p in prep:
-            task = p.get("task", "?") if isinstance(p, dict) else str(p)
-            detail = p.get("detail", "") if isinstance(p, dict) else ""
-            line = f"  • {task}"
-            if detail:
-                line += f" — {detail}"
-            lines.append(line)
-        lines.append("")
-
-    if timeline:
-        lines.append(f"{labels['timeline']} ({int(makespan)} {labels['min']})")
-        for entry in timeline:
-            m = int(entry["start_min"])
-            s = int((entry["start_min"] - m) * 60)
-            res = f"  [{entry['resource']}]" if entry["resource"] else ""
-            lines.append(
-                f"  {m}:{s:02d}  — {entry['task']} ({entry['duration_min']:.0f} {labels['min']}){res}"
-            )
-            if entry["end_action"]:
-                lines.append(f"         ↳ {entry['end_action']}")
-
-        # Final "done" line
-        done_m = int(makespan)
-        done_s = int((makespan - done_m) * 60)
-        lines.append(f"  {done_m}:{done_s:02d}  — {labels['ready']}")
-
-    formatted = "\n".join(lines)
+    lines = [f"{labels['plan']} ({total} {labels['min']})"]
+    previous = None
+    for step in timeline:
+        text = step["task"]
+        if not step["hands_on"]:
+            text += f" ({step['duration_min']} {labels['min']})" + (f" [{step['resource']}]" if step["resource"] else "")
+        goes_on = previous is not None and previous["order"] == step["order"] and (
+            previous["start_min"] + previous["duration_min"] == step["start_min"])
+        if goes_on:
+            lines.append(f"         ↳ {text}")
+        else:
+            lines.append(f"  {_clock(step['start_min'])}  — {step['dish']}: {text}")
+        previous = step
+    lines.append(f"  {_clock(total)}  — {labels['ready']}")
 
     return {
-        "timeline": timeline,
-        "makespan_min": makespan,
-        "formatted": formatted,
+        "timeline": [{k: v for k, v in s.items() if k != "order"} for s in timeline],
+        "makespan_min": total,
+        "formatted": "\n".join(lines),
     }
 
 
@@ -159,7 +250,9 @@ async def get_schedule(body: ScheduleRequest, user_id: int = Depends(require_use
         prefs = await fetch_preferences(db, user_id)
     language = prefs.get("response_language", "en")
 
-    system_prompt = build_scheduler_prompt(body.meal_name, body.steps, ingredients_str, kitchen_appliances=kitchen_appliances, language=language)
+    # The plan keeps only the appliances the prompt offered
+    appliances = kitchen_appliances or DEFAULT_APPLIANCES
+    system_prompt = build_scheduler_prompt(body.meal_name, body.steps, ingredients_str, kitchen_appliances=appliances, language=language)
     user_message = build_scheduler_user_message(body.meal_name, body.steps, ingredients_str, menu=body.menu, language=language)
 
     # Collect full LLM response
@@ -178,7 +271,7 @@ async def get_schedule(body: ScheduleRequest, user_id: int = Depends(require_use
 
     # Parse the JSON plan from LLM output
     raw_plan = extract_json_block(response_text)
-    if not raw_plan or not isinstance(raw_plan, dict):
+    if not isinstance(raw_plan, dict) or not isinstance(raw_plan.get("dishes"), list):
         return ScheduleResponse(
             timeline=[],
             makespan_min=0,
@@ -186,7 +279,7 @@ async def get_schedule(body: ScheduleRequest, user_id: int = Depends(require_use
         )
 
     # Build the schedule ourselves
-    result = _build_plan(raw_plan, language)
+    result = _build_plan(raw_plan, language, appliances)
 
     # Cache if meal_id was provided
     if body.meal_id is not None:
