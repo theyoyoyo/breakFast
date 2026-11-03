@@ -191,3 +191,16 @@ def test_format_today():
     day = date(2026, 10, 27)
     assert format_today(day) == "Tuesday, 27 October 2026"
     assert format_today(day, "Türkiye") == "Tuesday, 27 October 2026, in Türkiye"
+
+
+# Saved favorites read as a name and one plain item list, each item once, from the DB's JSON or an old flat meal
+def test_format_favorite_meals():
+    from services.knowledge import format_favorite_meals
+    menu = json.dumps([
+        {"name": "Omelette", "ingredients": [{"name": "Eggs"}, {"name": "Cheddar"}]},
+        {"name": "Boiled egg", "ingredients": [{"name": "Eggs"}]},
+        {"name": "Orange juice", "amount": 1, "unit": "glass", "ingredients": []},
+    ])
+    meals = [{"meal_name": "Egg plate", "menu_items": menu}, {"meal_name": "Toast", "ingredients": '["Bread"]'}]
+    assert format_favorite_meals(meals) == "- Egg plate: Eggs, Cheddar, Orange juice\n- Toast: Bread"
+    assert format_favorite_meals([]) == "none saved yet"

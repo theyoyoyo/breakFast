@@ -11,6 +11,9 @@ from datetime import date
 from services.knowledge import (
     format_ingredients,
     format_history,
+    format_favorite_meals,
+    format_favorites,
+    format_ratings,
     format_preferences,
     format_habits,
     format_health_rules,
@@ -220,10 +223,17 @@ MODE_INSTRUCTIONS = {
         "\n\n═══════════════════════════════════════════════════════════════\n"
         "MODE: FAVORITES (comfort)\n"
         "═══════════════════════════════════════════════════════════════\n"
-        "The user asked for a suggestion based on their FAVORITE ingredients and meals.\n"
-        "Prioritize ingredients and meal patterns from their favorites list.\n"
-        "Stay within the user's comfort zone — familiar flavors, proven combinations.\n"
-        "If the favorites list is empty, use their meal history to infer what they enjoy most."
+        "The user asked for a FAVORITE: a breakfast that fits their taste — familiar flavors, "
+        "proven combinations.\n"
+        "Everything you know about them hints at that taste: the meals they saved, their favorite "
+        "ingredients and their ratings below, and their preferences, habits, patterns and recent "
+        "meals above. Weigh all of it together and design the menu that fits them best today, so "
+        "it feels like theirs; a saved meal may be made as it is or inspire something close to it.\n"
+        "Meals they saved in Favorites:\n"
+        "{favorite_meals}\n"
+        "Their favorite ingredients: {favorite_ingredients}\n"
+        "Their ratings of items they ate:\n"
+        "{ratings}"
     ),
     "explore": (
         "\n\n═══════════════════════════════════════════════════════════════\n"
@@ -255,8 +265,12 @@ def build_suggestion_prompt(
     language: str = "en",
     country: str | None = None,
     today: date | None = None,
+    favorite_meals: list[dict] | None = None,
+    favorites: list[str] | None = None,
+    ratings: list[dict] | None = None,
 ) -> str:
-    """Build the suggestion persona system prompt."""
+    """Build the suggestion persona system prompt. Favorites mode also lists the saved favorite
+    meals, the staples (favorite ingredients) and the item ratings."""
     appliance_str = ", ".join(kitchen_appliances) if kitchen_appliances else "Not configured"
     base = SUGGESTION_TEMPLATE.format(
         lang_instruction=_lang(language),
@@ -277,5 +291,9 @@ def build_suggestion_prompt(
         weekly_summary=format_weekly_summary(weekly_summary),
         today=format_today(today, country),
     )
-    mode_instruction = MODE_INSTRUCTIONS.get(mode, "")
+    mode_instruction = MODE_INSTRUCTIONS.get(mode, "").format(
+        favorite_meals=format_favorite_meals(favorite_meals),
+        favorite_ingredients=format_favorites(favorites or []),
+        ratings=format_ratings(ratings or []),
+    )
     return base + mode_instruction + FINAL_REMINDER.format(lang_instruction=_lang(language))

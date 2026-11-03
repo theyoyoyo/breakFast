@@ -13,7 +13,8 @@ load_shopping_context() return them, so the real prompts run without a database.
 Simit sits in the en, tr and mixed fridges without tahini, to catch prepared items (#115).
 
 Five users from the 15-fridge test (2026-10-30), whose replies looked clean but weren't (#131):
-- picky: nuts avoided with almond milk in the fridge, dislikes, favorites mode.
+- picky: nuts avoided with almond milk in the fridge, dislikes, favorites mode with saved
+  favorite meals, staples and ratings from its fridge (#132).
 - diabetic: a critical blood sugar rule, with white bread and honey in the fridge.
 - student: no stove (microwave, kettle, toaster), ten minutes on weekdays.
 - big_fridge: about 50 items and every appliance.
@@ -34,8 +35,17 @@ def _meal(name: str, *ingredients: str) -> dict:
     return {"meal_name": name, "ingredients": [{"name": i} for i in ingredients]}
 
 
+def _favorite(name: str, *menu: str | tuple[str, list[str]]) -> dict:
+    """A meal saved in Favorites: each menu entry is a simple item's name or a (dish, ingredients) pair."""
+    return {"meal_name": name, "menu_items": [
+        {"name": m[0], "ingredients": [{"name": i} for i in m[1]]} if isinstance(m, tuple)
+        else {"name": m, "ingredients": []}
+        for m in menu
+    ]}
+
+
 # What every sample shares unless it says otherwise: no preferences, habits, rules or
-# supplements, a basic kitchen, an empty shopping list and no staples or ratings
+# supplements, a basic kitchen, an empty shopping list and no staples, saved favorite meals or ratings
 _BASE = {
     "country": "Türkiye",
     "preferences": {},
@@ -49,6 +59,7 @@ _BASE = {
     "weekly_summary": None,
     "shopping_list": [],
     "favorites": [],
+    "favorite_meals": [],
     "ratings": [],
 }
 
@@ -179,6 +190,19 @@ SAMPLES = {
         "history": [
             _meal("Pancakes with maple syrup", "Flour", "Eggs", "Milk", "Maple syrup"),
             _meal("Bagel with cream cheese", "Bagels", "Cream cheese"),
+        ],
+        "favorite_meals": [
+            _favorite("Cheddar toast", ("Cheddar toast", ["Bread", "Butter", "Cheddar"]), "Orange juice"),
+            _favorite(
+                "Strawberry pancakes",
+                ("Strawberry pancakes", ["Flour", "Eggs", "Milk", "Baking powder", "Strawberries", "Maple syrup"]),
+            ),
+        ],
+        "favorites": ["Cheddar", "Strawberries", "Maple syrup", "Bagels"],
+        "ratings": [
+            {"product_name": "Strawberries", "rating": 9},
+            {"product_name": "Cream cheese", "rating": 8},
+            {"product_name": "Oats", "rating": 3},
         ],
     },
     "diabetic": {

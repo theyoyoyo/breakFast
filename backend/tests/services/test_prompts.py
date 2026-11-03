@@ -366,6 +366,37 @@ class TestSuggestionPrompt:
         assert "FAVORITES" in prompt
         assert "comfort" in prompt.lower()
 
+    SAVED = [{"meal_name": "Cheddar toast", "menu_items": [
+        {"name": "Cheddar toast", "ingredients": [{"name": "Bread"}, {"name": "Cheddar"}]},
+        {"name": "Orange juice", "amount": 1, "unit": "glass", "ingredients": []},
+    ]}]
+
+    RATINGS = [{"product_name": "Strawberries", "rating": 9}, {"product_name": "Oats", "rating": 3}]
+
+    def test_mode_favorites_lists_taste_hints(self):
+        """Favorites mode lists the saved meals with their items, the staples and the ratings as hints to weigh."""
+        prompt = build_suggestion_prompt(
+            [], [], {}, [], mode="favorites",
+            favorite_meals=self.SAVED, favorites=["Bagels", "Cheddar"], ratings=self.RATINGS,
+        )
+        # One plain item list, so the model doesn't copy "Cheddar toast (Bread, …)" into dish names
+        assert "- Cheddar toast: Bread, Cheddar, Orange juice" in prompt
+        assert "Cheddar toast (" not in prompt
+        assert "Their favorite ingredients: Bagels, Cheddar" in prompt
+        assert "High-rated (favour these): Strawberries" in prompt
+        assert "Low-rated (avoid or minimise): Oats" in prompt
+        assert "Weigh all of it together" in prompt
+
+    def test_other_modes_leave_taste_hints_out(self):
+        """Plain Suggest and explore mode don't list the saved meals, staples or ratings."""
+        for mode in (None, "explore"):
+            prompt = build_suggestion_prompt(
+                [], [], {}, [], mode=mode, favorite_meals=self.SAVED, favorites=["Bagels"], ratings=self.RATINGS,
+            )
+            assert "Cheddar toast" not in prompt, mode
+            assert "Bagels" not in prompt, mode
+            assert "Strawberries" not in prompt, mode
+
     def test_mode_explore_appends_discovery_instructions(self):
         """Explore mode should add world cuisine/discovery instructions."""
         prompt = build_suggestion_prompt([], [], {}, [], mode="explore")
