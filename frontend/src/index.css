@@ -13,6 +13,10 @@
   --secondary: #c4533e;                    /* action buttons (secondaryColor) */
   --secondary-soft: rgba(196, 83, 62, 0.13);
   --bubble: #3d2a2a;                       /* assistant chat bubble, tinted with the accent */
+  --dish-1: #f4a261;                       /* prep plan dish colors (PrepPlanText), see below */
+  --dish-2: #7ace87;
+  --dish-3: #60c3fe;
+  --dish-4: #e499e2;
   --text: #e8e8f0;
   --text-muted: #9999bb;
   --border: #2a2a4a;
@@ -22,13 +26,20 @@
 
 /* Theme setting (Settings → Theme). Only the accent colors change; orange is the default above.
    Accent hues are spread around the wheel (orange 27°, green 64°, teal 164°, blue 228°, purple 310°),
-   each nudged warm. White on --secondary and text on --bubble pass WCAG AA. */
+   each nudged warm. White on --secondary and text on --bubble pass WCAG AA.
+   Dish colors tell a prep plan's dishes apart: --dish-1 is the accent, the other three are hues
+   spread around the wheel from it at the accent's lightness (OKLCH), kept away from the delete red
+   and the missing-item yellow. Each passes WCAG AA on its --bubble (6.4:1 or more). */
 :root[data-theme="green"] {
   --accent: #c3c96b;
   --accent2: #a3b85c;
   --secondary: #61803a;
   --secondary-soft: rgba(97, 128, 58, 0.13);
   --bubble: #30321f;
+  --dish-1: #c3c96b;
+  --dish-2: #2fdae5;
+  --dish-3: #c2b5fe;
+  --dish-4: #fe9fcd;
 }
 
 :root[data-theme="teal"] {
@@ -37,6 +48,10 @@
   --secondary: #2e7a68;
   --secondary-soft: rgba(46, 122, 104, 0.13);
   --bubble: #22352f;
+  --dish-1: #8fd3c1;
+  --dish-2: #a8c2fe;
+  --dish-3: #f5a8cc;
+  --dish-4: #f6b284;
 }
 
 :root[data-theme="blue"] {
@@ -45,6 +60,10 @@
   --secondary: #4a5db5;
   --secondary-soft: rgba(74, 93, 181, 0.13);
   --bubble: #282c43;
+  --dish-1: #a7b6f2;
+  --dish-2: #ee9dc3;
+  --dish-3: #efa775;
+  --dish-4: #65d0b5;
 }
 
 :root[data-theme="purple"] {
@@ -53,6 +72,10 @@
   --secondary: #9a4c88;
   --secondary-soft: rgba(154, 76, 136, 0.13);
   --bubble: #38293a;
+  --dish-1: #e0a3d6;
+  --dish-2: #f5a56e;
+  --dish-3: #7dd095;
+  --dish-4: #72c3fe;
 }
 
 html, body, #root {
