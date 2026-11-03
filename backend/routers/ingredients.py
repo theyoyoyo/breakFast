@@ -329,11 +329,12 @@ async def get_shopping_suggestions(
     When a whole reply is repeats, the model is asked once more.
     """
     import logging
+    import random
     from services.context import load_shopping_context
     from services.suggestion import build_shopping_prompt
     from services.llm import chat_json, LLMUnavailableError, lyric_cycler
     from services.shopping import (
-        SUGGESTIONS_SCHEMA, new_suggestions, parse_suggestions, recently_removed, shopping_request,
+        SUGGESTIONS_SCHEMA, new_suggestions, parse_suggestions, pick_input, recently_removed, shopping_request,
     )
 
     shown = list(body.exclude) if body else []
@@ -349,28 +350,26 @@ async def get_shopping_suggestions(
     # The avoid list is a hard ban, so code enforces it beside the prompt rule.
     # Items removed with × are left out by code only, so the prompt stays the same.
     known = [i["name"] for i in ctx["ingredients"]] + ctx["shopping_list"] + ctx["avoid_list"] + removed
+    # This press shows a random share of the fridge and of the taste hints, so it starts somewhere new
+    fridge, hints = pick_input(ctx, random.Random())
 
     for _ in range(2):
         try:
             prompt = build_shopping_prompt(
-                ingredient_inventory=ctx["ingredients"],
-                recent_meal_history=ctx["history"],
+                taste_hints=hints,
                 user_preferences=ctx["preferences"],
-                stated_habits=ctx["stated_habits"],
-                inferred_habits=ctx["inferred_habits"],
                 health_rules=ctx["health_rules"],
                 user_profile=ctx["user_profile"],
                 supplements=ctx["supplements"],
                 avoid_list=ctx["avoid_list"],
                 shopping_list=ctx["shopping_list"],
-                favorites=ctx["favorites"],
                 ratings=ctx["ratings"],
                 language=ctx["language"],
                 country=ctx["country"],
             )
             reply = await chat_json(
                 system_prompt=prompt,
-                messages=[{"role": "user", "content": shopping_request(ctx["language"], shown)}],
+                messages=[{"role": "user", "content": shopping_request(ctx["language"], shown, fridge)}],
                 schema=SUGGESTIONS_SCHEMA,
                 temperature=0.6,
             )

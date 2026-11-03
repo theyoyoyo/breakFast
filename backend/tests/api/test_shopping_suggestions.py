@@ -45,6 +45,20 @@ async def test_call_uses_schema_and_country(client):
     assert ", in Türkiye." in kwargs["system_prompt"]
 
 
+# The request lists about 70% of the fridge, while code still drops anything in the whole fridge
+async def test_request_lists_a_share_of_the_fridge(client):
+    names = [f"Item {i}" for i in range(10)]
+    for name in names:
+        await client.post("/ingredients/", json={"name": name})
+    with _llm(_reply(*names, "Salmon")) as llm:
+        data = await _suggest(client)
+    request = llm.call_args.kwargs["messages"][0]["content"]
+    have = request.split("\n")[0].removeprefix("Some of what I have now: ").removesuffix(".").split(", ")
+    assert len(have) == 7 and set(have) <= set(names)
+    assert not any(n in llm.call_args.kwargs["system_prompt"] for n in names)
+    assert [s["name"] for s in data["suggestions"]] == ["Salmon"]
+
+
 # Dishes from the meal history are dropped, and the request names the reply language
 async def test_drops_eaten_dishes_and_asks_in_the_reply_language(client):
     await client.post("/meals/", json={"meal_name": "Menemen", "ingredients": []})

@@ -1,6 +1,10 @@
 """Tests for the shopping suggestion reply parsing and the code dedupe."""
 
-from services.shopping import dish_names, new_suggestions, parse_suggestions, shopping_request
+import random
+
+from services.shopping import (
+    dish_names, new_suggestions, parse_suggestions, pick_input, random_share, shopping_request, taste_hints,
+)
 
 
 # A schema-shaped reply gives its items, names and reasons trimmed
@@ -69,6 +73,51 @@ def test_shopping_request_names_the_language_and_shown_items():
         "Generate more shopping suggestions for me, in Turkish, all different from these, "
         "which I've already seen: Kiwi, Pear."
     )
+
+
+# The request starts with this press's share of the fridge, so the language stays the last thing said
+def test_shopping_request_lists_the_fridge_share():
+    assert shopping_request("en", fridge=["Eggs", "Bread"]) == (
+        "Some of what I have now: Eggs, Bread.\nGenerate shopping suggestions for me, in English."
+    )
+
+
+# A random share is about 70% of the items, each once, at least one, and the same for the same seed
+def test_random_share():
+    items = [f"Item {i}" for i in range(10)]
+    drawn = random_share(items, random.Random(1))
+    assert len(drawn) == 7 and len(set(drawn)) == 7 and set(drawn) <= set(items)
+    assert random_share(items, random.Random(1)) == drawn
+    assert len(random_share(["Eggs"], random.Random(1))) == 1
+    assert random_share([], random.Random(1)) == []
+
+
+# Taste hints come from likes, staples, saved meals with their items, habits, patterns and high ratings
+def test_taste_hints():
+    ctx = {
+        "preferences": {"fav:pancakes": "Pancakes", "dislike:olives": "Olives"},
+        "favorites": ["Cheddar"],
+        "favorite_meals": [{"meal_name": "Avocado toast", "ingredients": '["Bread", "Avocado"]'}],
+        "stated_habits": ["Sweet breakfasts on weekends"],
+        "inferred_habits": ["Rarely eaten, suggest more: fish"],
+        "ratings": [{"product_name": "Honey", "rating": 9}, {"product_name": "Oats", "rating": 3}],
+    }
+    assert taste_hints(ctx) == [
+        "Likes Pancakes",
+        "Keeps around: Cheddar",
+        "Saved favorite meal: Avocado toast: Bread, Avocado",
+        "Habit: Sweet breakfasts on weekends",
+        "Pattern: Rarely eaten, suggest more: fish",
+        "Rated 9/10: Honey",
+    ]
+
+
+# One press draws a share of the fridge names and of the taste hints
+def test_pick_input():
+    ctx = {"ingredients": [{"name": f"Item {i}"} for i in range(10)], "favorites": ["A", "B", "C"]}
+    fridge, hints = pick_input(ctx, random.Random(1))
+    assert len(fridge) == 7 and set(fridge) <= {f"Item {i}" for i in range(10)}
+    assert len(hints) == 2 and set(hints) <= {"Keeps around: A", "Keeps around: B", "Keeps around: C"}
 
 
 # The same item twice in one reply is kept once

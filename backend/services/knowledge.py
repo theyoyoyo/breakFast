@@ -218,12 +218,14 @@ def format_favorite_meals(meals: list[dict] | None) -> str:
     The items come as one plain list, so the model doesn't copy a "Dish (items)" shape into dish names."""
     if not meals:
         return "none saved yet"
-    lines = []
-    for m in meals:
-        meal = {"menu": _json_list(m.get("menu_items")), "ingredients": _json_list(m.get("ingredients"))}
-        items = list(dict.fromkeys(meal_ingredient_names(meal)))
-        lines.append(f"- {m.get('meal_name', 'Unknown')}: {', '.join(items) or 'no items listed'}")
-    return "\n".join(lines)
+    return "\n".join(f"- {format_favorite_meal(m)}" for m in meals)
+
+
+def format_favorite_meal(meal: dict) -> str:
+    """One saved favorite meal as its name and the items it uses, each once ("Cheddar toast: Bread, Cheddar")."""
+    parsed = {"menu": _json_list(meal.get("menu_items")), "ingredients": _json_list(meal.get("ingredients"))}
+    items = list(dict.fromkeys(meal_ingredient_names(parsed)))
+    return f"{meal.get('meal_name', 'Unknown')}: {', '.join(items) or 'no items listed'}"
 
 
 def format_history_detailed(history: list[dict], limit: int = 5) -> str:
