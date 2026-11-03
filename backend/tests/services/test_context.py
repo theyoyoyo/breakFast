@@ -87,3 +87,17 @@ async def test_chat_context_has_taste_hints(client, db):
     assert [m["meal_name"] for m in chat["favorite_meals"]] == ["Cheddar toast"]
     assert chat["favorites"] == ["Cheddar"]
     assert chat["ratings"] == [{"product_name": "Cheddar", "rating": 9}]
+
+
+# The shopping context carries the saved favorite meals in place of recent meals
+async def test_shopping_context_has_favorite_meals_not_history(client, db):
+    from services.context import load_shopping_context
+
+    await client.post("/meals/", json={"meal_name": "Weekend", "ingredients": []})
+    await client.post("/favorites/", json={"meal_name": "Avocado toast", "ingredients": ["Bread", "Avocado"]})
+    async with db.execute("SELECT id FROM users WHERE name = 'testuser'") as cur:
+        user_id = (await cur.fetchone())[0]
+
+    shopping = await load_shopping_context(db, user_id)
+    assert [m["meal_name"] for m in shopping["favorite_meals"]] == ["Avocado toast"]
+    assert "history" not in shopping
