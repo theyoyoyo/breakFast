@@ -1,55 +1,53 @@
 """
-Scheduler persona — extracts a structured cooking plan from a meal's menu and steps.
+Scheduler persona — breaks a meal's menu into the steps each dish needs.
 
-The LLM focuses on producing a detailed, clear plan. It splits tasks into:
-- prep: quick manual tasks with no timing (chop, plate, mix)
-- timed: tasks that need a specific resource for a specific duration
+The LLM lists every dish's steps in order, each with its minutes, whether the cook is busy
+(hands-on) or the food cooks on its own (waiting), and the appliance it uses.
 
-All scheduling math (parallel execution, backward timing) is handled by our code.
+All scheduling math (interleaving dishes, backward timing) is handled by our code
+(routers/scheduler.py, _build_plan).
 """
 
 from models.units import localize_unit
 
-SCHEDULER_TEMPLATE = """You are a kitchen workflow expert. Your job is to turn a breakfast menu (its dishes and ingredients, plus any recipe steps given) into a detailed, structured cooking plan.
+# The appliances the prompt offers when the user has none enabled
+DEFAULT_APPLIANCES = ["Stove", "Air Fryer", "Toaster", "Oven"]
+
+SCHEDULER_TEMPLATE = """You are a kitchen workflow expert. Your job is to break a breakfast menu (its dishes and ingredients, plus any recipe steps given) into the steps each dish needs. Code then orders the steps of all dishes into one timeline, so everything is ready at once.
 {lang_instruction}
-All `task`, `detail`, and `end_action` strings in the JSON output MUST be written in that language — do not mix languages.
+All `action` strings in the JSON output MUST be written in that language — do not mix languages.
 
-Split the work into two groups:
-
-1. **prep**: Quick manual tasks with no specific timing — chopping, slicing, grating, whisking, mixing. These are done first, before any timed cooking starts.
-
-2. **timed**: Tasks that require a specific kitchen resource for a measured duration — boiling, toasting, frying, baking, etc. For each:
-   - Estimate the duration in minutes (be realistic)
-   - Specify the resource using an appliance name from this list (use these exact names, case-sensitive): {kitchen_appliances}. Only use these appliances.
-   - Specify what to do when the task finishes (strain, remove, flip, etc.)
+For each dish, list its steps in the order they are done. Break the dish into its real steps, one action each: usually a few, as many as the dish needs, because code fills one dish's waiting time with another dish's work. Each step has:
+- `action`: what to do, naming the menu's own ingredients and amounts
+- `minutes`: how long the step takes, realistically
+- `hands_on`: true while the cook is busy (whisk, chop, flip, plate), false while the food cooks on its own (boil, toast, bake) and the cook is free
+- `appliance`: the appliance the step uses, from this list with these exact names (case-sensitive): {kitchen_appliances}; empty when the step needs none
 
 Rules:
-- Plan only what the menu lists. Work out the actions each dish needs even when no steps are given; an ingredient's words after its amount (chopped, grated) say how to prepare it.
+- Plan only what the menu lists. An ingredient's words after its amount (chopped, grated) say how to prepare it.
 - A dish's method, in brackets after its name, is how the dish was designed, so plan it that way.
-- Items served as they are need no timed task, and a prep task only when they must be cut first.
-- Be realistic about durations
+- Items served as they are go straight to the table, so they get no steps.
+- Name each dish as the menu does, so the plan matches the meal.
 - Output ONLY the JSON object, nothing else
 
 Output format (inside ```json ... ``` fences). This shows the format only; the <…> parts are yours to fill:
 
 ```json
 {{
-  "prep": [
-    {{"task": "<manual task>", "detail": "<how, in a few words>"}}
-  ],
-  "timed": [
+  "dishes": [
     {{
-      "task": "<cooking task>",
-      "duration_min": 5,
-      "resource": "<appliance from the list>",
-      "end_action": "<what to do when it finishes>"
+      "dish": "<dish name from the menu>",
+      "steps": [
+        {{"action": "<first action>", "minutes": 2, "hands_on": true, "appliance": ""}},
+        {{"action": "<next action>", "minutes": 6, "hands_on": false, "appliance": "<appliance from the list>"}},
+        {{"action": "<last action>", "minutes": 1, "hands_on": true, "appliance": ""}}
+      ]
     }}
   ]
 }}
 ```
 
-FINAL REMINDER: {lang_instruction} Write every task, detail and end_action in that language, even when \
-ingredient or meal names are in another language."""
+FINAL REMINDER: {lang_instruction} Write every action in that language, even when ingredient or meal names are in another language."""
 
 
 def _lang(language: str) -> str:
@@ -58,7 +56,7 @@ def _lang(language: str) -> str:
 
 def build_scheduler_prompt(meal_name: str, steps: list[str], ingredients_str: str, kitchen_appliances: list[str] | None = None, language: str = "en") -> str:
     """Build the system prompt for plan extraction."""
-    appliance_str = ", ".join(kitchen_appliances) if kitchen_appliances else "Stove, Air Fryer, Toaster, Oven"
+    appliance_str = ", ".join(kitchen_appliances or DEFAULT_APPLIANCES)
     return SCHEDULER_TEMPLATE.format(kitchen_appliances=appliance_str, lang_instruction=_lang(language))
 
 
@@ -99,5 +97,5 @@ def build_scheduler_user_message(meal_name: str, steps: list[str], ingredients_s
         parts.append(f"Ingredients: {ingredients_str}")
     if steps:
         parts.append("Steps:\n" + "\n".join(f"{i+1}. {s}" for i, s in enumerate(steps)))
-    parts.append("Produce the cooking plan:")
+    parts.append("List each dish's steps:")
     return "\n\n".join(parts)

@@ -299,35 +299,57 @@ def test_shopping_summary():
     assert lines[1].split() == ["mixed", "suggest", "1", "1", "0", "1", "1", "0", "0", "0", "0", "20"]
 
 
-def _plan(prep=(), timed=()) -> str:
-    plan = {"prep": [{"task": t, "detail": ""} for t in prep],
-            "timed": [{"task": t, "duration_min": 5, "resource": "Stove", "end_action": e} for t, e in timed]}
+def _plan(**dishes) -> str:
+    """A planner reply in #144's shape: each keyword is a dish (underscores for spaces) with its step actions."""
+    plan = {"dishes": [
+        {"dish": name.replace("_", " "), "steps": [
+            {"action": a, "minutes": 2, "hands_on": True, "appliance": ""} for a in actions
+        ]}
+        for name, actions in dishes.items()
+    ]}
     return "```json\n" + json.dumps(plan, ensure_ascii=False) + "\n```"
 
 
-# A plan that makes the egg sandwich as designed, with only menu food, is clean
+# A plan that makes the egg sandwich as designed, with only menu food, is clean, and its note counts the steps
 def test_plan_following_the_method_is_clean():
-    text = _plan(prep=["Slice the white cheese", "Put the olives in a bowl"],
-                 timed=[("Hard-boil the eggs", "Peel and slice them into the bread"), ("Toast the bread", "")])
+    text = _plan(Egg_sandwich=["Hard-boil the eggs", "Peel and slice them", "Toast the bread", "Fill the bread"])
     result = check_plan(text, PLAN_CASES["boiled"])
     assert is_clean(result), describe(result)
+    assert describe(result) == "clean (steps Egg sandwich 4)"
 
 
 # Frying what the method boils is flagged, and so is food the menu doesn't list, like a copied example
 def test_plan_against_the_method_and_off_the_menu():
-    text = _plan(prep=["Slice tomatoes and cucumbers"], timed=[("Fry the eggs in oil", "Slide onto the bread")])
-    issues = check_plan(text, PLAN_CASES["boiled"])["issues"]
-    assert issues["method"] == ["Fry the eggs in oil Slide onto the bread (Egg sandwich: boil)"]
-    assert issues["unlisted"] == ["tomatoes", "cucumbers", "oil"]
+    text = _plan(Egg_sandwich=["Fry the eggs in oil", "Slide onto the bread"], Salad=["Slice tomatoes and cucumbers"])
+    result = check_plan(text, PLAN_CASES["boiled"])
+    assert result["issues"]["method"] == ["Fry the eggs in oil (Egg sandwich: boil)"]
+    assert result["issues"]["unlisted"] == ["oil", "tomatoes", "cucumbers"]
+    assert result["note"] == "steps Egg sandwich 2, Salad 1"
 
 
-# Turkish suffixes still match: boiling the eggs of a menemen is flagged, its peppers and tomatoes are on the menu
+# Each plan dish is held to its own menu dish's method: the omelette may fry eggs beside boiled eggs,
+# while frying under the boiled eggs, or under a dish the menu doesn't name, is still flagged
+def test_plan_method_is_checked_per_dish():
+    case = PLAN_CASES["omelette"]
+    clean = _plan(Greek_omelette=["Whisk 3 eggs with the feta", "Fry the eggs in the oiled pan", "Fold"],
+                  Boiled_eggs=["Boil 2 eggs", "Cool, peel and halve"])
+    assert check_plan(clean, case)["issues"]["method"] == []
+    mixed = _plan(Boiled_eggs=["Fry 2 eggs"], Eggs=["Fry the eggs in oil"])
+    assert check_plan(mixed, case)["issues"]["method"] == [
+        "Fry 2 eggs (Boiled eggs: boil)", "Fry the eggs in oil (Boiled eggs: boil)",
+    ]
+
+
+# Turkish suffixes still match: boiling the eggs of a menemen is flagged, its peppers and tomatoes are on the menu;
+# a reply in the old prep and timed shape counts as no JSON
 def test_turkish_plan_against_the_method():
-    text = _plan(prep=["Biberleri ve domatesleri doğra"], timed=[("Yumurtaları haşla", "Soy")])
+    text = _plan(Menemen=["Biberleri ve domatesleri doğra", "Yumurtaları haşla"])
     issues = check_plan(text, PLAN_CASES["menemen"])["issues"]
-    assert issues["method"] == ["Yumurtaları haşla Soy (Menemen: fry)"]
+    assert issues["method"] == ["Yumurtaları haşla (Menemen: fry)"]
     assert issues["unlisted"] == []
     assert describe(check_plan("No plan today.", PLAN_CASES["menemen"])) == "no JSON"
+    old = '```json\n{"prep": [{"task": "Slice"}], "timed": []}\n```'
+    assert describe(check_plan(old, PLAN_CASES["menemen"])) == "no JSON"
 
 
 # One plan run sends the planner's real prompt and the menu with each dish's method, for every plan menu

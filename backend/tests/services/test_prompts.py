@@ -522,14 +522,28 @@ class TestSchedulerPrompt:
         """The 7B model copies a full example plan into real ones, so the example holds placeholders only."""
         prompt = build_scheduler_prompt("", [], "")
         assert "This shows the format only" in prompt
-        assert '"task": "<manual task>"' in prompt
+        assert '"dish": "<dish name from the menu>"' in prompt
+        assert '{"action": "<first action>", "minutes": 2, "hands_on": true, "appliance": ""}' in prompt
         assert "tomato" not in prompt.lower() and "boil eggs" not in prompt.lower()
 
-    def test_items_served_as_they_are_get_no_cooking(self):
-        """Simple items need no timed task, and a prep task only when they must be cut."""
+    def test_each_dish_gets_its_real_steps(self):
+        """The planner lists every dish's steps in order, one action each, hands-on or waiting, and
+        leaves the timing across dishes to code."""
         prompt = build_scheduler_prompt("", [], "")
-        assert "Items served as they are need no timed task, and a prep task only when they must be cut first." in prompt
+        assert "Break the dish into its real steps, one action each: usually a few, as many as the dish needs" in prompt
+        assert "`hands_on`: true while the cook is busy (whisk, chop, flip, plate), false while the food cooks on its own" in prompt
+        assert "Code then orders the steps of all dishes into one timeline" in prompt
+
+    def test_items_served_as_they_are_get_no_steps(self):
+        """Simple items go straight to the table, and the plan covers only the menu."""
+        prompt = build_scheduler_prompt("", [], "")
+        assert "Items served as they are go straight to the table, so they get no steps." in prompt
         assert "Plan only what the menu lists." in prompt
+
+    def test_appliances_are_the_users_or_the_defaults(self):
+        """The user's appliances are offered by their exact names, with a default list when none are enabled."""
+        assert "these exact names (case-sensitive): Stove, Kettle;" in build_scheduler_prompt("", [], "", ["Stove", "Kettle"])
+        assert "these exact names (case-sensitive): Stove, Air Fryer, Toaster, Oven;" in build_scheduler_prompt("", [], "", [])
 
     def test_dish_method_is_followed(self):
         """One rule says a dish's method is how it was designed, so the plan makes it that way."""

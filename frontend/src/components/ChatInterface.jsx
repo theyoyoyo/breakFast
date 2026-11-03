@@ -6,7 +6,9 @@ import SuggestButton from './SuggestButton'
 import DecidePanel from './DecidePanel'
 import MealBlock from './MealBlock'
 import MarkdownText from './MarkdownText'
+import PrepPlanText from './PrepPlanText'
 import { normalizeMeal } from '../utils/ingredients'
+import { isPrepPlan } from '../utils/prepPlan'
 import * as s from './ChatInterface.styles'
 
 const WELCOME_MSG = { role: 'assistant', content: "Good morning! Tell me what's in your fridge and I'll plan your breakfast." }
@@ -132,22 +134,16 @@ const DEMO_MEAL = {
   nutrition_note: 'Rich in protein, calcium, and healthy fats.',
 }
 
-// Demo schedule output — shows what the scheduler produces
+// Demo schedule output — shows what the scheduler produces for the demo meal
 const DEMO_SCHEDULE = `📋 Classic Spread Breakfast — Prep Plan
 
-🔪 Prep
-  • Slice tomato and cucumber — thin rounds
-  • Cube the white cheese
-  • Drain olives and plate
-  • Put honey and butter in small bowls
-  • Cut 3 slices of bread
-
-⏱ Timing (7 min)
-  0:00  — Drop eggs into boiling water (7 min)  [stove]
-         ↳ Drain, cool in cold water, peel
-  5:00  — Put bread slices in the toaster (2 min)  [toaster]
-         ↳ Remove and plate
-  7:00  — Ready! ✓`
+⏱ Plan (12 min)
+  0:00  — Menemen: Chop 1 green pepper and 1 tomato
+         ↳ Heat 1 tbsp olive oil in the pan
+         ↳ Cook the pepper until soft (3 min) [Stove]
+         ↳ Add the tomato and simmer (4 min) [Stove]
+         ↳ Stir in 2 eggs until just set
+  0:12  — Ready! ✓`
 
 export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref) {
   const [messages, setMessages] = useState([WELCOME_MSG])
@@ -764,7 +760,9 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
             <div key={i} style={s.messageWrapper(m.role)}>
               {displayText && (
                 <div style={s.bubble(m.role)}>
-                  {m.role === 'assistant' ? <MarkdownText text={displayText} /> : displayText}
+                  {m.role !== 'assistant' ? displayText
+                    : isPrepPlan(displayText) ? <PrepPlanText text={displayText} />
+                    : <MarkdownText text={displayText} />}
                 </div>
               )}
               {hasMealBlock && (

@@ -25,31 +25,59 @@ async def test_plan_no_steps(client):
     assert data["formatted"] == "No steps found."
 
 
+MENEMEN_MENU = [
+    {"name": "Menemen", "ingredients": [{"name": "Egg", "amount": 2, "unit": "adet"}]},
+    {"name": "White cheese", "amount": 50, "unit": "g", "ingredients": []},
+]
+
+
 async def test_plan_from_menu_without_steps(client):
-    """A menu-format meal with no steps still gets a plan from the LLM, its units in the reply language."""
+    """A menu-format meal with no steps still gets a plan from the LLM, its units in the reply language,
+    and the item it serves as it is stays out of the plan."""
     reply = (
-        '```json\n{"prep": [{"task": "Slice cheese"}], "timed": [{"task": "Cook menemen", '
-        '"duration_min": 10, "resource": "Stove", "end_action": "Serve"}]}\n```'
+        '```json\n{"dishes": [{"dish": "Menemen", "steps": ['
+        '{"action": "Sauté the peppers", "minutes": 4, "hands_on": true, "appliance": "Stove"}, '
+        '{"action": "Stir in 2 eggs and cook", "minutes": 6, "hands_on": false, "appliance": "Stove"}]}, '
+        '{"dish": "White cheese", "steps": [{"action": "Serve 50 g", "minutes": 0, "hands_on": false}]}]}\n```'
     )
     with patch("routers.scheduler.stream_response", side_effect=_mock_stream(reply)) as llm:
         r = await client.post("/scheduler/plan", json={
             "meal_name": "Classic Breakfast",
             "steps": [],
-            "menu": [
-                {"name": "Menemen", "ingredients": [{"name": "Egg", "amount": 2, "unit": "adet"}]},
-                {"name": "White cheese", "amount": 50, "unit": "g", "ingredients": []},
-            ],
+            "menu": MENEMEN_MENU,
         })
     assert r.status_code == 200
     data = r.json()
     assert data["makespan_min"] == 10
-    assert data["timeline"][0]["task"] == "Cook menemen"
+    assert [s["task"] for s in data["timeline"]] == ["Sauté the peppers", "Stir in 2 eggs and cook"]
+    assert data["formatted"].startswith("⏱ Plan (10 min)\n  0:00  — Menemen: Sauté the peppers\n")
     user_message = llm.call_args.args[2]
     assert "Menemen: Egg (2 pcs)" in user_message
 
 
+async def test_plan_keeps_only_the_users_appliances(client):
+    """The planner is offered the user's appliances (the stove by default), and a step on another
+    appliance keeps its place without one."""
+    reply = (
+        '```json\n{"dishes": [{"dish": "Toast", "steps": ['
+        '{"action": "Toast 2 slices of bread", "minutes": 3, "hands_on": false, "appliance": "Toaster"}]}]}\n```'
+    )
+    with patch("routers.scheduler.stream_response", side_effect=_mock_stream(reply)) as llm:
+        r = await client.post("/scheduler/plan", json={"meal_name": "Toast", "menu": MENEMEN_MENU})
+    assert "these exact names (case-sensitive): Stove;" in llm.call_args.args[0]
+    assert r.json()["formatted"].splitlines()[1] == "  0:00  — Toast: Toast 2 slices of bread (3 min)"
+
+
+async def test_plan_in_another_shape_is_unreadable(client):
+    """A reply without a dishes list asks the user to try again instead of showing an empty plan."""
+    reply = '```json\n{"prep": [{"task": "Slice cheese"}], "timed": []}\n```'
+    with patch("routers.scheduler.stream_response", side_effect=_mock_stream(reply)):
+        r = await client.post("/scheduler/plan", json={"meal_name": "Classic Breakfast", "menu": MENEMEN_MENU})
+    assert r.json()["formatted"] == "Couldn't read the plan. Please try again."
+
+
 async def test_plan_with_cached_schedule(client, db):
-    """Should return cached schedule when meal_id has one."""
+    """A meal's cached plan comes back as stored, older formats included."""
     async with db.execute("SELECT id FROM users WHERE name = 'testuser'") as cur:
         row = await cur.fetchone()
         user_id = row[0]
@@ -82,7 +110,7 @@ async def test_plan_with_cached_schedule(client, db):
     assert data["makespan_min"] == 7
     assert len(data["timeline"]) == 1
     assert data["timeline"][0]["task"] == "Yumurtaları haşla"
-    assert "Hazır!" in data["formatted"]
+    assert data["formatted"] == cached["formatted"]
 
 
 async def test_plan_without_meal_id_llm_down(client):
