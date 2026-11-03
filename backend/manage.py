@@ -1,15 +1,20 @@
 """
 CLI admin tool for break FAST.
 Usage:
-    python manage.py add-user "Alice" --pin 1234
-    python manage.py add-user "Alice" --pin 1234 --admin
+    python manage.py add-user "Alice"
+    python manage.py add-user "Alice" --admin
+    python manage.py set-pin "Alice"
     python manage.py list-users
     python manage.py delete-user "Alice"
     python manage.py backup-db
+
+A PIN needs 6+ digits. Without --pin the CLI asks for it twice without showing it, which keeps
+it out of the shell history.
 """
 
 import argparse
 import asyncio
+import getpass
 import shutil
 import sys
 from datetime import datetime
@@ -19,7 +24,7 @@ import aiosqlite
 
 from config import DATABASE_PATH
 from database import init_db
-from auth import hash_pin
+from auth import hash_pin, pin_problem
 
 
 # Every table holding per-user rows, children before parents
@@ -33,7 +38,24 @@ USER_TABLES = [
 ]
 
 
+def _check_pin(pin: str) -> None:
+    problem = pin_problem(pin)
+    if problem:
+        print(f"✗ {problem}", file=sys.stderr)
+        sys.exit(1)
+
+
+def _ask_pin() -> str:
+    """Ask for a PIN twice without showing it."""
+    pin = getpass.getpass("PIN (6+ digits): ")
+    if getpass.getpass("PIN again: ") != pin:
+        print("✗ The PINs don't match.", file=sys.stderr)
+        sys.exit(1)
+    return pin
+
+
 async def add_user(name: str, pin: str, is_admin: bool = False) -> None:
+    _check_pin(pin)
     await init_db()
     async with aiosqlite.connect(DATABASE_PATH) as db:
         try:
@@ -47,6 +69,19 @@ async def add_user(name: str, pin: str, is_admin: bool = False) -> None:
         except aiosqlite.IntegrityError:
             print(f"✗ User '{name}' already exists.", file=sys.stderr)
             sys.exit(1)
+
+
+async def set_pin(name: str, pin: str) -> None:
+    """Give a user a new PIN (6+ digits); their old PIN stops working."""
+    _check_pin(pin)
+    await init_db()
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cur = await db.execute("UPDATE users SET pin_hash = ? WHERE name = ?", (hash_pin(pin), name))
+        await db.commit()
+    if not cur.rowcount:
+        print(f"✗ User '{name}' not found.", file=sys.stderr)
+        sys.exit(1)
+    print(f"✓ PIN changed for '{name}'.")
 
 
 async def list_users() -> None:
@@ -105,8 +140,13 @@ def main():
     # add-user
     add = sub.add_parser("add-user", help="Create a new user")
     add.add_argument("name", help="Username")
-    add.add_argument("--pin", required=True, help="Login PIN")
+    add.add_argument("--pin", help="Login PIN, 6+ digits (asked for when left out)")
     add.add_argument("--admin", action="store_true", help="Make admin")
+
+    # set-pin
+    set_pin_cmd = sub.add_parser("set-pin", help="Change a user's PIN")
+    set_pin_cmd.add_argument("name", help="Username")
+    set_pin_cmd.add_argument("--pin", help="New PIN, 6+ digits (asked for when left out)")
 
     # list-users
     sub.add_parser("list-users", help="List all users")
@@ -121,7 +161,9 @@ def main():
     args = parser.parse_args()
 
     if args.command == "add-user":
-        asyncio.run(add_user(args.name, args.pin, args.admin))
+        asyncio.run(add_user(args.name, args.pin or _ask_pin(), args.admin))
+    elif args.command == "set-pin":
+        asyncio.run(set_pin(args.name, args.pin or _ask_pin()))
     elif args.command == "list-users":
         asyncio.run(list_users())
     elif args.command == "delete-user":

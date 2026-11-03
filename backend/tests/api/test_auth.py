@@ -13,6 +13,7 @@ import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 
+import config
 import database
 from auth import hash_pin, verify_pin, needs_rehash
 from models.ingredient import DEMO_FRIDGE
@@ -212,14 +213,24 @@ async def test_demo_user_not_created_by_default(unauth_client):
 
 async def test_demo_user_created_when_enabled(unauth_client, monkeypatch):
     monkeypatch.setattr(database, "DEMO_USER", True)
+    monkeypatch.setattr(config, "DEMO_USER", True)
     await database.init_db()
     r = await unauth_client.post("/auth/login", json={"name": "demo", "pin": ""})
     assert r.status_code == 200
 
 
+# A demo account left over from a try-out can't log in with its empty PIN once DEMO_USER is off
+async def test_demo_user_locked_when_disabled(unauth_client, monkeypatch):
+    monkeypatch.setattr(database, "DEMO_USER", True)
+    await database.init_db()
+    r = await unauth_client.post("/auth/login", json={"name": "demo", "pin": ""})
+    assert r.status_code == 401
+
+
 # A new demo account starts with the starter fridge, basics included, added only once
 async def test_demo_user_gets_starter_fridge_once(unauth_client, monkeypatch):
     monkeypatch.setattr(database, "DEMO_USER", True)
+    monkeypatch.setattr(config, "DEMO_USER", True)
     await database.init_db()
     await database.init_db()  # a restart must not add the items again
     token = (await unauth_client.post("/auth/login", json={"name": "demo", "pin": ""})).json()["token"]

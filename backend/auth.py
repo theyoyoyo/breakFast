@@ -24,6 +24,9 @@ SCRYPT_P = 3
 _SALT_BYTES = 16
 _HASH_BYTES = 32
 
+# New or changed PINs need this many digits; shorter PINs set before the rule still log in
+MIN_PIN_LENGTH = 6
+
 
 def _scrypt(pin: str, salt: bytes, n: int, r: int, p: int, dklen: int = _HASH_BYTES) -> bytes:
     # maxmem is twice what OpenSSL needs (128·r·(n+p+2) bytes); its 32 MiB default is too tight
@@ -62,6 +65,14 @@ def unknown_user_hash() -> str:
     """A scrypt hash at the current cost that no PIN matches: checking a PIN against it for an
     unknown name takes as long as for a real user, so the reply time doesn't tell names apart."""
     return f"scrypt${SCRYPT_N}${SCRYPT_R}${SCRYPT_P}${'00' * _SALT_BYTES}${'00' * _HASH_BYTES}"
+
+
+def pin_problem(pin: str) -> str | None:
+    """Why a new or changed PIN is refused, or None when it has 6+ digits.
+    Digits only, because the login screen opens the number pad on phones."""
+    if not (pin.isascii() and pin.isdigit()) or len(pin) < MIN_PIN_LENGTH:
+        return f"A PIN needs at least {MIN_PIN_LENGTH} digits (0-9 only)."
+    return None
 
 
 def create_token(user_id: int) -> str:

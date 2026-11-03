@@ -4,6 +4,7 @@
 
 import asyncio
 from fastapi import APIRouter, HTTPException
+import config
 from database import get_db
 from auth import hash_pin, verify_pin, needs_rehash, unknown_user_hash, create_token
 from models.user import UserLogin, TokenOut
@@ -21,9 +22,12 @@ async def login(body: UserLogin):
         ) as cur:
             user = await cur.fetchone()
 
-    # scrypt is slow on purpose, so it runs off the event loop (chat streams keep going)
+    # scrypt is slow on purpose, so it runs off the event loop (chat streams keep going).
+    # An empty PIN (the demo account's) logs in only while DEMO_USER is on, so a demo account
+    # left over from a try-out is locked once the setting is off.
     stored = user["pin_hash"] if user else unknown_user_hash()
-    if not await asyncio.to_thread(verify_pin, body.pin, stored) or not user:
+    pin_allowed = bool(body.pin) or config.DEMO_USER
+    if not (pin_allowed and await asyncio.to_thread(verify_pin, body.pin, stored)) or not user:
         raise HTTPException(status_code=401, detail="Invalid name or pin")
 
     # A hash from before scrypt (or at an older cost) is replaced while the PIN is at hand
