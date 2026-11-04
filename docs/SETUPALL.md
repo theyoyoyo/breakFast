@@ -205,11 +205,12 @@ one user to log in. The admin CLI handles this:
 
 ```
 cd backend
-python manage.py add-user "Alice" --pin 1234 --admin
+python manage.py add-user "Alice" --admin
 ```
 
-Replace `"Alice"` and `1234` with your name and desired PIN. The `--admin` flag gives
-you admin privileges (needed for user management).
+Replace `"Alice"` with your name. The CLI asks for a PIN twice without showing it: 6 to
+10 digits, digits only. The `--admin` flag gives you admin privileges (needed for
+user management).
 
 **Verify:**
 
@@ -221,6 +222,10 @@ You should see your user listed.
 
 > **Adding more users later:** Run `add-user` again with a different name/pin.
 > Each user gets fully isolated data (ingredients, meals, preferences, etc.).
+
+> **Changing a PIN:** `python manage.py set-pin "Alice"` asks for the new one (6-10 digits).
+> Use it to move a user who still has a PIN from before the rule (old PINs keep working
+> until then), or to reset a forgotten one.
 
 ---
 
@@ -252,11 +257,16 @@ Should return: `{"status":"ok"}`
 **Test authentication:**
 
 ```
-curl -X POST http://localhost:8000/auth/login -H "Content-Type: application/json" -d "{\"name\": \"Alice\", \"pin\": \"1234\"}"
+curl -X POST http://localhost:8000/auth/login -H "Content-Type: application/json" -d "{\"name\": \"Alice\", \"pin\": \"YOUR_PIN\"}"
 ```
 
-Should return JSON with a `token` field. Copy this token — you'll need it for the
-next test.
+Put your PIN in place of `YOUR_PIN`. It should return JSON with a `token` field. Copy
+this token — you'll need it for the next test.
+
+> **Locked out after typos?** Repeated failed logins for a name from one device are
+> answered with `429 Too Many Requests` and a `Retry-After` wait that grows with each
+> further failure. Only that name on that device waits: wait it out, log in from another
+> device, or restart the backend, which clears the count.
 
 **Test the Ollama connection through the backend:**
 
@@ -657,7 +667,8 @@ minute, a `--draft` run about 15 seconds.
 |---|---|
 | Start backend | `cd backend && python -m uvicorn main:app --host 0.0.0.0 --port 8000` |
 | Build frontend | `cd frontend && npm run build` |
-| Add user | `cd backend && python manage.py add-user "Name" --pin 1234 --admin` |
+| Add user | `cd backend && python manage.py add-user "Name" --admin` (asks for a 6-10 digit PIN) |
+| Change a PIN | `cd backend && python manage.py set-pin "Name"` |
 | List users | `cd backend && python manage.py list-users` |
 | Backup DB | `cd backend && python manage.py backup-db` |
 | Check Ollama | `ollama list` |

@@ -12,6 +12,8 @@ import {
   getMeals,
   updateSessionMessage,
   createChatSocket,
+  login,
+  LoginLimitError,
 } from './api'
 
 
@@ -38,6 +40,37 @@ describe('apiFetch error handling', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 204 }))
     const result = await deleteIngredient(1)
     expect(result).toBeUndefined()
+  })
+})
+
+
+describe('login', () => {
+  // A rate-limited login throws LoginLimitError carrying the server's Retry-After seconds
+  it('throws LoginLimitError with the wait on 429', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      headers: new Headers({ 'Retry-After': '30' }),
+    }))
+    const err = await login('Alice', '999999').catch(e => e)
+    expect(err).toBeInstanceOf(LoginLimitError)
+    expect(err.retryAfter).toBe(30)
+  })
+
+  // A 429 whose Retry-After the browser hides still throws LoginLimitError, with no wait
+  it('throws LoginLimitError without a wait when Retry-After is missing', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 429, headers: new Headers() }))
+    const err = await login('Alice', '999999').catch(e => e)
+    expect(err).toBeInstanceOf(LoginLimitError)
+    expect(err.retryAfter).toBe(0)
+  })
+
+  // A wrong PIN stays a plain error, not a rate limit
+  it('throws a plain error on 401', async () => {
+    vi.stubGlobal('fetch', mockFetch(401, { detail: 'Invalid name or pin' }))
+    const err = await login('Alice', '999999').catch(e => e)
+    expect(err).not.toBeInstanceOf(LoginLimitError)
+    expect(err.message).toBe('Login failed')
   })
 })
 

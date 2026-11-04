@@ -4,6 +4,8 @@ Shared test fixtures for the break FAST backend.
 Each test function gets a fresh SQLite database via the `client` fixture,
 which patches database.DATABASE_PATH before creating the FastAPI test client.
 A test user is created and all requests include the auth token.
+PINs are hashed at a tiny scrypt cost unless a test is marked real_scrypt, and every test
+starts with no failed logins counted.
 """
 
 import sys
@@ -13,8 +15,28 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import aiosqlite
+import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
+
+
+@pytest.fixture(autouse=True)
+def fast_pin_hashing(request, monkeypatch):
+    """Hash PINs at a tiny scrypt cost, since the real one is slow on purpose."""
+    if request.node.get_closest_marker("real_scrypt"):
+        return
+    import auth
+
+    monkeypatch.setattr(auth, "SCRYPT_N", 2**4)
+    monkeypatch.setattr(auth, "SCRYPT_P", 1)
+
+
+@pytest.fixture(autouse=True)
+def no_login_failures():
+    """Start every test with no failed logins counted (they live in memory, like the tokens)."""
+    import auth
+
+    auth._login_failures.clear()
 
 
 @pytest_asyncio.fixture

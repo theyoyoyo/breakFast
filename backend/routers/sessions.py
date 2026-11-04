@@ -131,8 +131,8 @@ async def save_message(session_id: str, body: dict, user_id: int = Depends(requi
             (session_id, user_id, role, content),
         )
         await db.execute(
-            "UPDATE chat_sessions SET updated_at = datetime('now') WHERE id = ?",
-            (session_id,),
+            "UPDATE chat_sessions SET updated_at = datetime('now') WHERE id = ? AND user_id = ?",
+            (session_id, user_id),
         )
         if body.get("select"):
             await db.execute(

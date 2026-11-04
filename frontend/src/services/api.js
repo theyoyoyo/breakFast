@@ -13,6 +13,14 @@ export class NetworkError extends Error {
   constructor() { super('Cannot reach server') }
 }
 
+/** Too many failed logins: `retryAfter` is the server's wait in seconds (0 when unknown). */
+export class LoginLimitError extends Error {
+  constructor(retryAfter) {
+    super('Too many failed logins')
+    this.retryAfter = retryAfter
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Auth helpers
 // ---------------------------------------------------------------------------
@@ -71,6 +79,7 @@ export const login = async (name, pin) => {
   } catch {
     throw new NetworkError()
   }
+  if (r.status === 429) throw new LoginLimitError(Number(r.headers.get('Retry-After')) || 0)
   if (!r.ok) throw new Error('Login failed')
   return r.json()
 }
