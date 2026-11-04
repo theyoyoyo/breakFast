@@ -204,7 +204,7 @@ All backend settings are environment variables, documented in [`.env.example`](.
 break FAST is built for a trusted home network (LAN or Tailscale), not the open internet:
 
 - Users log in with a name and a PIN of 6 to 10 digits, stored as a salted scrypt hash. Hashes from older versions (plain SHA-256) still work and are upgraded on the next login, and PINs shorter than 6 digits from before the rule keep working until `set-pin` replaces them.
-- Five failed logins in a row for a name from one IP lock that name on that IP for 30 seconds, doubling with each further failure up to 15 minutes. Other users on that device, and the same user on other devices, can still log in.
+- Failed logins are rate limited with exponential backoff, per name on each IP. Other users on that device, and the same user on other devices, can still log in.
 - Session tokens are random 256-bit values kept in memory, so everyone logs in again after a server restart.
 - Do not expose port 8000 to the public internet. Use Tailscale for remote access.
 

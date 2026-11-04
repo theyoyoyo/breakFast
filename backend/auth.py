@@ -20,7 +20,7 @@ from fastapi import Header, HTTPException
 # In-memory token store: {token_string: user_id}
 _active_tokens: dict[str, int] = {}
 
-# scrypt cost: 32 MiB of memory and about a quarter second per hash (OWASP's N=2^15, r=8, p=3).
+# scrypt cost: OWASP's N=2^15, r=8, p=3 (32 MiB of memory per hash).
 # Each stored hash names its own cost, so raising these re-hashes a PIN on its next login.
 SCRYPT_N = 2**15
 SCRYPT_R = 8

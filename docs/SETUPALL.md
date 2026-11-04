@@ -263,10 +263,10 @@ curl -X POST http://localhost:8000/auth/login -H "Content-Type: application/json
 Put your PIN in place of `YOUR_PIN`. It should return JSON with a `token` field. Copy
 this token — you'll need it for the next test.
 
-> **Locked out after typos?** The 5th failed login in a row for a name from one device
-> is answered with `429 Too Many Requests` and a `Retry-After` wait: 30 seconds, doubling
-> with each further failure up to 15 minutes. Only that name on that device waits: wait
-> it out, log in from another device, or restart the backend, which clears the count.
+> **Locked out after typos?** Repeated failed logins for a name from one device are
+> answered with `429 Too Many Requests` and a `Retry-After` wait that grows with each
+> further failure. Only that name on that device waits: wait it out, log in from another
+> device, or restart the backend, which clears the count.
 
 **Test the Ollama connection through the backend:**
 

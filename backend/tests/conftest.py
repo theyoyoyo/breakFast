@@ -22,7 +22,7 @@ from httpx import AsyncClient, ASGITransport
 
 @pytest.fixture(autouse=True)
 def fast_pin_hashing(request, monkeypatch):
-    """Hash PINs at a tiny scrypt cost, since the real one takes a quarter second per hash."""
+    """Hash PINs at a tiny scrypt cost, since the real one is slow on purpose."""
     if request.node.get_closest_marker("real_scrypt"):
         return
     import auth
