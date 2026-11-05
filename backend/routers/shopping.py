@@ -1,7 +1,8 @@
 """
 /shopping — CRUD endpoints for the persistent shopping list, and the Fridge tab's
 shopping suggestions list (/shopping/suggestions), kept per user so every device shows
-the same one. A suggestions change tells the user's open chats (services/chat_sync).
+the same one. Items removed from it with × can be brought back from Settings
+(/shopping/suggestions/removed). A suggestions change tells the user's open chats (services/chat_sync).
 All queries are scoped to the authenticated user.
 """
 
@@ -11,7 +12,7 @@ from typing import Optional
 from database import get_db
 from auth import require_user
 from services import chat_sync
-from services.shopping import REMOVED_DAYS
+from services.shopping import REMOVED_DAYS, recently_removed
 
 router = APIRouter(prefix="/shopping", tags=["shopping"])
 
@@ -193,3 +194,23 @@ async def put_suggestions(body: SuggestionsState, user_id: int = Depends(require
         items = await _suggestion_items(db, user_id)
     await chat_sync.notify_user(user_id, {"type": "shopping_suggestions_updated"})
     return {"items": items}
+
+
+@router.get("/suggestions/removed")
+async def get_removed_count(user_id: int = Depends(require_user)):
+    """How many items removed with × new suggestions leave out right now (removed in the last
+    REMOVED_DAYS days), for Settings' Bring back button."""
+    async with get_db() as db:
+        return {"count": len(await recently_removed(db, user_id))}
+
+
+@router.delete("/suggestions/removed", status_code=204)
+async def bring_back_removed(user_id: int = Depends(require_user)):
+    """Forget the items removed with ×, so the next Suggest Shopping may bring them back.
+    The list itself and the avoid list stay as they are."""
+    async with get_db() as db:
+        await db.execute(
+            "DELETE FROM shopping_suggestions WHERE user_id = ? AND removed_at IS NOT NULL", (user_id,)
+        )
+        await db.commit()
+    await chat_sync.notify_user(user_id, {"type": "shopping_suggestions_updated"})

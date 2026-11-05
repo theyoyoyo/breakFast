@@ -287,7 +287,7 @@ async def test_supplement_changes_notify_users_sockets(sync_setup):
             assert _pushes(_chat(bob), "supplements_updated") == []
 
 
-# A shopping suggestions change tells the user's sockets, and no other user's.
+# A shopping suggestions change, or bringing back removed suggestions, tells the user's sockets, and no other user's.
 @pytest.mark.asyncio
 async def test_shopping_suggestions_change_notifies_users_sockets(sync_setup):
     app, users = sync_setup
@@ -301,7 +301,9 @@ async def test_shopping_suggestions_change_notifies_users_sockets(sync_setup):
                 headers={"Authorization": f"Bearer {ada_token}"},
             )
             assert r.status_code == 200
-            assert _pushes(_chat(ada), "shopping_suggestions_updated") == [{"type": "shopping_suggestions_updated"}]
+            r = client.delete("/shopping/suggestions/removed", headers={"Authorization": f"Bearer {ada_token}"})
+            assert r.status_code == 204
+            assert _pushes(_chat(ada), "shopping_suggestions_updated") == [{"type": "shopping_suggestions_updated"}] * 2
             assert _pushes(_chat(bob), "shopping_suggestions_updated") == []
 
 
