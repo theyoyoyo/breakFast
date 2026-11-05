@@ -149,7 +149,7 @@ async def test_websocket_suggest_type_uses_pipeline(ws_setup):
 
     client = TestClient(app)
 
-    async def mock_pipeline(context, user_message, mode=None, temperature=None, chat_context=None):
+    async def mock_pipeline(context, user_message, mode=None, temperature=None, chat_block=None):
         yield {"type": "progress", "step": "drafting"}
         yield {"type": "token", "content": "Merhaba"}
         yield {"type": "done", "content": "Merhaba"}
@@ -181,7 +181,7 @@ async def test_websocket_suggest_with_mode_passes_mode(ws_setup):
 
     client = TestClient(app)
 
-    async def mock_pipeline(context, user_message, mode=None, temperature=None, chat_context=None):
+    async def mock_pipeline(context, user_message, mode=None, temperature=None, chat_block=None):
         yield {"type": "done", "content": "OK"}
 
     mock_fn = MagicMock(side_effect=mock_pipeline)
@@ -285,3 +285,35 @@ async def test_websocket_logs_suggestion_crash(ws_setup, caplog):
     assert msg["type"] == "done" and msg["content"] in FALLBACK_LYRICS
     record = next(r for r in caplog.records if r.getMessage() == "Suggestion pipeline failed; replying with a lyric")
     assert "pipeline boom" in str(record.exc_info[1])
+
+
+@pytest.mark.asyncio
+async def test_websocket_suggest_reads_the_chat_from_the_session(ws_setup):
+    """A Suggest press gives the pipeline the chat block the server builds from the session, not what the client sends."""
+    app, token, user_id = ws_setup
+    from starlette.testclient import TestClient
+    from unittest.mock import patch, MagicMock
+
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        await db.execute("INSERT INTO chat_sessions (id, user_id) VALUES ('s1', ?)", (user_id,))
+        for content in ("No eggs please.", "Suggest Breakfast"):
+            await db.execute(
+                "INSERT INTO chat_messages (session_id, user_id, role, content) VALUES ('s1', ?, 'user', ?)",
+                (user_id, content),
+            )
+        await db.commit()
+
+    async def mock_pipeline(context, user_message, mode=None, temperature=None, chat_block=None):
+        yield {"type": "done", "content": "OK"}
+
+    mock_fn = MagicMock(side_effect=mock_pipeline)
+    with patch("routers.chat.run_suggestion_pipeline", mock_fn):
+        with TestClient(app).websocket_connect(f"/chat?token={token}") as ws:
+            ws.send_text(json.dumps({
+                "message": "Suggest Breakfast", "type": "suggest", "session_id": "s1", "chat_context": ["Sent by an old client"],
+            }))
+            assert ws.receive_json()["type"] == "done"
+
+    block = mock_fn.call_args.kwargs["chat_block"]
+    assert block.endswith("\n\n- User (latest message): No eggs please.")
+    assert "Sent by an old client" not in block and "Suggest Breakfast" not in block

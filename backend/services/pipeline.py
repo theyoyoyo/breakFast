@@ -9,13 +9,18 @@ Steps:
 1. Suggestion persona drafts a menu (collected internally, not shown).
 2. Plain code checks the draft's meal (fridge, units, avoid list), and the
    Pipeline Analyst returns the fixed meal itself through structured outputs
-   (revision_schema): its changes first, then the meal. If code finds more
-   problems in the revised meal than in the draft, or can't read it, the
-   draft's meal is used: avoid-list hits first, then fridge misses and units.
+   (revision_schema): what the chat asks for (after a chat), its changes, then
+   the meal. If code finds more problems in the revised meal than in the
+   draft, or can't read it, the draft's meal is used: avoid-list hits first,
+   then fridge misses and units.
 3. Suggestion persona writes the short reply text from the final meal alone,
    so the text never promises what the menu doesn't have. If that call fails,
    code writes the text from the menu name and description.
 The reply keeps its shape: the text, then the meal in a ```json block.
+
+After a chat, the draft and the reviser both get the chat block
+(services/chat_block.py), placed last in their message, so both follow what
+the user typed.
 """
 
 import json
@@ -41,11 +46,13 @@ REVISE_TEMPERATURE = 0.3
 _FENCED_RE = re.compile(r"```[\s\S]*?(```|$)")
 
 
-def revision_schema(language: str) -> dict:
-    """The reviser's reply: its changes first, then the meal. Each menu item lists its ingredients
-    before its name, so a dish's name is written after what goes in, and every item has a numeric
-    amount in the app's units (a dish's servings, which code drops; a simple item's portion). One
-    item shape for both: offered a choice of shapes, the 7B model dropped a dish's ingredients."""
+def revision_schema(language: str, chat: bool = False) -> dict:
+    """The reviser's reply: its changes first, then the meal. After a chat it starts with
+    `chat_asks`, what the chat asks for in its own words, so it holds the meal against each ask.
+    Each menu item lists its ingredients before its name, so a dish's name is written after what
+    goes in, and every item has a numeric amount in the app's units (a dish's servings, which code
+    drops; a simple item's portion). One item shape for both: offered a choice of shapes, the 7B
+    model dropped a dish's ingredients."""
     units = units_for(language)
     ingredient = {
         "type": "object",
@@ -78,11 +85,10 @@ def revision_schema(language: str) -> dict:
         },
         "required": ["menu", "menu_name", "description", "prep_time_min"],
     }
-    return {
-        "type": "object",
-        "properties": {"changes": {"type": "array", "items": {"type": "string"}}, "meal": meal},
-        "required": ["changes", "meal"],
-    }
+    strings = {"type": "array", "items": {"type": "string"}}
+    properties = {"chat_asks": strings} if chat else {}
+    properties |= {"changes": strings, "meal": meal}
+    return {"type": "object", "properties": properties, "required": list(properties)}
 
 
 def _readable_meal(meal) -> dict | None:
@@ -134,17 +140,25 @@ def _clean_meal(meal: dict) -> dict:
     return meal
 
 
-def _parse_revision(reply: str) -> tuple[list[str], dict | None]:
-    """The reviser's changes and its meal (None when the meal can't be read)."""
+def _lines(value) -> list[str]:
+    return [str(v).strip() for v in value if str(v).strip()] if isinstance(value, list) else []
+
+
+def _parse_revision(reply: str) -> tuple[list[str], list[str], dict | None]:
+    """What the reviser read in the chat, its changes and its meal (None when the meal can't be read)."""
     try:
         data = json.loads(reply)
     except (json.JSONDecodeError, TypeError):
-        return [], None
+        return [], [], None
     if not isinstance(data, dict):
-        return [], None
-    changes = [str(c).strip() for c in data.get("changes") or [] if str(c).strip()]
+        return [], [], None
     meal = _readable_meal(data.get("meal"))
-    return changes, _clean_meal(meal) if meal else None
+    return _lines(data.get("chat_asks")), _lines(data.get("changes")), _clean_meal(meal) if meal else None
+
+
+def _with_chat(message: str, chat_block: str | None) -> str:
+    """A step's message with the chat block placed last, where the model reads it freshest."""
+    return f"{message}\n\n{chat_block}" if chat_block else message
 
 
 def _revision_message(draft_text: str, draft_meal: dict | None, problems: list[str]) -> str:
@@ -167,7 +181,7 @@ async def run_suggestion_pipeline(
     user_message: str,
     mode: str | None = None,
     temperature: float | None = None,
-    chat_context: list[str] | None = None,
+    chat_block: str | None = None,
 ) -> AsyncGenerator[dict, None]:
     """
     Run the 3-step suggestion pipeline, yielding events for the WebSocket handler.
@@ -180,6 +194,7 @@ async def run_suggestion_pipeline(
       {"type": "done", "content": "..."}    — full final response
 
     context: the full context dict from _load_context() in chat.py
+    chat_block: the session's chat (services/chat_block.py), or None before any chat
     """
 
     # --- Build prompts ---
@@ -215,23 +230,15 @@ async def run_suggestion_pipeline(
         preferences=context["preferences"],
         mode=mode,
         language=language,
+        chat=bool(chat_block),
     )
-
-    # Enrich user_message with recent chat context when provided
-    if chat_context:
-        recent_lines = "\n".join(f"- {m}" for m in chat_context)
-        user_message = (
-            f"{user_message}\n\n"
-            f"User's recent chat messages "
-            f"(treat as breakfast preference/feedback if relevant):\n"
-            f"{recent_lines}"
-        )
 
     # --- Step 1: Draft ---
     yield {"type": "progress", "step": "drafting"}
 
     draft_chunks = []
-    async for chunk in stream_response(suggestion_prompt, [], user_message, temperature=temperature):
+    draft_message = _with_chat(user_message, chat_block)
+    async for chunk in stream_response(suggestion_prompt, [], draft_message, temperature=temperature):
         draft_chunks.append(chunk)
     draft_text = "".join(draft_chunks)
     yield {"type": "draft", "content": draft_text}
@@ -251,20 +258,24 @@ async def run_suggestion_pipeline(
     yield {"type": "progress", "step": "analyzing"}
 
     problems = _code_check(draft_meal, context) if draft_meal else []
-    changes, revised_meal = [], None
+    asks, changes, revised_meal = [], [], None
     try:
         reply = await chat_json(
             system_prompt=reviser_prompt,
-            messages=[{"role": "user", "content": _revision_message(draft_text, draft_meal, problems)}],
-            schema=revision_schema(language),
+            messages=[{"role": "user", "content": _with_chat(_revision_message(draft_text, draft_meal, problems), chat_block)}],
+            schema=revision_schema(language, chat=bool(chat_block)),
             temperature=REVISE_TEMPERATURE,
         )
-        changes, revised_meal = _parse_revision(reply)
+        asks, changes, revised_meal = _parse_revision(reply)
         if revised_meal is None:
             logging.warning("Suggestion reviser: could not read the meal in %r", reply)
     except Exception:
         logging.exception("Suggestion reviser failed; the draft's meal is used")
-    review = [f"- CODE CHECK: {p}" for p in problems] + [f"- {c}" for c in changes]
+    review = (
+        [f"- CHAT ASKS: {a}" for a in asks]
+        + [f"- CODE CHECK: {p}" for p in problems]
+        + [f"- {c}" for c in changes]
+    )
     yield {"type": "review", "content": "\n".join(review) or "- No changes."}
 
     # The review may only improve the meal: when code finds more problems after it, keep the draft's

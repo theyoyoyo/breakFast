@@ -48,6 +48,7 @@ from models.units import unknown_units
 from routers.chat import SUGGEST_TEMPERATURES
 from routers.scheduler import _build_plan, served_items
 from services import llm, pipeline, suggestion
+from services.chat_block import SUGGEST_MESSAGES, format_chat_block
 # The fridge check's own word handling, to tell renamed items from missing ones
 from services.fridge import (
     _FOLD, _tokens, _words, find_avoided, find_missing_ingredients, meal_ingredient_names, same_name,
@@ -67,17 +68,9 @@ HISTORY = RUNS_DIR / "history.jsonl"
 # Everything that shapes what the pipeline sends; their content is the prompt id
 PROMPT_SOURCES = [
     "services/personas", "services/knowledge.py", "services/pipeline.py",
-    "services/fridge.py", "services/shopping.py", "models/units.py", "tools/prompt_samples.py",
+    "services/fridge.py", "services/shopping.py", "services/chat_block.py", "models/units.py",
+    "tools/prompt_samples.py",
 ]
-
-# What the Suggest button sends per mode (frontend ChatInterface.jsx, handleSuggest)
-SUGGEST_MESSAGES = {
-    None: "Suggest Breakfast",
-    "favorites": "Suggest breakfast from my favorite meals",
-    "explore": "Suggest a different breakfast from world cuisines",
-}
-# How many of the user's messages on screen a Suggest press sends (handleSuggest)
-APP_CHAT_MESSAGES = 5
 
 
 def chat_rows(chat: list[dict], mode: str | None) -> list[dict]:
@@ -95,12 +88,6 @@ def chat_rows(chat: list[dict], mode: str | None) -> list[dict]:
             rows.append(entry)
     return rows
 
-
-def app_chat_context(rows: list[dict]) -> list[str] | None:
-    """What a Suggest press sends as chat_context today (handleSuggest): the last five user messages,
-    the Suggest buttons' own text among them, and no menus. None when the chat has no user message."""
-    sent = [r["content"] for r in rows if r["role"] == "user"][-APP_CHAT_MESSAGES:]
-    return sent or None
 
 # Suggest Shopping's temperature (routers/ingredients.py, get_shopping_suggestions)
 SHOPPING_TEMPERATURE = 0.6
@@ -458,17 +445,18 @@ def describe(result: dict) -> str:
 
 async def suggest_once(sample: dict, mode: str | None, draft_only: bool, scenario: dict | None = None) -> dict:
     """One Suggest press through the real pipeline: {"draft": text, "review": feedback, "final": text}.
-    After a chat, the press sends what the app sends from it, kept as "chat" for the log."""
+    After a chat, the press sends the chat block the server builds from the session, kept as "chat"
+    for the log."""
     replies = {}
-    chat_context = app_chat_context(chat_rows(scenario["chat"], mode)) if scenario else None
-    if chat_context:
-        replies["chat"] = "\n".join(chat_context)
+    chat_block = format_chat_block(chat_rows(scenario["chat"], mode)) if scenario else None
+    if chat_block:
+        replies["chat"] = chat_block
     events = pipeline.run_suggestion_pipeline(
         context=sample,
         user_message=SUGGEST_MESSAGES[mode],
         mode=mode,
         temperature=SUGGEST_TEMPERATURES.get(mode),
-        chat_context=chat_context,
+        chat_block=chat_block,
     )
     async with aclosing(events):
         async for event in events:

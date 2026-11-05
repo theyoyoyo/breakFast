@@ -16,6 +16,7 @@ from services.llm import LLMUnavailableError, lyric_cycler
 from services.suggestion import build_chat_prompt, stream_response
 from services.pipeline import run_suggestion_pipeline
 from services.context import load_chat_context
+from services.chat_block import load_chat_block
 from services import chat_sync
 from models.units import count_unit
 from utils import extract_json_block
@@ -146,7 +147,6 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
             # Determine prompt type: "suggest" uses suggestion persona, default uses chat
             prompt_type = payload.get("type", "chat")
             suggest_mode = payload.get("mode")  # "favorites" or "explore"
-            chat_context = payload.get("chat_context")  # recent user messages for suggest context
 
             # Use session_id from payload if provided, otherwise keep current
             if "session_id" in payload:
@@ -177,9 +177,11 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
             temperature = SUGGEST_TEMPERATURES.get(suggest_mode) if prompt_type == "suggest" else None
 
             if prompt_type == "suggest":
-                # Force fresh context for suggestion requests
+                # Force fresh context for suggestion requests, and read the chat so far from the
+                # session (this press isn't saved yet), so every device sends the same chat
                 async with get_db() as db:
                     cached_context = await load_chat_context(db, user_id)
+                    chat_block = await load_chat_block(db, session_id, user_id)
 
                 # Run 3-step pipeline: draft → analyst review → refine
                 response_text = ""
@@ -189,7 +191,7 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                         user_message=user_message,
                         mode=suggest_mode,
                         temperature=temperature,
-                        chat_context=chat_context,
+                        chat_block=chat_block,
                     ):
                         if event["type"] == "progress":
                             await send_live(event)
