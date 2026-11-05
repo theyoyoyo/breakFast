@@ -15,7 +15,7 @@ from models.ingredient import (
     INGREDIENT_GROUPS, DEFAULT_GROUP,
 )
 from services.fridge import find_missing_ingredients
-from services.ingredient_groups import resolve_groups, save_pick
+from services.ingredient_groups import remember, resolve_groups
 
 router = APIRouter(prefix="/ingredients", tags=["ingredients"])
 
@@ -62,14 +62,13 @@ async def list_ingredients(user_id: int = Depends(require_user)):
 async def add_ingredient(body: IngredientCreate, user_id: int = Depends(require_user)):
     """Add an item: the group picked, else the user's pick for the name, the food list or Other.
 
-    Only a picked group is remembered, so memory holds the user's own choices.
+    Memory records the name either way; only a picked group counts as the user's choice.
     """
     _validate_group(body.group_name)
     async with get_db() as db:
         group = body.group_name or (await resolve_groups(db, user_id, [body.name]))[body.name]
         await db.execute(_UPSERT_SQL, (user_id, body.name, body.expiry_date, group))
-        if body.group_name:
-            await save_pick(db, user_id, body.name, body.group_name)
+        await remember(db, user_id, body.name, group, picked=bool(body.group_name))
         await db.commit()
         async with db.execute(
             "SELECT * FROM ingredient_inventory WHERE user_id = ? AND name = ?",
@@ -116,9 +115,9 @@ async def update_ingredient(ingredient_id: int, body: IngredientUpdate, user_id:
     # give the name that group: a move, or a renamed item keeping its group
     if body.group_name is not None:
         async with get_db() as db:
-            if body.group_name != (await resolve_groups(db, user_id, [row["name"]]))[row["name"]]:
-                await save_pick(db, user_id, row["name"], body.group_name)
-                await db.commit()
+            auto = (await resolve_groups(db, user_id, [row["name"]]))[row["name"]]
+            await remember(db, user_id, row["name"], body.group_name, picked=body.group_name != auto)
+            await db.commit()
 
     return dict(row)
 
@@ -141,13 +140,10 @@ async def bulk_add_ingredients(ingredients: list[IngredientCreate], user_id: int
 
     async with get_db() as db:
         groups = await resolve_groups(db, user_id, [item.name for item in ingredients])
-        await db.executemany(_UPSERT_SQL, [
-            (user_id, item.name, item.expiry_date, item.group_name or groups[item.name])
-            for item in ingredients
-        ])
         for item in ingredients:
-            if item.group_name:
-                await save_pick(db, user_id, item.name, item.group_name)
+            group = item.group_name or groups[item.name]
+            await db.execute(_UPSERT_SQL, (user_id, item.name, item.expiry_date, group))
+            await remember(db, user_id, item.name, group, picked=bool(item.group_name))
         await db.commit()
     return {"added": len(ingredients)}
 

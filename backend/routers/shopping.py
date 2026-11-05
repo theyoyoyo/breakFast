@@ -12,7 +12,7 @@ from typing import Optional
 from database import get_db
 from auth import require_user
 from services import chat_sync
-from services.ingredient_groups import resolve_groups
+from services.ingredient_groups import remember, resolve_groups
 from services.shopping import REMOVED_DAYS, recently_removed
 
 router = APIRouter(prefix="/shopping", tags=["shopping"])
@@ -134,6 +134,7 @@ async def bought_items(body: BoughtRequest, user_id: int = Depends(require_user)
                        updated_at = datetime('now')""",
                 (user_id, item["item_name"], expiry, group),
             )
+            await remember(db, user_id, item["item_name"], group, picked=False)
 
         # Remove bought items from shopping list
         await db.execute(

@@ -254,19 +254,34 @@ async def test_moved_group_beats_the_food_list(client):
 
 
 async def _picks(db) -> dict[str, str]:
+    async with db.execute("SELECT ingredient_name, group_name FROM ingredient_group_memory WHERE picked = 1") as cur:
+        return {r["ingredient_name"]: r["group_name"] for r in await cur.fetchall()}
+
+
+async def _names(db) -> dict[str, str]:
     async with db.execute("SELECT ingredient_name, group_name FROM ingredient_group_memory") as cur:
         return {r["ingredient_name"]: r["group_name"] for r in await cur.fetchall()}
 
 
-# Only the user's own choices are remembered: an Auto add and an expiry-only edit save nothing, a move does
-async def test_memory_saves_only_picks(client, db):
+# Every added name is recorded, but only a move is a pick: an Auto add and an expiry-only edit aren't
+async def test_memory_records_names_and_marks_picks(client, db):
     created = (await client.post("/ingredients/", json={"name": "Grandma's spice mix"})).json()
+    await client.post("/ingredients/", json={"name": "Tomatoes"})
     await client.patch(f"/ingredients/{created['id']}", json={
         "name": "Grandma's spice mix", "expiry_date": "2026-12-01", "group_name": "🍽️ Other",
     })
+    assert await _names(db) == {"Grandma's spice mix": "🍽️ Other", "Tomatoes": "🥬 Produce"}
     assert await _picks(db) == {}
     await client.patch(f"/ingredients/{created['id']}", json={"group_name": "🧂 Spices"})
     assert await _picks(db) == {"Grandma's spice mix": "🧂 Spices"}
+
+
+# An Auto add of a name the user picked a group for keeps the pick
+async def test_auto_add_keeps_the_pick(client, db):
+    created = (await client.post("/ingredients/", json={"name": "Honey", "group_name": "🫒 Breakfast Staples"})).json()
+    await client.delete(f"/ingredients/{created['id']}")
+    await client.post("/ingredients/bulk", json=[{"name": "Honey"}])
+    assert await _picks(db) == {"Honey": "🫒 Breakfast Staples"}
 
 
 # A renamed item keeps its group under the new name, which the list doesn't know
@@ -280,7 +295,7 @@ async def test_rename_keeps_the_group_as_a_pick(client):
     assert r.json()["group_name"] == "🐄 Animal Products"
 
 
-# Memory matches by exact name too, and a new pick replaces the earlier one for the same name
+# Memory matches by exact name too, and a new pick replaces the earlier one for the same name (kept as a name)
 async def test_memory_matches_the_same_name(client, db):
     created = (await client.post("/ingredients/", json={"name": "Peanut butter", "group_name": "🍯 Sweets"})).json()
     await client.delete(f"/ingredients/{created['id']}")
@@ -288,6 +303,7 @@ async def test_memory_matches_the_same_name(client, db):
     assert r.json()["group_name"] == "🍯 Sweets"
     await client.patch(f"/ingredients/{r.json()['id']}", json={"group_name": "🌱 Plant-Based"})
     assert await _picks(db) == {"peanut butter": "🌱 Plant-Based"}
+    assert set(await _names(db)) == {"Peanut butter", "peanut butter"}
 
 
 async def test_add_ingredient_with_group(client):

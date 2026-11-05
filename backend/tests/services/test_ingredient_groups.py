@@ -53,14 +53,14 @@ def test_catalog_group_matches_exact_names():
 
 
 async def _state(db):
-    async with db.execute("SELECT ingredient_name, group_name FROM ingredient_group_memory") as cur:
-        memory = {r[0]: r[1] for r in await cur.fetchall()}
+    async with db.execute("SELECT ingredient_name, group_name, picked FROM ingredient_group_memory") as cur:
+        memory = {r[0]: (r[1], r[2]) for r in await cur.fetchall()}
     async with db.execute("SELECT name, group_name FROM ingredient_inventory") as cur:
         fridge = {r[0]: r[1] for r in await cur.fetchall()}
     return memory, fridge
 
 
-# The one-time pass drops remembered Others, moves Other items the list knows, and runs only once
+# The one-time pass keeps every old name, marks the ones not in Other as picks, moves Other items the list knows, and runs only once
 async def test_regroup_runs_once(client, db):
     async with db.execute("SELECT id FROM users WHERE name = 'testuser'") as cur:
         (user_id,) = await cur.fetchone()
@@ -78,17 +78,36 @@ async def test_regroup_runs_once(client, db):
 
     await database.init_db()
     memory, fridge = await _state(db)
-    assert memory == {"Pepper": "🥬 Produce"}
+    assert memory == {"Honey": (DEFAULT_GROUP, 0), "Pepper": ("🥬 Produce", 1)}
     assert fridge == {"Honey": "🍯 Sweets", "Grandma's spice mix": DEFAULT_GROUP, "Olives": "🧂 Spices"}
 
     # A later Other pick stays on the next start
-    await db.execute(
-        "INSERT INTO ingredient_group_memory (user_id, ingredient_name, group_name) VALUES (?, 'Honey', ?)",
-        (user_id, DEFAULT_GROUP),
-    )
+    await db.execute("UPDATE ingredient_group_memory SET picked = 1 WHERE ingredient_name = 'Honey'")
     await db.execute("UPDATE ingredient_inventory SET group_name = ? WHERE name = 'Honey'", (DEFAULT_GROUP,))
     await db.commit()
     await database.init_db()
     memory, fridge = await _state(db)
-    assert memory == {"Pepper": "🥬 Produce", "Honey": DEFAULT_GROUP}
+    assert memory == {"Honey": (DEFAULT_GROUP, 1), "Pepper": ("🥬 Produce", 1)}
     assert fridge["Honey"] == DEFAULT_GROUP
+
+
+# A database from before the list gets the picked column, so its old rows can be marked
+async def test_old_memory_table_gets_picked(tmp_path, monkeypatch):
+    import aiosqlite
+
+    path = str(tmp_path / "old.db")
+    async with aiosqlite.connect(path) as conn:
+        await conn.executescript("""
+            CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);
+            CREATE TABLE ingredient_group_memory (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, ingredient_name TEXT NOT NULL,
+                group_name TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(user_id, ingredient_name));
+            INSERT INTO users (id, name) VALUES (1, 'old');
+            INSERT INTO ingredient_group_memory (user_id, ingredient_name, group_name) VALUES (1, 'Pepper', '🥬 Produce');
+        """)
+    monkeypatch.setattr(database, "DATABASE_PATH", path)
+    await database.init_db()
+    async with aiosqlite.connect(path) as conn:
+        async with conn.execute("SELECT ingredient_name, picked FROM ingredient_group_memory") as cur:
+            assert await cur.fetchall() == [("Pepper", 1)]
