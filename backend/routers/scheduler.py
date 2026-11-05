@@ -178,6 +178,12 @@ def _in_time_order(dishes: list[dict]) -> list[dict]:
     return ordered
 
 
+def served_items(menu: list) -> list[str]:
+    """The names of the menu's items served as they are; the planner's steps for them are dropped."""
+    return [i.get("name") or "" if isinstance(i, dict) else i for i in menu
+            if not (isinstance(i, dict) and i.get("ingredients"))]
+
+
 def _clock(minutes: int) -> str:
     return f"{minutes // 60}:{minutes % 60:02d}"
 
@@ -285,9 +291,7 @@ async def get_schedule(body: ScheduleRequest, user_id: int = Depends(require_use
         )
 
     # Build the schedule ourselves; the model sometimes gives a served item a "serve" step
-    served = [i.get("name") or "" if isinstance(i, dict) else i for i in body.menu
-              if not (isinstance(i, dict) and i.get("ingredients"))]
-    result = _build_plan(raw_plan, language, appliances, served)
+    result = _build_plan(raw_plan, language, appliances, served_items(body.menu))
 
     # Cache if meal_id was provided
     if body.meal_id is not None:
