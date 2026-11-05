@@ -538,7 +538,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
               value={newGroup}
               onChange={(e) => setNewGroup(e.target.value)}
             >
-              <option value="">Auto (group memory)</option>
+              <option value="">Auto</option>
               {INGREDIENT_GROUPS.map(g => (
                 <option key={g} value={g}>{g}</option>
               ))}
