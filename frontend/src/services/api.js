@@ -156,6 +156,10 @@ export const addShoppingItemsBulk = (items) =>
 export const deleteShoppingItem = (id) =>
   apiFetch(`${BASE_URL}/shopping/${id}`, { method: 'DELETE' })
 
+// Empty the whole shopping list (its Delete all)
+export const clearShoppingList = () =>
+  apiFetch(`${BASE_URL}/shopping/`, { method: 'DELETE' })
+
 export const buyShoppingItems = (ids, expiry_dates = null) =>
   apiFetch(`${BASE_URL}/shopping/bought`, json('POST', { ids, expiry_dates }))
 
