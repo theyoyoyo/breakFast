@@ -8,6 +8,7 @@ in time order, dishes interleaved at their waits.
 Supports caching via meal_history.schedule column.
 """
 
+import asyncio
 import json
 import math
 from collections import Counter
@@ -390,8 +391,9 @@ async def get_schedule(body: ScheduleRequest, user_id: int = Depends(require_use
             formatted=_labels(language)["unreadable"],
         )
 
-    # Build the schedule ourselves; the model sometimes gives a served item a "serve" step
-    result = _build_plan(raw_plan, language, appliances, served_items(body.menu))
+    # Build the schedule ourselves, off the event loop since the search takes a moment; the model
+    # sometimes gives a served item a "serve" step
+    result = await asyncio.to_thread(_build_plan, raw_plan, language, appliances, served_items(body.menu))
 
     # Cache if meal_id was provided
     if body.meal_id is not None:
