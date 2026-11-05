@@ -12,6 +12,7 @@ import {
 } from '../services/api'
 import WeeklySummary from './WeeklySummary'
 import KitchenSettings from './KitchenSettings'
+import ConfirmPrompt from './ConfirmPrompt'
 import MealEditor from './MealEditor'
 import StarRating from './StarRating'
 import { THEMES, applyTheme, storedTheme } from '../utils/theme'
@@ -909,13 +910,14 @@ export default function SettingsPanel({ visible }) {
             </button>
           </div>
           {askBringBack && removedCount > 0 && (
-            <div style={s.bringBackPrompt} role="alertdialog" aria-label="Bring back removed suggestions">
-              <span style={s.bringBackPromptText}>
-                Are you sure you want to allow {removedCount} removed {removedCount === 1 ? 'item' : 'items'} back
-                in suggestions?
-              </span>
-              <button style={s.bringBackCancelBtn} onClick={() => setAskBringBack(false)}>Cancel</button>
-              <button style={s.bringBackAllowBtn} onClick={handleBringBack}>Allow</button>
+            <div style={s.bringBackPrompt}>
+              <ConfirmPrompt
+                label="Bring back removed suggestions"
+                message={`Are you sure you want to allow ${removedCount} removed ${removedCount === 1 ? 'item' : 'items'} back in suggestions?`}
+                confirmLabel="Allow"
+                onConfirm={handleBringBack}
+                onCancel={() => setAskBringBack(false)}
+              />
             </div>
           )}
         </div>

@@ -500,39 +500,7 @@ export const bringBackBtn = (active) => ({
   opacity: active ? 1 : 0.6,
 })
 
+// Holds the shared ConfirmPrompt under the row
 export const bringBackPrompt = {
-  display: 'flex',
-  flexWrap: 'wrap',
-  alignItems: 'center',
-  justifyContent: 'flex-end',
-  gap: 8,
   marginTop: 8,
-  padding: '8px 10px',
-  borderRadius: 8,
-  background: 'var(--surface2)',
-  border: '1px solid var(--border)',
-}
-
-export const bringBackPromptText = {
-  flex: '1 1 180px',
-  fontSize: 13,
-  color: 'var(--text)',
-}
-
-export const bringBackCancelBtn = {
-  padding: '5px 12px',
-  borderRadius: 8,
-  border: '1px solid var(--border)',
-  background: 'transparent',
-  color: 'var(--text-muted)',
-  fontSize: 12,
-  cursor: 'pointer',
-}
-
-export const bringBackAllowBtn = {
-  ...bringBackCancelBtn,
-  border: 'none',
-  background: secondaryColor,
-  color: '#fff',
-  fontWeight: 600,
 }
