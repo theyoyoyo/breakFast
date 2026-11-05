@@ -460,7 +460,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     return () => document.removeEventListener('visibilitychange', handleVisible)
   }, [ensureSocket, loadTodaySupplements])
 
-  const sendMessage = useCallback((text, type = 'chat', mode = null, chatContext = null) => {
+  const sendMessage = useCallback((text, type = 'chat', mode = null) => {
     const msg = text.trim()
     if (!msg || streamBuffer !== null || analyzingIdx !== null) return
 
@@ -473,7 +473,6 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     if (type !== 'chat') payload.type = type
     if (mode) payload.mode = mode
     if (sessionIdRef.current) payload.session_id = sessionIdRef.current
-    if (chatContext && chatContext.length > 0) payload.chat_context = chatContext
 
     const ws = ensureSocket()
     if (ws.readyState === WebSocket.OPEN) {
@@ -609,21 +608,15 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     }
   }, [streamBuffer])
 
+  // The server reads the chat so far from the session (services/chat_block.py), and leaves these
+  // button texts out of it: they are mirrored there as SUGGEST_MESSAGES, so edit both
   const handleSuggest = useCallback((mode) => {
     const modeLabels = {
       favorites: 'Suggest breakfast from my favorite meals',
       explore: 'Suggest a different breakfast from world cuisines',
     }
-    const msg = modeLabels[mode] || 'Suggest Breakfast'
-
-    // Collect last 5 user messages (chronological) as breakfast feedback context
-    const recentUserMsgs = messages
-      .filter(m => m.role === 'user')
-      .slice(-5)
-      .map(m => m.content)
-
-    sendMessage(msg, 'suggest', mode || null, recentUserMsgs.length > 0 ? recentUserMsgs : null)
-  }, [sendMessage, messages])
+    sendMessage(modeLabels[mode] || 'Suggest Breakfast', 'suggest', mode || null)
+  }, [sendMessage])
 
   const handleAnalyze = useCallback(async (msgIdx) => {
     const meal = mealBlocks[msgIdx]
