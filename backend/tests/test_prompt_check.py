@@ -323,11 +323,12 @@ def _plan(**dishes) -> str:
 
 
 # A plan that makes the egg sandwich as designed, with only menu food, is clean, and its note counts the steps
+# and the switches between dishes
 def test_plan_following_the_method_is_clean():
     text = _plan(Egg_sandwich=["Hard-boil the eggs", "Peel and slice them", "Toast the bread", "Fill the bread"])
     result = check_plan(text, PLAN_CASES["boiled"])
     assert is_clean(result), describe(result)
-    assert describe(result) == "clean (steps Egg sandwich 4)"
+    assert describe(result) == "clean (steps Egg sandwich 4; switches 0)"
 
 
 # Frying what the method boils is flagged, and so is food the menu doesn't list, like a copied example
@@ -336,7 +337,7 @@ def test_plan_against_the_method_and_off_the_menu():
     result = check_plan(text, PLAN_CASES["boiled"])
     assert result["issues"]["method"] == ["Fry the eggs in oil (Egg sandwich: boil)"]
     assert result["issues"]["unlisted"] == ["oil", "tomatoes", "cucumbers"]
-    assert result["note"] == "steps Egg sandwich 2, Salad 1"
+    assert result["note"] == "steps Egg sandwich 2, Salad 1; switches 1"
 
 
 # Each plan dish is held to its own menu dish's method: the omelette may fry eggs beside boiled eggs,
@@ -350,6 +351,27 @@ def test_plan_method_is_checked_per_dish():
     assert check_plan(mixed, case)["issues"]["method"] == [
         "Fry 2 eggs (Boiled eggs: boil)", "Fry the eggs in oil (Boiled eggs: boil)",
     ]
+
+
+# The switch count is taken from the plan the app shows: the oatmeal fills the pudding's wait, so the plan
+# moves to the oatmeal and back once each, and the step the model gave the served sweet potato isn't counted
+def test_plan_switches_count_the_plan_the_app_shows():
+    plan = {"dishes": [
+        {"dish": "Chia pudding", "steps": [
+            {"action": "Stir the chia seeds into the milk with the honey", "minutes": 1, "hands_on": True},
+            {"action": "Let it set", "minutes": 10, "hands_on": False},
+            {"action": "Top with the sliced banana", "minutes": 1, "hands_on": True},
+        ]},
+        {"dish": "Pumpkin oatmeal", "steps": [
+            {"action": "Simmer the oats in the milk", "minutes": 5, "hands_on": False, "appliance": "Stove"},
+            {"action": "Stir in the pumpkin purée", "minutes": 1, "hands_on": True},
+            {"action": "Top with the tahini", "minutes": 1, "hands_on": True},
+        ]},
+        {"dish": "Sweet potato", "steps": [{"action": "Serve 300 g sweet potato", "minutes": 1, "hands_on": True}]},
+    ]}
+    result = check_plan("```json\n" + json.dumps(plan) + "\n```", PLAN_CASES["bowls"])
+    assert is_clean(result), describe(result)
+    assert result["note"] == "steps Chia pudding 3, Pumpkin oatmeal 3, Sweet potato 1; switches 2"
 
 
 # Turkish suffixes still match: boiling the eggs of a menemen is flagged, its peppers and tomatoes are on the menu;

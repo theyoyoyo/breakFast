@@ -36,6 +36,36 @@ export const title = {
   fontSize: 14,
 }
 
+// Header helpers like the Fridge's suggestions list: select all, and Delete all in red
+export const headerHelpers = {
+  display: 'flex',
+  gap: 6,
+}
+
+export const helperBtn = {
+  background: 'var(--surface2)',
+  border: 'none',
+  borderRadius: 6,
+  color: 'var(--text)',
+  width: 26,
+  height: 22,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  cursor: 'pointer',
+  padding: 0,
+}
+
+export const clearAllBtn = {
+  ...helperBtn,
+  color: colors.danger,
+}
+
+// Holds the "Are you sure?" box for Delete all, at the top of the list
+export const confirm = {
+  padding: '8px 16px 4px',
+}
+
 export const closeBtn = {
   background: 'none',
   border: 'none',
@@ -56,7 +86,16 @@ export const row = {
   display: 'flex',
   alignItems: 'center',
   padding: '8px 16px',
+  gap: 8,
+}
+
+// The checkbox and the name: a tap anywhere on them checks the item
+export const rowLabel = {
+  display: 'flex',
+  alignItems: 'center',
   gap: 10,
+  flex: 1,
+  minWidth: 0,
   cursor: 'pointer',
 }
 
@@ -69,21 +108,23 @@ export const checkbox = {
 
 export const itemName = {
   flex: 1,
+  minWidth: 0,
+  overflowWrap: 'anywhere',
   fontSize: 13,
   color: 'var(--text)',
   transition: 'all 0.15s',
 }
 
-export const deleteBtn = {
+// × removes an item, red like every remove (the Fridge's suggestions use the same)
+export const removeBtn = {
   background: 'none',
   border: 'none',
-  color: 'var(--text-muted)',
-  padding: '3px',
-  borderRadius: 4,
-  opacity: 0.45,
+  color: colors.danger,
+  fontSize: 18,
+  lineHeight: 1,
   cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
+  padding: '0 4px',
+  flexShrink: 0,
 }
 
 export const addRow = {
@@ -136,24 +177,25 @@ export const empty = {
   textAlign: 'center',
 }
 
-export const expiryDateRow = {
+// Best before date, inline on a checked item's row
+export const bbd = {
   display: 'flex',
   alignItems: 'center',
-  gap: 6,
-  padding: '2px 16px 6px 42px',
+  gap: 4,
+  flexShrink: 0,
 }
 
-export const expiryDateLabel = {
+export const bbdLabel = {
   fontSize: 11,
   color: 'var(--text-muted)',
 }
 
-export const expiryDateInput = {
-  flex: 1,
+export const bbdInput = {
+  width: 118,
   background: 'var(--surface2)',
   border: '1px solid var(--border)',
   borderRadius: 6,
-  padding: '4px 8px',
+  padding: '3px 6px',
   color: 'var(--text)',
   fontSize: 11,
   outline: 'none',

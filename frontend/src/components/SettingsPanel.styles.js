@@ -472,3 +472,35 @@ export const themeSwatch = (color) => ({
   borderRadius: 6,
   background: color,
 })
+
+// AI settings → Removed shopping suggestions: a row like the toggles above it, with a small
+// Bring back button (muted while there's nothing to bring back), then an "Are you sure?" prompt
+export const aiRow = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 12,
+  marginTop: 12,
+}
+
+export const aiRowLabel = {
+  fontSize: 13,
+  color: 'var(--text-muted)',
+  flex: 1,
+}
+
+export const bringBackBtn = (active) => ({
+  padding: '4px 10px',
+  borderRadius: 12,
+  border: '1px solid var(--border)',
+  background: active ? 'var(--surface2)' : 'transparent',
+  color: active ? 'var(--text)' : 'var(--text-muted)',
+  fontSize: 12,
+  whiteSpace: 'nowrap',
+  cursor: active ? 'pointer' : 'default',
+  opacity: active ? 1 : 0.6,
+})
+
+// Holds the shared ConfirmPrompt under the row
+export const bringBackPrompt = {
+  marginTop: 8,
+}

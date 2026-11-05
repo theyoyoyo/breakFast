@@ -132,6 +132,14 @@ export const getSuggestionList = () =>
 export const saveSuggestionList = (items, removed = []) =>
   apiFetch(`${BASE_URL}/shopping/suggestions`, json('PUT', { items, removed }))
 
+// How many items removed with × new suggestions leave out right now → { count }
+export const getRemovedSuggestionCount = () =>
+  apiFetch(`${BASE_URL}/shopping/suggestions/removed`)
+
+// Forget the items removed with ×, so the next Suggest Shopping may bring them back
+export const bringBackRemovedSuggestions = () =>
+  apiFetch(`${BASE_URL}/shopping/suggestions/removed`, { method: 'DELETE' })
+
 // ---------------------------------------------------------------------------
 // Shopping List
 // ---------------------------------------------------------------------------
@@ -147,6 +155,10 @@ export const addShoppingItemsBulk = (items) =>
 
 export const deleteShoppingItem = (id) =>
   apiFetch(`${BASE_URL}/shopping/${id}`, { method: 'DELETE' })
+
+// Empty the whole shopping list (its Delete all)
+export const clearShoppingList = () =>
+  apiFetch(`${BASE_URL}/shopping/`, { method: 'DELETE' })
 
 export const buyShoppingItems = (ids, expiry_dates = null) =>
   apiFetch(`${BASE_URL}/shopping/bought`, json('POST', { ids, expiry_dates }))

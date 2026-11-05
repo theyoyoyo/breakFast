@@ -128,3 +128,12 @@ async def test_removed_item_left_out_for_seven_days(client, db):
     with _llm(_reply("Salmon", "Kiwi")):
         data = await _suggest(client)
     assert [s["name"] for s in data["suggestions"]] == ["Salmon", "Kiwi"]
+
+
+# After Settings brings back the removed items, the next press may suggest them again
+async def test_brought_back_item_may_be_suggested_again(client):
+    await client.put("/shopping/suggestions", json={"items": [], "removed": ["Salmon"]})
+    await client.delete("/shopping/suggestions/removed")
+    with _llm(_reply("Salmon", "Kiwi")):
+        data = await _suggest(client)
+    assert [s["name"] for s in data["suggestions"]] == ["Salmon", "Kiwi"]

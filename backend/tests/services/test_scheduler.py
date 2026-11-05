@@ -99,8 +99,112 @@ def test_a_wait_is_filled_with_another_dishs_hands_on_steps():
     assert result["makespan_min"] == 12
 
 
+def test_another_dish_never_splits_a_block():
+    """The oatmeal's purée and tahini stay together, as do the toast's peel and mash, so the plan switches
+    dishes only at the waits (before #152 the toast's steps went between the oatmeal's)."""
+    raw = {"dishes": [
+        _dish("Pumpkin oatmeal", _step("Simmer 1 glass of oats in 1 glass of milk", 5, False, "Stove"),
+              _step("Pour in 100 g pumpkin purée", 1), _step("Stir in 1 tbsp tahini", 1)),
+        _dish("Avocado toast", _step("Toast 2 slices of bread", 5, False, "Toaster"),
+              _step("Peel the avocado", 1), _step("Mash it onto the toast", 1)),
+    ]}
+    assert _build_plan(raw)["formatted"] == "\n".join([
+        "⏱ Plan (9 min)",
+        "  0:00  — Avocado toast: Toast 2 slices of bread (5 min) [Toaster]",
+        "  0:02  — Pumpkin oatmeal: Simmer 1 glass of oats in 1 glass of milk (5 min) [Stove]",
+        "  0:05  — Avocado toast: Peel the avocado",
+        "         ↳ Mash it onto the toast",
+        "  0:07  — Pumpkin oatmeal: Pour in 100 g pumpkin purée",
+        "         ↳ Stir in 1 tbsp tahini",
+        "  0:09  — Ready! ✓",
+    ])
+
+
+def test_a_block_that_fits_inside_a_wait_goes_there():
+    """The whole salad is made while the eggs boil, so it adds no time to the plan."""
+    raw = {"dishes": [
+        _dish("Boiled eggs", _step("Boil 2 eggs", 10, False, "Stove"), _step("Cool and peel the eggs", 2)),
+        _dish("Tomato salad", _step("Slice 2 tomatoes", 1), _step("Chop the parsley", 1),
+              _step("Dress with 1 tbsp olive oil", 1)),
+    ]}
+    result = _build_plan(raw)
+    boil = _steps(result, "Boiled eggs")[0]
+    salad = _steps(result, "Tomato salad")
+    assert boil["start_min"] <= salad[0]["start_min"] and _end(salad[-1]) <= _end(boil)
+    assert result["makespan_min"] == 12
+
+
+def test_dishes_of_short_hands_on_steps_get_one_time_line_each():
+    """Three dishes made only of one-minute hands-on steps get one time line each instead of taking turns every minute."""
+    raw = {"dishes": [
+        _dish("Yogurt bowl", _step("Spoon 150 g yogurt into a bowl", 1), _step("Slice the banana", 1),
+              _step("Top with 1 tsp honey", 1)),
+        _dish("Tomato salad", _step("Slice 2 tomatoes", 1), _step("Chop the parsley", 1),
+              _step("Dress with 1 tbsp olive oil", 1)),
+        _dish("Cheese plate", _step("Slice 50 g white cheese", 1), _step("Arrange 8 olives", 1)),
+    ]}
+    lines = _build_plan(raw)["formatted"].splitlines()
+    time_lines = [line for line in lines[1:-1] if "↳" not in line]
+    assert sorted(line.split("— ")[1].split(":")[0] for line in time_lines) == ["Cheese plate", "Tomato salad", "Yogurt bowl"]
+    assert lines[0] == "⏱ Plan (8 min)" and len(lines) == 10
+
+
+def test_the_search_finds_a_shorter_plan_than_the_first_order(monkeypatch):
+    """The first order makes the salad after the egg (10 min), while the search makes it during the boil
+    (6 min) and lists the boil before the block that starts with it."""
+    raw = {"dishes": [
+        _dish("Fruit salad", _step("Slice the fruit", 3), _step("Mix with 100 g yogurt", 2)),
+        _dish("Boiled egg", _step("Boil 1 egg", 4, False, "Stove"), _step("Peel it", 1)),
+    ]}
+    monkeypatch.setattr("routers.scheduler._SEARCH_NODES", 1)  # only the first order
+    assert _build_plan(raw)["makespan_min"] == 10
+    monkeypatch.undo()
+    assert _build_plan(raw)["formatted"] == "\n".join([
+        "⏱ Plan (6 min)",
+        "  0:00  — Boiled egg: Boil 1 egg (4 min) [Stove]",
+        "  0:00  — Fruit salad: Slice the fruit",
+        "         ↳ Mix with 100 g yogurt",
+        "  0:05  — Boiled egg: Peel it",
+        "  0:06  — Ready! ✓",
+    ])
+
+
+def test_a_wait_starts_during_another_dishs_last_step():
+    """The bread goes in while the omelette sets, so the toast is ready when it's spread, and the
+    omelette's steps stay together in the list (before, the toast was made first and went cold)."""
+    raw = {"dishes": [
+        _dish("Omelette", _step("Chop the chard", 2), _step("Beat 3 eggs", 2),
+              _step("Cook the omelette until set", 6, True, "Stove")),
+        _dish("Avocado toast", _step("Toast 2 slices of bread", 3, False, "Toaster"),
+              _step("Spread the avocado on the toast", 1)),
+    ]}
+    assert _build_plan(raw)["formatted"] == "\n".join([
+        "⏱ Plan (11 min)",
+        "  0:00  — Omelette: Chop the chard",
+        "         ↳ Beat 3 eggs",
+        "         ↳ Cook the omelette until set",
+        "  0:07  — Avocado toast: Toast 2 slices of bread (3 min) [Toaster]",
+        "         ↳ Spread the avocado on the toast",
+        "  0:11  — Ready! ✓",
+    ])
+
+
+def test_hot_food_is_made_last_among_equally_long_plans():
+    """Of two equally long orders, the fruit salad (no hot appliance) is made first and the halloumi
+    fried last, so it isn't left to cool."""
+    raw = {"dishes": [
+        _dish("Fried halloumi", _step("Slice 100 g halloumi", 1),
+              _step("Fry the halloumi in 1 tsp olive oil", 3, True, "Stove")),
+        _dish("Fruit salad", _step("Peel and slice the fruit", 4), _step("Mix with 100 g yogurt", 1)),
+    ]}
+    result = _build_plan(raw)
+    assert result["makespan_min"] == 9
+    assert [s["dish"] for s in result["timeline"]] == ["Fruit salad"] * 2 + ["Fried halloumi"] * 2
+
+
 def test_random_menus_keep_every_rule():
-    """Across many seeded random menus: dish order, one cook, appliance limits, and some dish ends at the finish."""
+    """Across many seeded random menus: dish order, one cook, appliance limits, some dish ends at the finish,
+    and whole blocks (consecutive hands-on steps back to back, no other dish's step listed between them)."""
     rng = random.Random(144)
     for _ in range(300):
         raw = {"dishes": [
@@ -117,6 +221,9 @@ def test_random_menus_keep_every_rule():
             steps = _steps(result, dish["dish"])
             assert [s["task"] for s in steps] == [s["action"] for s in dish["steps"]]
             assert all(_end(a) <= b["start_min"] for a, b in zip(steps, steps[1:]))
+            for a, b in zip(steps, steps[1:]):
+                if a["hands_on"] and b["hands_on"]:
+                    assert _end(a) == b["start_min"] and timeline.index(b) == timeline.index(a) + 1
         for minute in range(result["makespan_min"]):
             now = [s for s in timeline if s["start_min"] <= minute < _end(s)]
             assert sum(s["hands_on"] for s in now) <= 1

@@ -14,6 +14,8 @@ import {
   createChatSocket,
   login,
   LoginLimitError,
+  getRemovedSuggestionCount,
+  bringBackRemovedSuggestions,
 } from './api'
 
 
@@ -109,6 +111,22 @@ describe('preference API', () => {
     const [url, opts] = stub.mock.calls[0]
     expect(url).toContain('/preferences/fav%3Aeggs')
     expect(JSON.parse(opts.body)).toEqual({ value: 'eggs' })
+  })
+})
+
+
+describe('shopping suggestions API', () => {
+  // Settings reads the removed count and brings the removed items back on the same URL
+  it('GET and DELETE /shopping/suggestions/removed', async () => {
+    const stub = mockFetch(200, { count: 2 })
+    vi.stubGlobal('fetch', stub)
+    expect(await getRemovedSuggestionCount()).toEqual({ count: 2 })
+    expect(stub.mock.calls[0][0]).toMatch(/\/shopping\/suggestions\/removed$/)
+    vi.stubGlobal('fetch', mockFetch(204))
+    await bringBackRemovedSuggestions()
+    const [url, opts] = fetch.mock.calls[0]
+    expect(url).toMatch(/\/shopping\/suggestions\/removed$/)
+    expect(opts.method).toBe('DELETE')
   })
 })
 

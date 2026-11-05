@@ -20,7 +20,7 @@ Personas, each run for a sample user (tools/prompt_samples.py):
 - plan: one Prep Plan press per menu in PLAN_CASES (every menu by default), with the
   planner's real prompt and menu message. It flags food the menu doesn't list and a
   dish cooked another way than its method says (fry vs boil), and notes how many
-  steps each dish got.
+  steps each dish got and how often the plan the app builds from them switches dishes.
 Nothing touches the database. Every test is kept locally in tools/runs/ (git-ignored): a log with the
 replies and the exact prompts sent, and a line in history.jsonl that later tests are
 compared against, so a prompt change can't quietly make things worse.
@@ -42,6 +42,7 @@ from pathlib import Path
 
 from models.units import unknown_units
 from routers.chat import SUGGEST_TEMPERATURES
+from routers.scheduler import _build_plan, served_items
 from services import llm, pipeline, suggestion
 # The fridge check's own word handling, to tell renamed items from missing ones
 from services.fridge import _FOLD, _tokens, _words, find_avoided, find_missing_ingredients, same_name
@@ -341,14 +342,22 @@ def contradicted_methods(dishes: list[tuple[str, list[str]]], case: dict) -> lis
     return found
 
 
+def switches(plan: dict, case: dict) -> int:
+    """How often the plan the app shows moves from one dish to another, scheduled by the app's own code."""
+    timeline = _build_plan(plan, case["language"], case["kitchen_appliances"], served_items(case["menu"]))["timeline"]
+    return sum(a["dish"] != b["dish"] for a, b in zip(timeline, timeline[1:]))
+
+
 def check_plan(text: str, case: dict) -> dict:
     """Score one prep plan reply: does its JSON parse, does it plan only the menu, and each dish as designed.
-    The note counts each dish's steps, so a plan of one step per dish shows in the log."""
+    The note counts each dish's steps, so a plan of one step per dish shows, and the plan's switches between
+    dishes, so a plan that hops from dish to dish every minute shows too."""
     plan = extract_json_block(text or "")
     if not isinstance(plan, dict) or not isinstance(plan.get("dishes"), list):
         return _no_json("plan")
     dishes = _plan_dishes(plan)
     fridge = {"language": case["language"], "ingredients": [{"name": n} for n in _menu_names(case["menu"])]}
+    steps = ", ".join(f"{name or '?'} {len(actions)}" for name, actions in dishes) or "none"
     return {
         "json": True,
         # The plan's steps, to count distinct plans across runs
@@ -358,7 +367,7 @@ def check_plan(text: str, case: dict) -> dict:
             "method": contradicted_methods(dishes, case),
             "turkish": turkish_words(text, fridge),
         },
-        "note": "steps " + (", ".join(f"{name or '?'} {len(actions)}" for name, actions in dishes) or "none"),
+        "note": f"steps {steps}; switches {switches(plan, case)}",
     }
 
 

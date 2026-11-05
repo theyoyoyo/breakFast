@@ -8,9 +8,11 @@ import {
   addFavorite, deleteFavorite,
   getPreferences, setPreference,
   analyzeMeal,
+  getRemovedSuggestionCount, bringBackRemovedSuggestions,
 } from '../services/api'
 import WeeklySummary from './WeeklySummary'
 import KitchenSettings from './KitchenSettings'
+import ConfirmPrompt from './ConfirmPrompt'
 import MealEditor from './MealEditor'
 import StarRating from './StarRating'
 import { THEMES, applyTheme, storedTheme } from '../utils/theme'
@@ -78,7 +80,16 @@ export default function SettingsPanel({ visible }) {
   // Weekly summary in suggestions toggle (default off)
   const [weeklySummaryInSuggestions, setWeeklySummaryInSuggestions] = useState(false)
 
+  // Shopping suggestions removed with × that new suggestions leave out (7 days), and the open "Are you sure?"
+  const [removedCount, setRemovedCount] = useState(0)
+  const [askBringBack, setAskBringBack] = useState(false)
+
+  const loadRemovedCount = () => {
+    getRemovedSuggestionCount().then(r => setRemovedCount(r.count)).catch(() => {})
+  }
+
   const load = async () => {
+    loadRemovedCount() // on its own, so a failure here doesn't fail the whole page
     try {
       setError(null)
       const [r, prof, supps, rules, m, prefs] = await Promise.all([
@@ -154,6 +165,20 @@ export default function SettingsPanel({ visible }) {
   useSyncNotice('supplements_updated', () => {
     getSupplements().then(setSupplements).catch(() => {})
   })
+
+  // A × on any device, or the chat socket (re)opened: reload the removed suggestions count
+  useSyncNotice(['shopping_suggestions_updated', 'sync_connected'], loadRemovedCount)
+
+  const handleBringBack = async () => {
+    setAskBringBack(false)
+    try {
+      setError(null)
+      await bringBackRemovedSuggestions()
+      setRemovedCount(0)
+    } catch {
+      setError('Failed to bring back removed suggestions')
+    }
+  }
 
   // Rating handlers
   const handleAddRating = async () => {
@@ -833,9 +858,9 @@ export default function SettingsPanel({ visible }) {
           </div>
         </div>
 
-        {/* Language + analysis toggles */}
+        {/* AI settings: reply language, weekly review, removed shopping suggestions */}
         <div style={s.section}>
-          <div style={s.sectionLabel}>AI Response Language</div>
+          <div style={s.sectionLabel}>AI settings</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
             <span style={{ fontSize: 13, color: language === 'en' ? 'var(--accent)' : 'var(--text-muted)' }}>English</span>
             <button
@@ -873,6 +898,28 @@ export default function SettingsPanel({ visible }) {
               }} />
             </button>
           </div>
+          {/* Items removed with × stay out of shopping suggestions for 7 days; this lets them back sooner */}
+          <div style={s.aiRow}>
+            <span style={s.aiRowLabel}>Removed shopping suggestions</span>
+            <button
+              style={s.bringBackBtn(removedCount > 0)}
+              disabled={removedCount === 0}
+              onClick={() => setAskBringBack(true)}
+            >
+              Bring back ({removedCount})
+            </button>
+          </div>
+          {askBringBack && removedCount > 0 && (
+            <div style={s.bringBackPrompt}>
+              <ConfirmPrompt
+                label="Bring back removed suggestions"
+                message={`Are you sure you want to allow ${removedCount} removed ${removedCount === 1 ? 'item' : 'items'} back in suggestions?`}
+                confirmLabel="Allow"
+                onConfirm={handleBringBack}
+                onCancel={() => setAskBringBack(false)}
+              />
+            </div>
+          )}
         </div>
 
         {/* Theme — only the accent colors change */}

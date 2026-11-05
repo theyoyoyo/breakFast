@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Trash2, ShoppingCart, X, Plus } from 'lucide-react'
-import { getShoppingList, addShoppingItem, deleteShoppingItem, buyShoppingItems } from '../services/api'
+import { Trash2, ShoppingCart, X, Plus, CheckSquare, Square } from 'lucide-react'
+import { getShoppingList, addShoppingItem, deleteShoppingItem, buyShoppingItems, clearShoppingList } from '../services/api'
+import ConfirmPrompt from './ConfirmPrompt'
 import * as s from './ShoppingListPanel.styles'
 
 export default function ShoppingListPanel({ open, onClose, onBought }) {
@@ -10,6 +11,7 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
   const [newItem, setNewItem] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [askClearAll, setAskClearAll] = useState(false) // Delete all's "Are you sure?"
 
   const load = async () => {
     try {
@@ -29,6 +31,7 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
       setError(null)
       setChecked({})
       setExpiryDates({})
+      setAskClearAll(false)
       load()
     }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -73,6 +76,28 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
     setExpiryDates(prev => ({ ...prev, [id]: date }))
   }
 
+  // Header helpers, like the Fridge's suggestions list: check or uncheck every item, and delete them
+  // all after an "Are you sure?" (the list is typed in by hand)
+  const allChecked = items.length > 0 && items.every(i => checked[i.id])
+
+  const toggleAll = () => {
+    setChecked(allChecked ? {} : Object.fromEntries(items.map(i => [i.id, true])))
+    if (allChecked) setExpiryDates({})
+  }
+
+  const handleClearAll = async () => {
+    setAskClearAll(false)
+    setItems([])
+    setChecked({})
+    setExpiryDates({})
+    try {
+      await clearShoppingList()
+    } catch {
+      setError('Failed to delete the list')
+      load()
+    }
+  }
+
   const handleBought = async () => {
     const selectedIds = Object.entries(checked)
       .filter(([, v]) => v)
@@ -111,18 +136,47 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
         <div style={s.header}>
           <ShoppingCart size={16} />
           <span style={s.title}>Shopping List</span>
-          <button style={s.closeBtn} onClick={onClose}><X size={16} /></button>
+          {items.length > 0 && (
+            <span style={s.headerHelpers}>
+              <button
+                style={s.helperBtn}
+                onClick={toggleAll}
+                title={allChecked ? 'Unselect all' : 'Select all'}
+                aria-label={allChecked ? 'Unselect all' : 'Select all'}
+              >
+                {allChecked ? <Square size={13} /> : <CheckSquare size={13} />}
+              </button>
+              <button style={s.clearAllBtn} onClick={() => setAskClearAll(true)} title="Delete all" aria-label="Delete all">
+                <Trash2 size={13} />
+              </button>
+            </span>
+          )}
+          <button style={s.closeBtn} onClick={onClose} aria-label="Close"><X size={16} /></button>
         </div>
 
         <div style={s.list}>
           {error && <div style={s.error}>{error}</div>}
+          {askClearAll && items.length > 0 && (
+            <div style={s.confirm}>
+              <ConfirmPrompt
+                label="Delete the shopping list"
+                message={`Are you sure you want to delete all ${items.length} ${items.length === 1 ? 'item' : 'items'} from your shopping list?`}
+                confirmLabel="Delete"
+                danger
+                onConfirm={handleClearAll}
+                onCancel={() => setAskClearAll(false)}
+              />
+            </div>
+          )}
           {loading && <div style={s.empty}>Loading…</div>}
           {!loading && items.length === 0 && (
             <div style={s.empty}>Shopping list is empty</div>
           )}
+          {/* A checked item gets its best before date on the same row; × removes an item (not bought
+              yet, so no trash can) */}
           {items.map(item => (
-            <div key={item.id}>
-              <label style={s.row}>
+            <div key={item.id} style={s.row}>
+              <label style={s.rowLabel}>
                 <input
                   type="checkbox"
                   checked={!!checked[item.id]}
@@ -134,22 +188,25 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
                   textDecoration: checked[item.id] ? 'line-through' : 'none',
                   opacity: checked[item.id] ? 0.5 : 1,
                 }}>{item.item_name}</span>
-                <button style={s.deleteBtn} onClick={(e) => { e.preventDefault(); handleDelete(item.id) }}>
-                  <Trash2 size={12} />
-                </button>
               </label>
               {checked[item.id] && (
-                <div style={s.expiryDateRow}>
-                  <span style={s.expiryDateLabel}>Expiry:</span>
+                <label style={s.bbd}>
+                  <span style={s.bbdLabel}>BBD:</span>
                   <input
                     type="date"
-                    style={s.expiryDateInput}
+                    style={s.bbdInput}
                     value={expiryDates[item.id] || ''}
                     onChange={(e) => setExpiryDate(item.id, e.target.value)}
-                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`Best before date for ${item.item_name}`}
                   />
-                </div>
+                </label>
               )}
+              <button
+                style={s.removeBtn}
+                onClick={() => handleDelete(item.id)}
+                title="Remove"
+                aria-label={`Remove ${item.item_name}`}
+              >×</button>
             </div>
           ))}
         </div>

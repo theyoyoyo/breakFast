@@ -9,6 +9,7 @@ import {
 import { useSyncNotice } from '../hooks/useSyncNotice'
 import ShoppingListPanel from './ShoppingListPanel'
 import FavoriteIngredientsPanel from './FavoriteIngredientsPanel'
+import ConfirmPrompt from './ConfirmPrompt'
 import * as s from './IngredientPanel.styles'
 
 // ---------------------------------------------------------------------------
@@ -86,6 +87,12 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
   const [shoppingListOpen, setShoppingListOpen] = useState(false)
   const [lyricBanner, setLyricBanner] = useState(null)
   const [noNewSuggestions, setNoNewSuggestions] = useState(false) // the AI only had repeats
+  const [askClearSuggestions, setAskClearSuggestions] = useState(false) // Delete all's "Are you sure?"
+
+  // The list emptied (here or on another device): an open "Delete all?" box has nothing left to ask about
+  useEffect(() => {
+    if (suggestions.length === 0) setAskClearSuggestions(false)
+  }, [suggestions.length])
 
   // Delete-to-shopping popup
   const [deletePopup, setDeletePopup] = useState(null) // { id, name }
@@ -423,19 +430,23 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
     await saveSuggestions(suggestionsRef.current.filter(s => !sent.includes(s.name)))
   }
 
-  // ▲/▼ hides or shows the list; it never clears it
-  const toggleSuggestionsCollapsed = () => setSuggestionsCollapsed(prev => !prev)
+  // ▲/▼ hides or shows the list; it never clears it (and closes an open "Delete all?" box)
+  const toggleSuggestionsCollapsed = () => {
+    setSuggestionsCollapsed(prev => !prev)
+    setAskClearSuggestions(false)
+  }
 
   const selectedSuggestionCount = suggestions.filter(s => s.checked).length
   const allSuggestionsChecked = selectedSuggestionCount === suggestions.length
 
-  // Header helpers (open list only): check or uncheck every item, and clear the whole list.
-  // Clearing doesn't count as × — the same items may be suggested again.
+  // Header helpers (open list only): check or uncheck every item, and clear the whole list after
+  // an "Are you sure?". Clearing doesn't count as × — the same items may be suggested again.
   const toggleAllSuggestions = () => {
     saveSuggestions(suggestions.map(s => ({ ...s, checked: !allSuggestionsChecked })))
   }
 
   const clearSuggestions = () => {
+    setAskClearSuggestions(false)
     setLyricBanner(null)
     setNoNewSuggestions(false)
     saveSuggestions([])
@@ -790,7 +801,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
                     </button>
                     <button
                       style={s.suggestionsClearBtn}
-                      onClick={(e) => { e.stopPropagation(); clearSuggestions() }}
+                      onClick={(e) => { e.stopPropagation(); setAskClearSuggestions(true) }}
                       title="Delete all"
                       aria-label="Delete all"
                     >
@@ -805,6 +816,18 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
           </div>
           {!suggestionsCollapsed && (
             <>
+              {askClearSuggestions && (
+                <div style={s.suggestionsConfirm}>
+                  <ConfirmPrompt
+                    label="Delete all suggestions"
+                    message={`Are you sure you want to delete all ${suggestions.length} ${suggestions.length === 1 ? 'suggestion' : 'suggestions'}?`}
+                    confirmLabel="Delete"
+                    danger
+                    onConfirm={clearSuggestions}
+                    onCancel={() => setAskClearSuggestions(false)}
+                  />
+                </div>
+              )}
               <div style={s.suggestionsList}>
                 {suggestions.map((item) => (
                   <div key={item.name} style={s.suggestionRow}>

@@ -130,6 +130,17 @@ async def test_bought_restores_group_from_memory(client):
     assert kasar["group_name"] == "🐄 Animal Products"
 
 
+# Delete all empties this user's shopping list and leaves another user's alone
+async def test_clear_shopping_list_is_per_user(client):
+    await client.post("/shopping/bulk", json=[{"item_name": "Kiwi"}, {"item_name": "Salmon"}])
+    other = await _second_user_auth()
+    await client.post("/shopping/", json={"item_name": "Milk"}, headers=other)
+    r = await client.delete("/shopping/")
+    assert r.status_code == 204
+    assert (await client.get("/shopping/")).json() == []
+    assert [i["item_name"] for i in (await client.get("/shopping/", headers=other)).json()] == ["Milk"]
+
+
 # ---------------------------------------------------------------------------
 # Shopping suggestions list (/shopping/suggestions)
 # ---------------------------------------------------------------------------
@@ -188,3 +199,28 @@ async def test_suggestions_list_is_per_user(client):
     assert (await client.get("/shopping/suggestions", headers=other)).json() == {"items": []}
     await client.put("/shopping/suggestions", json={"items": [KIWI]}, headers=other)
     assert (await client.get("/shopping/suggestions")).json() == {"items": [SALMON]}
+
+
+# Bring back removed suggestions: the count is what × leaves out of new suggestions right now
+async def test_removed_count_includes_only_the_last_seven_days(client, db):
+    await client.put("/shopping/suggestions", json={"items": [SALMON], "removed": ["Kiwi", "Strawberries"]})
+    assert (await client.get("/shopping/suggestions/removed")).json() == {"count": 2}
+    await db.execute("UPDATE shopping_suggestions SET removed_at = datetime('now', '-8 days') WHERE name = 'Strawberries'")
+    await db.commit()
+    assert (await client.get("/shopping/suggestions/removed")).json() == {"count": 1}
+
+
+# Bringing them back deletes only this user's removed items, and keeps the list and the avoid list
+async def test_bring_back_removed_keeps_the_list_and_other_users(client):
+    await client.put("/preferences/avoid:Milk", json={"value": "Milk"})
+    await client.put("/shopping/suggestions", json={"items": [SALMON, KIWI], "removed": ["Strawberries"]})
+    other = await _second_user_auth()
+    await client.put("/shopping/suggestions", json={"items": [], "removed": ["Strawberries"]}, headers=other)
+
+    r = await client.delete("/shopping/suggestions/removed")
+    assert r.status_code == 204
+    assert (await client.get("/shopping/suggestions/removed")).json() == {"count": 0}
+    assert (await client.get("/shopping/suggestions")).json() == {"items": [SALMON, KIWI]}
+    assert (await client.get("/shopping/suggestions/removed", headers=other)).json() == {"count": 1}
+    avoid = [p for p in (await client.get("/preferences/")).json() if p["key"] == "avoid:Milk"]
+    assert [p["value"] for p in avoid] == ["Milk"]
