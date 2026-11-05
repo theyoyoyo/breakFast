@@ -337,6 +337,9 @@ def _served(name: str, amount: float, unit: str) -> dict:
 # - menemen: a Turkish menu with a Turkish reply.
 # - omelette: two cooked dishes, so one dish's steps can fill the other's wait (#144); both use eggs,
 #   cooked two ways.
+# - bowls: the server menu whose plan switched dishes every minute (#152): two dishes made of short
+#   hands-on steps around their waits. The sweet potato is a simple item, served as it is until a
+#   simple item may carry a method (#156); the air fryer is there for that method.
 PLAN_CASES = {
     "boiled": {
         "language": "en",
@@ -393,6 +396,20 @@ PLAN_CASES = {
             _dish("Boiled eggs", "Boil the eggs, cool them in cold water, peel and halve",
                   ("Eggs", 2, "pcs"), ("Salt", 1, "pinch")),
             _served("Bread", 1, "slice"),
+        ],
+    },
+    "bowls": {
+        "language": "en",
+        "kitchen_appliances": ["Stove", "Air Fryer", "Kettle"],
+        "meal_name": "Autumn bowls",
+        "menu": [
+            _dish("Chia pudding", "Stir the chia seeds into the milk with the honey, let it set, top with the banana",
+                  ("Chia seeds", 3, "tbsp"), ("Milk", 1, "glass"), ("Honey", 1, "tsp"),
+                  ("Banana", 1, "pcs", "sliced")),
+            _dish("Pumpkin oatmeal", "Simmer the oats in the milk, stir in the pumpkin purée, top with the tahini",
+                  ("Oats", 1, "glass", "rolled"), ("Milk", 1, "glass"), ("Pumpkin purée", 100, "g"),
+                  ("Tahini", 1, "tbsp")),
+            _served("Sweet potato", 300, "g"),
         ],
     },
 }
