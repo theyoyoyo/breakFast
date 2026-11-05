@@ -3,7 +3,7 @@
  * answer (everything was a repeat) says so instead of showing nothing. The list is kept
  * on the server: it starts collapsed, Send to List moves only the checked items, × removes one
  * item, ▲/▼ hides the list without clearing it, the header's helpers check or uncheck every
- * item and clear the list, Suggest More adds checked items at the end, the list reloads on a
+ * item and clear the list after an "Are you sure?", Suggest More adds checked items at the end, the list reloads on a
  * push, and a list saved in this browser moves to the server.
  * API calls are mocked — no real network calls are made.
  */
@@ -141,12 +141,31 @@ describe('IngredientPanel shopping suggestions', () => {
     expect(header()).toHaveAttribute('aria-expanded', 'true') // the helpers don't toggle the list
   })
 
-  // The trash clears the whole list without leaving the items out of later suggestions
-  it('deletes all items without marking them removed', async () => {
+  // The trash asks first, then clears the whole list without leaving the items out of later suggestions
+  it('deletes all items after asking, without marking them removed', async () => {
     await renderWithList([SALMON, KIWI])
     fireEvent.click(screen.getByRole('button', { name: 'Delete all' }))
+    const prompt = screen.getByRole('alertdialog', { name: 'Delete all suggestions' })
+    expect(prompt).toHaveTextContent('Are you sure you want to delete all 2 suggestions?')
+    expect(api.saveSuggestionList).not.toHaveBeenCalled()
+    expect(header()).toHaveAttribute('aria-expanded', 'true') // the trash doesn't toggle the list
+    fireEvent.click(within(prompt).getByRole('button', { name: 'Delete' }))
     expect(lastSaved()).toEqual([[], []])
     expect(await screen.findByRole('button', { name: /Suggest Shopping/ })).toBeInTheDocument()
+  })
+
+  // Cancel closes the prompt and keeps the list; hiding the list closes it too
+  it('keeps the list when Delete all is cancelled', async () => {
+    await renderWithList([SALMON, KIWI])
+    fireEvent.click(screen.getByRole('button', { name: 'Delete all' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(screen.getByText('Salmon')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Delete all' }))
+    fireEvent.click(header())
+    fireEvent.click(header())
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(api.saveSuggestionList).not.toHaveBeenCalled()
   })
 
   // Send to List and Suggest More sit together under the list; Suggest Shopping isn't at the top any more

@@ -630,6 +630,11 @@ export const suggestionsPanelTitle = {
   whiteSpace: 'nowrap',
 }
 
+// Holds the "Are you sure?" box for Delete all, between the header and the list
+export const suggestionsConfirm = {
+  padding: '8px 8px 4px',
+}
+
 export const suggestionsList = {
   flex: 1,
   overflowY: 'auto',

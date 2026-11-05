@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Trash2, ShoppingCart, X, Plus, CheckSquare, Square } from 'lucide-react'
 import { getShoppingList, addShoppingItem, deleteShoppingItem, buyShoppingItems, clearShoppingList } from '../services/api'
+import ConfirmPrompt from './ConfirmPrompt'
 import * as s from './ShoppingListPanel.styles'
 
 export default function ShoppingListPanel({ open, onClose, onBought }) {
@@ -10,6 +11,7 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
   const [newItem, setNewItem] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [askClearAll, setAskClearAll] = useState(false) // Delete all's "Are you sure?"
 
   const load = async () => {
     try {
@@ -29,6 +31,7 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
       setError(null)
       setChecked({})
       setExpiryDates({})
+      setAskClearAll(false)
       load()
     }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -73,7 +76,8 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
     setExpiryDates(prev => ({ ...prev, [id]: date }))
   }
 
-  // Header helpers, like the Fridge's suggestions list: check or uncheck every item, and delete them all
+  // Header helpers, like the Fridge's suggestions list: check or uncheck every item, and delete them
+  // all after an "Are you sure?" (the list is typed in by hand)
   const allChecked = items.length > 0 && items.every(i => checked[i.id])
 
   const toggleAll = () => {
@@ -82,6 +86,7 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
   }
 
   const handleClearAll = async () => {
+    setAskClearAll(false)
     setItems([])
     setChecked({})
     setExpiryDates({})
@@ -141,7 +146,7 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
               >
                 {allChecked ? <Square size={13} /> : <CheckSquare size={13} />}
               </button>
-              <button style={s.clearAllBtn} onClick={handleClearAll} title="Delete all" aria-label="Delete all">
+              <button style={s.clearAllBtn} onClick={() => setAskClearAll(true)} title="Delete all" aria-label="Delete all">
                 <Trash2 size={13} />
               </button>
             </span>
@@ -151,6 +156,18 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
 
         <div style={s.list}>
           {error && <div style={s.error}>{error}</div>}
+          {askClearAll && items.length > 0 && (
+            <div style={s.confirm}>
+              <ConfirmPrompt
+                label="Delete the shopping list"
+                message={`Are you sure you want to delete all ${items.length} ${items.length === 1 ? 'item' : 'items'} from your shopping list?`}
+                confirmLabel="Delete"
+                danger
+                onConfirm={handleClearAll}
+                onCancel={() => setAskClearAll(false)}
+              />
+            </div>
+          )}
           {loading && <div style={s.empty}>Loading…</div>}
           {!loading && items.length === 0 && (
             <div style={s.empty}>Shopping list is empty</div>

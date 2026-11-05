@@ -61,6 +61,11 @@ export const clearAllBtn = {
   color: colors.danger,
 }
 
+// Holds the "Are you sure?" box for Delete all, at the top of the list
+export const confirm = {
+  padding: '8px 16px 4px',
+}
+
 export const closeBtn = {
   background: 'none',
   border: 'none',

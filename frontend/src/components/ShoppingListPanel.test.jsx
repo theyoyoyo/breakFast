@@ -1,11 +1,12 @@
 /**
- * Tests for the shopping list panel: Select all and Delete all in the header, like the Fridge's
- * suggestions list; a checked item's best before date ("BBD:") on its own row; × to remove an item.
+ * Tests for the shopping list panel: Select all and Delete all (after an "Are you sure?") in the
+ * header, like the Fridge's suggestions list; a checked item's best before date ("BBD:") on its own
+ * row; × to remove an item.
  * API calls are mocked — no real network calls are made.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import ShoppingListPanel from './ShoppingListPanel'
 import * as api from '../services/api'
 
@@ -38,12 +39,28 @@ describe('ShoppingListPanel', () => {
     expect(screen.getAllByRole('checkbox').some(box => box.checked)).toBe(false)
   })
 
-  // Delete all empties the list, on the server too
-  it('deletes every item', async () => {
+  // Delete all asks first, then empties the list, on the server too
+  it('deletes every item after asking', async () => {
     render(<ShoppingListPanel open onClose={() => {}} />)
     fireEvent.click(await screen.findByRole('button', { name: 'Delete all' }))
+    const prompt = screen.getByRole('alertdialog', { name: 'Delete the shopping list' })
+    expect(prompt).toHaveTextContent('Are you sure you want to delete all 2 items from your shopping list?')
+    expect(api.clearShoppingList).not.toHaveBeenCalled()
+    fireEvent.click(within(prompt).getByRole('button', { name: 'Delete' }))
     expect(await screen.findByText('Shopping list is empty')).toBeInTheDocument()
+    expect(screen.queryByRole('alertdialog')).toBeNull()
     expect(api.clearShoppingList).toHaveBeenCalledTimes(1)
+  })
+
+  // Cancel closes the prompt and keeps every item
+  it('keeps the list when Delete all is cancelled', async () => {
+    render(<ShoppingListPanel open onClose={() => {}} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete all' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(screen.getByText('Kiwi')).toBeInTheDocument()
+    expect(screen.getByText('Salmon')).toBeInTheDocument()
+    expect(api.clearShoppingList).not.toHaveBeenCalled()
   })
 
   // A checked item asks for its best before date on its own row, and the date goes with Done
