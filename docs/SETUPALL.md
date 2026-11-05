@@ -670,7 +670,7 @@ minute, a `--draft` run about 15 seconds.
 | Add user | `cd backend && python manage.py add-user "Name" --admin` (asks for a 6-10 digit PIN) |
 | Change a PIN | `cd backend && python manage.py set-pin "Name"` |
 | List users | `cd backend && python manage.py list-users` |
-| Backup DB | `cd backend && python manage.py backup-db` |
+| Backup DB | `cd backend && python manage.py backup-db` (safe while the server runs) |
 | Check Ollama | `ollama list` |
 | Model fits the GPU | `ollama ps` shows `100% GPU` |
 | Test Ollama | `ollama run qwen2.5:7b "Good morning"` |
