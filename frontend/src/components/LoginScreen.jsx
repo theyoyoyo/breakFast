@@ -1,6 +1,20 @@
 import { useState } from 'react'
-import { login, NetworkError } from '../services/api'
+import { login, NetworkError, LoginLimitError } from '../services/api'
 import * as s from './LoginScreen.styles'
+
+/** The message for a rate-limited login: the wait in seconds or minutes, or "later" when unknown. */
+export function retryMessage(seconds) {
+  if (!seconds) return 'Too many failed logins. Try again later.'
+  if (seconds < 60) return `Too many failed logins. Try again in ${seconds} seconds.`
+  const minutes = Math.ceil(seconds / 60)
+  return `Too many failed logins. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`
+}
+
+function errorMessage(err) {
+  if (err instanceof NetworkError) return 'Cannot reach server'
+  if (err instanceof LoginLimitError) return retryMessage(err.retryAfter)
+  return 'Invalid name or PIN'
+}
 
 export default function LoginScreen({ onLogin }) {
   const [name, setName] = useState('demo')
@@ -21,7 +35,7 @@ export default function LoginScreen({ onLogin }) {
       localStorage.setItem('bf_user', JSON.stringify(data.user))
       onLogin(data)
     } catch (err) {
-      setError(err instanceof NetworkError ? 'Cannot reach server' : 'Invalid name or PIN')
+      setError(errorMessage(err))
     } finally {
       setLoading(false)
     }

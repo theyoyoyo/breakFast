@@ -112,7 +112,7 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate       # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-python manage.py add-user "Alice" --pin 1234
+python manage.py add-user "Alice"   # asks for a PIN of 6-10 digits
 python -m uvicorn main:app --host 0.0.0.0 --port 8000
 
 # Frontend (in a second terminal)
@@ -157,11 +157,14 @@ Users are managed on the server; there is no sign-up page.
 
 ```bash
 cd backend
-python manage.py add-user "Alice" --pin 1234           # add --admin for an admin user
+python manage.py add-user "Alice"                      # asks for a 6-10 digit PIN; add --admin for an admin user
+python manage.py set-pin "Alice"                       # change a PIN (or reset a forgotten one)
 python manage.py list-users
 python manage.py delete-user "Alice"                   # also deletes all of Alice's data
-python manage.py backup-db                             # timestamped copy next to the database
+python manage.py backup-db                             # timestamped copy next to the database, safe while the server runs
 ```
+
+To restore a backup, stop the backend, delete `breakFAST.db-wal` and `breakFAST.db-shm` if they're there, then copy the backup over `breakFAST.db`. A leftover `-wal` file would be read into the restored database.
 
 ---
 
@@ -202,7 +205,8 @@ All backend settings are environment variables, documented in [`.env.example`](.
 
 break FAST is built for a trusted home network (LAN or Tailscale), not the open internet:
 
-- Users log in with a name and a PIN, hashed with SHA-256. There is no salting or login rate limiting yet, so use PINs of 6 or more digits.
+- Users log in with a name and a PIN of 6 to 10 digits, stored as a salted scrypt hash. Hashes from older versions (plain SHA-256) still work and are upgraded on the next login, and PINs shorter than 6 digits from before the rule keep working until `set-pin` replaces them.
+- Failed logins are rate limited with exponential backoff, per name on each IP. Other users on that device, and the same user on other devices, can still log in.
 - Session tokens are random 256-bit values kept in memory, so everyone logs in again after a server restart.
 - Do not expose port 8000 to the public internet. Use Tailscale for remote access.
 
@@ -240,7 +244,6 @@ breakFast/
 
 - Habit onboarding: ask about routines one question at a time
 - Appliance-aware prep plans that stagger tasks sharing one appliance
-- Auth hardening: salted, deliberately slow PIN hashing, a 6+ digit PIN minimum and login rate limiting
 
 ---
 

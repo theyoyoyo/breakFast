@@ -216,3 +216,72 @@ async def test_save_suggestion_defaults_unit_by_language(ws_setup):
         async with db.execute("SELECT id, ingredients FROM suggested_meals ORDER BY id") as cur:
             units = {row[0]: json.loads(row[1])[0]["unit"] for row in await cur.fetchall()}
     assert units == {en_id: "pcs", tr_id: "adet"}
+
+
+# A chat reply saved into another user's session id doesn't touch that session
+async def test_save_message_touches_only_own_session(ws_setup):
+    _, _, user_id = ws_setup
+    from routers.chat import _save_message
+
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        await db.execute("INSERT INTO users (name, pin_hash) VALUES ('Bob', 'unused')")
+        await db.execute(
+            "INSERT INTO chat_sessions (id, user_id, updated_at) VALUES "
+            "('own-session', ?, '2026-01-01 08:00:00'), "
+            "('bob-session', (SELECT id FROM users WHERE name = 'Bob'), '2026-01-01 08:00:00')",
+            (user_id,),
+        )
+        await db.commit()
+
+        await _save_message(db, "own-session", user_id, "user", "Any eggs?")
+        await _save_message(db, "bob-session", user_id, "user", "Any eggs?")
+
+        async with db.execute("SELECT id, updated_at FROM chat_sessions") as cur:
+            updated = {r["id"]: r["updated_at"] for r in await cur.fetchall()}
+    assert updated["own-session"] != "2026-01-01 08:00:00"
+    assert updated["bob-session"] == "2026-01-01 08:00:00"
+
+
+# A crashing chat reply is logged with its traceback, and the user still gets a lyric
+@pytest.mark.asyncio
+async def test_websocket_logs_chat_reply_crash(ws_setup, caplog):
+    app, token, _ = ws_setup
+    from starlette.testclient import TestClient
+    from unittest.mock import patch
+    from services.llm import FALLBACK_LYRICS
+
+    async def mock_stream_crash(*args, **kwargs):
+        raise RuntimeError("chat boom")
+        yield
+
+    with patch("routers.chat.build_chat_prompt", return_value="test prompt"),          patch("routers.chat.stream_response", mock_stream_crash):
+        with TestClient(app).websocket_connect(f"/chat?token={token}") as ws:
+            ws.send_text(json.dumps({"message": "hello"}))
+            msg = ws.receive_json()
+
+    assert msg["type"] == "done" and msg["content"] in FALLBACK_LYRICS
+    record = next(r for r in caplog.records if r.getMessage() == "Chat reply failed; replying with a lyric")
+    assert "chat boom" in str(record.exc_info[1])
+
+
+# A crashing suggestion pipeline is logged with its traceback, and the user still gets a lyric
+@pytest.mark.asyncio
+async def test_websocket_logs_suggestion_crash(ws_setup, caplog):
+    app, token, _ = ws_setup
+    from starlette.testclient import TestClient
+    from unittest.mock import patch
+    from services.llm import FALLBACK_LYRICS
+
+    async def mock_pipeline_crash(*args, **kwargs):
+        raise RuntimeError("pipeline boom")
+        yield
+
+    with patch("routers.chat.run_suggestion_pipeline", mock_pipeline_crash):
+        with TestClient(app).websocket_connect(f"/chat?token={token}") as ws:
+            ws.send_text(json.dumps({"message": "Suggest breakfast", "type": "suggest", "mode": "favorites"}))
+            msg = ws.receive_json()
+
+    assert msg["type"] == "done" and msg["content"] in FALLBACK_LYRICS
+    record = next(r for r in caplog.records if r.getMessage() == "Suggestion pipeline failed; replying with a lyric")
+    assert "pipeline boom" in str(record.exc_info[1])
