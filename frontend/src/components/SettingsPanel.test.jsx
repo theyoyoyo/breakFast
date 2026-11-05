@@ -3,7 +3,7 @@
  * "Occasional" for occasional ones, and can be edited with ✏️; the theme picker offers all five themes;
  * the header shows the app name and the tab's name; the optional country saves with the profile, listed as
  * "Name (CODE)" and shown as its code; the profile boxes can shrink to a phone's width; removed shopping
- * suggestions can be brought back after a confirm.
+ * suggestions can be brought back from AI settings after an "Are you sure?" prompt.
  * API calls are mocked — no real network calls are made.
  */
 
@@ -162,43 +162,42 @@ describe('SettingsPanel', () => {
   })
 
   // With nothing removed in the last 7 days the button shows 0 and can't be pressed
-  it('disables Bring back removed suggestions at 0', async () => {
+  it('disables Bring back at 0', async () => {
     render(<SettingsPanel visible />)
-    const button = await screen.findByRole('button', { name: 'Bring back removed suggestions (0)' })
-    expect(button).toBeDisabled()
+    expect(await screen.findByText('Removed shopping suggestions')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Bring back (0)' })).toBeDisabled()
   })
 
-  // The first tap only opens the confirm; Confirm brings them back and the count drops to 0
-  it('brings back removed suggestions after the confirm', async () => {
+  // The first tap only asks; Allow brings them back and the count drops to 0
+  it('brings back removed suggestions after the prompt', async () => {
     api.getRemovedSuggestionCount.mockResolvedValue({ count: 3 })
     render(<SettingsPanel visible />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Bring back removed suggestions (3)' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Bring back (3)' }))
+    expect(screen.getByText(/Are you sure you want to allow 3 removed items back/)).toBeInTheDocument()
     expect(api.bringBackRemovedSuggestions).not.toHaveBeenCalled()
-    api.getRemovedSuggestionCount.mockResolvedValue({ count: 0 })
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
-    expect(await screen.findByRole('button', { name: 'Bring back removed suggestions (0)' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Allow' }))
+    expect(await screen.findByRole('button', { name: 'Bring back (0)' })).toBeDisabled()
     expect(api.bringBackRemovedSuggestions).toHaveBeenCalledTimes(1)
-    expect(screen.queryByRole('button', { name: 'Confirm' })).toBeNull()
+    expect(screen.queryByText(/Are you sure/)).toBeNull()
   })
 
-  // A tap anywhere else closes the confirm without bringing anything back, like the Fridge's delete confirm
-  it('cancels the bring-back confirm on a tap elsewhere', async () => {
-    api.getRemovedSuggestionCount.mockResolvedValue({ count: 2 })
+  // Cancel closes the prompt without bringing anything back
+  it('cancels the bring-back prompt', async () => {
+    api.getRemovedSuggestionCount.mockResolvedValue({ count: 1 })
     render(<SettingsPanel visible />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Bring back removed suggestions (2)' }))
-    expect(screen.getByRole('button', { name: 'Confirm' })).toBeInTheDocument()
-    await act(() => new Promise(resolve => setTimeout(resolve, 0)))  // the outside-click listener starts next tick
-    fireEvent.click(document.body)
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Confirm' })).toBeNull())
+    fireEvent.click(await screen.findByRole('button', { name: 'Bring back (1)' }))
+    expect(screen.getByText(/allow 1 removed item back/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByText(/Are you sure/)).toBeNull()
     expect(api.bringBackRemovedSuggestions).not.toHaveBeenCalled()
   })
 
   // A × on another device sends a notice, and the count reloads
   it('reloads the removed count on a suggestions notice', async () => {
     render(<SettingsPanel visible />)
-    await screen.findByRole('button', { name: 'Bring back removed suggestions (0)' })
+    await screen.findByRole('button', { name: 'Bring back (0)' })
     api.getRemovedSuggestionCount.mockResolvedValue({ count: 1 })
     act(() => emitSyncNotice({ type: 'shopping_suggestions_updated' }))
-    expect(await screen.findByRole('button', { name: 'Bring back removed suggestions (1)' })).toBeEnabled()
+    expect(await screen.findByRole('button', { name: 'Bring back (1)' })).toBeEnabled()
   })
 })

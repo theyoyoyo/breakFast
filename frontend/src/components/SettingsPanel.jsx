@@ -10,7 +10,6 @@ import {
   analyzeMeal,
   getRemovedSuggestionCount, bringBackRemovedSuggestions,
 } from '../services/api'
-import { Trash2 } from 'lucide-react'
 import WeeklySummary from './WeeklySummary'
 import KitchenSettings from './KitchenSettings'
 import MealEditor from './MealEditor'
@@ -80,9 +79,9 @@ export default function SettingsPanel({ visible }) {
   // Weekly summary in suggestions toggle (default off)
   const [weeklySummaryInSuggestions, setWeeklySummaryInSuggestions] = useState(false)
 
-  // Shopping suggestions removed with × that new suggestions leave out (7 days), and the open confirm
+  // Shopping suggestions removed with × that new suggestions leave out (7 days), and the open "Are you sure?"
   const [removedCount, setRemovedCount] = useState(0)
-  const [confirmBringBack, setConfirmBringBack] = useState(false)
+  const [askBringBack, setAskBringBack] = useState(false)
 
   const loadRemovedCount = () => {
     getRemovedSuggestionCount().then(r => setRemovedCount(r.count)).catch(() => {})
@@ -169,17 +168,8 @@ export default function SettingsPanel({ visible }) {
   // A × on any device, or the chat socket (re)opened: reload the removed suggestions count
   useSyncNotice(['shopping_suggestions_updated', 'sync_connected'], loadRemovedCount)
 
-  // The bring-back confirm closes on any click outside it (serves as cancel), like the Fridge's delete confirm
-  useEffect(() => {
-    if (!confirmBringBack) return
-    const dismiss = () => setConfirmBringBack(false)
-    // setTimeout(0) so the click that opened it doesn't close it at once
-    const id = setTimeout(() => window.addEventListener('click', dismiss, { once: true }), 0)
-    return () => { clearTimeout(id); window.removeEventListener('click', dismiss) }
-  }, [confirmBringBack])
-
   const handleBringBack = async () => {
-    setConfirmBringBack(false)
+    setAskBringBack(false)
     try {
       setError(null)
       await bringBackRemovedSuggestions()
@@ -867,9 +857,9 @@ export default function SettingsPanel({ visible }) {
           </div>
         </div>
 
-        {/* Language + analysis toggles */}
+        {/* AI settings: reply language, weekly review, removed shopping suggestions */}
         <div style={s.section}>
-          <div style={s.sectionLabel}>AI Response Language</div>
+          <div style={s.sectionLabel}>AI settings</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
             <span style={{ fontSize: 13, color: language === 'en' ? 'var(--accent)' : 'var(--text-muted)' }}>English</span>
             <button
@@ -907,6 +897,27 @@ export default function SettingsPanel({ visible }) {
               }} />
             </button>
           </div>
+          {/* Items removed with × stay out of shopping suggestions for 7 days; this lets them back sooner */}
+          <div style={s.aiRow}>
+            <span style={s.aiRowLabel}>Removed shopping suggestions</span>
+            <button
+              style={s.bringBackBtn(removedCount > 0)}
+              disabled={removedCount === 0}
+              onClick={() => setAskBringBack(true)}
+            >
+              Bring back ({removedCount})
+            </button>
+          </div>
+          {askBringBack && removedCount > 0 && (
+            <div style={s.bringBackPrompt} role="alertdialog" aria-label="Bring back removed suggestions">
+              <span style={s.bringBackPromptText}>
+                Are you sure you want to allow {removedCount} removed {removedCount === 1 ? 'item' : 'items'} back
+                in suggestions?
+              </span>
+              <button style={s.bringBackCancelBtn} onClick={() => setAskBringBack(false)}>Cancel</button>
+              <button style={s.bringBackAllowBtn} onClick={handleBringBack}>Allow</button>
+            </div>
+          )}
         </div>
 
         {/* Theme — only the accent colors change */}
@@ -925,26 +936,6 @@ export default function SettingsPanel({ visible }) {
               </button>
             ))}
           </div>
-        </div>
-
-        {/* Shopping suggestions — bring back the items removed with ×, after a confirm */}
-        <div style={s.section}>
-          <div style={s.sectionLabel}>Shopping suggestions</div>
-          <span style={s.sectionHint}>Items removed with × stay out of new suggestions for 7 days.</span>
-          <button
-            style={s.bringBackBtn(removedCount > 0)}
-            disabled={removedCount === 0}
-            onClick={(e) => { e.stopPropagation(); setConfirmBringBack(open => !open) }}
-          >
-            Bring back removed suggestions ({removedCount})
-          </button>
-          {confirmBringBack && (
-            <div style={s.bringBackConfirmRow} onClick={(e) => e.stopPropagation()}>
-              <button style={s.bringBackConfirmBtn} onClick={handleBringBack}>
-                <Trash2 size={12} /> Confirm
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Kitchen — navigates to sub-page */}

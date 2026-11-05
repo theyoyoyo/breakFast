@@ -473,34 +473,66 @@ export const themeSwatch = (color) => ({
   background: color,
 })
 
-// Shopping suggestions: a muted line on what × does, the Bring back button (muted while there's
-// nothing to bring back) and its confirm, the app's delete look (soft red) below it
-export const sectionHint = {
-  fontSize: 12,
+// AI settings → Removed shopping suggestions: a row like the toggles above it, with a small
+// Bring back button (muted while there's nothing to bring back), then an "Are you sure?" prompt
+export const aiRow = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 12,
+  marginTop: 12,
+}
+
+export const aiRowLabel = {
+  fontSize: 13,
   color: 'var(--text-muted)',
+  flex: 1,
 }
 
 export const bringBackBtn = (active) => ({
-  padding: '8px 12px',
-  borderRadius: 8,
+  padding: '4px 10px',
+  borderRadius: 12,
   border: '1px solid var(--border)',
   background: active ? 'var(--surface2)' : 'transparent',
   color: active ? 'var(--text)' : 'var(--text-muted)',
-  fontSize: 13,
-  textAlign: 'left',
+  fontSize: 12,
+  whiteSpace: 'nowrap',
   cursor: active ? 'pointer' : 'default',
   opacity: active ? 1 : 0.6,
 })
 
-export const bringBackConfirmRow = {
+export const bringBackPrompt = {
   display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  justifyContent: 'flex-end',
+  gap: 8,
+  marginTop: 8,
+  padding: '8px 10px',
+  borderRadius: 8,
+  background: 'var(--surface2)',
+  border: '1px solid var(--border)',
 }
 
-export const bringBackConfirmBtn = {
-  ...deleteBtn,
-  display: 'flex',
-  alignItems: 'center',
-  gap: 6,
-  padding: '6px 12px',
+export const bringBackPromptText = {
+  flex: '1 1 180px',
   fontSize: 13,
+  color: 'var(--text)',
+}
+
+export const bringBackCancelBtn = {
+  padding: '5px 12px',
+  borderRadius: 8,
+  border: '1px solid var(--border)',
+  background: 'transparent',
+  color: 'var(--text-muted)',
+  fontSize: 12,
+  cursor: 'pointer',
+}
+
+export const bringBackAllowBtn = {
+  ...bringBackCancelBtn,
+  border: 'none',
+  background: secondaryColor,
+  color: '#fff',
+  fontWeight: 600,
 }
