@@ -2,14 +2,16 @@
  * Tests for Settings: supplements start as Daily with no frequency picker, show
  * "Occasional" for occasional ones, and can be edited with ✏️; the theme picker offers all five themes;
  * the header shows the app name and the tab's name; the optional country saves with the profile, listed as
- * "Name (CODE)" and shown as its code; the profile boxes can shrink to a phone's width.
+ * "Name (CODE)" and shown as its code; the profile boxes can shrink to a phone's width; removed shopping
+ * suggestions can be brought back after a confirm.
  * API calls are mocked — no real network calls are made.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import SettingsPanel from './SettingsPanel'
 import * as api from '../services/api'
+import { emitSyncNotice } from '../hooks/useSyncNotice'
 
 vi.mock('../services/api', () => {
   const ok = (value) => vi.fn(() => Promise.resolve(value))
@@ -24,6 +26,7 @@ vi.mock('../services/api', () => {
     analyzeMeal: ok({}),
     getWeeklyReview: ok(null), generateWeeklyReview: ok({}),
     getKitchenAppliances: ok([]), toggleKitchenAppliance: ok({}),
+    getRemovedSuggestionCount: ok({ count: 0 }), bringBackRemovedSuggestions: ok(undefined),
   }
 })
 
@@ -32,6 +35,7 @@ describe('SettingsPanel', () => {
     vi.clearAllMocks()
     api.getSupplements.mockResolvedValue([])
     api.getProfile.mockResolvedValue(null)
+    api.getRemovedSuggestionCount.mockResolvedValue({ count: 0 })
   })
 
   it('adds a supplement as Daily without asking for a frequency', async () => {
@@ -155,5 +159,46 @@ describe('SettingsPanel', () => {
     for (const label of ['Orange', 'Green', 'Teal', 'Blue', 'Purple']) {
       expect(await screen.findByRole('button', { name: label })).toBeInTheDocument()
     }
+  })
+
+  // With nothing removed in the last 7 days the button shows 0 and can't be pressed
+  it('disables Bring back removed suggestions at 0', async () => {
+    render(<SettingsPanel visible />)
+    const button = await screen.findByRole('button', { name: 'Bring back removed suggestions (0)' })
+    expect(button).toBeDisabled()
+  })
+
+  // The first tap only opens the confirm; Confirm brings them back and the count drops to 0
+  it('brings back removed suggestions after the confirm', async () => {
+    api.getRemovedSuggestionCount.mockResolvedValue({ count: 3 })
+    render(<SettingsPanel visible />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Bring back removed suggestions (3)' }))
+    expect(api.bringBackRemovedSuggestions).not.toHaveBeenCalled()
+    api.getRemovedSuggestionCount.mockResolvedValue({ count: 0 })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+    expect(await screen.findByRole('button', { name: 'Bring back removed suggestions (0)' })).toBeDisabled()
+    expect(api.bringBackRemovedSuggestions).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: 'Confirm' })).toBeNull()
+  })
+
+  // A tap anywhere else closes the confirm without bringing anything back, like the Fridge's delete confirm
+  it('cancels the bring-back confirm on a tap elsewhere', async () => {
+    api.getRemovedSuggestionCount.mockResolvedValue({ count: 2 })
+    render(<SettingsPanel visible />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Bring back removed suggestions (2)' }))
+    expect(screen.getByRole('button', { name: 'Confirm' })).toBeInTheDocument()
+    await act(() => new Promise(resolve => setTimeout(resolve, 0)))  // the outside-click listener starts next tick
+    fireEvent.click(document.body)
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Confirm' })).toBeNull())
+    expect(api.bringBackRemovedSuggestions).not.toHaveBeenCalled()
+  })
+
+  // A × on another device sends a notice, and the count reloads
+  it('reloads the removed count on a suggestions notice', async () => {
+    render(<SettingsPanel visible />)
+    await screen.findByRole('button', { name: 'Bring back removed suggestions (0)' })
+    api.getRemovedSuggestionCount.mockResolvedValue({ count: 1 })
+    act(() => emitSyncNotice({ type: 'shopping_suggestions_updated' }))
+    expect(await screen.findByRole('button', { name: 'Bring back removed suggestions (1)' })).toBeEnabled()
   })
 })

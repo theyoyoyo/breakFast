@@ -132,6 +132,14 @@ export const getSuggestionList = () =>
 export const saveSuggestionList = (items, removed = []) =>
   apiFetch(`${BASE_URL}/shopping/suggestions`, json('PUT', { items, removed }))
 
+// How many items removed with × new suggestions leave out right now → { count }
+export const getRemovedSuggestionCount = () =>
+  apiFetch(`${BASE_URL}/shopping/suggestions/removed`)
+
+// Forget the items removed with ×, so the next Suggest Shopping may bring them back
+export const bringBackRemovedSuggestions = () =>
+  apiFetch(`${BASE_URL}/shopping/suggestions/removed`, { method: 'DELETE' })
+
 // ---------------------------------------------------------------------------
 // Shopping List
 // ---------------------------------------------------------------------------

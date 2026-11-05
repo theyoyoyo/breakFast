@@ -8,7 +8,9 @@ import {
   addFavorite, deleteFavorite,
   getPreferences, setPreference,
   analyzeMeal,
+  getRemovedSuggestionCount, bringBackRemovedSuggestions,
 } from '../services/api'
+import { Trash2 } from 'lucide-react'
 import WeeklySummary from './WeeklySummary'
 import KitchenSettings from './KitchenSettings'
 import MealEditor from './MealEditor'
@@ -78,7 +80,16 @@ export default function SettingsPanel({ visible }) {
   // Weekly summary in suggestions toggle (default off)
   const [weeklySummaryInSuggestions, setWeeklySummaryInSuggestions] = useState(false)
 
+  // Shopping suggestions removed with × that new suggestions leave out (7 days), and the open confirm
+  const [removedCount, setRemovedCount] = useState(0)
+  const [confirmBringBack, setConfirmBringBack] = useState(false)
+
+  const loadRemovedCount = () => {
+    getRemovedSuggestionCount().then(r => setRemovedCount(r.count)).catch(() => {})
+  }
+
   const load = async () => {
+    loadRemovedCount() // on its own, so a failure here doesn't fail the whole page
     try {
       setError(null)
       const [r, prof, supps, rules, m, prefs] = await Promise.all([
@@ -154,6 +165,29 @@ export default function SettingsPanel({ visible }) {
   useSyncNotice('supplements_updated', () => {
     getSupplements().then(setSupplements).catch(() => {})
   })
+
+  // A × on any device, or the chat socket (re)opened: reload the removed suggestions count
+  useSyncNotice(['shopping_suggestions_updated', 'sync_connected'], loadRemovedCount)
+
+  // The bring-back confirm closes on any click outside it (serves as cancel), like the Fridge's delete confirm
+  useEffect(() => {
+    if (!confirmBringBack) return
+    const dismiss = () => setConfirmBringBack(false)
+    // setTimeout(0) so the click that opened it doesn't close it at once
+    const id = setTimeout(() => window.addEventListener('click', dismiss, { once: true }), 0)
+    return () => { clearTimeout(id); window.removeEventListener('click', dismiss) }
+  }, [confirmBringBack])
+
+  const handleBringBack = async () => {
+    setConfirmBringBack(false)
+    try {
+      setError(null)
+      await bringBackRemovedSuggestions()
+      setRemovedCount(0)
+    } catch {
+      setError('Failed to bring back removed suggestions')
+    }
+  }
 
   // Rating handlers
   const handleAddRating = async () => {
@@ -891,6 +925,26 @@ export default function SettingsPanel({ visible }) {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Shopping suggestions — bring back the items removed with ×, after a confirm */}
+        <div style={s.section}>
+          <div style={s.sectionLabel}>Shopping suggestions</div>
+          <span style={s.sectionHint}>Items removed with × stay out of new suggestions for 7 days.</span>
+          <button
+            style={s.bringBackBtn(removedCount > 0)}
+            disabled={removedCount === 0}
+            onClick={(e) => { e.stopPropagation(); setConfirmBringBack(open => !open) }}
+          >
+            Bring back removed suggestions ({removedCount})
+          </button>
+          {confirmBringBack && (
+            <div style={s.bringBackConfirmRow} onClick={(e) => e.stopPropagation()}>
+              <button style={s.bringBackConfirmBtn} onClick={handleBringBack}>
+                <Trash2 size={12} /> Confirm
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Kitchen — navigates to sub-page */}

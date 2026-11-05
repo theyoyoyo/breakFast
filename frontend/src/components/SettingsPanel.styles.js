@@ -472,3 +472,35 @@ export const themeSwatch = (color) => ({
   borderRadius: 6,
   background: color,
 })
+
+// Shopping suggestions: a muted line on what × does, the Bring back button (muted while there's
+// nothing to bring back) and its confirm, the app's delete look (soft red) below it
+export const sectionHint = {
+  fontSize: 12,
+  color: 'var(--text-muted)',
+}
+
+export const bringBackBtn = (active) => ({
+  padding: '8px 12px',
+  borderRadius: 8,
+  border: '1px solid var(--border)',
+  background: active ? 'var(--surface2)' : 'transparent',
+  color: active ? 'var(--text)' : 'var(--text-muted)',
+  fontSize: 13,
+  textAlign: 'left',
+  cursor: active ? 'pointer' : 'default',
+  opacity: active ? 1 : 0.6,
+})
+
+export const bringBackConfirmRow = {
+  display: 'flex',
+}
+
+export const bringBackConfirmBtn = {
+  ...deleteBtn,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: '6px 12px',
+  fontSize: 13,
+}
