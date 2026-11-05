@@ -449,19 +449,24 @@ async def plan_once(case: dict, sent: dict) -> dict:
 
 @contextmanager
 def recording_prompts(into: dict):
-    """Collect each distinct system prompt the pipeline sends (dict keys keep first-use order)."""
-    send = pipeline.stream_response
+    """Collect each distinct system prompt the pipeline sends, streamed (draft, present) or as a
+    structured call (the reviser); dict keys keep first-use order."""
+    send, send_json = pipeline.stream_response, pipeline.chat_json
 
     async def record(system_prompt, history, message, temperature=None):
         into.setdefault(system_prompt, None)
         async for chunk in send(system_prompt, history, message, temperature=temperature):
             yield chunk
 
-    pipeline.stream_response = record
+    async def record_json(system_prompt, messages, schema, temperature=None):
+        into.setdefault(system_prompt, None)
+        return await send_json(system_prompt=system_prompt, messages=messages, schema=schema, temperature=temperature)
+
+    pipeline.stream_response, pipeline.chat_json = record, record_json
     try:
         yield
     finally:
-        pipeline.stream_response = send
+        pipeline.stream_response, pipeline.chat_json = send, send_json
 
 
 async def run(

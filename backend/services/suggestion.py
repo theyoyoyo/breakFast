@@ -13,6 +13,7 @@ from services.llm import chat_stream
 from services.personas import (
     build_chat_prompt,
     build_suggestion_prompt,
+    build_present_prompt,
     build_analyst_prompt,
     build_pipeline_analyst_prompt,
     build_shopping_prompt,

@@ -194,30 +194,42 @@ async def test_samples_run_in_their_usual_mode():
     assert set(SAMPLE_MODES) <= set(SAMPLES)
 
 
+# A draft reply with one fridge dish, for the fake model below
+_DRAFT = 'Enjoy!\n```json\n{"menu_name": "Eggs", "menu": [{"name": "Boiled eggs", "ingredients": [{"name": "Eggs", "amount": 2, "unit": "pcs"}]}]}\n```'
+
+
+async def _fake_stream(system_prompt, history, message, temperature=None):
+    yield _DRAFT if "Append a JSON block" in system_prompt else "A warm start."
+
+
+async def _fake_chat_json(system_prompt, messages, schema, temperature=None):
+    return json.dumps({"changes": [], "meal": json.loads(_DRAFT.split("```json\n")[1].split("\n```")[0])})
+
+
 # Every sample runs through the real pipeline with a fake model, so it has all the context the prompts read
 async def test_samples_run_through_the_pipeline():
-    async def fake_stream(system_prompt, history, message, temperature=None):
-        yield "ok"
-
-    with patch("services.pipeline.stream_response", fake_stream):
+    with patch("services.pipeline.stream_response", _fake_stream), patch("services.pipeline.chat_json", _fake_chat_json):
         for sample in SAMPLES.values():
-            assert await suggest_once(sample, None, draft_only=False) == {"draft": "ok", "review": "ok", "final": "ok"}
+            replies = await suggest_once(sample, None, draft_only=False)
+            assert replies["draft"] == _DRAFT
+            assert replies["review"] == "- No changes." or replies["review"].startswith("- CODE CHECK")
+            assert replies["final"].startswith("A warm start.\n\n```json\n")
 
 
-# The recorder keeps each distinct system prompt once, in order of use, and puts the sender back
+# The recorder keeps each distinct system prompt once, in order of use, streamed or structured, and puts both senders back
 async def test_recording_prompts_keeps_distinct_system_prompts():
-    async def fake_stream(system_prompt, history, message, temperature=None):
-        yield "ok"
-
     sent = {}
-    with patch("services.pipeline.stream_response", fake_stream):
+    with patch("services.pipeline.stream_response", _fake_stream), patch("services.pipeline.chat_json", _fake_chat_json):
         with recording_prompts(sent):
             await suggest_once(EN, None, draft_only=False)
             await suggest_once(EN, None, draft_only=False)
-        assert pipeline.stream_response is fake_stream
+        assert pipeline.stream_response is _fake_stream
+        assert pipeline.chat_json is _fake_chat_json
     prompts = list(sent)
-    assert len(prompts) == 2  # suggestion (draft and refine) and analyst
+    assert len(prompts) == 3  # draft, reviser and present
     assert "Append a JSON block" in prompts[0]
+    assert "meal reviser" in prompts[1]
+    assert "Introduce it in a few short lines" in prompts[2]
 
 
 # The summary counts replies and distinct menus per sample and stage, then lists the most frequent offenders
