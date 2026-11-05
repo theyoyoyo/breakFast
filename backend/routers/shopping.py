@@ -83,6 +83,14 @@ async def bulk_add_shopping(items: list[ShoppingItemCreate], user_id: int = Depe
     return {"added": len(items)}
 
 
+@router.delete("/", status_code=204)
+async def clear_shopping(user_id: int = Depends(require_user)):
+    """Empty this user's shopping list (the list's Delete all)."""
+    async with get_db() as db:
+        await db.execute("DELETE FROM shopping_list WHERE user_id = ?", (user_id,))
+        await db.commit()
+
+
 @router.delete("/{item_id}", status_code=204)
 async def delete_shopping_item(item_id: int, user_id: int = Depends(require_user)):
     async with get_db() as db:

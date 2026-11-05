@@ -130,6 +130,17 @@ async def test_bought_restores_group_from_memory(client):
     assert kasar["group_name"] == "🐄 Animal Products"
 
 
+# Delete all empties this user's shopping list and leaves another user's alone
+async def test_clear_shopping_list_is_per_user(client):
+    await client.post("/shopping/bulk", json=[{"item_name": "Kiwi"}, {"item_name": "Salmon"}])
+    other = await _second_user_auth()
+    await client.post("/shopping/", json={"item_name": "Milk"}, headers=other)
+    r = await client.delete("/shopping/")
+    assert r.status_code == 204
+    assert (await client.get("/shopping/")).json() == []
+    assert [i["item_name"] for i in (await client.get("/shopping/", headers=other)).json()] == ["Milk"]
+
+
 # ---------------------------------------------------------------------------
 # Shopping suggestions list (/shopping/suggestions)
 # ---------------------------------------------------------------------------
