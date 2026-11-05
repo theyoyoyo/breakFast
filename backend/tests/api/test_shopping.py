@@ -130,6 +130,15 @@ async def test_bought_restores_group_from_memory(client):
     assert kasar["group_name"] == "🐄 Animal Products"
 
 
+# A bought item the user never placed gets the food list's group, and an id that's gone doesn't stop the rest
+async def test_bought_uses_the_food_list(client):
+    item = (await client.post("/shopping/", json={"item_name": "Strawberries"})).json()
+    r = await client.post("/shopping/bought", json={"ids": [item["id"], 9999]})
+    assert r.json() == {"bought": 1}
+    ingredients = (await client.get("/ingredients/")).json()
+    assert [(i["name"], i["group_name"]) for i in ingredients] == [("Strawberries", "🥬 Produce")]
+
+
 # Delete all empties this user's shopping list and leaves another user's alone
 async def test_clear_shopping_list_is_per_user(client):
     await client.post("/shopping/bulk", json=[{"item_name": "Kiwi"}, {"item_name": "Salmon"}])

@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 
 from config import DATABASE_PATH, DEMO_USER
 from models.ingredient import DEMO_FRIDGE
+from services.ingredient_groups import regroup_once
 
 
 # ---------------------------------------------------------------------------
@@ -358,6 +359,15 @@ async def init_db() -> None:
                 "UPDATE ingredient_group_memory SET group_name = ? WHERE group_name = ?",
                 (new, old),
             )
+
+        # Migrate once (user_version 1): group memory keeps only the user's picks, and
+        # Fridge items in Other get the built-in food list's group (#162). It runs once
+        # because a later Other pick must stay.
+        async with db.execute("PRAGMA user_version") as cur:
+            (version,) = await cur.fetchone()
+        if version < 1:
+            await regroup_once(db)
+            await db.execute("PRAGMA user_version = 1")
 
         # Migrate: add last_expiry_check column to users if missing
         try:

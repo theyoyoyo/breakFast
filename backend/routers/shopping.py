@@ -12,6 +12,7 @@ from typing import Optional
 from database import get_db
 from auth import require_user
 from services import chat_sync
+from services.ingredient_groups import resolve_groups
 from services.shopping import REMOVED_DAYS, recently_removed
 
 router = APIRouter(prefix="/shopping", tags=["shopping"])
@@ -118,19 +119,12 @@ async def bought_items(body: BoughtRequest, user_id: int = Depends(require_user)
         ) as cur:
             items = [dict(r) for r in await cur.fetchall()]
 
-        # Add each as an ingredient (restore group from memory)
-        from models.ingredient import DEFAULT_GROUP
-        item_names = [item["item_name"] for item in items]
-        placeholders = ",".join("?" for _ in item_names)
-        async with db.execute(
-            f"SELECT ingredient_name, group_name FROM ingredient_group_memory WHERE user_id = ? AND ingredient_name IN ({placeholders})",
-            [user_id, *item_names],
-        ) as cur:
-            group_memory = {r["ingredient_name"]: r["group_name"] for r in await cur.fetchall()}
+        # Add each as an ingredient, in the user's group for it, else the food list's
+        groups = await resolve_groups(db, user_id, [item["item_name"] for item in items])
 
         for item in items:
             expiry = (body.expiry_dates or {}).get(item["item_name"])
-            group = group_memory.get(item["item_name"], DEFAULT_GROUP)
+            group = groups[item["item_name"]]
             await db.execute(
                 """INSERT INTO ingredient_inventory (user_id, name, expiry_date, group_name)
                    VALUES (?, ?, ?, ?)
