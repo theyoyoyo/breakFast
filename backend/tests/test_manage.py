@@ -2,7 +2,10 @@
 
 import asyncio
 import io
+import sqlite3
 import sys
+from contextlib import closing
+from pathlib import Path
 
 import aiosqlite
 import pytest
@@ -136,3 +139,41 @@ def test_cli_output_survives_cp1252(cli_db, monkeypatch):
     out.flush()
     assert out.buffer.getvalue() == b"User 'Ay?e' created.\n"
     assert verify_pin("135792", asyncio.run(_pin_hash(cli_db, "Ayşe")))
+
+
+def _backup_path(out: str) -> Path:
+    return Path(out.split("Backup created: ")[1].strip())
+
+
+# A row still in the WAL, with no checkpoint yet, is in the backup (a copy of the .db file missed it)
+def test_backup_includes_wal_writes(cli_db, capsys):
+    asyncio.run(database.init_db())
+    with closing(sqlite3.connect(cli_db)) as live:
+        live.execute("PRAGMA wal_autocheckpoint=0")
+        live.execute("INSERT INTO users (name, pin_hash) VALUES ('Alice', 'x')")
+        live.commit()
+        assert Path(cli_db + "-wal").stat().st_size > 0
+        manage.backup_db()
+
+    with closing(sqlite3.connect(_backup_path(capsys.readouterr().out))) as db:
+        assert db.execute("SELECT name FROM users").fetchall() == [("Alice",)]
+
+
+# The backup is one self-contained file: it passes an integrity check and needs no -wal beside it
+def test_backup_is_self_contained(cli_db, capsys):
+    asyncio.run(database.init_db())
+    manage.backup_db()
+
+    dst = _backup_path(capsys.readouterr().out)
+    with closing(sqlite3.connect(dst)) as db:
+        assert db.execute("PRAGMA journal_mode").fetchone()[0] == "delete"
+        assert db.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    assert not Path(f"{dst}-wal").exists()
+
+
+# backup-db without a database exits with an error and writes no backup
+def test_backup_missing_database(cli_db, capsys):
+    with pytest.raises(SystemExit):
+        manage.backup_db()
+    assert "database not found" in capsys.readouterr().err
+    assert not list(Path(cli_db).parent.glob("breakFAST_backup_*"))

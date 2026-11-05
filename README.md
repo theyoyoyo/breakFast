@@ -161,8 +161,10 @@ python manage.py add-user "Alice"                      # asks for a 6-10 digit P
 python manage.py set-pin "Alice"                       # change a PIN (or reset a forgotten one)
 python manage.py list-users
 python manage.py delete-user "Alice"                   # also deletes all of Alice's data
-python manage.py backup-db                             # timestamped copy next to the database
+python manage.py backup-db                             # timestamped copy next to the database, safe while the server runs
 ```
+
+To restore a backup, stop the backend, delete `breakFAST.db-wal` and `breakFAST.db-shm` if they're there, then copy the backup over `breakFAST.db`. A leftover `-wal` file would be read into the restored database.
 
 ---
 

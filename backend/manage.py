@@ -16,8 +16,9 @@ import argparse
 import asyncio
 import getpass
 import io
-import shutil
+import sqlite3
 import sys
+from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 
@@ -123,6 +124,8 @@ async def delete_user(name: str) -> None:
 
 
 def backup_db() -> None:
+    """Back up the database to a timestamped file next to it. SQLite's backup API takes a
+    consistent snapshot, writes still in the WAL included, so it's safe while the server runs."""
     src = Path(DATABASE_PATH)
     if not src.exists():
         print(f"Error: database not found at {src}", file=sys.stderr)
@@ -130,7 +133,10 @@ def backup_db() -> None:
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     dst = src.parent / f"breakFAST_backup_{timestamp}.db"
-    shutil.copy2(src, dst)
+    with closing(sqlite3.connect(src)) as source, closing(sqlite3.connect(dst)) as backup:
+        source.backup(backup)
+        # One self-contained file, so the backup needs no -wal beside it
+        backup.execute("PRAGMA journal_mode=DELETE")
     print(f"Backup created: {dst}")
 
 
