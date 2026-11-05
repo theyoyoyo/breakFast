@@ -23,6 +23,7 @@ from services.suggestion import stream_response
 from services.personas import build_scheduler_prompt, build_scheduler_user_message
 from services.personas.scheduler import DEFAULT_APPLIANCES
 from services.llm import LLMUnavailableError, lyric_cycler
+from models.kitchen import HOT_APPLIANCES
 from services.fridge import same_name
 from services.knowledge import format_ingredient_item
 from utils import extract_json_block
@@ -138,21 +139,23 @@ def _schedule(dishes: list[dict]) -> int:
     in order, one cook does the hands-on steps one at a time, and an appliance holds one step
     (the stove two). A dish's consecutive hands-on steps are one block, placed whole, so another
     dish never cuts into it: the cook switches dishes only between blocks. Waiting steps need no
-    cook, so other dishes' blocks fill them, and a wait doesn't start in the middle of a block.
+    cook, so other dishes' blocks fill them. A wait may start during a block's last step (put the
+    bread in while the omelette sets), but not earlier in it, so the list never splits a block.
 
     The pieces (blocks and waiting steps) go in one at a time, each as close to the finish as it
     fits. The first plan takes the piece that can end closest to the finish, on a tie the dish just
     placed, then the dish with the most work left. Whole blocks can leave that plan far longer than
     needed, so a search then tries other orders, a few changes from it at a time (limited
-    discrepancy search), and keeps a shorter plan, or one as short with fewer switches between
-    dishes. Times inside count minutes before the finish."""
+    discrepancy search), and keeps a shorter plan, or one as short where hot food sits less
+    (_hot_sitting), then one with fewer switches between dishes. Times inside count minutes before
+    the finish."""
     units = [_units(d["steps"]) for d in dishes]
     flat = [s for d in dishes for s in d["steps"]]
     cook, used = set(), Counter()  # minutes the cook is busy; steps on each (appliance, minute)
-    blocks, wait_starts = [], []  # placed blocks as (end, start); where placed waiting steps start
+    blocks, wait_starts = [], []  # placed blocks as (last step's start, start); where waits start
     left = [len(u) for u in units]  # pieces still to place, per dish
     ready = [0] * len(dishes)  # where each dish's earliest placed piece starts
-    best, nodes, cut = None, 0, False  # (total, switches, start of each step); placements tried
+    best, nodes, cut = None, 0, False  # (total, hot food sitting, switches, starts); placements tried
 
     def length(unit: list[dict]) -> int:
         return sum(s["duration_min"] for s in unit)
@@ -170,9 +173,9 @@ def _schedule(dishes: list[dict]) -> int:
     def fits(unit: list[dict], at: int) -> bool:
         start = at + length(unit)
         if unit[0]["hands_on"]:
-            if any(at < w < start for w in wait_starts):
+            if any(at + unit[-1]["duration_min"] <= w < start for w in wait_starts):
                 return False
-        elif any(block_end < start < block_start for block_end, block_start in blocks):
+        elif any(last_start <= start < block_start for last_start, block_start in blocks):
             return False
         for step, end in steps_ending(unit, at):
             minutes = range(end, end + step["duration_min"])
@@ -202,7 +205,7 @@ def _schedule(dishes: list[dict]) -> int:
         if add < 0:
             (blocks if unit[0]["hands_on"] else wait_starts).pop()
         elif unit[0]["hands_on"]:
-            blocks.append((at, at + length(unit)))
+            blocks.append((at + unit[-1]["duration_min"], at + length(unit)))
         else:
             wait_starts.append(at + length(unit))
 
@@ -228,10 +231,11 @@ def _schedule(dishes: list[dict]) -> int:
                     step["start_min"] = total - step["end_before"] - step["duration_min"]
                 shown = [s["order"] for s in _in_time_order(dishes)]
                 switches = sum(a != b for a, b in zip(shown, shown[1:]))
-                if best is None or (total, switches) < best[:2]:
-                    best = (total, switches, [s["start_min"] for s in flat])
+                score = (total, _hot_sitting(dishes, total), switches)
+                if best is None or score < best[:3]:
+                    best = (*score, [s["start_min"] for s in flat])
             return
-        if best is not None and (bound(), 0) >= best[:2]:
+        if best is not None and (bound(), 0, 0) >= best[:3]:
             return
         options = sorted((latest(i), i != last, -work(i), i) for i in range(len(dishes)) if left[i])
         for strays, (at, _, _, i) in enumerate(options):
@@ -254,11 +258,26 @@ def _schedule(dishes: list[dict]) -> int:
         if not cut or nodes >= _SEARCH_NODES:
             break
         allowance += 1
-    total, _, starts = best
+    total, _, _, starts = best
     for step, start in zip(flat, starts):
         step.pop("end_before", None)
         step["start_min"] = start
     return total
+
+
+def _hot_sitting(dishes: list[dict], total: int) -> int:
+    """Minutes hot food sits in a plan: a dish made with a hot appliance (models/kitchen.py) from its
+    last step to the finish, and food from a hot step (toast, a simmered pan) until its dish's next
+    step. A dish made without one (a chia pudding, a dip) keeps, so it may be made first."""
+    sitting = 0
+    for dish in dishes:
+        steps = dish["steps"]
+        if any(s["resource"].lower() in HOT_APPLIANCES for s in steps):
+            sitting += total - steps[-1]["start_min"] - steps[-1]["duration_min"]
+        for step, after in zip(steps, steps[1:]):
+            if step["resource"].lower() in HOT_APPLIANCES:
+                sitting += after["start_min"] - step["start_min"] - step["duration_min"]
+    return sitting
 
 
 def _in_time_order(dishes: list[dict]) -> list[dict]:

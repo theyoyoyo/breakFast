@@ -169,6 +169,39 @@ def test_the_search_finds_a_shorter_plan_than_the_first_order(monkeypatch):
     ])
 
 
+def test_a_wait_starts_during_another_dishs_last_step():
+    """The bread goes in while the omelette sets, so the toast is ready when it's spread, and the
+    omelette's steps stay together in the list (before, the toast was made first and went cold)."""
+    raw = {"dishes": [
+        _dish("Omelette", _step("Chop the chard", 2), _step("Beat 3 eggs", 2),
+              _step("Cook the omelette until set", 6, True, "Stove")),
+        _dish("Avocado toast", _step("Toast 2 slices of bread", 3, False, "Toaster"),
+              _step("Spread the avocado on the toast", 1)),
+    ]}
+    assert _build_plan(raw)["formatted"] == "\n".join([
+        "⏱ Plan (11 min)",
+        "  0:00  — Omelette: Chop the chard",
+        "         ↳ Beat 3 eggs",
+        "         ↳ Cook the omelette until set",
+        "  0:07  — Avocado toast: Toast 2 slices of bread (3 min) [Toaster]",
+        "         ↳ Spread the avocado on the toast",
+        "  0:11  — Ready! ✓",
+    ])
+
+
+def test_hot_food_is_made_last_among_equally_long_plans():
+    """Of two equally long orders, the fruit salad (no hot appliance) is made first and the halloumi
+    fried last, so it isn't left to cool."""
+    raw = {"dishes": [
+        _dish("Fried halloumi", _step("Slice 100 g halloumi", 1),
+              _step("Fry the halloumi in 1 tsp olive oil", 3, True, "Stove")),
+        _dish("Fruit salad", _step("Peel and slice the fruit", 4), _step("Mix with 100 g yogurt", 1)),
+    ]}
+    result = _build_plan(raw)
+    assert result["makespan_min"] == 9
+    assert [s["dish"] for s in result["timeline"]] == ["Fruit salad"] * 2 + ["Fried halloumi"] * 2
+
+
 def test_random_menus_keep_every_rule():
     """Across many seeded random menus: dish order, one cook, appliance limits, some dish ends at the finish,
     and whole blocks (consecutive hands-on steps back to back, no other dish's step listed between them)."""
