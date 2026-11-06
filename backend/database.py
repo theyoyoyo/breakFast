@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 
 from config import DATABASE_PATH, DEMO_USER
 from models.ingredient import DEMO_FRIDGE
+from services.ingredient_groups import regroup_once
 
 
 # ---------------------------------------------------------------------------
@@ -44,6 +45,7 @@ CREATE TABLE IF NOT EXISTS ingredient_group_memory (
     user_id         INTEGER NOT NULL REFERENCES users(id),
     ingredient_name TEXT    NOT NULL,
     group_name      TEXT    NOT NULL,
+    picked          INTEGER NOT NULL DEFAULT 0,  -- 1: the user chose this group; 0: code did
     updated_at      TEXT    NOT NULL DEFAULT (datetime('now')),
     UNIQUE(user_id, ingredient_name)
 );
@@ -358,6 +360,23 @@ async def init_db() -> None:
                 "UPDATE ingredient_group_memory SET group_name = ? WHERE group_name = ?",
                 (new, old),
             )
+
+        # Migrate: add picked column to ingredient_group_memory if missing
+        try:
+            await db.execute(
+                "ALTER TABLE ingredient_group_memory ADD COLUMN picked INTEGER NOT NULL DEFAULT 0"
+            )
+        except Exception:
+            pass  # Column already exists
+
+        # Migrate once (user_version 1): old group memory rows are marked as picks unless
+        # they say Other, and Fridge items in Other get the built-in food list's group
+        # (#162). It runs once because a later Other pick must stay.
+        async with db.execute("PRAGMA user_version") as cur:
+            (version,) = await cur.fetchone()
+        if version < 1:
+            await regroup_once(db)
+            await db.execute("PRAGMA user_version = 1")
 
         # Migrate: add last_expiry_check column to users if missing
         try:

@@ -15,6 +15,7 @@ from models.ingredient import (
     INGREDIENT_GROUPS, DEFAULT_GROUP,
 )
 from services.fridge import find_missing_ingredients
+from services.ingredient_groups import remember, resolve_groups
 
 router = APIRouter(prefix="/ingredients", tags=["ingredients"])
 
@@ -24,29 +25,6 @@ def _validate_group(group_name: str | None) -> str | None:
     if group_name is not None and group_name not in INGREDIENT_GROUPS:
         raise HTTPException(status_code=400, detail=f"Invalid group: {group_name}")
     return group_name
-
-
-async def _resolve_group(db, user_id: int, name: str, explicit: str | None) -> str:
-    """Resolve group: explicit > memory > default."""
-    if explicit:
-        return explicit
-    async with db.execute(
-        "SELECT group_name FROM ingredient_group_memory WHERE user_id = ? AND ingredient_name = ?",
-        (user_id, name),
-    ) as cur:
-        row = await cur.fetchone()
-    return row["group_name"] if row else DEFAULT_GROUP
-
-
-async def _save_group_memory(db, user_id: int, name: str, group_name: str) -> None:
-    """Upsert the group memory for an ingredient name."""
-    await db.execute(
-        """INSERT INTO ingredient_group_memory (user_id, ingredient_name, group_name)
-           VALUES (?, ?, ?)
-           ON CONFLICT(user_id, ingredient_name) DO UPDATE SET
-               group_name = excluded.group_name, updated_at = datetime('now')""",
-        (user_id, name, group_name),
-    )
 
 
 # Shared upsert SQL used by both single-add and bulk-add
@@ -82,11 +60,15 @@ async def list_ingredients(user_id: int = Depends(require_user)):
 
 @router.post("/", response_model=Ingredient, status_code=201)
 async def add_ingredient(body: IngredientCreate, user_id: int = Depends(require_user)):
+    """Add an item: the group picked, else the user's pick for the name, the food list or Other.
+
+    Memory records the name either way; only a picked group counts as the user's choice.
+    """
     _validate_group(body.group_name)
     async with get_db() as db:
-        group = await _resolve_group(db, user_id, body.name, body.group_name)
+        group = body.group_name or (await resolve_groups(db, user_id, [body.name]))[body.name]
         await db.execute(_UPSERT_SQL, (user_id, body.name, body.expiry_date, group))
-        await _save_group_memory(db, user_id, body.name, group)
+        await remember(db, user_id, body.name, group, picked=bool(body.group_name))
         await db.commit()
         async with db.execute(
             "SELECT * FROM ingredient_inventory WHERE user_id = ? AND name = ?",
@@ -129,10 +111,12 @@ async def update_ingredient(ingredient_id: int, body: IngredientUpdate, user_id:
     if not row:
         raise HTTPException(status_code=404, detail="Ingredient not found")
 
-    # Update group memory when group changes
+    # The Fridge edit always sends the group, so it's a pick only when code wouldn't
+    # give the name that group: a move, or a renamed item keeping its group
     if body.group_name is not None:
         async with get_db() as db:
-            await _save_group_memory(db, user_id, row["name"], body.group_name)
+            auto = (await resolve_groups(db, user_id, [row["name"]]))[row["name"]]
+            await remember(db, user_id, row["name"], body.group_name, picked=body.group_name != auto)
             await db.commit()
 
     return dict(row)
@@ -155,30 +139,11 @@ async def bulk_add_ingredients(ingredients: list[IngredientCreate], user_id: int
         _validate_group(item.group_name)
 
     async with get_db() as db:
-        # Batch lookup group memory for all names
-        names = [item.name for item in ingredients]
-        placeholders = ",".join("?" for _ in names)
-        async with db.execute(
-            f"SELECT ingredient_name, group_name FROM ingredient_group_memory WHERE user_id = ? AND ingredient_name IN ({placeholders})",
-            [user_id, *names],
-        ) as cur:
-            memory = {r["ingredient_name"]: r["group_name"] for r in await cur.fetchall()}
-
-        rows = []
+        groups = await resolve_groups(db, user_id, [item.name for item in ingredients])
         for item in ingredients:
-            group = item.group_name or memory.get(item.name, DEFAULT_GROUP)
-            rows.append((user_id, item.name, item.expiry_date, group))
-
-        await db.executemany(_UPSERT_SQL, rows)
-
-        # Update group memory for all
-        await db.executemany(
-            """INSERT INTO ingredient_group_memory (user_id, ingredient_name, group_name)
-               VALUES (?, ?, ?)
-               ON CONFLICT(user_id, ingredient_name) DO UPDATE SET
-                   group_name = excluded.group_name, updated_at = datetime('now')""",
-            [(user_id, item.name, row[3]) for item, row in zip(ingredients, rows)],
-        )
+            group = item.group_name or groups[item.name]
+            await db.execute(_UPSERT_SQL, (user_id, item.name, item.expiry_date, group))
+            await remember(db, user_id, item.name, group, picked=bool(item.group_name))
         await db.commit()
     return {"added": len(ingredients)}
 

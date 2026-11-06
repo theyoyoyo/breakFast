@@ -49,14 +49,21 @@ def _tokens(name: str) -> list[set[str]]:
     return result
 
 
+name_tokens = _tokens  # split a name once, then compare it with same_tokens
+
+
 def same_name(a: str, b: str) -> bool:
     """Exact match: the same words in order, ignoring case, Turkish letters and plurals.
 
     Every word of a product name carries meaning, so "Frozen strawberries" and
     "Strawberries" are different items while "Strawberry" and "strawberries" are not.
     """
-    wa, wb = _tokens(a), _tokens(b)
-    return len(wa) == len(wb) > 0 and all(x & y for x, y in zip(wa, wb))
+    return same_tokens(name_tokens(a), name_tokens(b))
+
+
+def same_tokens(a: list[set[str]], b: list[set[str]]) -> bool:
+    """same_name for names already split by name_tokens, for checks against many names."""
+    return len(a) == len(b) > 0 and all(x & y for x, y in zip(a, b))
 
 
 def meal_ingredient_names(meal: dict) -> list[str]:
