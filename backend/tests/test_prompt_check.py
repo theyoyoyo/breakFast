@@ -6,11 +6,12 @@ from unittest.mock import patch
 import pytest
 
 from services import pipeline
+from services.fridge import same_name
 from tools.prompt_check import (
-    CHECKS, PERSONAS, check_plan, check_reply, compare, describe, is_clean, parse_args, plan_once, recording_prompts,
-    run, score_shopping, shop_once, suggest_once, summarize,
+    CHECKS, PERSONAS, app_chat_context, chat_rows, check_plan, check_reply, compare, describe, is_clean, parse_args,
+    plan_once, recording_prompts, run, score_shopping, shop_once, suggest_once, summarize,
 )
-from tools.prompt_samples import PLAN_CASES, SAMPLE_MODES, SAMPLES
+from tools.prompt_samples import CHAT_MINUTES, PLAN_CASES, SAMPLE_MODES, SAMPLES, SCENARIOS, chat_picks, chat_scenario
 
 EN, TR = SAMPLES["en"], SAMPLES["tr"]
 
@@ -183,7 +184,7 @@ async def test_suggest_once_collects_draft_and_final():
 async def test_samples_run_in_their_usual_mode():
     modes = []
 
-    async def fake_suggest_once(sample, mode, draft_only):
+    async def fake_suggest_once(sample, mode, draft_only, scenario=None):
         modes.append(mode)
         return {}
 
@@ -216,6 +217,120 @@ async def test_samples_run_through_the_pipeline():
             assert replies["final"].startswith("A warm start.\n\n```json\n")
 
 
+# Each sample's chat picks four different fridge items, none avoided or disliked, and the same ones on every test
+def test_chat_picks_are_fixed_fridge_items():
+    for key, sample in SAMPLES.items():
+        picks = chat_picks(sample, key)
+        fridge = [i["name"] for i in sample["ingredients"]]
+        banned = sample["avoid_list"] + [v for k, v in sample["preferences"].items() if k.startswith("dislike:")]
+        assert len(set(picks)) == 4 and set(picks) <= set(fridge), key
+        assert not any(same_name(p, b) for p in picks for b in banned), key
+        assert chat_picks(sample, key) == picks
+    # Basics and drinks only when the other items run out: the sparse fridge has two others
+    assert set(chat_picks(SAMPLES["sparse"], "sparse")[:2]) == {"Eggs", "Bread"}
+    assert chat_picks({**SAMPLES["sparse"], "ingredients": SAMPLES["sparse"]["ingredients"][:3]}, "sparse") is None
+
+
+# A fresh chat has no scenario; chat is four typed messages, and pressed puts them between two earlier menus
+def test_chat_scenarios():
+    assert chat_scenario("en", "fresh") is None
+    chat, pressed = chat_scenario("en", "chat"), chat_scenario("en", "pressed")
+    (a,), (b,), (c,) = chat["leave_out"], chat["liked"], chat["allowed"]
+    typed = [e["content"] for e in chat["chat"]]
+    assert typed == [
+        f"No {a.lower()} please, and no {c.lower()} either.", f"I love {b.lower()}.",
+        f"I only have {CHAT_MINUTES} minutes.", f"Actually {c.lower()} is fine again.",
+    ]
+    assert chat["max_minutes"] == CHAT_MINUTES
+    assert [e.get("content") for e in pressed["chat"]] == [None, typed[0], None, *typed[1:]]
+    first, second = (e["press"] for e in pressed["chat"] if "press" in e)
+    assert [i["name"] for i in first["menu"]] == [a, b, c]
+    assert b in [i["name"] for i in second["menu"]] and not {a, c} & {i["name"] for i in second["menu"]}
+    assert {k: v for k, v in pressed.items() if k != "chat"} == {k: v for k, v in chat.items() if k != "chat"}
+
+
+# The press sends what handleSuggest sends today: the last five user lines, button text included, and no menus
+def test_app_chat_context_mirrors_the_app():
+    chat, pressed = chat_scenario("en", "chat"), chat_scenario("en", "pressed")
+    typed = [e["content"] for e in chat["chat"]]
+    rows = chat_rows(pressed["chat"], None)
+    assert [r["role"] for r in rows] == ["user", "assistant", "user", "user", "assistant", "user", "user", "user"]
+    assert rows[0]["content"] == "Suggest Breakfast" and '"menu_name": "Breakfast plate"' in rows[1]["content"]
+    assert app_chat_context(rows) == [typed[0], "Suggest Breakfast", *typed[1:]]
+    assert chat_rows(pressed["chat"], "favorites")[0]["content"] == "Suggest breakfast from my favorite meals"
+    assert app_chat_context(chat_rows(chat["chat"], None)) == typed
+    assert app_chat_context([]) is None
+
+
+def _plain(*names, minutes=8) -> str:
+    """A reply serving fridge items as they are."""
+    menu = [{"name": n, "amount": 1, "unit": "pcs", "ingredients": []} for n in names]
+    return "Enjoy!\n```json\n" + json.dumps({"menu_name": "Test", "menu": menu, "prep_time_min": minutes}) + "\n```"
+
+
+# After a chat a reply is flagged for a food still left out, a time over the limit and an earlier menu,
+# while a liked food and a ban taken back are only noted
+def test_chat_checks():
+    scenario = chat_scenario("en", "pressed")
+    (a,), (b,), (c,) = scenario["leave_out"], scenario["liked"], scenario["allowed"]
+    other = next(i["name"] for i in EN["ingredients"] if i["name"] not in {a, b, c})
+
+    fine = check_reply(_plain(b, c, other), EN, scenario)
+    assert is_clean(fine)
+    assert fine["note"] == f"liked {b}: in, allowed {c}: in"
+    assert check_reply(_plain(other), EN, scenario)["note"] == f"liked {b}: out, allowed {c}: out"
+
+    issues = check_reply(_plain(a, other, minutes=CHAT_MINUTES + 15), EN, scenario)["issues"]
+    assert issues["left_out"] == [a]
+    assert issues["over_time"] == [f"{CHAT_MINUTES + 15} min"]
+    assert check_reply(_plain(b, minutes=CHAT_MINUTES), EN, scenario)["issues"]["over_time"] == []
+
+    # The first menu again, in another order and case, is a repeat
+    assert check_reply(_plain(c.upper(), b.lower(), a), EN, scenario)["issues"]["repeat"] == ["Breakfast plate"]
+    assert check_reply(_plain(c, b), EN, scenario)["issues"]["repeat"] == []
+
+    # A fresh chat asks nothing
+    fresh = check_reply(_plain(a, minutes=60), EN)
+    assert is_clean(fresh) and "note" not in fresh
+
+
+# Each sample runs once per scenario, labelled by it, and a fridge too small for a chat is skipped
+async def test_run_labels_each_scenario():
+    calls = []
+
+    async def fake_suggest_once(sample, mode, draft_only, scenario=None):
+        calls.append(scenario)
+        return {}
+
+    tiny = {**SAMPLES["sparse"], "ingredients": SAMPLES["sparse"]["ingredients"][:3]}
+    with patch("tools.prompt_check.suggest_once", fake_suggest_once), patch.dict(SAMPLES, {"sparse": tiny}):
+        records, prompts = await run(["en", "sparse"], 1, None, False, scenarios=list(SCENARIOS))
+    assert [r["sample"] for r in records] == ["en", "en:chat", "en:pressed", "sparse"]
+    assert calls == [None, chat_scenario("en", "chat"), chat_scenario("en", "pressed"), None]
+    assert list(prompts) == ["en", "en:chat", "en:pressed", "sparse"]
+
+
+# The chat the app sends reaches the draft, every sample's scenarios run through the pipeline, and the log keeps the chat
+async def test_scenarios_run_through_the_pipeline():
+    drafts = []
+
+    async def stream(system_prompt, history, message, temperature=None):
+        if "Append a JSON block" in system_prompt:
+            drafts.append(message)
+        async for chunk in _fake_stream(system_prompt, history, message, temperature):
+            yield chunk
+
+    with patch("services.pipeline.stream_response", stream), patch("services.pipeline.chat_json", _fake_chat_json):
+        for key, sample in SAMPLES.items():
+            for name in ("chat", "pressed"):
+                scenario = chat_scenario(key, name)
+                replies = await suggest_once(sample, SAMPLE_MODES.get(key), False, scenario=scenario)
+                sent = app_chat_context(chat_rows(scenario["chat"], SAMPLE_MODES.get(key)))
+                assert replies["chat"] == "\n".join(sent)
+                assert all(f"- {line}" in drafts[-1] for line in sent)
+                assert replies["final"].startswith("A warm start.")
+
+
 # The recorder keeps each distinct system prompt once, in order of use, streamed or structured, and puts both senders back
 async def test_recording_prompts_keeps_distinct_system_prompts():
     sent = {}
@@ -242,8 +357,8 @@ def test_summary_counts_and_offenders():
         {"sample": "en", "run": 2, "seconds": 50, "error": None, "replies": {}, "scores": {"draft": simit, "final": simit}},
     ]
     lines = summarize(records).splitlines()
-    assert lines[1].split() == ["en", "draft", "2", "2", "0", "1", "0", "2", "0", "0", "0", "0", "0", "0", "40"]
-    assert lines[2].split() == ["en", "final", "2", "2", "1", "2", "0", "1", "0", "0", "0", "0", "0", "0", "40"]
+    assert lines[1].split() == ["en", "draft", "2", "2", "0", "1", "0", "2", "0", "0", "0", "0", "0", "0", "0", "0", "0", "40"]
+    assert lines[2].split() == ["en", "final", "2", "2", "1", "2", "0", "1", "0", "0", "0", "0", "0", "0", "0", "0", "0", "40"]
     assert "en draft renamed: Simit with tahini ×2" in lines
 
 
@@ -412,6 +527,15 @@ def test_plan_samples():
     assert parse_args([]).samples == ["en"]
     with pytest.raises(SystemExit):
         parse_args(["--persona", "plan", "--samples", "en"])
+
+
+# --scenario picks what a Suggest press comes after, a fresh chat by default, and is for Suggest presses only
+def test_scenario_flag():
+    assert parse_args([]).scenarios == ["fresh"]
+    assert parse_args(["--scenario", "pressed"]).scenarios == ["pressed"]
+    assert parse_args(["--scenario", "all"]).scenarios == list(SCENARIOS)
+    with pytest.raises(SystemExit):
+        parse_args(["--persona", "shopping", "--scenario", "chat"])
 
 
 # --samples all runs every sample of the persona

@@ -23,10 +23,17 @@ Five users from the 15-fridge test (2026-10-30), whose replies looked clean but 
 - greek: explore mode, with figs and pomegranate in season.
 SAMPLE_MODES holds the Suggest mode a sample's user usually presses.
 
+chat_scenario() gives the chat a Suggest press comes after (--scenario, #159): none (fresh), a few
+typed messages (chat), or the same messages between two earlier presses (pressed).
+
 PLAN_CASES are menus for the prep plan test, shaped the way the Prep Plan button sends them.
 """
 
+import random
+
 from models.ingredient import DEMO_FRIDGE
+from models.units import count_unit
+from services.fridge import same_name
 
 
 def _fridge(groups: dict[str, list[str]]) -> list[dict]:
@@ -317,6 +324,76 @@ SAMPLES = {
 
 # The Suggest mode a sample's user usually presses; the others press plain Suggest
 SAMPLE_MODES = {"picky": "favorites", "greek": "explore"}
+
+
+# ── Chat scenarios ──────────────────────────────────────────────────────────
+
+# What a Suggest press comes after: a fresh chat, typed messages, or typed messages between earlier presses
+SCENARIOS = ("fresh", "chat", "pressed")
+# The time limit the chat asks for
+CHAT_MINUTES = 10
+# Seeds each sample's picks, so tests compare
+CHAT_SEED = 159
+# Basics and drinks are picked only when a fridge has too few other items ("No salt please" is no breakfast wish)
+_BASICS = {"🫙 Pantry", "🧂 Spices", "☕ Beverages"}
+
+
+def chat_picks(sample: dict, key: str) -> list[str] | None:
+    """Four different fridge items for a sample's chat, the same on every test: A (left out), B (liked),
+    C (left out, then allowed again) and D (only on an earlier menu). None of them is avoided or disliked.
+    None when the fridge has fewer than four such items."""
+    banned = list(sample["avoid_list"]) + [v for k, v in sample["preferences"].items() if k.startswith("dislike:")]
+    names = [i for i in sample["ingredients"] if not any(same_name(i["name"], b) for b in banned)]
+    rng = random.Random(f"{CHAT_SEED}:{key}")
+    picks = []
+    for group in ([i for i in names if i["group_name"] not in _BASICS], [i for i in names if i["group_name"] in _BASICS]):
+        picks += rng.sample([i["name"] for i in group], len(group))
+    return picks[:4] if len(picks) >= 4 else None
+
+
+def _plate(name: str, items: list[str], language: str) -> dict:
+    """An earlier suggestion: fridge items served as they are."""
+    unit = count_unit(language)
+    return {
+        "menu_name": name,
+        "menu": [{"name": i, "amount": 1, "unit": unit, "ingredients": []} for i in items],
+        "prep_time_min": 5,
+    }
+
+
+def chat_scenario(key: str, name: str) -> dict | None:
+    """The chat before the Suggest press under test, and what it asks, so code can check the reply.
+
+    chat lists the user's typed messages ({"role": "user", "content": ...}) and earlier Suggest presses
+    ({"press": meal}, the menu that press got), oldest first. leave_out is still asked to be left out,
+    liked and allowed (a ban taken back) must not be left out, and max_minutes is the time the chat gives.
+    None for a fresh chat, or when the sample's fridge is too small."""
+    if name == "fresh":
+        return None
+    sample = SAMPLES[key]
+    picks = chat_picks(sample, key)
+    if picks is None:
+        return None
+    a, b, c, d = picks
+    typed = [
+        {"role": "user", "content": text} for text in (
+            f"No {a.lower()} please, and no {c.lower()} either.",
+            f"I love {b.lower()}.",
+            f"I only have {CHAT_MINUTES} minutes.",
+            f"Actually {c.lower()} is fine again.",
+        )
+    ]
+    if name == "chat":
+        chat = typed
+    else:
+        language = sample["language"]
+        chat = [
+            {"press": _plate("Breakfast plate", [a, b, c], language)},
+            typed[0],
+            {"press": _plate("Light plate", [b, d], language)},
+            *typed[1:],
+        ]
+    return {"chat": chat, "leave_out": [a], "liked": [b], "allowed": [c], "max_minutes": CHAT_MINUTES}
 
 
 def _dish(name: str, method: str, *ingredients: tuple) -> dict:

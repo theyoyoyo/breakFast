@@ -637,7 +637,9 @@ reachable from your other devices.
    It runs 1 Suggest press for the English sample by default. Options: `--runs 3`,
    `--samples en,tr` or `--samples all`, `--mode explore` (without it, each sample uses
    the mode its user usually presses), `--draft` (stop after the draft: one model call
-   instead of three). `--persona shopping` tests Suggest Shopping and Suggest More;
+   instead of three), `--scenario chat`, `pressed` or `all` (the press comes after a few
+   typed messages, or after them between two earlier presses, instead of a fresh chat).
+   `--persona shopping` tests Suggest Shopping and Suggest More;
    `--persona plan` runs the prep planner for the menus in `PLAN_CASES` and flags food
    the menu doesn't list and a dish cooked another way than its method says (fry vs boil).
    Setting `OLLAMA_BASE_URL` in the development PC's `backend/.env` saves the `--url`.
@@ -647,8 +649,9 @@ reachable from your other devices.
    JSON parses, nothing missing from the fridge, no renamed fridge items like "White
    cheese (peynir)", units the app knows, every amount a number with a unit, nothing on
    the avoid list, no dish named after a fridge item it doesn't use, no Turkish words in
-   an English reply) and how many different menus came back, then lists the most
-   frequent problems.
+   an English reply; after a chat, nothing the chat left out, no prep time over its limit
+   and no menu the chat already had) and how many different menus came back, then lists
+   the most frequent problems.
 
 4. Every test is kept on the development PC in `backend/tools/runs/` (git-ignored): a log
    with the replies and the exact prompts sent, and a line in `history.jsonl` with the
