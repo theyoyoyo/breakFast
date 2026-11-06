@@ -218,10 +218,92 @@ async def test_thrown_empty_list(client):
 
 
 async def test_add_ingredient_default_group(client):
-    """Adding without group_name defaults to Other."""
-    r = await client.post("/ingredients/", json={"name": "salt"})
+    """Adding a name the food list doesn't know, without group_name, defaults to Other."""
+    r = await client.post("/ingredients/", json={"name": "Grandma's spice mix"})
     assert r.status_code == 201
     assert r.json()["group_name"] == "🍽️ Other"
+
+
+# Without a group, the food list gives one by exact name: case, Turkish letters and plurals only
+async def test_add_ingredient_gets_the_food_list_group(client):
+    groups = {}
+    for name in ["Tomatoes", "domates", "Yumurtalar", "Free-range eggs"]:
+        groups[name] = (await client.post("/ingredients/", json={"name": name})).json()["group_name"]
+    assert groups == {
+        "Tomatoes": "🥬 Produce",
+        "domates": "🥬 Produce",
+        "Yumurtalar": "🐄 Animal Products",
+        "Free-range eggs": "🍽️ Other",
+    }
+
+
+# A group picked in the add panel beats the food list
+async def test_picked_group_beats_the_food_list(client):
+    r = await client.post("/ingredients/", json={"name": "Honey", "group_name": "🍽️ Other"})
+    assert r.json()["group_name"] == "🍽️ Other"
+
+
+# Honey moved to Other, deleted and added again stays in Other: the user's pick beats the list
+async def test_moved_group_beats_the_food_list(client):
+    created = (await client.post("/ingredients/", json={"name": "Honey"})).json()
+    assert created["group_name"] == "🍯 Sweets"
+    await client.patch(f"/ingredients/{created['id']}", json={"group_name": "🍽️ Other"})
+    await client.delete(f"/ingredients/{created['id']}")
+    r = await client.post("/ingredients/", json={"name": "Honey"})
+    assert r.json()["group_name"] == "🍽️ Other"
+
+
+async def _picks(db) -> dict[str, str]:
+    async with db.execute("SELECT ingredient_name, group_name FROM ingredient_group_memory WHERE picked = 1") as cur:
+        return {r["ingredient_name"]: r["group_name"] for r in await cur.fetchall()}
+
+
+async def _names(db) -> dict[str, str]:
+    async with db.execute("SELECT ingredient_name, group_name FROM ingredient_group_memory") as cur:
+        return {r["ingredient_name"]: r["group_name"] for r in await cur.fetchall()}
+
+
+# Every added name is recorded, but only a move is a pick: an Auto add and an expiry-only edit aren't
+async def test_memory_records_names_and_marks_picks(client, db):
+    created = (await client.post("/ingredients/", json={"name": "Grandma's spice mix"})).json()
+    await client.post("/ingredients/", json={"name": "Tomatoes"})
+    await client.patch(f"/ingredients/{created['id']}", json={
+        "name": "Grandma's spice mix", "expiry_date": "2026-12-01", "group_name": "🍽️ Other",
+    })
+    assert await _names(db) == {"Grandma's spice mix": "🍽️ Other", "Tomatoes": "🥬 Produce"}
+    assert await _picks(db) == {}
+    await client.patch(f"/ingredients/{created['id']}", json={"group_name": "🧂 Spices"})
+    assert await _picks(db) == {"Grandma's spice mix": "🧂 Spices"}
+
+
+# An Auto add of a name the user picked a group for keeps the pick
+async def test_auto_add_keeps_the_pick(client, db):
+    created = (await client.post("/ingredients/", json={"name": "Honey", "group_name": "🫒 Breakfast Staples"})).json()
+    await client.delete(f"/ingredients/{created['id']}")
+    await client.post("/ingredients/bulk", json=[{"name": "Honey"}])
+    assert await _picks(db) == {"Honey": "🫒 Breakfast Staples"}
+
+
+# A renamed item keeps its group under the new name, which the list doesn't know
+async def test_rename_keeps_the_group_as_a_pick(client):
+    created = (await client.post("/ingredients/", json={"name": "Eggs"})).json()
+    await client.patch(f"/ingredients/{created['id']}", json={
+        "name": "Village eggs", "group_name": created["group_name"],
+    })
+    await client.delete(f"/ingredients/{created['id']}")
+    r = await client.post("/ingredients/", json={"name": "Village eggs"})
+    assert r.json()["group_name"] == "🐄 Animal Products"
+
+
+# Memory matches by exact name too, and a new pick replaces the earlier one for the same name (kept as a name)
+async def test_memory_matches_the_same_name(client, db):
+    created = (await client.post("/ingredients/", json={"name": "Peanut butter", "group_name": "🍯 Sweets"})).json()
+    await client.delete(f"/ingredients/{created['id']}")
+    r = await client.post("/ingredients/", json={"name": "peanut butter"})
+    assert r.json()["group_name"] == "🍯 Sweets"
+    await client.patch(f"/ingredients/{r.json()['id']}", json={"group_name": "🌱 Plant-Based"})
+    assert await _picks(db) == {"peanut butter": "🌱 Plant-Based"}
+    assert set(await _names(db)) == {"Peanut butter", "peanut butter"}
 
 
 async def test_add_ingredient_with_group(client):
@@ -233,7 +315,7 @@ async def test_add_ingredient_with_group(client):
 
 async def test_update_ingredient_group(client):
     """PATCH can change an ingredient's group."""
-    created = (await client.post("/ingredients/", json={"name": "thyme"})).json()
+    created = (await client.post("/ingredients/", json={"name": "Grandma's spice mix"})).json()
     assert created["group_name"] == "🍽️ Other"
     r = await client.patch(f"/ingredients/{created['id']}", json={"group_name": "🧂 Spices"})
     assert r.status_code == 200
@@ -257,18 +339,17 @@ async def test_group_memory_on_readd(client):
 
 
 async def test_bulk_add_with_group_memory(client):
-    """Bulk add restores group from memory for previously assigned items."""
+    """Bulk add restores a remembered pick, else the food list's group, else Other."""
     # First, add with explicit group and delete
     created = (await client.post("/ingredients/", json={"name": "pepper", "group_name": "🥬 Produce"})).json()
     await client.delete(f"/ingredients/{created['id']}")
     # Bulk add without group — should restore from memory
-    r = await client.post("/ingredients/bulk", json=[{"name": "pepper"}, {"name": "salt"}])
+    r = await client.post("/ingredients/bulk", json=[
+        {"name": "pepper"}, {"name": "salt"}, {"name": "Grandma's spice mix"},
+    ])
     assert r.status_code == 201
-    listed = (await client.get("/ingredients/")).json()
-    pepper = [i for i in listed if i["name"] == "pepper"][0]
-    salt = [i for i in listed if i["name"] == "salt"][0]
-    assert pepper["group_name"] == "🥬 Produce"
-    assert salt["group_name"] == "🍽️ Other"
+    listed = {i["name"]: i["group_name"] for i in (await client.get("/ingredients/")).json()}
+    assert listed == {"pepper": "🥬 Produce", "salt": "🫙 Pantry", "Grandma's spice mix": "🍽️ Other"}
 
 
 async def test_groups_endpoint(client):
