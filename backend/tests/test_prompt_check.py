@@ -259,12 +259,12 @@ def test_scenario_chat_is_the_server_block():
     assert rows[0]["content"] == "Suggest Breakfast" and '"menu_name": "Breakfast plate"' in rows[1]["content"]
     assert chat_rows(pressed["chat"], "favorites")[0]["content"] == "Suggest breakfast from my favorite meals"
     assert format_chat_block(rows).split("\n\n", 1)[1].splitlines() == [
-        "- Menu shown: Breakfast plate. Items: Eggs, Cucumber, Simit",
-        f"- User: {typed[0]}",
-        "- Menu shown: Light plate. Items: Cucumber, Milk",
-        f"- User: {typed[1]}",
-        f"- User: {typed[2]}",
-        f"- User (latest message): {typed[3]}",
+        "- #1 Menu shown: Breakfast plate. Items: Eggs, Cucumber, Simit",
+        f"- #2 User: {typed[0]}",
+        "- #3 Menu shown: Light plate. Items: Cucumber, Milk",
+        f"- #4 User: {typed[1]}",
+        f"- #5 User: {typed[2]}",
+        f"- #6 User (latest message): {typed[3]}",
     ]
 
 

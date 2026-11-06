@@ -28,7 +28,7 @@ def _app(text: str) -> dict:
     return {"role": "assistant", "content": text}
 
 
-# The block keeps typed messages and meal cards in chat order, and leaves out button text and every other app reply
+# The block keeps typed messages and meal cards in chat order, numbered, and leaves out button text and every other app reply
 def test_block_has_typed_messages_and_cards_only():
     rows = [
         _user(SUGGEST_MESSAGES[None]),
@@ -49,9 +49,9 @@ def test_block_has_typed_messages_and_cards_only():
     ]
     assert format_chat_block(rows) == (
         f"{CHAT_HEADER}\n\n"
-        "- Menu shown: Breakfast plate. Dishes: Scrambled eggs. Items: Eggs, Butter, Cucumber\n"
-        "- User: Too heavy, and no butter.\n"
-        "- User (latest message): I only have 10 minutes."
+        "- #1 Menu shown: Breakfast plate. Dishes: Scrambled eggs. Items: Eggs, Butter, Cucumber\n"
+        "- #2 User: Too heavy, and no butter.\n"
+        "- #3 User (latest message): I only have 10 minutes."
     )
 
 
@@ -72,6 +72,7 @@ def test_header_states_the_rules():
     assert "a message right after a menu is about that menu" in CHAT_HEADER
     assert "holds for every menu from here on" in CHAT_HEADER
     assert "differs from the menus shown here" in CHAT_HEADER
+    assert "numbered in chat order" in CHAT_HEADER
 
 
 # A chat with nothing typed and no card sends no block, and an old flat meal or an unreadable block is handled
@@ -83,7 +84,7 @@ def test_empty_chat_and_old_cards():
     assert chat_entries([_app(_card(flat))]) == ["Menu shown: Toast. Items: Bread, Cheese"]
 
 
-# Only a chat too long for the context loses entries, the oldest first, and the latest message always stays
+# Only a chat too long for the context loses entries, the oldest first, the kept ones numbered from 1, and the latest always stays
 def test_long_chat_loses_its_oldest_entries():
     rows = [_user(f"Message {i}: " + "x" * 200) for i in range(60)]
     block = format_chat_block(rows)
@@ -91,6 +92,7 @@ def test_long_chat_loses_its_oldest_entries():
     assert "Message 59" in block and "Message 0:" not in block
     kept = block.split("\n\n", 1)[1].splitlines()
     assert [int(line.split("Message ")[1].split(":")[0]) for line in kept] == list(range(60 - len(kept), 60))
+    assert kept[0].startswith("- #1 User: ") and kept[-1].startswith(f"- #{len(kept)} User (latest message): ")
     assert format_chat_block([_user("y" * (CHAT_BLOCK_CHARS * 2))]).endswith("y" * 100)
 
 
@@ -114,7 +116,7 @@ async def test_load_reads_the_session_with_card_edits(client, db):
 
     block = await load_chat_block(db, session_id, user_id)
     assert block.split("\n\n", 1)[1].splitlines() == [
-        "- User (latest message): No butter please.",
-        "- Menu shown: Light plate. Items: Cucumber",
+        "- #1 User (latest message): No butter please.",
+        "- #2 Menu shown: Light plate. Items: Cucumber",
     ]
     assert await load_chat_block(db, "no-such-session", user_id) is None

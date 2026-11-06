@@ -138,10 +138,12 @@ class TestReviserPrompt:
         assert "three changes at most" in prompt
         assert "water" not in prompt.lower()
 
-    # After a chat it first lists what the chat asks and follows each ask; a fresh press's prompt stays as it was
+    # After a chat it first lists what the chat asks now, each ask after the entries it comes from; a fresh press's prompt stays as it was
     def test_chat_step_only_after_a_chat(self):
         fresh, chat = build_pipeline_analyst_prompt([]), build_pipeline_analyst_prompt([], chat=True)
-        assert 'in "chat_asks", write each thing it asks for' in CHAT_STEP and "the latest message first" in CHAT_STEP
+        assert 'in "chat_asks", write what the chat asks for now' in CHAT_STEP and "the latest first" in CHAT_STEP
+        assert 'In "from", list the numbers of every entry about that thing' in CHAT_STEP
+        assert "where the latest of those entries wins" in CHAT_STEP
         assert f"{CHAT_STEP}1. Fix every problem" in chat and chat.index("HOW TO REVISE") < chat.index(CHAT_STEP)
         assert CHAT_STEP not in fresh and chat.replace(CHAT_STEP, "") == fresh
 
@@ -161,11 +163,13 @@ class TestRevisionSchema:
         item = meal["properties"]["menu"]["items"]
         assert list(item["properties"])[:2] == ["ingredients", "name"]
 
-    # After a chat the reply starts with chat_asks, one plain list before the changes and the meal
+    # After a chat the reply starts with chat_asks, each the entries it comes from and then the ask, before the changes and the meal
     def test_chat_asks_come_first_after_a_chat(self):
         schema = revision_schema("en", chat=True)
         assert list(schema["properties"]) == schema["required"] == ["chat_asks", "changes", "meal"]
-        assert schema["properties"]["chat_asks"] == {"type": "array", "items": {"type": "string"}}
+        ask = schema["properties"]["chat_asks"]["items"]
+        assert list(ask["properties"]) == ask["required"] == ["from", "ask"]
+        assert ask["properties"]["from"] == {"type": "array", "items": {"type": "integer"}}
         assert schema["properties"]["meal"] == revision_schema("en")["properties"]["meal"]
         assert revision_schema("en")["required"] == ["changes", "meal"]
 
@@ -224,7 +228,8 @@ class TestPipelineOrchestrator:
     @pytest.mark.asyncio
     async def test_chat_reaches_the_draft_and_the_reviser(self):
         block = "THE CHAT SO FAR\n\n- User (latest message): I only have 10 minutes."
-        revision = json.dumps({"chat_asks": ["Ready in 10 minutes", " "], "changes": ["Shorter prep"], "meal": _meal(EGGS)})
+        asks = [{"from": [2, 4], "ask": "Simit is fine again"}, {"from": [], "ask": "Ready in 10 minutes"}, {"from": [3], "ask": " "}]
+        revision = json.dumps({"chat_asks": asks, "changes": ["Shorter prep"], "meal": _meal(EGGS)})
         events, calls = await _run(_draft(_meal(EGGS)), revision, chat_block=block)
         draft, reviser, present = calls
         assert draft["message"] == f"Suggest\n\n{block}"
@@ -232,7 +237,7 @@ class TestPipelineOrchestrator:
         assert reviser["schema"] == revision_schema("en", chat=True) and CHAT_STEP in reviser["system"]
         assert "THE CHAT SO FAR" not in present["message"] + present["system"]
         review = next(e["content"] for e in events if e["type"] == "review")
-        assert review == "- CHAT ASKS: Ready in 10 minutes\n- Shorter prep"
+        assert review == "- CHAT ASKS: Simit is fine again (from #2, #4)\n- CHAT ASKS: Ready in 10 minutes\n- Shorter prep"
 
         _, fresh = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)))
         assert fresh[0]["message"] == "Suggest" and CHAT_STEP not in fresh[1]["system"]

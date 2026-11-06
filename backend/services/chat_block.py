@@ -25,9 +25,9 @@ _BUTTON_TEXTS = set(SUGGEST_MESSAGES.values())
 CHAT_BLOCK_CHARS = 6000
 
 CHAT_HEADER = """\
-THE CHAT SO FAR (oldest first, the latest last). These are the user's own words about this \
-breakfast, so they come before their habits, favorites and patterns; health rules and the avoid \
-list still hold.
+THE CHAT SO FAR, numbered in chat order (oldest first, the latest last). These are the user's \
+own words about this breakfast, so they come before their habits, favorites and patterns; health \
+rules and the avoid list still hold.
 - A later message wins over an earlier one it disagrees with, and a message right after a menu \
 is about that menu. Every other message still counts.
 - Whatever the chat asks for (a time, a food, a mood) holds for every menu from here on, as \
@@ -81,17 +81,19 @@ def chat_entries(rows: list[dict]) -> list[str]:
 
 def format_chat_block(rows: list[dict]) -> str | None:
     """The chat block a Suggest press sends to the draft and the reviser, or None for a chat with
-    no typed message and no meal card. A chat too long for the context loses its oldest entries."""
+    no typed message and no meal card. A chat too long for the context loses its oldest entries.
+    The entries are numbered in chat order, so the reviser can say which entries each ask comes
+    from, and a later message that changes an earlier one is read together with it."""
     entries = chat_entries(rows)
     if not entries:
         return None
     kept, size = [], 0
     for entry in reversed(entries):
-        size += len(entry) + 3
+        size += len(entry) + 8  # "- #12 " and the newline
         if kept and size > CHAT_BLOCK_CHARS:
             break
         kept.append(entry[:CHAT_BLOCK_CHARS])
-    lines = "\n".join(f"- {e}" for e in reversed(kept))
+    lines = "\n".join(f"- #{n} {e}" for n, e in enumerate(reversed(kept), start=1))
     return f"{CHAT_HEADER}\n\n{lines}"
 
 

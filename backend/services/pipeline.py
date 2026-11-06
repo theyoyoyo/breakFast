@@ -48,8 +48,9 @@ _FENCED_RE = re.compile(r"```[\s\S]*?(```|$)")
 
 def revision_schema(language: str, chat: bool = False) -> dict:
     """The reviser's reply: its changes first, then the meal. After a chat it starts with
-    `chat_asks`, what the chat asks for in its own words, so it holds the meal against each ask.
-    Each menu item lists its ingredients before its name, so a dish's name is written after what
+    `chat_asks`, what the chat asks for now, so it holds the meal against each ask. Each ask lists
+    the chat entries it comes from before its words, so a later message is read together with the
+    earlier one it changes (one general shape, no field per kind of request). Each menu item lists its ingredients before its name, so a dish's name is written after what
     goes in, and every item has a numeric amount in the app's units (a dish's servings, which code
     drops; a simple item's portion). One item shape for both: offered a choice of shapes, the 7B
     model dropped a dish's ingredients."""
@@ -85,9 +86,13 @@ def revision_schema(language: str, chat: bool = False) -> dict:
         },
         "required": ["menu", "menu_name", "description", "prep_time_min"],
     }
-    strings = {"type": "array", "items": {"type": "string"}}
-    properties = {"chat_asks": strings} if chat else {}
-    properties |= {"changes": strings, "meal": meal}
+    ask = {
+        "type": "object",
+        "properties": {"from": {"type": "array", "items": {"type": "integer"}}, "ask": {"type": "string"}},
+        "required": ["from", "ask"],
+    }
+    properties = {"chat_asks": {"type": "array", "items": ask}} if chat else {}
+    properties |= {"changes": {"type": "array", "items": {"type": "string"}}, "meal": meal}
     return {"type": "object", "properties": properties, "required": list(properties)}
 
 
@@ -144,6 +149,19 @@ def _lines(value) -> list[str]:
     return [str(v).strip() for v in value if str(v).strip()] if isinstance(value, list) else []
 
 
+def _asks(value) -> list[str]:
+    """The reviser's chat asks as review lines, each with the chat entries it cites ("No eggs (from #2)")."""
+    lines = []
+    for item in value if isinstance(value, list) else []:
+        ask = str(item.get("ask") or "").strip() if isinstance(item, dict) else str(item).strip()
+        if not ask:
+            continue
+        cited = item.get("from") if isinstance(item, dict) else None
+        cited = [f"#{n}" for n in cited if isinstance(n, int)] if isinstance(cited, list) else []
+        lines.append(f"{ask} (from {', '.join(cited)})" if cited else ask)
+    return lines
+
+
 def _parse_revision(reply: str) -> tuple[list[str], list[str], dict | None]:
     """What the reviser read in the chat, its changes and its meal (None when the meal can't be read)."""
     try:
@@ -153,7 +171,7 @@ def _parse_revision(reply: str) -> tuple[list[str], list[str], dict | None]:
     if not isinstance(data, dict):
         return [], [], None
     meal = _readable_meal(data.get("meal"))
-    return _lines(data.get("chat_asks")), _lines(data.get("changes")), _clean_meal(meal) if meal else None
+    return _asks(data.get("chat_asks")), _lines(data.get("changes")), _clean_meal(meal) if meal else None
 
 
 def _with_chat(message: str, chat_block: str | None) -> str:

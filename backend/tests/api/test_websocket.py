@@ -315,5 +315,5 @@ async def test_websocket_suggest_reads_the_chat_from_the_session(ws_setup):
             assert ws.receive_json()["type"] == "done"
 
     block = mock_fn.call_args.kwargs["chat_block"]
-    assert block.endswith("\n\n- User (latest message): No eggs please.")
+    assert block.endswith("\n\n- #1 User (latest message): No eggs please.")
     assert "Sent by an old client" not in block and "Suggest Breakfast" not in block

@@ -31,12 +31,16 @@ MODE_LINES = {
 }
 _PLAIN_MODE = "The user asked for a breakfast suggestion."
 
-# After a chat: the reviser restates what the chat asks before its changes and the meal
-# (revision_schema's `chat_asks`), so it holds the meal against each ask
+# After a chat: the reviser restates what the chat asks now before its changes and the meal
+# (revision_schema's `chat_asks`). Each ask names the numbered entries it comes from before its
+# words, so a later message is read together with the earlier one it changes, and the latest wins.
 CHAT_STEP = """\
 The chat at the end of the message is in the user's own words, and the menu follows it. First, \
-in "chat_asks", write each thing it asks for in one short line of your own words, the latest \
-message first. Then, along with the steps below, change whatever in the menu doesn't follow an ask.
+in "chat_asks", write what the chat asks for now, one item per thing it asks about, the latest \
+first. In "from", list the numbers of every entry about that thing, together with the menu a \
+message right after it talks about; then write in "ask", in a few words of your own, what holds \
+now, where the latest of those entries wins. Then, along with the steps below, change whatever in \
+the menu doesn't follow an ask.
 """
 
 
