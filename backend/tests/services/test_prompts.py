@@ -585,13 +585,17 @@ class TestSchedulerPrompt:
         assert "A dish's method, in brackets after its name, is how the dish was designed, so cook each food the way it says." in prompt
 
     def test_prep_before_heating_and_heating_on_an_appliance(self):
-        """Prep that keeps comes before the heating, so hot food doesn't wait, and a heating step names any
-        appliance from the list that does the job, since code serves hot food last (#160); no example dish."""
+        """A heating step names any appliance from the list that does the job, since code serves hot food last,
+        and the request ends with the order rule: prep that keeps before the heating, so hot food doesn't wait
+        (#160). Neither has an example dish."""
         prompt = build_scheduler_prompt("", [], "", kitchen_appliances=["Stove", "Oven"])
-        assert "do the prep that keeps (slicing, chopping, mashing, mixing) before the steps that heat food" in prompt
-        assert "so hot food doesn't wait for the prep" in prompt
         assert "A step that heats food names its appliance, any one from the list that does the job" in prompt
-        assert "avocado" not in prompt.lower() and "Stove, Oven" in prompt
+        assert "prep that keeps" not in prompt and "avocado" not in prompt.lower() and "Stove, Oven" in prompt
+        msg = build_scheduler_user_message("Toast", [], "", menu=[{"name": "Toast", "ingredients": [{"name": "Bread"}]}])
+        assert msg.endswith(
+            "List each dish's steps. Within a dish, do the prep that keeps (slicing, chopping, mashing, mixing) "
+            "before the steps that heat food, and heat as late as the dish allows, so hot food doesn't wait for the prep:"
+        )
 
 
 class TestSchedulerUserMessage:
