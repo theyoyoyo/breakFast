@@ -631,6 +631,17 @@ class TestSchedulerUserMessage:
         assert "- Egg sandwich (Hard-boil the eggs, peel, slice into the bread): Egg (2 pcs), Bread (2 slice)" in msg
         assert "- Menemen: Egg (2 pcs), Tomato (1 pcs)" in msg
 
+    def test_simple_item_with_a_method_is_planned_as_a_dish_of_itself(self):
+        """A simple item that is cut or cooked reaches the planner like a dish of itself, with its method;
+        one with an empty method is served as it is (#156)."""
+        menu = [
+            {"name": "Sweet potato", "amount": 300, "unit": "g", "method": "Peel, cube and roast. ", "ingredients": []},
+            {"name": "White cheese", "amount": 50, "unit": "g", "method": " ", "ingredients": []},
+        ]
+        msg = build_scheduler_user_message("Bowls", [], "", menu=menu)
+        assert "- Sweet potato (Peel, cube and roast): Sweet potato (300 g)" in msg
+        assert "- White cheese (50 g), served as it is" in msg
+
     def test_water_is_planned_like_any_item(self):
         """Water in a recipe reaches the planner with the dish; a glass of water on its own is served as it is."""
         menu = [
@@ -680,6 +691,14 @@ class TestFridgeRule:
         assert "everything the user has, basics included" in prompt
         assert "FRIDGE CONSTRAINT" not in prompt
         assert "water" not in prompt.lower()
+
+    # The reviser gives a simple item a method when it's cut or cooked, and an empty one when it's served as it is
+    def test_pipeline_analyst_gives_simple_items_a_method(self):
+        prompt = build_pipeline_analyst_prompt([])
+        assert "how a simple item is cut or cooked when it is, and an empty method for a simple item served as it is" in prompt
+        assert "A simple item is one fridge item on its own" in prompt
+        assert "A dish combines or tops items" in prompt
+        assert "Give every dish a `method`" not in prompt
 
 
 # ---------------------------------------------------------------------------

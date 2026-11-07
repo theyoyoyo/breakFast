@@ -514,7 +514,7 @@ def test_plan_method_is_checked_per_dish():
 
 
 # The switch count is taken from the plan the app shows: the oatmeal fills the pudding's wait, so the plan
-# moves to the oatmeal and back once each, and the step the model gave the served sweet potato isn't counted
+# moves to the oatmeal and back once each, and the step the model gave a served sweet potato isn't counted
 def test_plan_switches_count_the_plan_the_app_shows():
     plan = {"dishes": [
         {"dish": "Chia pudding", "steps": [
@@ -529,7 +529,9 @@ def test_plan_switches_count_the_plan_the_app_shows():
         ]},
         {"dish": "Sweet potato", "steps": [{"action": "Serve 300 g sweet potato", "minutes": 1, "hands_on": True}]},
     ]}
-    result = check_plan("```json\n" + json.dumps(plan) + "\n```", PLAN_CASES["bowls"])
+    bowls = PLAN_CASES["bowls"]
+    served = {**bowls, "menu": [*bowls["menu"][:2], {"name": "Sweet potato", "amount": 300, "unit": "g", "ingredients": []}]}
+    result = check_plan("```json\n" + json.dumps(plan) + "\n```", served)
     assert is_clean(result), describe(result)
     assert result["note"] == "steps Chia pudding 3, Pumpkin oatmeal 3, Sweet potato 1; switches 2"
 
@@ -594,6 +596,7 @@ async def test_plan_once_sends_the_menu_with_its_methods():
             assert len(sent) == 1 and "kitchen workflow expert" in next(iter(sent))
             requests[key] = replies["request"]
     assert "- Egg sandwich (Hard-boil the eggs, peel, slice into the buttered bread): Eggs (2 pcs)" in requests["boiled"]
+    assert "- Sweet potato (Peel and cube the sweet potato, roast it in the air fryer): Sweet potato (300 g)" in requests["bowls"]
     assert set(calls) == {0.3}
 
 

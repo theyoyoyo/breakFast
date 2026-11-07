@@ -73,14 +73,15 @@ def _with_amount(item, language: str = "en") -> str:
 
 
 def format_menu(menu: list, language: str = "en") -> str:
-    """One line per menu item: cooked dishes with their method and ingredients
-    ('Egg sandwich (hard-boil the eggs, peel, slice into the bread): Egg (2 pcs), …'),
-    simple items with their amount, marked as served as they are."""
+    """One line per menu item: dishes with their method and ingredients
+    ('Egg sandwich (hard-boil the eggs, peel, slice into the bread): Egg (2 pcs), …'), a simple
+    item with a method the same way, as a dish of itself ('Sweet potato (peel, cube and roast):
+    Sweet potato (300 g)', #156), and the others with their amount, marked as served as they are."""
     lines = []
     for item in menu:
-        subs = item.get("ingredients") if isinstance(item, dict) else None
+        method = str(item.get("method") or "").strip().rstrip(".") if isinstance(item, dict) else ""
+        subs = (item.get("ingredients") or ([item] if method else [])) if isinstance(item, dict) else None
         if subs:
-            method = str(item.get("method") or "").strip().rstrip(".")
             name = f"{item.get('name', '?')} ({method})" if method else item.get("name", "?")
             lines.append(f"- {name}: {', '.join(_with_amount(s, language) for s in subs)}")
         else:

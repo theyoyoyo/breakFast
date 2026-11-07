@@ -299,9 +299,10 @@ def _in_time_order(dishes: list[dict]) -> list[dict]:
 
 
 def served_items(menu: list) -> list[str]:
-    """The names of the menu's items served as they are; the planner's steps for them are dropped."""
+    """The names of the menu's items served as they are (no ingredients and no method); the
+    planner's steps for them are dropped."""
     return [i.get("name") or "" if isinstance(i, dict) else i for i in menu
-            if not (isinstance(i, dict) and i.get("ingredients"))]
+            if not (isinstance(i, dict) and (i.get("ingredients") or str(i.get("method") or "").strip()))]
 
 
 def _clock(minutes: int) -> str:

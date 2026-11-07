@@ -2,7 +2,7 @@
 
 import random
 
-from routers.scheduler import _build_plan
+from routers.scheduler import _build_plan, served_items
 
 
 def _step(action, minutes, hands_on=True, appliance=""):
@@ -282,6 +282,18 @@ def test_items_served_as_they_are_get_no_steps():
     result = _build_plan(raw, served=["White cheese", "Olives"])
     assert {s["dish"] for s in result["timeline"]} == {"Egg sandwich"}
     assert result["makespan_min"] == 12
+
+
+def test_a_simple_item_with_a_method_keeps_its_steps():
+    """Only items served as they are lose the planner's steps: a simple item with a method (roasted sweet
+    potato) is readied like a dish, while one whose method is empty is served (#156)."""
+    menu = [
+        {"name": "Chia pudding", "ingredients": [{"name": "Chia seeds", "amount": 3, "unit": "tbsp"}]},
+        {"name": "Sweet potato", "amount": 300, "unit": "g", "method": "Peel, cube and roast", "ingredients": []},
+        {"name": "Olives", "amount": 8, "unit": "pcs", "method": " ", "ingredients": []},
+        "Tea",
+    ]
+    assert served_items(menu) == ["Olives", "Tea"]
 
 
 # ---------------------------------------------------------------------------

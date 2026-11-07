@@ -360,6 +360,21 @@ describe('MealEditor prep words', () => {
     expect(screen.getByText('Hard-boil the eggs, peel, slice into the bread')).toBeInTheDocument()
   })
 
+  it('shows a simple item method behind the info button and keeps it through edits', () => {
+    const onChange = vi.fn()
+    const meal = { menu_name: 'Bowls', menu: [
+      { name: 'Sweet potato', amount: 300, unit: 'g', method: 'Peel, cube and roast', ingredients: [] },
+      { name: 'Olives', amount: 10, unit: 'pcs', ingredients: [] },
+    ] }
+    render(<MealEditor meal={meal} menuMode onChange={onChange} />)
+    fireEvent.click(screen.getByTitle('Preparation details'))
+    expect(screen.getByText('Sweet potato', { selector: 'div' })).toBeInTheDocument()
+    expect(screen.getByText('Peel, cube and roast')).toBeInTheDocument()
+    expect(screen.queryByText('Olives', { selector: 'div' })).toBeNull()
+    fireEvent.click(screen.getAllByText('▲')[0])
+    expect(onChange.mock.lastCall[0].menu[0]).toMatchObject({ name: 'Sweet potato', method: 'Peel, cube and roast' })
+  })
+
   it('keeps a dish method through edits', () => {
     const onChange = vi.fn()
     render(<MealEditor meal={METHOD_MEAL} menuMode onChange={onChange} />)
