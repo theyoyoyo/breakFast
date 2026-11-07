@@ -11,6 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from services.personas.chat import build_chat_message
 from services.suggestion import (
     build_chat_prompt,
     build_suggestion_prompt,
@@ -211,15 +212,23 @@ class TestChatPrompt:
         assert "```json" not in prompt
 
     def test_menus_go_to_suggest(self):
-        """The chat talks and sends the user to Suggest for a menu, with the reason, and has no rules for meals it mentions (#168)."""
+        """The chat talks, the Suggest button makes the menu, and there are no rules for meals the chat mentions (#168)."""
         prompt = build_chat_prompt([], [], {}, [])
-        assert "THE MENU COMES FROM THE SUGGEST BUTTON" in prompt
-        assert "leave dishes, recipes, amounts and cooking steps to it" in prompt
-        assert "card the user can edit, plan and log" in prompt
-        assert "tell them to tap Suggest" in prompt
         assert "Ask one short question at a time" in prompt
+        assert "The Suggest button makes the menu; each message ends with the app's note on how to reply." in prompt
         for gone in ("INGREDIENT RULE", "Only suggest meals", "shape your suggestions", "What should I eat?"):
             assert gone not in prompt
+
+    def test_message_ends_with_the_reply_note(self):
+        """Each typed message reaches the model with the app's note last: the menu rule with its reason and the reply language (#168)."""
+        message = build_chat_message("I only have 10 minutes.", language="tr")
+        words, note = message.split("\n\n", 1)
+        assert words == "I only have 10 minutes."
+        assert note.startswith("(Note from the app, not from the user:")
+        assert "so name no dish, recipe, amount or cooking step" in note
+        assert "card the user can edit, plan and log" in note
+        assert "tell them to tap Suggest" in note
+        assert note.endswith("Always respond in Turkish.)")
 
     def test_ends_with_language_reminder(self):
         """The language directive is the last thing the model reads, like every user-facing prompt."""

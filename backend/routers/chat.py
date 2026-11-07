@@ -14,6 +14,7 @@ from database import get_db
 from auth import get_user_id_from_token
 from services.llm import LLMUnavailableError, lyric_cycler
 from services.suggestion import build_chat_prompt, stream_response
+from services.personas.chat import build_chat_message
 from services.pipeline import RETRY_TEXTS, in_language, run_suggestion_pipeline
 from services.context import load_chat_context
 from services.chat_block import CHAT_SUGGEST_TEXTS, chat_history, drop_meal_block, load_chat_block
@@ -226,7 +227,9 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                 # Stream response token by token
                 full_response = []
                 try:
-                    async for chunk in stream_response(system_prompt, conversation_history, user_message, temperature=temperature):
+                    # The user's words with the app's note on how to reply; the words alone are saved
+                    message = build_chat_message(user_message, cached_context.get("language", "en"))
+                    async for chunk in stream_response(system_prompt, conversation_history, message, temperature=temperature):
                         full_response.append(chunk)
                         await send_live({"type": "token", "content": chunk})
 

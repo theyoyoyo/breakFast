@@ -7,6 +7,7 @@ import pytest
 
 from services import pipeline
 from services.chat_block import chat_history, format_chat_block
+from services.personas.chat import build_chat_message
 from services.fridge import same_name
 from tools.prompt_check import (
     CHECKS, PERSONAS, chat_once, chat_rows, check_chat, check_plan, check_reply, compare, describe, is_clean,
@@ -618,7 +619,9 @@ async def test_chat_once_sends_the_typed_messages_in_turn():
         replies = await chat_once(EN, None, scenario, sent)
     assert list(replies) == ["chat", *CHAT_MESSAGES]
     assert replies["chat"] == "\n".join(typed) and replies["allowed"] == "reply 4"
-    assert [message for _, _, message, _ in calls] == typed
+    # Each message carries the app's note, as the server sends it, while the history keeps the words alone
+    assert [message for _, _, message, _ in calls] == [build_chat_message(t, "en") for t in typed]
+    assert [h["content"] for h in calls[-1][1] if h["role"] == "user"][-1] == typed[2]
     assert {temperature for *_, temperature in calls} == {None}
     assert len(sent) == 1 and "breakfast assistant" in next(iter(sent))
     # The first message comes after the first press; the last has the whole chat before it
