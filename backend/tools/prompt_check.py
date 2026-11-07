@@ -9,6 +9,7 @@ Run from backend/, with the server's Ollama reachable (docs/SETUPALL.md, BONUS C
     python -m tools.prompt_check --samples all --note "baseline"
     python -m tools.prompt_check --persona plan
     python -m tools.prompt_check --samples en,picky --scenario all
+    python -m tools.prompt_check --persona chat --samples en,picky --scenario all
     python -m tools.prompt_check --history
 
 Personas, each run for a sample user (tools/prompt_samples.py):
@@ -27,6 +28,10 @@ Personas, each run for a sample user (tools/prompt_samples.py):
   planner's real prompt and menu message. It flags food the menu doesn't list and a
   dish cooked another way than its method says (fry vs boil), and notes how many
   steps each dish got and how often the plan the app builds from them switches dishes.
+- chat: the typed messages of a --scenario (chat by default, or pressed) sent to the chat
+  persona one at a time, with the chat so far as history. The chat talks and menus come
+  only from a Suggest press (#168), so a reply with food amounts, numbered steps or a
+  code block is flagged, and each reply notes whether it points to the Suggest button.
 Nothing touches the database. Every test is kept locally in tools/runs/ (git-ignored): a log with the
 replies and the exact prompts sent, and a line in history.jsonl that later tests are
 compared against, so a prompt change can't quietly make things worse.
@@ -46,21 +51,22 @@ from contextlib import aclosing, contextmanager
 from datetime import datetime
 from pathlib import Path
 
-from models.units import unknown_units
+from models.units import UNIT_ALIASES, UNIT_PAIRS, unknown_units
 from routers.chat import SUGGEST_TEMPERATURES
 from routers.scheduler import _build_plan, served_items
 from services import llm, pipeline, suggestion
-from services.chat_block import SUGGEST_MESSAGES, format_chat_block
+from services.chat_block import SUGGEST_MESSAGES, chat_history, format_chat_block
 # The fridge check's own word handling, to tell renamed items from missing ones
 from services.fridge import (
-    _FOLD, _tokens, _words, find_avoided, find_missing_ingredients, meal_ingredient_names, same_name,
+    _FOLD, _tokens, _words, find_avoided, find_missing_ingredients, meal_ingredient_names, name_tokens, same_name,
+    same_tokens,
 )
 from services.personas import build_scheduler_prompt, build_scheduler_user_message
 from services.personas.shopping import build_shopping_prompt
 from services.shopping import (
     SUGGESTIONS_SCHEMA, dish_names, new_suggestions, parse_suggestions, pick_input, shopping_request,
 )
-from tools.prompt_samples import PLAN_CASES, SAMPLE_MODES, SAMPLES, SCENARIOS, chat_scenario
+from tools.prompt_samples import CHAT_MESSAGES, PLAN_CASES, SAMPLE_MODES, SAMPLES, SCENARIOS, chat_scenario
 from utils import extract_json_block
 
 BACKEND = Path(__file__).resolve().parent.parent
@@ -109,6 +115,7 @@ PERSONAS = {
     },
     "shopping": {"stages": ("suggest", "more"), "problems": ("dish", "vague", "repeat", "turkish")},
     "plan": {"stages": ("plan",), "problems": ("unlisted", "method", "turkish")},
+    "chat": {"stages": CHAT_MESSAGES, "problems": ("food", "amounts", "steps", "block", "turkish")},
 }
 STAGES = PERSONAS["suggest"]["stages"]
 # Bumped when a check changes what counts as clean, so a test is compared only with tests scored the same way
@@ -145,6 +152,17 @@ _NOT_FOOD = {
     "white", "black", "green", "red", "yellow", "brown", "fresh", "dried", "frozen", "whole", "plain", "cooked",
     "raw", "smoked", "sliced", "ground", "sweet", "light", "beyaz", "siyah", "yesil", "kirmizi", "taze",
 }
+_NUMBER = r"(?<![\w.,])(\d+(?:[.,/]\d+)?|[½¼¾])"
+# A number with a unit from the app's list, in either language ("50 g", "2 slices", "1 çay kaşığı")
+_UNIT_WORDS = sorted({u.lower() for pair in UNIT_PAIRS for u in pair} | set(UNIT_ALIASES), key=len, reverse=True)
+_AMOUNT = re.compile(_NUMBER + r"\s*(" + "|".join(map(re.escape, _UNIT_WORDS)) + r")(?!\w)", re.IGNORECASE)
+# A number with up to three words after it, to find counted fridge items ("2 eggs")
+_COUNTED = re.compile(_NUMBER + r"\s+(\w+(?:\s+\w+){0,2})")
+# A line that starts with a step number or a time ("1. Boil…", "**2)** Slice…", "Step 3", "7:05 Toast…")
+_STEP = re.compile(
+    r"^[ \t]*(?:[*_#>]+[ \t]*)?(?:\d+[.)]|\d{1,2}:\d\d|(?:step|adım)[ \t]+\d+)[*_]*[ \t:]*\S.*$",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 
 # ── Checks ──────────────────────────────────────────────────────────────────
@@ -454,6 +472,58 @@ def check_plan(text: str, case: dict) -> dict:
     }
 
 
+def chat_amounts(text: str, sample: dict) -> list[str]:
+    """Food amounts in a chat reply: a number with a unit from the app's list ("50 g", "1 slice") or
+    with a fridge item's name ("2 eggs"). A number with anything else ("10 minutes") isn't one."""
+    units = {m.start(): f"{m[1]} {m[2]}" for m in _AMOUNT.finditer(text)}
+    found = list(units.values())
+    names = [i["name"] for i in sample["ingredients"]]
+    for match in _COUNTED.finditer(text):
+        if match.start() in units:  # a unit's amount, even when its unit starts like a fridge item ("1 çay kaşığı")
+            continue
+        number, words = match[1], match[2].split()
+        for k in range(len(words), 0, -1):
+            phrase = " ".join(words[:k])
+            if any(same_name(phrase, name) for name in names):
+                found.append(f"{number} {phrase}")
+                break
+    return list(dict.fromkeys(found))
+
+
+def brought_in(text: str, sample: dict, said: list[str]) -> list[str]:
+    """Fridge items a chat reply names that the user's messages so far don't, by exact name. Two or more
+    put a meal together ("a yogurt bowl with honey and walnuts"), so only then are they returned."""
+    def named(name: str, words: list[str]) -> bool:
+        tokens = name_tokens(name)
+        return any(same_tokens(tokens, name_tokens(" ".join(words[i:i + len(tokens)]))) for i in range(len(words)))
+
+    reply, user = re.findall(r"\w+", text), [w for message in said for w in re.findall(r"\w+", message)]
+    found = [i["name"] for i in sample["ingredients"] if named(i["name"], reply) and not named(i["name"], user)]
+    return found if len(found) >= 2 else []
+
+
+def check_chat(text: str, sample: dict, said: list[str] = ()) -> dict:
+    """Score one chat reply: the chat talks with the user, and menus and plans come only from a Suggest
+    press (#168). Fridge items it brings in together, food amounts, numbered or timed steps and a code
+    block make a menu or a plan, so they're flagged; said is the user's messages so far, whose foods the
+    reply may repeat. The note says whether the reply points to the Suggest button. "json" here means a
+    reply came back."""
+    text = text or ""
+    return {
+        "json": bool(text.strip()),
+        # The reply itself, to count distinct replies across runs
+        "dishes": [" ".join(text.lower().split())],
+        "issues": {
+            "food": brought_in(text, sample, list(said)),
+            "amounts": chat_amounts(text, sample),
+            "steps": [line.strip()[:40] for line in _STEP.findall(text)],
+            "block": ["```"] if "```" in text else [],
+            "turkish": turkish_words(text, sample),
+        },
+        "note": "points to Suggest" if re.search(r"\bSuggest\b", text) else "no Suggest",
+    }
+
+
 def is_clean(result: dict) -> bool:
     return result["json"] and not any(result["issues"].values())
 
@@ -545,6 +615,40 @@ async def plan_once(case: dict, sent: dict) -> dict:
     return {"request": message, "plan": "".join(chunks)}
 
 
+def chat_prompt(sample: dict) -> str:
+    """The chat persona's system prompt, built the way routers/chat.py builds it."""
+    return suggestion.build_chat_prompt(
+        ingredient_inventory=sample["ingredients"],
+        recent_meal_history=sample["history"],
+        user_preferences=sample["preferences"],
+        stated_habits=sample["stated_habits"],
+        inferred_habits=sample["inferred_habits"],
+        health_rules=sample["health_rules"],
+        avoid_list=sample["avoid_list"],
+        kitchen_appliances=sample.get("kitchen_appliances"),
+        language=sample["language"],
+    )
+
+
+async def chat_once(sample: dict, mode: str | None, scenario: dict, sent: dict) -> dict:
+    """The scenario's typed messages sent to the chat persona one at a time, the way routers/chat.py sends
+    them: each with the chat so far as history (an earlier Suggest press as its button text and its meal
+    card's one line) and its reply added after it. {"chat": the typed messages, then a reply per message
+    kind}. A reply is scored as the model wrote it, before the app drops a meal block from it."""
+    prompt = chat_prompt(sample)
+    sent.setdefault(prompt, None)
+    typed = [entry["content"] for entry in scenario["chat"] if "press" not in entry]
+    replies, history, kinds = {"chat": "\n".join(typed)}, [], iter(CHAT_MESSAGES)
+    for entry in scenario["chat"]:
+        if "press" in entry:
+            history += chat_history(chat_rows([entry], mode))
+            continue
+        reply = "".join([c async for c in suggestion.stream_response(prompt, history, entry["content"])])
+        replies[next(kinds)] = reply
+        history += [entry, {"role": "assistant", "content": reply}]
+    return replies
+
+
 @contextmanager
 def recording_prompts(into: dict):
     """Collect each distinct system prompt the pipeline sends, streamed (draft, present) or as a
@@ -588,7 +692,7 @@ async def run(
     """Every run for every sample (and chat scenario), one at a time (they share the server's GPU), and the
     prompts sent. Without a mode, each sample's user presses Suggest the way they usually do."""
     records, prompts = [], {}
-    for label, key, scenario in _cases(samples, scenarios if persona == "suggest" else ["fresh"]):
+    for label, key, scenario in _cases(samples, scenarios if persona in ("suggest", "chat") else ["fresh"]):
         sample, sent = (PLAN_CASES if persona == "plan" else SAMPLES)[key], {}
         sample_mode = mode or SAMPLE_MODES.get(key)
         with recording_prompts(sent):
@@ -599,6 +703,8 @@ async def run(
                         replies = await shop_once(sample, sent)
                     elif persona == "plan":
                         replies = await plan_once(sample, sent)
+                    elif persona == "chat":
+                        replies = await chat_once(sample, sample_mode, scenario, sent)
                     else:
                         replies = await suggest_once(sample, sample_mode, draft_only, scenario=scenario)
                     error = None
@@ -608,6 +714,11 @@ async def run(
                     scores = score_shopping(replies, sample)
                 elif persona == "plan":
                     scores = {"plan": check_plan(replies["plan"], sample)} if "plan" in replies else {}
+                elif persona == "chat":
+                    typed = [e["content"] for e in scenario["chat"] if "press" not in e]
+                    scores = {
+                        s: check_chat(replies[s], sample, typed[:i + 1]) for i, s in enumerate(CHAT_MESSAGES) if s in replies
+                    }
                 else:
                     scores = {s: check_reply(replies[s], sample, scenario) for s in STAGES if s in replies}
                 record = {
@@ -791,7 +902,7 @@ def save_log(records: list[dict], prompts: dict, header: str, report: str, diff:
 # ── CLI ─────────────────────────────────────────────────────────────────────
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Score the suggestion, shopping and prep plan prompts against an Ollama server.")
+    parser = argparse.ArgumentParser(description="Score the suggestion, shopping, prep plan and chat prompts against an Ollama server.")
     parser.add_argument("--url", default=llm.OLLAMA_BASE_URL, help="Ollama address (default: OLLAMA_BASE_URL)")
     parser.add_argument("--runs", type=int, default=1, help="Suggest presses per sample (default: 1)")
     parser.add_argument(
@@ -805,9 +916,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Suggest mode for every sample (default: each sample's usual mode, plain Suggest for most)",
     )
     parser.add_argument(
-        "--scenario", choices=[*SCENARIOS, "all"], default="fresh",
+        "--scenario", choices=[*SCENARIOS, "all"],
         help="what each Suggest press comes after: a fresh chat, typed messages, or typed messages "
-             "between earlier presses (default: fresh)",
+             "between earlier presses (default: fresh); for the chat persona, the typed messages it gets "
+             "(chat or pressed, default: chat)",
     )
     parser.add_argument("--draft", action="store_true", help="stop each run after the draft")
     parser.add_argument("--note", default="", help="what this prompt version changes, kept in the history")
@@ -822,8 +934,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     unknown = [s for s in args.samples if s not in pool]
     if unknown:
         parser.error(f"unknown sample: {', '.join(unknown)}")
+    if args.persona == "chat":
+        # The chat persona answers typed messages, so a fresh chat gives it nothing to answer
+        args.scenario = args.scenario or "chat"
+        if args.scenario == "fresh":
+            parser.error("the chat persona needs typed messages: --scenario chat, pressed or all")
+        chats = [s for s in SCENARIOS if s != "fresh"]
+        args.scenarios = chats if args.scenario == "all" else [args.scenario]
+        return args
+    args.scenario = args.scenario or "fresh"
     if args.scenario != "fresh" and args.persona != "suggest":
-        parser.error("--scenario is for Suggest presses only")
+        parser.error("--scenario is for Suggest presses and the chat persona only")
     args.scenarios = list(SCENARIOS) if args.scenario == "all" else [args.scenario]
     return args
 
