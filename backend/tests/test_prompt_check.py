@@ -6,9 +6,10 @@ from unittest.mock import patch
 import pytest
 
 from services import pipeline
+from services.chat_block import format_chat_block
 from services.fridge import same_name
 from tools.prompt_check import (
-    CHECKS, PERSONAS, app_chat_context, chat_rows, check_plan, check_reply, compare, describe, is_clean, parse_args,
+    CHECKS, PERSONAS, chat_rows, check_plan, check_reply, compare, describe, is_clean, parse_args,
     plan_once, recording_prompts, run, score_shopping, shop_once, suggest_once, summarize,
 )
 from tools.prompt_samples import CHAT_MINUTES, PLAN_CASES, SAMPLE_MODES, SAMPLES, SCENARIOS, chat_picks, chat_scenario
@@ -163,7 +164,7 @@ def test_dishes_named_after_what_they_lack():
 async def test_suggest_once_collects_draft_and_final():
     calls = []
 
-    async def fake_pipeline(context, user_message, mode=None, temperature=None, chat_context=None):
+    async def fake_pipeline(context, user_message, mode=None, temperature=None, chat_block=None):
         calls.append((user_message, temperature))
         yield {"type": "progress", "step": "drafting"}
         yield {"type": "draft", "content": "D"}
@@ -249,17 +250,22 @@ def test_chat_scenarios():
     assert {k: v for k, v in pressed.items() if k != "chat"} == {k: v for k, v in chat.items() if k != "chat"}
 
 
-# The press sends what handleSuggest sends today: the last five user lines, button text included, and no menus
-def test_app_chat_context_mirrors_the_app():
+# A scenario's chat is saved like the app saves it, and the press sends the block the server builds from it
+def test_scenario_chat_is_the_server_block():
     chat, pressed = chat_scenario("en", "chat"), chat_scenario("en", "pressed")
     typed = [e["content"] for e in chat["chat"]]
     rows = chat_rows(pressed["chat"], None)
     assert [r["role"] for r in rows] == ["user", "assistant", "user", "user", "assistant", "user", "user", "user"]
     assert rows[0]["content"] == "Suggest Breakfast" and '"menu_name": "Breakfast plate"' in rows[1]["content"]
-    assert app_chat_context(rows) == [typed[0], "Suggest Breakfast", *typed[1:]]
     assert chat_rows(pressed["chat"], "favorites")[0]["content"] == "Suggest breakfast from my favorite meals"
-    assert app_chat_context(chat_rows(chat["chat"], None)) == typed
-    assert app_chat_context([]) is None
+    assert format_chat_block(rows).split("\n\n", 1)[1].splitlines() == [
+        "- #1 Menu shown: Breakfast plate. Items: Eggs, Cucumber, Simit",
+        f"- #2 User: {typed[0]}",
+        "- #3 Menu shown: Light plate. Items: Cucumber, Milk",
+        f"- #4 User: {typed[1]}",
+        f"- #5 User: {typed[2]}",
+        f"- #6 User (latest message): {typed[3]}",
+    ]
 
 
 def _plain(*names, minutes=8) -> str:
@@ -310,9 +316,9 @@ async def test_run_labels_each_scenario():
     assert list(prompts) == ["en", "en:chat", "en:pressed", "sparse"]
 
 
-# The chat the app sends reaches the draft, every sample's scenarios run through the pipeline, and the log keeps the chat
+# The chat block ends the draft's and the reviser's messages, every sample's scenarios run through the pipeline, and the log keeps it
 async def test_scenarios_run_through_the_pipeline():
-    drafts = []
+    drafts, revisions = [], []
 
     async def stream(system_prompt, history, message, temperature=None):
         if "Append a JSON block" in system_prompt:
@@ -320,14 +326,18 @@ async def test_scenarios_run_through_the_pipeline():
         async for chunk in _fake_stream(system_prompt, history, message, temperature):
             yield chunk
 
-    with patch("services.pipeline.stream_response", stream), patch("services.pipeline.chat_json", _fake_chat_json):
+    async def chat_json(system_prompt, messages, schema, temperature=None):
+        revisions.append(messages[-1]["content"])
+        return await _fake_chat_json(system_prompt, messages, schema, temperature)
+
+    with patch("services.pipeline.stream_response", stream), patch("services.pipeline.chat_json", chat_json):
         for key, sample in SAMPLES.items():
             for name in ("chat", "pressed"):
                 scenario = chat_scenario(key, name)
                 replies = await suggest_once(sample, SAMPLE_MODES.get(key), False, scenario=scenario)
-                sent = app_chat_context(chat_rows(scenario["chat"], SAMPLE_MODES.get(key)))
-                assert replies["chat"] == "\n".join(sent)
-                assert all(f"- {line}" in drafts[-1] for line in sent)
+                sent = format_chat_block(chat_rows(scenario["chat"], SAMPLE_MODES.get(key)))
+                assert replies["chat"] == sent
+                assert drafts[-1].endswith(sent) and revisions[-1].endswith(sent)
                 assert replies["final"].startswith("A warm start.")
 
 

@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import pytest
 
+from services.personas.pipeline_analyst import CHAT_STEP
 from services.suggestion import build_pipeline_analyst_prompt
 from services.pipeline import revision_schema, run_suggestion_pipeline
 from utils import extract_json_block
@@ -51,7 +52,7 @@ def _revision(meal, changes=()) -> str:
     return json.dumps({"changes": list(changes), "meal": meal})
 
 
-async def _run(draft, revision, present="A warm start.", context=SAMPLE_CONTEXT, mode=None, temperature=0.6):
+async def _run(draft, revision, present="A warm start.", context=SAMPLE_CONTEXT, mode=None, temperature=0.6, chat_block=None):
     """Run the pipeline on canned replies (an Exception raises instead); returns the events and every model call."""
     calls = []
 
@@ -77,6 +78,7 @@ async def _run(draft, revision, present="A warm start.", context=SAMPLE_CONTEXT,
         events = [
             e async for e in run_suggestion_pipeline(
                 context=context, user_message="Suggest", mode=mode, temperature=temperature,
+                chat_block=chat_block,
             )
         ]
     return events, calls
@@ -136,6 +138,15 @@ class TestReviserPrompt:
         assert "three changes at most" in prompt
         assert "water" not in prompt.lower()
 
+    # After a chat it first lists what the chat asks now, each ask after the entries it comes from; a fresh press's prompt stays as it was
+    def test_chat_step_only_after_a_chat(self):
+        fresh, chat = build_pipeline_analyst_prompt([]), build_pipeline_analyst_prompt([], chat=True)
+        assert 'in "chat_asks", write what the chat asks for now' in CHAT_STEP and "the latest first" in CHAT_STEP
+        assert 'In "from", list the numbers of every entry about that thing' in CHAT_STEP
+        assert "where the latest of those entries wins" in CHAT_STEP
+        assert f"{CHAT_STEP}1. Fix every problem" in chat and chat.index("HOW TO REVISE") < chat.index(CHAT_STEP)
+        assert CHAT_STEP not in fresh and chat.replace(CHAT_STEP, "") == fresh
+
     # Units come from the reply language's list, with the fixed spoon and glass sizes
     def test_units_follow_the_language(self):
         assert "tsp, dsp, tbsp" in build_pipeline_analyst_prompt([])
@@ -151,6 +162,16 @@ class TestRevisionSchema:
         assert list(meal["properties"])[0] == "menu"
         item = meal["properties"]["menu"]["items"]
         assert list(item["properties"])[:2] == ["ingredients", "name"]
+
+    # After a chat the reply starts with chat_asks, each the entries it comes from and then the ask, before the changes and the meal
+    def test_chat_asks_come_first_after_a_chat(self):
+        schema = revision_schema("en", chat=True)
+        assert list(schema["properties"]) == schema["required"] == ["chat_asks", "changes", "meal"]
+        ask = schema["properties"]["chat_asks"]["items"]
+        assert list(ask["properties"]) == ask["required"] == ["from", "ask"]
+        assert ask["properties"]["from"] == {"type": "array", "items": {"type": "integer"}}
+        assert schema["properties"]["meal"] == revision_schema("en")["properties"]["meal"]
+        assert revision_schema("en")["required"] == ["changes", "meal"]
 
     # Every item and ingredient has a numeric amount and a unit from the language's list, so no simple item lacks one
     def test_amounts_and_units(self):
@@ -202,6 +223,24 @@ class TestPipelineOrchestrator:
         assert reviser["schema"] == revision_schema("en")
         review = next(e["content"] for e in events if e["type"] == "review")
         assert review.startswith("- CODE CHECK: Not in the fridge: Salt, Shellfish")
+
+    # After a chat the block ends the draft's and the reviser's messages, and the review lists the asks first
+    @pytest.mark.asyncio
+    async def test_chat_reaches_the_draft_and_the_reviser(self):
+        block = "THE CHAT SO FAR\n\n- User (latest message): I only have 10 minutes."
+        asks = [{"from": [2, 4], "ask": "Simit is fine again"}, {"from": [], "ask": "Ready in 10 minutes"}, {"from": [3], "ask": " "}]
+        revision = json.dumps({"chat_asks": asks, "changes": ["Shorter prep"], "meal": _meal(EGGS)})
+        events, calls = await _run(_draft(_meal(EGGS)), revision, chat_block=block)
+        draft, reviser, present = calls
+        assert draft["message"] == f"Suggest\n\n{block}"
+        assert reviser["message"].endswith(f"Code check:\n- Nothing found.\n\n{block}")
+        assert reviser["schema"] == revision_schema("en", chat=True) and CHAT_STEP in reviser["system"]
+        assert "THE CHAT SO FAR" not in present["message"] + present["system"]
+        review = next(e["content"] for e in events if e["type"] == "review")
+        assert review == "- CHAT ASKS: Simit is fine again (from #2, #4)\n- CHAT ASKS: Ready in 10 minutes\n- Shorter prep"
+
+        _, fresh = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)))
+        assert fresh[0]["message"] == "Suggest" and CHAT_STEP not in fresh[1]["system"]
 
     # A clean draft tells the reviser that code found nothing
     @pytest.mark.asyncio

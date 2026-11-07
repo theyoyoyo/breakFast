@@ -1,9 +1,10 @@
 """
 Pipeline analyst persona — the reviser in the suggestion pipeline.
 
-Not user-facing. It gets the draft's meal and the problems code found in it, and returns
-the fixed meal itself (Ollama structured outputs, services.pipeline.revision_schema):
-first its changes, then the meal. Code fixes nothing on its own; it checks the result.
+Not user-facing. It gets the draft's meal, the problems code found in it and, after a chat,
+the chat block last, and returns the fixed meal itself (Ollama structured outputs,
+services.pipeline.revision_schema): what the chat asks for (after a chat), its changes, then
+the meal. Code fixes nothing on its own; it checks the result.
 """
 
 from models.units import unit_sizes, units_for
@@ -29,6 +30,18 @@ MODE_LINES = {
     "explore": "The user asked for something new from world cuisines: keep what makes this menu new to them.",
 }
 _PLAIN_MODE = "The user asked for a breakfast suggestion."
+
+# After a chat: the reviser restates what the chat asks now before its changes and the meal
+# (revision_schema's `chat_asks`). Each ask names the numbered entries it comes from before its
+# words, so a later message is read together with the earlier one it changes, and the latest wins.
+CHAT_STEP = """\
+The chat at the end of the message is in the user's own words, and the menu follows it. First, \
+in "chat_asks", write what the chat asks for now, one item per thing it asks about, the latest \
+first. In "from", list the numbers of every entry about that thing, together with the menu a \
+message right after it talks about; then write in "ask", in a few words of your own, what holds \
+now, where the latest of those entries wins. Then, along with the steps below, change whatever in \
+the menu doesn't follow an ask.
+"""
 
 
 PIPELINE_ANALYST_TEMPLATE = """\
@@ -68,7 +81,7 @@ FRIDGE (everything the user has, basics included)
 ═══════════════════════════════════════════════════════════════
 HOW TO REVISE
 ═══════════════════════════════════════════════════════════════
-1. Fix every problem listed under "Code check":
+{chat_step}1. Fix every problem listed under "Code check":
    - Not in the fridge: swap the item for a fridge item that does the same job. When none fits, \
 keep it: the app marks it, so the user can get it.
    - On the avoid list: replace it with a fridge item, or leave it out.
@@ -102,11 +115,14 @@ def build_pipeline_analyst_prompt(
     preferences: dict | None = None,
     mode: str | None = None,
     language: str = "en",
+    chat: bool = False,
 ) -> str:
-    """Build the reviser's prompt (the Pipeline Analyst persona)."""
+    """Build the reviser's prompt (the Pipeline Analyst persona). After a chat (its block ends the
+    reviser's message), the reviser first lists what the chat asks for and follows each ask."""
     dislikes = [v for k, v in (preferences or {}).items() if k.startswith("dislike:")]
     return PIPELINE_ANALYST_TEMPLATE.format(
         lang_instruction=_lang(language),
+        chat_step=CHAT_STEP if chat else "",
         mode_line=MODE_LINES.get(mode, _PLAIN_MODE),
         user_profile=format_user_profile(user_profile),
         supplements=format_supplements(supplements),
