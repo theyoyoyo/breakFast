@@ -16,7 +16,7 @@ from services.llm import LLMUnavailableError, lyric_cycler
 from services.suggestion import build_chat_prompt, stream_response
 from services.pipeline import RETRY_TEXTS, in_language, run_suggestion_pipeline
 from services.context import load_chat_context
-from services.chat_block import load_chat_block
+from services.chat_block import CHAT_SUGGEST_TEXTS, chat_history, drop_meal_block, load_chat_block
 from services import chat_sync
 from models.units import count_unit
 from utils import extract_json_block
@@ -219,9 +219,9 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                     language=cached_context.get("language", "en"),
                 )
 
-                # Load persisted conversation history for LLM context
+                # Load persisted conversation history for LLM context, meal cards as one line each
                 async with get_db() as db:
-                    conversation_history = await _load_session_history(db, session_id, user_id)
+                    conversation_history = chat_history(await _load_session_history(db, session_id, user_id))
 
                 # Stream response token by token
                 full_response = []
@@ -236,14 +236,17 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                 except Exception:
                     logging.exception("Chat reply failed; replying with a lyric")
                     response_text = lyric_cycler.next()
+                # Meal cards come only from a Suggest press (#168): a chat reply keeps the text before
+                # any meal block, or points to Suggest when the block was all it wrote
+                response_text = (
+                    drop_meal_block(response_text)
+                    or in_language(CHAT_SUGGEST_TEXTS, cached_context.get("language", "en"))
+                )
 
-            # Save suggestion if the response contains a ```json meal block.
-            # Suggest responses: save to DB and notify frontend as a new meal.
-            # Chat responses: notify frontend as an update to the existing meal —
-            # do not save a new suggestion row (user didn't request a new meal).
-            meal_data = extract_json_block(response_text)
+            # A Suggest reply's ```json meal block is saved as a suggestion and becomes a new meal card
+            meal_data = extract_json_block(response_text) if prompt_type == "suggest" else None
             saved_text = response_text
-            if meal_data and prompt_type == "suggest":
+            if meal_data:
                 async with get_db() as db:
                     suggestion_id = await _save_suggestion(db, user_id, session_id, meal_data, cached_context.get("language", "en"))
                 meal_data["id"] = suggestion_id
@@ -259,7 +262,7 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
             async with get_db() as db:
                 await _save_message(db, session_id, user_id, "user", user_message)
                 message_id = await _save_message(db, session_id, user_id, "assistant", saved_text)
-                if meal_data and prompt_type == "suggest":
+                if meal_data:
                     await db.execute(
                         "UPDATE chat_sessions SET selected_message_id = ? WHERE id = ? AND user_id = ?",
                         (message_id, session_id, user_id),
@@ -273,10 +276,7 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
             await send_live({"type": "done", "content": response_text, "message_id": message_id})
 
             if meal_data:
-                if prompt_type == "suggest":
-                    await send_live({"type": "meal_logged", "meal": meal_data})
-                else:
-                    await send_live({"type": "meal_updated", "meal": meal_data})
+                await send_live({"type": "meal_logged", "meal": meal_data})
                 cached_context = None
 
             if not client_live:

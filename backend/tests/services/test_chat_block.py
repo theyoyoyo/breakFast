@@ -1,8 +1,12 @@
-"""Tests for the chat block a Suggest press reads from the session (#161)."""
+"""Tests for the chat block a Suggest press reads from the session (#161), and the chat persona's
+view of the same session (#168)."""
 
 import json
 
-from services.chat_block import CHAT_BLOCK_CHARS, CHAT_HEADER, SUGGEST_MESSAGES, chat_entries, format_chat_block, load_chat_block
+from services.chat_block import (
+    CHAT_BLOCK_CHARS, CHAT_HEADER, SUGGEST_MESSAGES, chat_entries, chat_history, drop_meal_block, format_chat_block,
+    load_chat_block,
+)
 
 
 def _card(meal: dict, text: str = "A breakfast for you.") -> str:
@@ -120,3 +124,24 @@ async def test_load_reads_the_session_with_card_edits(client, db):
         "- #2 Menu shown: Light plate. Items: Cucumber",
     ]
     assert await load_chat_block(db, "no-such-session", user_id) is None
+
+
+# The chat persona's history keeps every message in order, with a meal card's JSON turned into its one line after the reply's text
+def test_chat_history_turns_cards_into_lines():
+    rows = [_user(SUGGEST_MESSAGES[None]), _app(_card(PLATE)), _user("Too heavy."), _app("Lighter it is!")]
+    history = chat_history(rows)
+    assert [h["role"] for h in history] == ["user", "assistant", "user", "assistant"]
+    assert history[1]["content"] == (
+        "A breakfast for you.\n\nMenu shown: Breakfast plate. Dishes: Scrambled eggs. Items: Eggs, Butter, Cucumber"
+    )
+    assert history[0] == rows[0] and history[2:] == rows[2:]
+    assert not any("```" in h["content"] for h in history)
+    # A card with no text of its own is just its line
+    assert chat_history([_app(_card(PLATE, text=""))])[0]["content"].startswith("Menu shown: Breakfast plate.")
+
+
+# A chat reply loses its meal block from the fence on, as the app stops showing it while it streams, and plain text stays
+def test_drop_meal_block():
+    assert drop_meal_block('Quick one!\n\n```json\n{"menu": []}\n```') == "Quick one!"
+    assert drop_meal_block("```json\n{}\n```") == ""
+    assert drop_meal_block("Tap Suggest when you're ready.") == "Tap Suggest when you're ready."

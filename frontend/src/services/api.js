@@ -374,7 +374,7 @@ export const getSchedule = (meal_name, steps, ingredients, meal_id = null, menu 
  * session another device (or a REST save) changed; onNotice gets any other notice
  * ({ type: 'supplements_updated' }, …) for the rest of the app.
  */
-export function createChatSocket(onToken, onDone, onMealLogged, onError, onClose, onProgress, onMealUpdated, onSessionUpdated, onNotice) {
+export function createChatSocket(onToken, onDone, onMealLogged, onError, onClose, onProgress, onSessionUpdated, onNotice) {
   const token = getToken()
   const ws = new WebSocket(`${WS_URL}/chat?token=${token}`)
 
@@ -384,7 +384,6 @@ export function createChatSocket(onToken, onDone, onMealLogged, onError, onClose
       if (msg.type === 'token') onToken(msg.content)
       else if (msg.type === 'done') onDone(msg.content, msg.message_id)
       else if (msg.type === 'meal_logged') onMealLogged(msg.meal)
-      else if (msg.type === 'meal_updated') onMealUpdated?.(msg.meal)
       else if (msg.type === 'progress') onProgress?.(msg.step)
       else if (msg.type === 'session_updated') onSessionUpdated?.(msg.session_id)
       else if (msg.type) onNotice?.(msg)

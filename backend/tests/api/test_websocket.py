@@ -347,3 +347,55 @@ async def test_websocket_suggest_reads_the_chat_from_the_session(ws_setup):
     block = mock_fn.call_args.kwargs["chat_block"]
     assert block.endswith("\n\n- #1 User (latest message): No eggs please.")
     assert "Sent by an old client" not in block and "Suggest Breakfast" not in block
+
+
+# A chat reply never becomes a meal card: the chat persona sees an earlier card as one line, its reply loses
+# any meal block before it's sent and saved (no meal update), and a reply that was only a block points to Suggest
+@pytest.mark.asyncio
+async def test_chat_reply_never_becomes_a_meal_card(ws_setup):
+    app, token, user_id = ws_setup
+    from starlette.testclient import TestClient
+    from unittest.mock import patch
+    from services.chat_block import CHAT_SUGGEST_TEXTS
+
+    card = {"menu_name": "Breakfast plate", "menu": [{"name": "Eggs", "amount": 2, "unit": "pcs", "ingredients": []}]}
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        await db.execute("INSERT INTO chat_sessions (id, user_id) VALUES ('s1', ?)", (user_id,))
+        for role, content in (("user", "Suggest Breakfast"), ("assistant", f"Enjoy!\n\n```json\n{json.dumps(card)}\n```")):
+            await db.execute(
+                "INSERT INTO chat_messages (session_id, user_id, role, content) VALUES ('s1', ?, ?, ?)",
+                (user_id, role, content),
+            )
+        await db.commit()
+
+    histories = []
+    replies = iter(["Quick one!\n\n```json\n" + json.dumps(card) + "\n```", "```json\n" + json.dumps(card) + "\n```"])
+
+    async def mock_stream(system_prompt, history, message, temperature=None):
+        histories.append(history)
+        yield next(replies)
+
+    def until_done(ws):
+        seen = []
+        while not seen or seen[-1]["type"] != "done":
+            seen.append(ws.receive_json())
+        return seen
+
+    with patch("routers.chat.build_chat_prompt", return_value="test prompt"), \
+         patch("routers.chat.stream_response", mock_stream):
+        with TestClient(app).websocket_connect(f"/chat?token={token}") as ws:
+            ws.send_text(json.dumps({"message": "I only have 10 minutes.", "session_id": "s1"}))
+            first = until_done(ws)
+            ws.send_text(json.dumps({"message": "Anything is fine.", "session_id": "s1"}))
+            second = until_done(ws)
+
+    assert first[-1]["content"] == "Quick one!"
+    # Nothing between the replies updates a meal card
+    assert [m["type"] for m in first + second if m["type"] not in ("token", "done")] == []
+    assert second[-1]["content"] == CHAT_SUGGEST_TEXTS["en"]
+    assert {"role": "assistant", "content": "Enjoy!\n\nMenu shown: Breakfast plate. Items: Eggs"} in histories[0]
+    assert not any("```" in h["content"] for h in histories[1])
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        async with db.execute("SELECT content FROM chat_messages WHERE role = 'assistant' ORDER BY id") as cur:
+            saved = [r[0] for r in await cur.fetchall()]
+    assert saved[1:] == ["Quick one!", CHAT_SUGGEST_TEXTS["en"]]
