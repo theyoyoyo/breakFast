@@ -265,13 +265,13 @@ async def test_websocket_logs_chat_reply_crash(ws_setup, caplog):
     assert "chat boom" in str(record.exc_info[1])
 
 
-# A crashing suggestion pipeline is logged with its traceback, and the user still gets a lyric
+# A crashing suggestion pipeline is logged with its traceback, and the user is told it failed and to press Suggest again
 @pytest.mark.asyncio
 async def test_websocket_logs_suggestion_crash(ws_setup, caplog):
     app, token, _ = ws_setup
     from starlette.testclient import TestClient
     from unittest.mock import patch
-    from services.llm import FALLBACK_LYRICS
+    from services.pipeline import RETRY_TEXTS
 
     async def mock_pipeline_crash(*args, **kwargs):
         raise RuntimeError("pipeline boom")
@@ -282,9 +282,39 @@ async def test_websocket_logs_suggestion_crash(ws_setup, caplog):
             ws.send_text(json.dumps({"message": "Suggest breakfast", "type": "suggest", "mode": "favorites"}))
             msg = ws.receive_json()
 
-    assert msg["type"] == "done" and msg["content"] in FALLBACK_LYRICS
-    record = next(r for r in caplog.records if r.getMessage() == "Suggestion pipeline failed; replying with a lyric")
+    assert msg["type"] == "done" and msg["content"] == RETRY_TEXTS["en"]
+    record = next(r for r in caplog.records if r.getMessage() == "Suggestion pipeline failed; asking to press Suggest again")
     assert "pipeline boom" in str(record.exc_info[1])
+
+
+# A Suggest press whose pipeline says nothing gets the retry text, while Ollama being unreachable still gets a lyric
+@pytest.mark.asyncio
+async def test_websocket_suggest_empty_or_unreachable(ws_setup):
+    app, token, _ = ws_setup
+    from starlette.testclient import TestClient
+    from unittest.mock import patch
+    from services.llm import FALLBACK_LYRICS, LLM_UNAVAILABLE_MESSAGE, LLMUnavailableError
+    from services.pipeline import RETRY_TEXTS
+
+    async def mock_pipeline_silent(*args, **kwargs):
+        yield {"type": "progress", "step": "drafting"}
+
+    async def mock_pipeline_unreachable(*args, **kwargs):
+        raise LLMUnavailableError(LLM_UNAVAILABLE_MESSAGE)
+        yield
+
+    replies = []
+    for pipeline in (mock_pipeline_silent, mock_pipeline_unreachable):
+        with patch("routers.chat.run_suggestion_pipeline", pipeline):
+            with TestClient(app).websocket_connect(f"/chat?token={token}") as ws:
+                ws.send_text(json.dumps({"message": "Suggest breakfast", "type": "suggest", "mode": "favorites"}))
+                msg = ws.receive_json()
+                while msg["type"] == "progress":
+                    msg = ws.receive_json()
+                replies.append(msg)
+
+    assert replies[0]["type"] == "done" and replies[0]["content"] == RETRY_TEXTS["en"]
+    assert replies[1]["type"] == "done" and replies[1]["content"] in FALLBACK_LYRICS
 
 
 @pytest.mark.asyncio

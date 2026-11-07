@@ -196,3 +196,33 @@ describe('IngredientPanel shopping suggestions', () => {
     await waitFor(() => expect(localStorage.getItem('bf_suggestions')).toBeNull())
   })
 })
+
+describe('IngredientPanel fridge rows', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
+    api.getSuggestionList.mockResolvedValue({ items: [] })
+    api.getIngredients.mockResolvedValue([
+      { id: 1, name: 'Tomatoes', group_name: '🥬 Produce' },
+      { id: 2, name: 'Cucumber', group_name: '🥬 Produce' },
+    ])
+  })
+
+  // The delete choices under a group's last row take their own line inside the group, so the card grows to show them
+  it("opens the last row's delete choices inside its group, in view", async () => {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+    render(<IngredientPanel visible />)
+    await screen.findByText('Cucumber')
+    fireEvent.click(screen.getAllByRole('button', { name: 'Delete' }).at(-1))
+
+    const choices = screen.getByRole('group', { name: 'Delete Cucumber' })
+    expect(choices.style.position).not.toBe('absolute')
+    expect(choices.previousElementSibling).toHaveTextContent('Cucumber')
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' })
+
+    fireEvent.click(within(choices).getByRole('button', { name: 'Delete' }))
+    await waitFor(() => expect(api.deleteIngredient).toHaveBeenCalledWith(2))
+    delete Element.prototype.scrollIntoView
+  })
+})

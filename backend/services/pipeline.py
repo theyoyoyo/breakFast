@@ -6,7 +6,12 @@ a higher-quality meal suggestion. The user sees progress updates while
 waiting, then the final meal.
 
 Steps:
-1. Suggestion persona drafts a menu (collected internally, not shown).
+1. Suggestion persona drafts a menu through structured outputs (draft_schema): its own
+   words, then the meal in the reviser's shape. An empty menu means the fridge is too
+   small: its words are sent as the note, or code's low-ingredients text
+   (LOW_INGREDIENT_TEXTS) when it wrote none. A reply that can't be read gets the retry
+   text (RETRY_TEXTS), and so does a press whose pipeline fails (routers/chat.py).
+   Neither shows a meal card.
 2. Plain code checks the draft's meal (fridge, units, avoid list), and the
    Pipeline Analyst returns the fixed meal itself through structured outputs
    (revision_schema): what the chat asks for (after a chat), its changes, then
@@ -37,7 +42,6 @@ from services.suggestion import (
     build_present_prompt,
     stream_response,
 )
-from utils import extract_json_block, repair_json_block
 
 # The reviser applies its changes and checks the result, so it runs cool like the old analyst
 REVISE_TEMPERATURE = 0.3
@@ -46,14 +50,30 @@ REVISE_TEMPERATURE = 0.3
 _FENCED_RE = re.compile(r"```[\s\S]*?(```|$)")
 
 
-def revision_schema(language: str, chat: bool = False) -> dict:
-    """The reviser's reply: its changes first, then the meal. After a chat it starts with
-    `chat_asks`, what the chat asks for now, so it holds the meal against each ask. Each ask lists
-    the chat entries it comes from before its words, so a later message is read together with the
-    earlier one it changes (one general shape, no field per kind of request). Each menu item lists its ingredients before its name, so a dish's name is written after what
-    goes in, and every item has a numeric amount in the app's units (a dish's servings, which code
+# What the user reads when the draft's reply can't be read at all (rare with its schema): no meal
+# card, and their next press is the retry. The UI is English only, so the button keeps its name.
+RETRY_TEXTS = {
+    "en": "I couldn't put a menu together this time. Please press Suggest again.",
+    "tr": "Bu sefer bir menü hazırlayamadım. Lütfen Suggest düğmesine tekrar basın.",
+}
+LOW_INGREDIENT_TEXTS = {
+    "en": "There aren't enough ingredients for a breakfast yet. Add some in the Fridge tab, or press Suggest Shopping for ideas.",
+    "tr": "Kahvaltı için henüz yeterli malzeme yok. Fridge sekmesinden malzeme ekleyin ya da fikir için Suggest Shopping düğmesine basın.",
+}
+
+
+def in_language(texts: dict, language: str) -> str:
+    """One of the code-written texts above in the reply language, English by default."""
+    return texts.get(language, texts["en"])
+
+
+def _meal_schema(language: str, method: bool = True) -> dict:
+    """The meal the draft and the reviser both return, one shape so the two stay the same. Each
+    menu item lists its ingredients before its name, so a dish's name is written after what goes
+    in, and every item has a numeric amount in the app's units (a dish's servings, which code
     drops; a simple item's portion). One item shape for both: offered a choice of shapes, the 7B
-    model dropped a dish's ingredients."""
+    model dropped a dish's ingredients. The draft's items have no `method`: the reviser writes it,
+    and a method rule in the draft scored worse."""
     units = units_for(language)
     ingredient = {
         "type": "object",
@@ -65,18 +85,12 @@ def revision_schema(language: str, chat: bool = False) -> dict:
         },
         "required": ["name", "amount", "unit"],
     }
-    item = {
-        "type": "object",
-        "properties": {
-            "ingredients": {"type": "array", "items": ingredient},
-            "name": {"type": "string"},
-            "method": {"type": "string"},
-            "amount": {"type": "number"},
-            "unit": {"type": "string", "enum": units},
-        },
-        "required": ["ingredients", "name", "method", "amount", "unit"],
-    }
-    meal = {
+    fields = {"ingredients": {"type": "array", "items": ingredient}, "name": {"type": "string"}}
+    if method:
+        fields["method"] = {"type": "string"}
+    fields |= {"amount": {"type": "number"}, "unit": {"type": "string", "enum": units}}
+    item = {"type": "object", "properties": fields, "required": list(fields)}
+    return {
         "type": "object",
         "properties": {
             "menu": {"type": "array", "items": item},
@@ -86,13 +100,29 @@ def revision_schema(language: str, chat: bool = False) -> dict:
         },
         "required": ["menu", "menu_name", "description", "prep_time_min"],
     }
+
+
+def draft_schema(language: str) -> dict:
+    """The draft's reply: its own words first, so the model plans the menu in words before it fills
+    in the meal, then the meal. An empty menu means the fridge is too small for a breakfast, and the
+    text is then the note the user reads."""
+    properties = {"text": {"type": "string"}, "meal": _meal_schema(language, method=False)}
+    return {"type": "object", "properties": properties, "required": list(properties)}
+
+
+def revision_schema(language: str, chat: bool = False) -> dict:
+    """The reviser's reply: its changes first, then the meal (the draft's shape, with methods).
+    After a chat it starts with `chat_asks`, what the chat asks for now, so it holds the meal
+    against each ask. Each ask lists the chat entries it comes from before its words, so a later
+    message is read together with the earlier one it changes (one general shape, no field per kind
+    of request)."""
     ask = {
         "type": "object",
         "properties": {"from": {"type": "array", "items": {"type": "integer"}}, "ask": {"type": "string"}},
         "required": ["from", "ask"],
     }
     properties = {"chat_asks": {"type": "array", "items": ask}} if chat else {}
-    properties |= {"changes": {"type": "array", "items": {"type": "string"}}, "meal": meal}
+    properties |= {"changes": {"type": "array", "items": {"type": "string"}}, "meal": _meal_schema(language)}
     return {"type": "object", "properties": properties, "required": list(properties)}
 
 
@@ -174,18 +204,35 @@ def _parse_revision(reply: str) -> tuple[list[str], list[str], dict | None]:
     return _asks(data.get("chat_asks")), _lines(data.get("changes")), _clean_meal(meal) if meal else None
 
 
+def _parse_draft(reply: str) -> tuple[str, dict | None] | None:
+    """The draft's text and its meal in the app's format, the meal None for an empty menu (the fridge
+    is too small, and the text, maybe empty, is the note). None when the reply can't be read."""
+    try:
+        data = json.loads(reply)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    text, meal = str(data.get("text") or "").strip(), data.get("meal")
+    menu = meal.get("menu") if isinstance(meal, dict) else None
+    if not isinstance(menu, list):
+        return None
+    return text, _clean_meal(meal) if menu else None
+
+
+def _meal_reply(text: str, meal: dict) -> str:
+    """A reply in the app's shape: the text, then the meal in a ```json block."""
+    return f"{text}\n\n```json\n{json.dumps(meal, ensure_ascii=False, indent=2)}\n```"
+
+
 def _with_chat(message: str, chat_block: str | None) -> str:
     """A step's message with the chat block placed last, where the model reads it freshest."""
     return f"{message}\n\n{chat_block}" if chat_block else message
 
 
-def _revision_message(draft_text: str, draft_meal: dict | None, problems: list[str]) -> str:
-    if draft_meal is None:
-        draft = f"Draft (its meal block couldn't be read, so build the meal from it):\n{draft_text}"
-    else:
-        draft = f"Draft menu:\n```json\n{json.dumps(draft_meal, ensure_ascii=False, indent=2)}\n```"
+def _revision_message(draft_meal: dict, problems: list[str]) -> str:
     check = "\n".join(f"- {p}" for p in problems) if problems else "- Nothing found."
-    return f"{draft}\n\nCode check:\n{check}"
+    return f"Draft menu:\n```json\n{json.dumps(draft_meal, ensure_ascii=False, indent=2)}\n```\n\nCode check:\n{check}"
 
 
 def _code_text(meal: dict) -> str:
@@ -254,33 +301,42 @@ async def run_suggestion_pipeline(
     # --- Step 1: Draft ---
     yield {"type": "progress", "step": "drafting"}
 
-    draft_chunks = []
-    draft_message = _with_chat(user_message, chat_block)
-    async for chunk in stream_response(suggestion_prompt, [], draft_message, temperature=temperature):
-        draft_chunks.append(chunk)
-    draft_text = "".join(draft_chunks)
-    yield {"type": "draft", "content": draft_text}
+    reply = await chat_json(
+        system_prompt=suggestion_prompt,
+        messages=[{"role": "user", "content": _with_chat(user_message, chat_block)}],
+        schema=draft_schema(language),
+        temperature=temperature,
+    )
+    draft = _parse_draft(reply)
+    if draft is None:
+        logging.warning("Suggestion draft: could not read %r", reply)
+    draft_text, draft_meal = draft or (reply, None)
+    yield {"type": "draft", "content": _meal_reply(draft_text, draft_meal) if draft_meal else draft_text}
 
-    # A draft with no meal block at all is a note to the user (the fridge is too small): send it as is
-    draft_meal = _readable_meal(extract_json_block(draft_text))
-    if draft_meal is None and "```json" not in draft_text:
+    # No menu: when the fridge is too small, the draft's note, or code's low-ingredients text if it
+    # wrote none; the retry text when its reply can't be read. It is sent as text without a review,
+    # so the chat shows no meal card.
+    if draft_meal is None:
+        if draft:
+            note = draft_text or in_language(LOW_INGREDIENT_TEXTS, language)
+        else:
+            note = in_language(RETRY_TEXTS, language)
         yield {"type": "progress", "step": "analyzing"}
-        yield {"type": "review", "content": "- No meal in the draft, so nothing to revise."}
+        yield {"type": "review", "content": "- No meal in the draft, so nothing to revise." if draft else "- The draft couldn't be read."}
         yield {"type": "progress", "step": "finalizing"}
-        final_text = repair_json_block(draft_text)
-        yield {"type": "token", "content": final_text}
-        yield {"type": "done", "content": final_text}
+        yield {"type": "token", "content": note}
+        yield {"type": "done", "content": note}
         return
 
     # --- Step 2: Revise ---
     yield {"type": "progress", "step": "analyzing"}
 
-    problems = _code_check(draft_meal, context) if draft_meal else []
+    problems = _code_check(draft_meal, context)
     asks, changes, revised_meal = [], [], None
     try:
         reply = await chat_json(
             system_prompt=reviser_prompt,
-            messages=[{"role": "user", "content": _with_chat(_revision_message(draft_text, draft_meal, problems), chat_block)}],
+            messages=[{"role": "user", "content": _with_chat(_revision_message(draft_meal, problems), chat_block)}],
             schema=revision_schema(language, chat=bool(chat_block)),
             temperature=REVISE_TEMPERATURE,
         )
@@ -305,20 +361,16 @@ async def run_suggestion_pipeline(
     # --- Step 3: Present ---
     yield {"type": "progress", "step": "finalizing"}
 
-    if meal is None:  # neither the draft nor the reviser gave a meal that can be read
-        final_text = repair_json_block(draft_text)
-    else:
-        meal_json = json.dumps(meal, ensure_ascii=False, indent=2)
-        text = ""
-        try:
-            chunks = []
-            present_message = f"Today's menu:\n```json\n{meal_json}\n```"
-            async for chunk in stream_response(build_present_prompt(language), [], present_message, temperature=temperature):
-                chunks.append(chunk)
-            text = _FENCED_RE.sub("", "".join(chunks)).strip()
-        except Exception:
-            logging.exception("Suggestion present step failed; code writes the text")
-        final_text = f"{text or _code_text(meal)}\n\n```json\n{meal_json}\n```"
+    text = ""
+    try:
+        chunks = []
+        present_message = f"Today's menu:\n```json\n{json.dumps(meal, ensure_ascii=False, indent=2)}\n```"
+        async for chunk in stream_response(build_present_prompt(language), [], present_message, temperature=temperature):
+            chunks.append(chunk)
+        text = _FENCED_RE.sub("", "".join(chunks)).strip()
+    except Exception:
+        logging.exception("Suggestion present step failed; code writes the text")
+    final_text = _meal_reply(text or _code_text(meal), meal)
 
     yield {"type": "token", "content": final_text}
     yield {"type": "done", "content": final_text}

@@ -640,6 +640,14 @@ class TestFridgeRule:
         assert "water" not in prompt.lower()
         assert "never appear in the JSON" not in prompt
 
+    # Only a fridge too small for any breakfast gets an empty menu, and the text then says what to change; the old no-block rule is gone
+    def test_too_small_fridge_gets_an_empty_menu_and_a_note(self):
+        prompt = build_suggestion_prompt([{"name": "Tea"}], [], {}, [])
+        assert "If the list is too small for any reasonable breakfast, leave `menu` empty and make `text` a short note" in prompt
+        assert "add ingredients in the Fridge tab, try the shopping suggestions" in prompt
+        assert "no JSON block" not in prompt and "Append a JSON block" not in prompt
+        assert "Reply with one JSON object: first `text`, your words to the user, then `meal`" in prompt
+
     # Code checks the fridge, so the reviser gets the list and code's findings, not a fridge rule of its own
     def test_pipeline_analyst_leaves_fridge_check_to_code(self):
         prompt = build_pipeline_analyst_prompt([], ingredient_inventory=[{"name": "Yumurta"}])

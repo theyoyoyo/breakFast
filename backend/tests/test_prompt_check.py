@@ -46,6 +46,19 @@ def test_no_meal_json():
     assert describe(result) == "no JSON"
 
 
+# A fridge too small for a breakfast passes with a note to the user; a menu, or a broken block, doesn't
+def test_note_for_a_fridge_too_small():
+    bare = SAMPLES["bare"]
+    note = check_reply("Your fridge has only tea and salt. Add a few items in the Fridge tab.", bare)
+    assert is_clean(note) and describe(note).startswith("clean (note: Your fridge has only tea and salt.")
+    menu = check_reply(_reply({"name": "Tea", "amount": 1, "unit": "glass", "ingredients": []}), bare)
+    assert not is_clean(menu) and menu["issues"]["menu"] == ["Tea"]
+    assert not is_clean(check_reply("Enjoy!\n```json\n{broken\n```", bare))
+    assert not is_clean(check_reply("", bare))
+    assert not is_clean(check_reply(pipeline.RETRY_TEXTS["en"], bare))
+    assert check_reply(_reply({"name": "Tea", "amount": 1, "unit": "glass", "ingredients": []}), EN)["issues"]["menu"] == []
+
+
 # A fraction amount is read the way the app reads it, so the reply still scores as a meal
 def test_fraction_amounts_score_as_a_meal():
     text = 'Enjoy!\n```json\n{"menu_name": "Oats", "menu": [{"name": "Oats", "amount": 1/4, "unit": "glass", "ingredients": []}]}\n```'
@@ -196,16 +209,23 @@ async def test_samples_run_in_their_usual_mode():
     assert set(SAMPLE_MODES) <= set(SAMPLES)
 
 
-# A draft reply with one fridge dish, for the fake model below
-_DRAFT = 'Enjoy!\n```json\n{"menu_name": "Eggs", "menu": [{"name": "Boiled eggs", "ingredients": [{"name": "Eggs", "amount": 2, "unit": "pcs"}]}]}\n```'
+# The fake model's meal, one fridge dish, and the draft as the prompt test logs it: its text, then the meal
+_MEAL = {
+    "menu": [{"ingredients": [{"name": "Eggs", "amount": 2, "unit": "pcs"}], "name": "Boiled eggs"}],
+    "menu_name": "Eggs", "description": "Warm eggs.", "prep_time_min": 10,
+}
+_DRAFT = "Enjoy!\n\n```json\n" + json.dumps(_MEAL, ensure_ascii=False, indent=2) + "\n```"
 
 
 async def _fake_stream(system_prompt, history, message, temperature=None):
-    yield _DRAFT if "Append a JSON block" in system_prompt else "A warm start."
+    yield "A warm start."
 
 
 async def _fake_chat_json(system_prompt, messages, schema, temperature=None):
-    return json.dumps({"changes": [], "meal": json.loads(_DRAFT.split("```json\n")[1].split("\n```")[0])})
+    """The draft's reply for the draft's schema (its text first), else the reviser's."""
+    if "text" in schema["properties"]:
+        return json.dumps({"text": "Enjoy!", "meal": _MEAL})
+    return json.dumps({"changes": [], "meal": _MEAL})
 
 
 # Every sample runs through the real pipeline with a fake model, so it has all the context the prompts read
@@ -222,6 +242,9 @@ async def test_samples_run_through_the_pipeline():
 def test_chat_picks_are_fixed_fridge_items():
     for key, sample in SAMPLES.items():
         picks = chat_picks(sample, key)
+        if sample.get("expects_note"):  # a fridge too small for a breakfast has no chat scenario
+            assert picks is None and chat_scenario(key, "chat") is None, key
+            continue
         fridge = [i["name"] for i in sample["ingredients"]]
         banned = sample["avoid_list"] + [v for k, v in sample["preferences"].items() if k.startswith("dislike:")]
         assert len(set(picks)) == 4 and set(picks) <= set(fridge), key
@@ -320,18 +343,14 @@ async def test_run_labels_each_scenario():
 async def test_scenarios_run_through_the_pipeline():
     drafts, revisions = [], []
 
-    async def stream(system_prompt, history, message, temperature=None):
-        if "Append a JSON block" in system_prompt:
-            drafts.append(message)
-        async for chunk in _fake_stream(system_prompt, history, message, temperature):
-            yield chunk
-
     async def chat_json(system_prompt, messages, schema, temperature=None):
-        revisions.append(messages[-1]["content"])
+        (drafts if "text" in schema["properties"] else revisions).append(messages[-1]["content"])
         return await _fake_chat_json(system_prompt, messages, schema, temperature)
 
-    with patch("services.pipeline.stream_response", stream), patch("services.pipeline.chat_json", chat_json):
+    with patch("services.pipeline.stream_response", _fake_stream), patch("services.pipeline.chat_json", chat_json):
         for key, sample in SAMPLES.items():
+            if sample.get("expects_note"):
+                continue
             for name in ("chat", "pressed"):
                 scenario = chat_scenario(key, name)
                 replies = await suggest_once(sample, SAMPLE_MODES.get(key), False, scenario=scenario)
@@ -352,7 +371,7 @@ async def test_recording_prompts_keeps_distinct_system_prompts():
         assert pipeline.chat_json is _fake_chat_json
     prompts = list(sent)
     assert len(prompts) == 3  # draft, reviser and present
-    assert "Append a JSON block" in prompts[0]
+    assert "Reply with one JSON object" in prompts[0]
     assert "meal reviser" in prompts[1]
     assert "Introduce it in a few short lines" in prompts[2]
 
@@ -367,8 +386,8 @@ def test_summary_counts_and_offenders():
         {"sample": "en", "run": 2, "seconds": 50, "error": None, "replies": {}, "scores": {"draft": simit, "final": simit}},
     ]
     lines = summarize(records).splitlines()
-    assert lines[1].split() == ["en", "draft", "2", "2", "0", "1", "0", "2", "0", "0", "0", "0", "0", "0", "0", "0", "0", "40"]
-    assert lines[2].split() == ["en", "final", "2", "2", "1", "2", "0", "1", "0", "0", "0", "0", "0", "0", "0", "0", "0", "40"]
+    assert lines[1].split() == ["en", "draft", "2", "2", "0", "1", "0", "2", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "40"]
+    assert lines[2].split() == ["en", "final", "2", "2", "1", "2", "0", "1", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "40"]
     assert "en draft renamed: Simit with tahini ×2" in lines
 
 
