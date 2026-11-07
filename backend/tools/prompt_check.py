@@ -26,10 +26,10 @@ Personas, each run for a sample user (tools/prompt_samples.py):
   the same prompt, reply schema and code dedupe.
 - plan: one Prep Plan press per menu in PLAN_CASES (every menu by default), with the
   planner's real prompt and menu message. It flags food the menu doesn't list, a
-  dish cooked another way than its method says (fry vs boil), a dish that cuts other
-  food after heating something (the heated food waits), and a heating step with no
-  appliance from the kitchen, and notes how many steps each dish got and how often
-  the plan the app builds from them switches dishes.
+  dish cooked another way than its method says (fry vs boil), and a dish that cuts other
+  food after heating something (the heated food waits), and notes how many steps each
+  dish got, how often the plan the app builds from them switches dishes, and a heating
+  step with no appliance from the kitchen (the cook can use one they have).
 - chat: the typed messages of a --scenario (chat by default, or pressed) sent to the chat
   persona one at a time, with the chat so far as history. The chat talks and menus come
   only from a Suggest press (#168), so a reply with food amounts, numbered steps or a
@@ -117,12 +117,12 @@ PERSONAS = {
         ),
     },
     "shopping": {"stages": ("suggest", "more"), "problems": ("dish", "vague", "repeat", "turkish")},
-    "plan": {"stages": ("plan",), "problems": ("unlisted", "method", "order", "appliance", "turkish")},
+    "plan": {"stages": ("plan",), "problems": ("unlisted", "method", "order", "turkish")},
     "chat": {"stages": CHAT_MESSAGES, "problems": ("food", "amounts", "steps", "block", "turkish")},
 }
 STAGES = PERSONAS["suggest"]["stages"]
 # Bumped when a check changes what counts as clean, so a test is compared only with tests scored the same way
-CHECKS = 5
+CHECKS = 6
 _TURKISH_LETTERS = set("çğıöşüÇĞİÖŞÜ")
 
 # Shopping names that aren't one specific product: alternatives, examples or filler words
@@ -515,7 +515,8 @@ def heated_before_prep(steps: list[tuple[str, list[dict]]], case: dict) -> list[
 def unheated_steps(steps: list[tuple[str, list[dict]]], case: dict) -> list[str]:
     """Heating steps with no appliance from the case's kitchen, as "Toast the bread (Avocado toast)":
     code serves food from a hot appliance last, so a heating step without one may be made first (#160).
-    Any appliance from the kitchen passes."""
+    Any appliance from the kitchen passes. It's a note, not a problem: the cook can toast in the Oven
+    when the plan says Toaster."""
     kitchen = {a.lower() for a in case["kitchen_appliances"]}
     return [
         f"{action} ({dish_name})" for dish_name, dish_steps in steps for step in dish_steps
@@ -532,15 +533,16 @@ def switches(plan: dict, case: dict) -> int:
 
 def check_plan(text: str, case: dict) -> dict:
     """Score one prep plan reply: does its JSON parse, does it plan only the menu, each dish as designed,
-    its prep before its heating, and its heating on an appliance. The note counts each dish's steps, so
-    a plan of one step per dish shows, and the plan's switches between dishes, so a plan that hops from
-    dish to dish every minute shows too."""
+    and its prep before its heating. The note counts each dish's steps, so a plan of one step per dish
+    shows, and the plan's switches between dishes, so a plan that hops from dish to dish every minute
+    shows too, and names heating steps with no appliance from the kitchen."""
     plan = extract_json_block(text or "")
     if not isinstance(plan, dict) or not isinstance(plan.get("dishes"), list):
         return _no_json("plan")
     dishes, dish_steps = _plan_dishes(plan), _plan_steps(plan)
     fridge = {"language": case["language"], "ingredients": [{"name": n} for n in _menu_names(case["menu"])]}
     steps = ", ".join(f"{name or '?'} {len(actions)}" for name, actions in dishes) or "none"
+    unheated = unheated_steps(dish_steps, case)
     return {
         "json": True,
         # The plan's steps, to count distinct plans across runs
@@ -549,10 +551,9 @@ def check_plan(text: str, case: dict) -> dict:
             "unlisted": unlisted_food([text for name, actions in dishes for text in (name, *actions)], case),
             "method": contradicted_methods(dishes, case),
             "order": heated_before_prep(dish_steps, case),
-            "appliance": unheated_steps(dish_steps, case),
             "turkish": turkish_words(text, fridge),
         },
-        "note": f"steps {steps}; switches {switches(plan, case)}",
+        "note": f"steps {steps}; switches {switches(plan, case)}" + (f"; no appliance: {', '.join(unheated)}" if unheated else ""),
     }
 
 

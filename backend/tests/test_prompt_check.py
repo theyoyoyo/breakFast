@@ -497,7 +497,7 @@ def test_plan_against_the_method_and_off_the_menu():
     result = check_plan(text, PLAN_CASES["boiled"])
     assert result["issues"]["method"] == ["Fry the eggs in oil (Egg sandwich: boil)"]
     assert result["issues"]["unlisted"] == ["oil", "tomatoes", "cucumbers"]
-    assert result["note"] == "steps Egg sandwich 2, Salad 1; switches 1"
+    assert result["note"] == "steps Egg sandwich 2, Salad 1; switches 1; no appliance: Fry the eggs in oil (Egg sandwich)"
 
 
 # Each plan dish is held to its own menu dish's method: the omelette may fry eggs beside boiled eggs,
@@ -552,19 +552,21 @@ def test_plan_heating_before_prep():
     assert check_plan(turkish, PLAN_CASES["menemen"])["issues"]["order"] == ["Domatesleri doğra (after Yumurtaları haşla)"]
 
 
-# A heating step needs an appliance from the case's kitchen: toast in the Oven passes where there is no Toaster,
-# a Toaster there doesn't, and spreading on the toast or cooling the boiled eggs isn't heating
-def test_plan_heating_needs_an_appliance():
+# A heating step with no appliance from the case's kitchen is noted, not a problem, since the cook can use one
+# they have: toast in the Oven where there is no Toaster isn't noted, a Toaster there is, and spreading on the
+# toast or cooling the boiled eggs isn't heating
+def test_plan_heating_without_an_appliance_is_noted():
     cooled = _plan(Boiled_eggs=[("Hard-boil the eggs", "Stove"), "Cool the boiled eggs in cold water"])
-    assert check_plan(cooled, PLAN_CASES["omelette"])["issues"]["appliance"] == []
-    assert check_plan(_plan(Boiled_eggs=["Hard-boil the eggs"]), PLAN_CASES["omelette"])["issues"]["appliance"] == [
-        "Hard-boil the eggs (Boiled eggs)",
-    ]
+    assert "no appliance" not in check_plan(cooled, PLAN_CASES["omelette"])["note"]
+    bare = check_plan(_plan(Boiled_eggs=["Hard-boil the eggs"]), PLAN_CASES["omelette"])
+    assert is_clean(bare), describe(bare)
+    assert bare["note"].endswith("; no appliance: Hard-boil the eggs (Boiled eggs)")
     steps = lambda appliance: _plan(Avocado_toast=["Mash the avocado", ("Toast the bread", appliance), "Spread it on the toast"])
-    assert check_plan(steps("Oven"), PLAN_CASES["avocado_oven"])["issues"]["appliance"] == []
-    assert check_plan(steps("Toaster"), PLAN_CASES["avocado_oven"])["issues"]["appliance"] == ["Toast the bread (Avocado toast)"]
-    assert check_plan(steps(""), PLAN_CASES["avocado"])["issues"]["appliance"] == ["Toast the bread (Avocado toast)"]
-    assert check_plan(steps("Toaster"), PLAN_CASES["avocado"])["issues"]["appliance"] == []
+    noted = lambda appliance, case: check_plan(steps(appliance), PLAN_CASES[case])["note"].partition("; no appliance: ")[2]
+    assert noted("Oven", "avocado_oven") == ""
+    assert noted("Toaster", "avocado_oven") == "Toast the bread (Avocado toast)"
+    assert noted("", "avocado") == "Toast the bread (Avocado toast)"
+    assert noted("Toaster", "avocado") == ""
 
 
 # Turkish suffixes still match: boiling the eggs of a menemen is flagged, its peppers and tomatoes are on the menu;
