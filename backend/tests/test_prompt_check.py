@@ -46,6 +46,18 @@ def test_no_meal_json():
     assert describe(result) == "no JSON"
 
 
+# A fridge too small for a breakfast passes with a note to the user; a menu, or a broken block, doesn't
+def test_note_for_a_fridge_too_small():
+    bare = SAMPLES["bare"]
+    note = check_reply("Your fridge has only tea and salt. Add a few items in the Fridge tab.", bare)
+    assert is_clean(note) and describe(note).startswith("clean (note: Your fridge has only tea and salt.")
+    menu = check_reply(_reply({"name": "Tea", "amount": 1, "unit": "glass", "ingredients": []}), bare)
+    assert not is_clean(menu) and menu["issues"]["menu"] == ["Tea"]
+    assert not is_clean(check_reply("Enjoy!\n```json\n{broken\n```", bare))
+    assert not is_clean(check_reply("", bare))
+    assert check_reply(_reply({"name": "Tea", "amount": 1, "unit": "glass", "ingredients": []}), EN)["issues"]["menu"] == []
+
+
 # A fraction amount is read the way the app reads it, so the reply still scores as a meal
 def test_fraction_amounts_score_as_a_meal():
     text = 'Enjoy!\n```json\n{"menu_name": "Oats", "menu": [{"name": "Oats", "amount": 1/4, "unit": "glass", "ingredients": []}]}\n```'
@@ -222,6 +234,9 @@ async def test_samples_run_through_the_pipeline():
 def test_chat_picks_are_fixed_fridge_items():
     for key, sample in SAMPLES.items():
         picks = chat_picks(sample, key)
+        if sample.get("expects_note"):  # a fridge too small for a breakfast has no chat scenario
+            assert picks is None and chat_scenario(key, "chat") is None, key
+            continue
         fridge = [i["name"] for i in sample["ingredients"]]
         banned = sample["avoid_list"] + [v for k, v in sample["preferences"].items() if k.startswith("dislike:")]
         assert len(set(picks)) == 4 and set(picks) <= set(fridge), key
@@ -332,6 +347,8 @@ async def test_scenarios_run_through_the_pipeline():
 
     with patch("services.pipeline.stream_response", stream), patch("services.pipeline.chat_json", chat_json):
         for key, sample in SAMPLES.items():
+            if sample.get("expects_note"):
+                continue
             for name in ("chat", "pressed"):
                 scenario = chat_scenario(key, name)
                 replies = await suggest_once(sample, SAMPLE_MODES.get(key), False, scenario=scenario)
@@ -367,8 +384,8 @@ def test_summary_counts_and_offenders():
         {"sample": "en", "run": 2, "seconds": 50, "error": None, "replies": {}, "scores": {"draft": simit, "final": simit}},
     ]
     lines = summarize(records).splitlines()
-    assert lines[1].split() == ["en", "draft", "2", "2", "0", "1", "0", "2", "0", "0", "0", "0", "0", "0", "0", "0", "0", "40"]
-    assert lines[2].split() == ["en", "final", "2", "2", "1", "2", "0", "1", "0", "0", "0", "0", "0", "0", "0", "0", "0", "40"]
+    assert lines[1].split() == ["en", "draft", "2", "2", "0", "1", "0", "2", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "40"]
+    assert lines[2].split() == ["en", "final", "2", "2", "1", "2", "0", "1", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "40"]
     assert "en draft renamed: Simit with tahini ×2" in lines
 
 

@@ -164,6 +164,14 @@ SAMPLES = {
         }),
         "history": [_meal("Boiled eggs", "Eggs", "Salt")],
     },
+    # A fridge too small for any breakfast: the press ends with a note that says what to change
+    "bare": {
+        **_BASE,
+        "language": "en",
+        "ingredients": _fridge({"☕ Beverages": ["Tea"], "🫙 Pantry": ["Salt"]}),
+        "history": [],
+        "expects_note": True,
+    },
     "vegan": {
         **_BASE,
         "language": "en",
