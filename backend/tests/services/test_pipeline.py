@@ -249,19 +249,22 @@ class TestPipelineOrchestrator:
         assert [c for c in calls if c["kind"] == "json"][1]["message"].endswith("Code check:\n- Nothing found.")
         assert next(e["content"] for e in events if e["type"] == "review") == "- No changes."
 
-    # The revised meal reaches the app's format: a dish loses its servings, a simple item its method
+    # The revised meal reaches the app's format: a dish loses its servings, a simple item keeps its method
+    # (how it's readied, #156), and empty methods and prep words are left out
     @pytest.mark.asyncio
     async def test_revised_meal_is_cleaned(self):
         revised = _meal({"name": "eggs", "amount": 2, "unit": "pcs", "prep": ""})
         revised["menu"][0].update({"amount": 1, "unit": "pcs", "method": "Boil for 8 minutes"})
-        revised["menu"].append({"ingredients": [], "name": "eggs", "method": "Serve", "amount": 1, "unit": "pcs"})
+        revised["menu"].append({"ingredients": [], "name": "eggs", "method": "Fry in the pan", "amount": 1, "unit": "pcs"})
+        revised["menu"].append({"ingredients": [], "name": "eggs", "method": " ", "amount": 1, "unit": "pcs"})
         events, _ = await _run(_draft(_meal(EGGS)), _revision(revised))
-        dish, simple = extract_json_block(_final(events))["menu"]
+        dish, readied, served = extract_json_block(_final(events))["menu"]
         assert dish == {"name": "Boiled eggs", "ingredients": [{"name": "eggs", "amount": 2, "unit": "pcs"}],
                         "method": "Boil for 8 minutes"}
-        assert simple == {"ingredients": [], "name": "eggs", "amount": 1, "unit": "pcs"}
+        assert readied == {"ingredients": [], "name": "eggs", "method": "Fry in the pan", "amount": 1, "unit": "pcs"}
+        assert served == {"ingredients": [], "name": "eggs", "amount": 1, "unit": "pcs"}
 
-    # A "dish" made of one item named as itself (Banana: Banana) is that item served as it is
+    # A "dish" made of one item named as itself (Banana: Banana) is that item on its own, and keeps its method
     @pytest.mark.asyncio
     async def test_self_named_dish_becomes_a_simple_item(self):
         revised = _meal(EGGS)
@@ -272,7 +275,7 @@ class TestPipelineOrchestrator:
         context = {**SAMPLE_CONTEXT, "ingredients": [{"name": "eggs"}, {"name": "Bananas"}]}
         events, _ = await _run(_draft(_meal(EGGS)), _revision(revised), context=context)
         banana = extract_json_block(_final(events))["menu"][1]
-        assert banana == {"ingredients": [], "name": "Banana", "amount": 100, "unit": "g"}
+        assert banana == {"ingredients": [], "name": "Banana", "method": "Peel and slice", "amount": 100, "unit": "g"}
 
     # A revised meal with more fridge or unit problems than the draft loses to the draft's meal
     @pytest.mark.asyncio

@@ -92,16 +92,18 @@ keep it: the app marks it, so the user can get it.
    - Is a portion far from a normal breakfast portion for this user?
    Change something only for a clear yes, three changes at most.
 3. Keep everything else as drafted: the same dishes, names, items and amounts.
-4. Give every dish a `method`: its main steps in one short line, so the prep plan cooks it as meant.
+4. Give each item a `method`, so the prep plan readies it as meant: a dish's main steps in one \
+short line, how a simple item is cut or cooked when it is, and an empty method for a simple item \
+served as it is.
 5. In "changes", write one short line per change (what and why). Leave it empty when nothing \
 needed changing.
 
 Amounts are numbers in these units: {unit_list}. Spoons and glasses are fixed sizes \
 ({unit_sizes}). An amount you can't measure, like "to taste", becomes a small one in a listed \
 unit (1 pinch), with the words in that ingredient's `prep`.
-A simple item is one fridge item served as it is: no ingredients, and its `amount` and `unit` \
-say how much is served. A dish is anything cooked, combined or topped: it lists its ingredients, \
-and its own `amount` and `unit` are its servings (1 pcs).
+A simple item is one fridge item on its own: no ingredients, and its `amount` and `unit` say how \
+much is served. A dish combines or tops items: it lists its ingredients, and its own `amount` and \
+`unit` are its servings (1 pcs).
 """
 
 

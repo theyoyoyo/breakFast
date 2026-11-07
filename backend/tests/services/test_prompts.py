@@ -580,9 +580,22 @@ class TestSchedulerPrompt:
         assert "these exact names (case-sensitive): Stove, Air Fryer, Toaster, Oven;" in build_scheduler_prompt("", [], "", [])
 
     def test_dish_method_is_followed(self):
-        """One rule says a dish's method is how it was designed, so the plan makes it that way."""
+        """One rule says a dish's method is how it was designed, so the plan cooks each food that way."""
         prompt = build_scheduler_prompt("", [], "")
-        assert "A dish's method, in brackets after its name, is how the dish was designed, so plan it that way." in prompt
+        assert "A dish's method, in brackets after its name, is how the dish was designed, so cook each food the way it says." in prompt
+
+    def test_prep_before_heating_and_heating_on_an_appliance(self):
+        """A heating step names any appliance from the list that does the job, since code serves hot food last,
+        and the request ends with the order rule: prep that keeps before the heating, so hot food doesn't wait
+        (#160). Neither has an example dish."""
+        prompt = build_scheduler_prompt("", [], "", kitchen_appliances=["Stove", "Oven"])
+        assert "A step that heats food names its appliance, any one from the list that does the job" in prompt
+        assert "prep that keeps" not in prompt and "avocado" not in prompt.lower() and "Stove, Oven" in prompt
+        msg = build_scheduler_user_message("Toast", [], "", menu=[{"name": "Toast", "ingredients": [{"name": "Bread"}]}])
+        assert msg.endswith(
+            "List each dish's steps. Within a dish, do the prep that keeps (slicing, chopping, mashing, mixing) "
+            "before the steps that heat food, and heat as late as the dish allows, so hot food doesn't wait for the prep:"
+        )
 
 
 class TestSchedulerUserMessage:
@@ -630,6 +643,17 @@ class TestSchedulerUserMessage:
         msg = build_scheduler_user_message("Egg sandwich", [], "", menu=menu)
         assert "- Egg sandwich (Hard-boil the eggs, peel, slice into the bread): Egg (2 pcs), Bread (2 slice)" in msg
         assert "- Menemen: Egg (2 pcs), Tomato (1 pcs)" in msg
+
+    def test_simple_item_with_a_method_is_planned_as_a_dish_of_itself(self):
+        """A simple item that is cut or cooked reaches the planner like a dish of itself, with its method;
+        one with an empty method is served as it is (#156)."""
+        menu = [
+            {"name": "Sweet potato", "amount": 300, "unit": "g", "method": "Peel, cube and roast. ", "ingredients": []},
+            {"name": "White cheese", "amount": 50, "unit": "g", "method": " ", "ingredients": []},
+        ]
+        msg = build_scheduler_user_message("Bowls", [], "", menu=menu)
+        assert "- Sweet potato (Peel, cube and roast): Sweet potato (300 g)" in msg
+        assert "- White cheese (50 g), served as it is" in msg
 
     def test_water_is_planned_like_any_item(self):
         """Water in a recipe reaches the planner with the dish; a glass of water on its own is served as it is."""
@@ -680,6 +704,14 @@ class TestFridgeRule:
         assert "everything the user has, basics included" in prompt
         assert "FRIDGE CONSTRAINT" not in prompt
         assert "water" not in prompt.lower()
+
+    # The reviser gives a simple item a method when it's cut or cooked, and an empty one when it's served as it is
+    def test_pipeline_analyst_gives_simple_items_a_method(self):
+        prompt = build_pipeline_analyst_prompt([])
+        assert "how a simple item is cut or cooked when it is, and an empty method for a simple item served as it is" in prompt
+        assert "A simple item is one fridge item on its own" in prompt
+        assert "A dish combines or tops items" in prompt
+        assert "Give every dish a `method`" not in prompt
 
 
 # ---------------------------------------------------------------------------

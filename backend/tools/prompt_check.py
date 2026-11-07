@@ -25,9 +25,11 @@ Personas, each run for a sample user (tools/prompt_samples.py):
 - shopping: Suggest Shopping, then Suggest More, as the Fridge tab sends them, with
   the same prompt, reply schema and code dedupe.
 - plan: one Prep Plan press per menu in PLAN_CASES (every menu by default), with the
-  planner's real prompt and menu message. It flags food the menu doesn't list and a
-  dish cooked another way than its method says (fry vs boil), and notes how many
-  steps each dish got and how often the plan the app builds from them switches dishes.
+  planner's real prompt and menu message. It flags food the menu doesn't list, a
+  dish cooked another way than its method says (fry vs boil), a dish that cuts other
+  food after heating something (the heated food waits), and a heating step with no
+  appliance from the kitchen, and notes how many steps each dish got and how often
+  the plan the app builds from them switches dishes.
 - chat: the typed messages of a --scenario (chat by default, or pressed) sent to the chat
   persona one at a time, with the chat so far as history. The chat talks and menus come
   only from a Suggest press (#168), so a reply with food amounts, numbered steps or a
@@ -115,12 +117,12 @@ PERSONAS = {
         ),
     },
     "shopping": {"stages": ("suggest", "more"), "problems": ("dish", "vague", "repeat", "turkish")},
-    "plan": {"stages": ("plan",), "problems": ("unlisted", "method", "turkish")},
+    "plan": {"stages": ("plan",), "problems": ("unlisted", "method", "order", "appliance", "turkish")},
     "chat": {"stages": CHAT_MESSAGES, "problems": ("food", "amounts", "steps", "block", "turkish")},
 }
 STAGES = PERSONAS["suggest"]["stages"]
 # Bumped when a check changes what counts as clean, so a test is compared only with tests scored the same way
-CHECKS = 4
+CHECKS = 5
 _TURKISH_LETTERS = set("çğıöşüÇĞİÖŞÜ")
 
 # Shopping names that aren't one specific product: alternatives, examples or filler words
@@ -143,6 +145,18 @@ _FOOD_WORDS = {
         "bal", "sogan", "patates", "sucu", "mantar", "tuz",
     ),
 }
+# Steps that heat food and steps that cut it, as word starts in either language (#160). English
+# actions lead with their verb ("Toast the bread", "Hard-boil the eggs") and Turkish ones end with it
+# ("Ekmeği kızart"), so only that word counts: "Spread it on the toast" isn't toasting, and "Cool the
+# boiled eggs" isn't boiling.
+_HEATING = (
+    "toast", "fry", "frie", "boil", "simmer", "bake", "grill", "roast", "saut", "poach", "scrambl",
+    "kizart", "kavur", "hasla", "kaynat", "pisir", "firin", "izgara",
+)
+_CUTTING = (
+    "slice", "chop", "dice", "mash", "peel", "grate", "cut", "halve", "cube", "mince",
+    "dilim", "dogra", "rende", "soy", "kes",
+)
 # Cooking methods code can tell apart, as word starts in either language
 _COOKING = {
     "boil": ("boil", "simmer", "poach", "hasla", "kaynat"),
@@ -332,8 +346,13 @@ def check_reply(text: str, sample: dict, scenario: dict | None = None) -> dict:
             "menu": [],
         },
     }
-    if note:
-        result["note"] = note
+    # Simple items' methods, so filler like "serve as is" shows in the log (#156)
+    readied = [
+        f"{i.get('name')}: {i['method'].strip()}" for i in meal["menu"]
+        if isinstance(i, dict) and not i.get("ingredients") and isinstance(i.get("method"), str) and i["method"].strip()
+    ]
+    if note or readied:
+        result["note"] = "; ".join(filter(None, [note, "simple items: " + "; ".join(readied) if readied else ""]))
     return result
 
 
@@ -428,20 +447,81 @@ def contradicted_methods(dishes: list[tuple[str, list[str]]], case: dict) -> lis
     names none, so an omelette's fried eggs aren't held to the boiled eggs beside it. A menu dish whose
     method names both ways or neither is skipped."""
     found = []
-    menu = [d for d in case["menu"] if d.get("ingredients")]
     for dish_name, actions in dishes:
-        for dish in [d for d in menu if same_name(d["name"], dish_name)] or menu:
+        for dish in _menu_dishes(dish_name, case):
             ways = _cooking(_folded(dish.get("method") or ""))
             if len(ways) != 1:
                 continue
-            # The dish's own words, plural-stripped: its name and its ingredients
-            names = [dish["name"], *(s["name"] for s in dish["ingredients"])]
-            roots = tuple(r for name in names for r in (min(v, key=lambda w: (len(w), w)) for v in _tokens(name)) if len(r) >= 3)
+            # The dish's own words: its name and its ingredients
+            roots = _food_roots([dish["name"], *(s["name"] for s in dish.get("ingredients") or [])])
             for action in actions:
                 words = _folded(action)
                 if any(w.startswith(roots) for w in words) and _cooking(words) and not _cooking(words) & ways:
                     found.append(f"{action} ({dish['name']}: {next(iter(ways))})")
     return found
+
+
+def _menu_dishes(dish_name: str, case: dict) -> list[dict]:
+    """The menu items a plan dish is held to: the one it names, or, when it names none, every item
+    that gets steps (a dish, or a simple item with a method)."""
+    menu = [d for d in case["menu"] if d.get("ingredients") or d.get("method")]
+    return [d for d in menu if same_name(d["name"], dish_name)] or menu
+
+
+def _food_roots(names) -> tuple[str, ...]:
+    """The names' words, plural-stripped, as word starts ("Eggs" → "egg")."""
+    return tuple(r for name in names for r in (min(v, key=lambda w: (len(w), w)) for v in _tokens(name)) if len(r) >= 3)
+
+
+def _verb_is(action: str, starts: tuple[str, ...], language: str) -> bool:
+    """Whether a step's verb starts like one of these: its first word in English (both parts of
+    "Hard-boil"), its last in Turkish."""
+    words = action.split()
+    verb = (words[-1:] if language == "tr" else words[:1]) or [""]
+    return any(w.startswith(starts) for w in _folded(verb[0]))
+
+
+def _plan_steps(plan: dict) -> list[tuple[str, list[dict]]]:
+    """Each dish of a plan with its steps in order, as the planner gave them."""
+    return [
+        (str(d.get("dish") or ""), [s for s in d.get("steps") or [] if isinstance(s, dict)])
+        for d in plan["dishes"] if isinstance(d, dict)
+    ]
+
+
+def heated_before_prep(steps: list[tuple[str, list[dict]]], case: dict) -> list[str]:
+    """Cutting steps that come after the dish heated other food, as "Mash the avocado (after Toast the
+    bread)": the hot food waits while the cook cuts (#160). Cutting the food that was heated (peel the
+    boiled eggs) is fine, and so is any cut after a heating step whose food code can't tell."""
+    found = []
+    for dish_name, dish_steps in steps:
+        roots = _food_roots(
+            name for item in _menu_dishes(dish_name, case)
+            for name in [s["name"] for s in item.get("ingredients") or []] or [item["name"]]
+        )
+        heated = []
+        for step in dish_steps:
+            action = str(step.get("action") or "")
+            foods = {r for r in roots if any(w.startswith(r) for w in _folded(action))}
+            if _verb_is(action, _CUTTING, case["language"]) and foods and heated and all(heated_foods for _, heated_foods in heated):
+                other = next((a for a, heated_foods in heated if not heated_foods & foods), None)
+                if other:
+                    found.append(f"{action} (after {other})")
+            if _verb_is(action, _HEATING, case["language"]):
+                heated.append((action, foods))
+    return found
+
+
+def unheated_steps(steps: list[tuple[str, list[dict]]], case: dict) -> list[str]:
+    """Heating steps with no appliance from the case's kitchen, as "Toast the bread (Avocado toast)":
+    code serves food from a hot appliance last, so a heating step without one may be made first (#160).
+    Any appliance from the kitchen passes."""
+    kitchen = {a.lower() for a in case["kitchen_appliances"]}
+    return [
+        f"{action} ({dish_name})" for dish_name, dish_steps in steps for step in dish_steps
+        if _verb_is(action := str(step.get("action") or ""), _HEATING, case["language"])
+        and str(step.get("appliance") or "").strip().lower() not in kitchen
+    ]
 
 
 def switches(plan: dict, case: dict) -> int:
@@ -451,13 +531,14 @@ def switches(plan: dict, case: dict) -> int:
 
 
 def check_plan(text: str, case: dict) -> dict:
-    """Score one prep plan reply: does its JSON parse, does it plan only the menu, and each dish as designed.
-    The note counts each dish's steps, so a plan of one step per dish shows, and the plan's switches between
-    dishes, so a plan that hops from dish to dish every minute shows too."""
+    """Score one prep plan reply: does its JSON parse, does it plan only the menu, each dish as designed,
+    its prep before its heating, and its heating on an appliance. The note counts each dish's steps, so
+    a plan of one step per dish shows, and the plan's switches between dishes, so a plan that hops from
+    dish to dish every minute shows too."""
     plan = extract_json_block(text or "")
     if not isinstance(plan, dict) or not isinstance(plan.get("dishes"), list):
         return _no_json("plan")
-    dishes = _plan_dishes(plan)
+    dishes, dish_steps = _plan_dishes(plan), _plan_steps(plan)
     fridge = {"language": case["language"], "ingredients": [{"name": n} for n in _menu_names(case["menu"])]}
     steps = ", ".join(f"{name or '?'} {len(actions)}" for name, actions in dishes) or "none"
     return {
@@ -467,6 +548,8 @@ def check_plan(text: str, case: dict) -> dict:
         "issues": {
             "unlisted": unlisted_food([text for name, actions in dishes for text in (name, *actions)], case),
             "method": contradicted_methods(dishes, case),
+            "order": heated_before_prep(dish_steps, case),
+            "appliance": unheated_steps(dish_steps, case),
             "turkish": turkish_words(text, fridge),
         },
         "note": f"steps {steps}; switches {switches(plan, case)}",

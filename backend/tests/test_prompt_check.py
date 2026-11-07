@@ -39,6 +39,19 @@ def test_clean_reply():
     assert result["dishes"] == ["menemen", "water", "white cheese"]
 
 
+# A simple item's method is noted, not flagged, so filler like "serve as is" shows in the log; dishes' methods aren't
+def test_simple_item_methods_are_noted():
+    text = _reply(
+        {"name": "Menemen", "method": "Fry the tomatoes, stir in the eggs", "ingredients": [
+            {"name": "Eggs", "amount": 2, "unit": "pcs"}, {"name": "Tomatoes", "amount": 1, "unit": "pcs"},
+        ]},
+        {"name": "White cheese", "amount": 50, "unit": "g", "method": "Serve as is", "ingredients": []},
+        {"name": "Water", "amount": 1, "unit": "glass", "method": " ", "ingredients": []},
+    )
+    result = check_reply(text, EN)
+    assert is_clean(result) and describe(result) == "clean (simple items: White cheese: Serve as is)"
+
+
 # A reply without a meal JSON block fails the JSON check
 def test_no_meal_json():
     result = check_reply("Here is a lovely breakfast idea.", EN)
@@ -457,10 +470,12 @@ def test_shopping_summary():
 
 
 def _plan(**dishes) -> str:
-    """A planner reply in #144's shape: each keyword is a dish (underscores for spaces) with its step actions."""
+    """A planner reply in #144's shape: each keyword is a dish (underscores for spaces) with its step actions,
+    each an action or an (action, appliance) pair."""
     plan = {"dishes": [
         {"dish": name.replace("_", " "), "steps": [
-            {"action": a, "minutes": 2, "hands_on": True, "appliance": ""} for a in actions
+            {"action": a, "minutes": 2, "hands_on": not appliance, "appliance": appliance}
+            for a, appliance in ((s, "") if isinstance(s, str) else s for s in actions)
         ]}
         for name, actions in dishes.items()
     ]}
@@ -470,7 +485,7 @@ def _plan(**dishes) -> str:
 # A plan that makes the egg sandwich as designed, with only menu food, is clean, and its note counts the steps
 # and the switches between dishes
 def test_plan_following_the_method_is_clean():
-    text = _plan(Egg_sandwich=["Hard-boil the eggs", "Peel and slice them", "Toast the bread", "Fill the bread"])
+    text = _plan(Egg_sandwich=[("Hard-boil the eggs", "Stove"), "Peel and slice them", ("Toast the bread", "Toaster"), "Fill the bread"])
     result = check_plan(text, PLAN_CASES["boiled"])
     assert is_clean(result), describe(result)
     assert describe(result) == "clean (steps Egg sandwich 4; switches 0)"
@@ -499,7 +514,7 @@ def test_plan_method_is_checked_per_dish():
 
 
 # The switch count is taken from the plan the app shows: the oatmeal fills the pudding's wait, so the plan
-# moves to the oatmeal and back once each, and the step the model gave the served sweet potato isn't counted
+# moves to the oatmeal and back once each, and the step the model gave a served sweet potato isn't counted
 def test_plan_switches_count_the_plan_the_app_shows():
     plan = {"dishes": [
         {"dish": "Chia pudding", "steps": [
@@ -514,9 +529,42 @@ def test_plan_switches_count_the_plan_the_app_shows():
         ]},
         {"dish": "Sweet potato", "steps": [{"action": "Serve 300 g sweet potato", "minutes": 1, "hands_on": True}]},
     ]}
-    result = check_plan("```json\n" + json.dumps(plan) + "\n```", PLAN_CASES["bowls"])
+    bowls = PLAN_CASES["bowls"]
+    served = {**bowls, "menu": [*bowls["menu"][:2], {"name": "Sweet potato", "amount": 300, "unit": "g", "ingredients": []}]}
+    result = check_plan("```json\n" + json.dumps(plan) + "\n```", served)
     assert is_clean(result), describe(result)
     assert result["note"] == "steps Chia pudding 3, Pumpkin oatmeal 3, Sweet potato 1; switches 2"
+
+
+# Toasting the bread before mashing the avocado is flagged (the toast waits), while peeling eggs after boiling
+# them, cutting after a heating step whose food code can't tell, and toast spread last are not
+def test_plan_heating_before_prep():
+    case = PLAN_CASES["avocado"]
+    late = _plan(Avocado_toast=[("Toast the bread", "Toaster"), "Mash the avocado with the lemon juice", "Spread it on the toast"])
+    assert check_plan(late, case)["issues"]["order"] == ["Mash the avocado with the lemon juice (after Toast the bread)"]
+    early = _plan(Avocado_toast=["Mash the avocado with the lemon juice", ("Toast the bread", "Toaster"), "Spread it on the toast"])
+    assert check_plan(early, case)["issues"]["order"] == []
+    unknown = _plan(Avocado_toast=[("Toast it", "Toaster"), "Mash the avocado"])
+    assert check_plan(unknown, case)["issues"]["order"] == []
+    eggs = _plan(Boiled_eggs=[("Boil the eggs", "Stove"), "Peel and halve the eggs"])
+    assert check_plan(eggs, PLAN_CASES["omelette"])["issues"]["order"] == []
+    turkish = _plan(Menemen=[("Yumurtaları haşla", "Stove"), "Domatesleri doğra"])
+    assert check_plan(turkish, PLAN_CASES["menemen"])["issues"]["order"] == ["Domatesleri doğra (after Yumurtaları haşla)"]
+
+
+# A heating step needs an appliance from the case's kitchen: toast in the Oven passes where there is no Toaster,
+# a Toaster there doesn't, and spreading on the toast or cooling the boiled eggs isn't heating
+def test_plan_heating_needs_an_appliance():
+    cooled = _plan(Boiled_eggs=[("Hard-boil the eggs", "Stove"), "Cool the boiled eggs in cold water"])
+    assert check_plan(cooled, PLAN_CASES["omelette"])["issues"]["appliance"] == []
+    assert check_plan(_plan(Boiled_eggs=["Hard-boil the eggs"]), PLAN_CASES["omelette"])["issues"]["appliance"] == [
+        "Hard-boil the eggs (Boiled eggs)",
+    ]
+    steps = lambda appliance: _plan(Avocado_toast=["Mash the avocado", ("Toast the bread", appliance), "Spread it on the toast"])
+    assert check_plan(steps("Oven"), PLAN_CASES["avocado_oven"])["issues"]["appliance"] == []
+    assert check_plan(steps("Toaster"), PLAN_CASES["avocado_oven"])["issues"]["appliance"] == ["Toast the bread (Avocado toast)"]
+    assert check_plan(steps(""), PLAN_CASES["avocado"])["issues"]["appliance"] == ["Toast the bread (Avocado toast)"]
+    assert check_plan(steps("Toaster"), PLAN_CASES["avocado"])["issues"]["appliance"] == []
 
 
 # Turkish suffixes still match: boiling the eggs of a menemen is flagged, its peppers and tomatoes are on the menu;
@@ -548,6 +596,7 @@ async def test_plan_once_sends_the_menu_with_its_methods():
             assert len(sent) == 1 and "kitchen workflow expert" in next(iter(sent))
             requests[key] = replies["request"]
     assert "- Egg sandwich (Hard-boil the eggs, peel, slice into the buttered bread): Eggs (2 pcs)" in requests["boiled"]
+    assert "- Sweet potato (Peel and cube the sweet potato, roast it in the air fryer): Sweet potato (300 g)" in requests["bowls"]
     assert set(calls) == {0.3}
 
 

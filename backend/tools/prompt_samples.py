@@ -412,8 +412,22 @@ def _dish(name: str, method: str, *ingredients: tuple) -> dict:
     ]}
 
 
-def _served(name: str, amount: float, unit: str) -> dict:
-    return {"name": name, "amount": amount, "unit": unit, "ingredients": []}
+def _served(name: str, amount: float, unit: str, method: str = "") -> dict:
+    """A simple item: served as it is, or readied the way its method says (#156)."""
+    return {"name": name, "amount": amount, "unit": unit, "ingredients": [], **({"method": method} if method else {})}
+
+
+# The server menu whose avocado toast was toasted first and went cold while the avocado was mashed (#160).
+# Its method names the toasting first, the way the reviser wrote it.
+_SERVER_MENU = [
+    _dish("Banana chia pudding", "Stir the chia seeds into the milk, let it set, top with the banana",
+          ("Chia seeds", 3, "tbsp"), ("Milk", 1, "glass"), ("Banana", 1, "pcs", "sliced")),
+    _dish("Salmon oatmeal", "Simmer the oats in the water, stir in the chard, top with the salmon",
+          ("Oats", 1, "glass", "rolled"), ("Water", 1, "glass"), ("Chard", 50, "g", "chopped"),
+          ("Smoked salmon", 50, "g")),
+    _dish("Avocado toast", "Toast the bread, mash the avocado with the lemon juice and salt, spread it on the toast",
+          ("Bread", 2, "slice"), ("Avocado", 1, "pcs"), ("Lemon juice", 1, "tsp"), ("Salt", 1, "pinch")),
+]
 
 
 # Menus for the prep plan test (--persona plan), as a suggestion designs them: dishes with their
@@ -425,8 +439,10 @@ def _served(name: str, amount: float, unit: str) -> dict:
 # - omelette: two cooked dishes, so one dish's steps can fill the other's wait (#144); both use eggs,
 #   cooked two ways.
 # - bowls: the server menu whose plan switched dishes every minute (#152): two dishes made of short
-#   hands-on steps around their waits. The sweet potato is a simple item, served as it is until a
-#   simple item may carry a method (#156); the air fryer is there for that method.
+#   hands-on steps around their waits. The sweet potato is a simple item with a method: roasted in
+#   the air fryer, so it gets steps (#156).
+# - avocado, avocado_oven: the server menu with toast (#160), once with a Toaster and once with an Oven
+#   and no Toaster, so toasting may use either.
 PLAN_CASES = {
     "boiled": {
         "language": "en",
@@ -496,7 +512,19 @@ PLAN_CASES = {
             _dish("Pumpkin oatmeal", "Simmer the oats in the milk, stir in the pumpkin purée, top with the tahini",
                   ("Oats", 1, "glass", "rolled"), ("Milk", 1, "glass"), ("Pumpkin purée", 100, "g"),
                   ("Tahini", 1, "tbsp")),
-            _served("Sweet potato", 300, "g"),
+            _served("Sweet potato", 300, "g", "Peel and cube the sweet potato, roast it in the air fryer"),
         ],
+    },
+    "avocado": {
+        "language": "en",
+        "kitchen_appliances": ["Stove", "Toaster", "Kettle"],
+        "meal_name": "Green morning",
+        "menu": _SERVER_MENU,
+    },
+    "avocado_oven": {
+        "language": "en",
+        "kitchen_appliances": ["Stove", "Oven", "Kettle"],
+        "meal_name": "Green morning",
+        "menu": _SERVER_MENU,
     },
 }

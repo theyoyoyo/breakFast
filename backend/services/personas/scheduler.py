@@ -25,7 +25,8 @@ For each dish, list its steps in the order they are done. Break the dish into it
 
 Rules:
 - Plan only what the menu lists. An ingredient's words after its amount (chopped, grated) say how to prepare it.
-- A dish's method, in brackets after its name, is how the dish was designed, so plan it that way.
+- A dish's method, in brackets after its name, is how the dish was designed, so cook each food the way it says.
+- A step that heats food names its appliance, any one from the list that does the job, because code serves food from a hot appliance last, while it's still warm.
 - Items served as they are go straight to the table, so they get no steps.
 - Name each dish as the menu does, so the plan matches the meal.
 - Output ONLY the JSON object, nothing else
@@ -73,14 +74,15 @@ def _with_amount(item, language: str = "en") -> str:
 
 
 def format_menu(menu: list, language: str = "en") -> str:
-    """One line per menu item: cooked dishes with their method and ingredients
-    ('Egg sandwich (hard-boil the eggs, peel, slice into the bread): Egg (2 pcs), …'),
-    simple items with their amount, marked as served as they are."""
+    """One line per menu item: dishes with their method and ingredients
+    ('Egg sandwich (hard-boil the eggs, peel, slice into the bread): Egg (2 pcs), …'), a simple
+    item with a method the same way, as a dish of itself ('Sweet potato (peel, cube and roast):
+    Sweet potato (300 g)', #156), and the others with their amount, marked as served as they are."""
     lines = []
     for item in menu:
-        subs = item.get("ingredients") if isinstance(item, dict) else None
+        method = str(item.get("method") or "").strip().rstrip(".") if isinstance(item, dict) else ""
+        subs = (item.get("ingredients") or ([item] if method else [])) if isinstance(item, dict) else None
         if subs:
-            method = str(item.get("method") or "").strip().rstrip(".")
             name = f"{item.get('name', '?')} ({method})" if method else item.get("name", "?")
             lines.append(f"- {name}: {', '.join(_with_amount(s, language) for s in subs)}")
         else:
@@ -97,5 +99,10 @@ def build_scheduler_user_message(meal_name: str, steps: list[str], ingredients_s
         parts.append(f"Ingredients: {ingredients_str}")
     if steps:
         parts.append("Steps:\n" + "\n".join(f"{i+1}. {s}" for i, s in enumerate(steps)))
-    parts.append("List each dish's steps:")
+    # The order rule ends the message: the 7B model follows the last message best, and the method
+    # alone kept its order even when the food it heated waited for the prep (#160)
+    parts.append(
+        "List each dish's steps. Within a dish, do the prep that keeps (slicing, chopping, mashing, mixing) "
+        "before the steps that heat food, and heat as late as the dish allows, so hot food doesn't wait for the prep:"
+    )
     return "\n\n".join(parts)

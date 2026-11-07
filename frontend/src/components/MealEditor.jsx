@@ -307,10 +307,10 @@ export default function MealEditor({
 
   const handleSave = () => onSave?.(buildCurrentMeal())
 
-  // How the suggestion meant each dish to be made: its method and its ingredients' prep words ("Oats: rolled"), behind the ℹ️ button
+  // How the suggestion meant each item to be made, behind the ℹ️ button: a dish's method and its ingredients'
+  // prep words ("Oats: rolled"), and the method of a simple item that is cut or cooked (#156)
   const prepDetails = menuMode
     ? items
-        .filter(item => !isSimpleItem(item))
         .map(item => ({
           dish: item.name,
           method: typeof item.method === 'string' ? item.method.trim() : '',

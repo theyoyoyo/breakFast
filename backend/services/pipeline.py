@@ -152,9 +152,10 @@ def _code_check(meal: dict, context: dict) -> list[str]:
 
 
 def _clean_meal(meal: dict) -> dict:
-    """The reviser's meal in the app's format: a dish has no amount or unit of its own, a simple
-    item no method, and empty prep words or methods are left out. A "dish" that is one item named
-    as itself (Banana: Banana) is that item served as it is, so it becomes a simple item."""
+    """The reviser's meal in the app's format: a dish has no amount or unit of its own, and empty
+    prep words or methods are left out. A "dish" that is one item named as itself (Banana: Banana)
+    is that item on its own, so it becomes a simple item and keeps its method: how it's readied,
+    none when it's served as it is (#156)."""
     for item in meal["menu"]:
         if not isinstance(item, dict):
             continue
@@ -166,7 +167,6 @@ def _clean_meal(meal: dict) -> dict:
             item.pop("unit", None)
         else:
             item["ingredients"] = []
-            item.pop("method", None)
         if not str(item.get("method") or "").strip():
             item.pop("method", None)
         for ingredient in item["ingredients"]:
