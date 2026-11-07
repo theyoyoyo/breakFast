@@ -8,8 +8,10 @@ waiting, then the final meal.
 Steps:
 1. Suggestion persona drafts a menu through structured outputs (draft_schema): its own
    words, then the meal in the reviser's shape. An empty menu means the fridge is too
-   small, and its words are sent as the note; a reply that can't be read gets the retry
-   text (RETRY_TEXTS). Neither shows a meal card.
+   small: its words are sent as the note, or code's low-ingredients text
+   (LOW_INGREDIENT_TEXTS) when it wrote none. A reply that can't be read gets the retry
+   text (RETRY_TEXTS), and so does a press whose pipeline fails (routers/chat.py).
+   Neither shows a meal card.
 2. Plain code checks the draft's meal (fridge, units, avoid list), and the
    Pipeline Analyst returns the fixed meal itself through structured outputs
    (revision_schema): what the chat asks for (after a chat), its changes, then
@@ -54,6 +56,15 @@ RETRY_TEXTS = {
     "en": "I couldn't put a menu together this time. Please press Suggest again.",
     "tr": "Bu sefer bir menü hazırlayamadım. Lütfen Suggest düğmesine tekrar basın.",
 }
+LOW_INGREDIENT_TEXTS = {
+    "en": "There aren't enough ingredients for a breakfast yet. Add some in the Fridge tab, or press Suggest Shopping for ideas.",
+    "tr": "Kahvaltı için henüz yeterli malzeme yok. Fridge sekmesinden malzeme ekleyin ya da fikir için Suggest Shopping düğmesine basın.",
+}
+
+
+def in_language(texts: dict, language: str) -> str:
+    """One of the code-written texts above in the reply language, English by default."""
+    return texts.get(language, texts["en"])
 
 
 def _meal_schema(language: str, method: bool = True) -> dict:
@@ -194,8 +205,8 @@ def _parse_revision(reply: str) -> tuple[list[str], list[str], dict | None]:
 
 
 def _parse_draft(reply: str) -> tuple[str, dict | None] | None:
-    """The draft's text and its meal in the app's format, the meal None for an empty menu (a note to
-    the user: the fridge is too small). None when the reply can't be read."""
+    """The draft's text and its meal in the app's format, the meal None for an empty menu (the fridge
+    is too small, and the text, maybe empty, is the note). None when the reply can't be read."""
     try:
         data = json.loads(reply)
     except (json.JSONDecodeError, TypeError):
@@ -204,7 +215,7 @@ def _parse_draft(reply: str) -> tuple[str, dict | None] | None:
         return None
     text, meal = str(data.get("text") or "").strip(), data.get("meal")
     menu = meal.get("menu") if isinstance(meal, dict) else None
-    if not isinstance(menu, list) or not (menu or text):
+    if not isinstance(menu, list):
         return None
     return text, _clean_meal(meal) if menu else None
 
@@ -302,10 +313,14 @@ async def run_suggestion_pipeline(
     draft_text, draft_meal = draft or (reply, None)
     yield {"type": "draft", "content": _meal_reply(draft_text, draft_meal) if draft_meal else draft_text}
 
-    # No menu: the draft's note when the fridge is too small, or the retry text when its reply
-    # can't be read. It is sent as text without a review, so the chat shows no meal card.
+    # No menu: when the fridge is too small, the draft's note, or code's low-ingredients text if it
+    # wrote none; the retry text when its reply can't be read. It is sent as text without a review,
+    # so the chat shows no meal card.
     if draft_meal is None:
-        note = draft_text if draft else RETRY_TEXTS["en" if language == "en" else "tr"]
+        if draft:
+            note = draft_text or in_language(LOW_INGREDIENT_TEXTS, language)
+        else:
+            note = in_language(RETRY_TEXTS, language)
         yield {"type": "progress", "step": "analyzing"}
         yield {"type": "review", "content": "- No meal in the draft, so nothing to revise." if draft else "- The draft couldn't be read."}
         yield {"type": "progress", "step": "finalizing"}

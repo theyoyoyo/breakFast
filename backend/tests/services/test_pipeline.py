@@ -13,7 +13,7 @@ import pytest
 
 from services.personas.pipeline_analyst import CHAT_STEP
 from services.suggestion import build_pipeline_analyst_prompt
-from services.pipeline import RETRY_TEXTS, revision_schema, run_suggestion_pipeline
+from services.pipeline import LOW_INGREDIENT_TEXTS, RETRY_TEXTS, revision_schema, run_suggestion_pipeline
 from utils import extract_json_block
 
 
@@ -360,10 +360,19 @@ class TestPipelineOrchestrator:
         assert [c["kind"] for c in calls] == ["json"]
         assert next(e["content"] for e in events if e["type"] == "review") == "- No meal in the draft, so nothing to revise."
 
+    # An empty menu without a note gets code's low-ingredients text in the reply language, not the retry text
+    @pytest.mark.asyncio
+    async def test_empty_menu_without_a_note_says_ingredients_are_low(self):
+        empty = _draft({**_meal(EGGS), "menu": []}, text=" ")
+        events, calls = await _run(empty, _revision(_meal(EGGS)))
+        assert _final(events) == LOW_INGREDIENT_TEXTS["en"] and len(calls) == 1
+        events, _ = await _run(empty, _revision(_meal(EGGS)), context={**SAMPLE_CONTEXT, "language": "tr"})
+        assert _final(events) == LOW_INGREDIENT_TEXTS["tr"]
+
     # A draft reply that can't be read ends with the retry text in the reply language, with no meal block
     @pytest.mark.asyncio
     async def test_unreadable_draft_gets_the_retry_text(self):
-        for reply in ('{"text": "Enjoy!", "meal": {"menu": [', "[]", _draft({**_meal(EGGS), "menu": []}, text=" ")):
+        for reply in ('{"text": "Enjoy!", "meal": {"menu": [', "[]", '{"text": "Enjoy!", "meal": {"menu": "eggs"}}'):
             events, calls = await _run(reply, _revision(_meal(EGGS)))
             assert _final(events) == RETRY_TEXTS["en"] and len(calls) == 1
             assert next(e["content"] for e in events if e["type"] == "draft") == reply

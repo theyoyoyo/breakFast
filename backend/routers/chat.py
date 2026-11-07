@@ -14,7 +14,7 @@ from database import get_db
 from auth import get_user_id_from_token
 from services.llm import LLMUnavailableError, lyric_cycler
 from services.suggestion import build_chat_prompt, stream_response
-from services.pipeline import run_suggestion_pipeline
+from services.pipeline import RETRY_TEXTS, in_language, run_suggestion_pipeline
 from services.context import load_chat_context
 from services.chat_block import load_chat_block
 from services import chat_sync
@@ -202,8 +202,10 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                 except LLMUnavailableError:
                     response_text = lyric_cycler.next()
                 except Exception:
-                    logging.exception("Suggestion pipeline failed; replying with a lyric")
-                    response_text = lyric_cycler.next()
+                    logging.exception("Suggestion pipeline failed; asking to press Suggest again")
+                # Ollama answered but the press failed (a timeout, an error) or said nothing:
+                # tell the user it failed instead of posting nothing or a lyric
+                response_text = response_text or in_language(RETRY_TEXTS, cached_context.get("language", "en"))
             else:
                 system_prompt = build_chat_prompt(
                     ingredient_inventory=cached_context["ingredients"],
