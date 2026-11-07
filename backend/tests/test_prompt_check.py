@@ -551,8 +551,13 @@ def test_plan_heating_before_prep():
 
 
 # A heating step needs an appliance from the case's kitchen: toast in the Oven passes where there is no Toaster,
-# a Toaster there doesn't, and spreading on the toast isn't heating
+# a Toaster there doesn't, and spreading on the toast or cooling the boiled eggs isn't heating
 def test_plan_heating_needs_an_appliance():
+    cooled = _plan(Boiled_eggs=[("Hard-boil the eggs", "Stove"), "Cool the boiled eggs in cold water"])
+    assert check_plan(cooled, PLAN_CASES["omelette"])["issues"]["appliance"] == []
+    assert check_plan(_plan(Boiled_eggs=["Hard-boil the eggs"]), PLAN_CASES["omelette"])["issues"]["appliance"] == [
+        "Hard-boil the eggs (Boiled eggs)",
+    ]
     steps = lambda appliance: _plan(Avocado_toast=["Mash the avocado", ("Toast the bread", appliance), "Spread it on the toast"])
     assert check_plan(steps("Oven"), PLAN_CASES["avocado_oven"])["issues"]["appliance"] == []
     assert check_plan(steps("Toaster"), PLAN_CASES["avocado_oven"])["issues"]["appliance"] == ["Toast the bread (Avocado toast)"]

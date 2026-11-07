@@ -147,7 +147,8 @@ _FOOD_WORDS = {
 }
 # Steps that heat food and steps that cut it, as word starts in either language (#160). English
 # actions lead with their verb ("Toast the bread", "Hard-boil the eggs") and Turkish ones end with it
-# ("Ekmeği kızart"), so only those words count, and "Spread it on the toast" isn't toasting.
+# ("Ekmeği kızart"), so only that word counts: "Spread it on the toast" isn't toasting, and "Cool the
+# boiled eggs" isn't boiling.
 _HEATING = (
     "toast", "fry", "frie", "boil", "simmer", "bake", "grill", "roast", "saut", "poach", "scrambl",
     "kizart", "kavur", "hasla", "kaynat", "pisir", "firin", "izgara",
@@ -473,9 +474,11 @@ def _food_roots(names) -> tuple[str, ...]:
 
 
 def _verb_is(action: str, starts: tuple[str, ...], language: str) -> bool:
-    """Whether a step's verb starts like one of these: its first two words in English, its last in Turkish."""
-    words = _folded(action)
-    return any(w.startswith(starts) for w in (words[-1:] if language == "tr" else words[:2]))
+    """Whether a step's verb starts like one of these: its first word in English (both parts of
+    "Hard-boil"), its last in Turkish."""
+    words = action.split()
+    verb = (words[-1:] if language == "tr" else words[:1]) or [""]
+    return any(w.startswith(starts) for w in _folded(verb[0]))
 
 
 def _plan_steps(plan: dict) -> list[tuple[str, list[dict]]]:
