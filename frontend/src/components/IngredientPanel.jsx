@@ -96,6 +96,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
 
   // Delete-to-shopping popup
   const [deletePopup, setDeletePopup] = useState(null) // { id, name }
+  const deleteConfirmRef = useRef(null)
 
   // Favorite ingredients
   const [favoriteNames, setFavoriteNames] = useState(new Set())
@@ -226,6 +227,12 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
       window.addEventListener('click', dismiss, { once: true })
     }, 0)
     return () => { clearTimeout(id); window.removeEventListener('click', dismiss) }
+  }, [deletePopup])
+
+  // The delete choices open on their own line under the row; bring them into view when the
+  // row is at the bottom of the list
+  useEffect(() => {
+    if (deletePopup) deleteConfirmRef.current?.scrollIntoView?.({ block: 'nearest' })
   }, [deletePopup])
 
   // Expose demo hooks
@@ -654,37 +661,43 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
                       >
                         <Pencil size={12} />
                       </button>
-                      <div style={{ position: 'relative' }}>
+                      <button
+                        style={s.rowDeleteBtn}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setDeletePopup(deletePopup?.id === ing.id ? null : { id: ing.id, name: ing.name })
+                        }}
+                        title="Delete"
+                        aria-expanded={deletePopup?.id === ing.id}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                    {/* On its own line, so the group grows to show it, even under its last row */}
+                    {deletePopup?.id === ing.id && (
+                      <div
+                        ref={deleteConfirmRef}
+                        style={s.deleteConfirm}
+                        role="group"
+                        aria-label={`Delete ${ing.name}`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <button
-                          style={s.rowDeleteBtn}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setDeletePopup(deletePopup?.id === ing.id ? null : { id: ing.id, name: ing.name })
-                          }}
+                          style={s.deleteConfirmTrash}
+                          onClick={() => handleDelete(ing.id)}
                           title="Delete"
                         >
                           <Trash2 size={12} />
                         </button>
-                        {deletePopup?.id === ing.id && (
-                          <div style={s.deleteConfirm} onClick={(e) => e.stopPropagation()}>
-                            <button
-                              style={s.deleteConfirmTrash}
-                              onClick={() => handleDelete(ing.id)}
-                              title="Delete"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                            <button
-                              style={s.deleteConfirmShop}
-                              onClick={() => handleDeleteToShopping(ing.id)}
-                              title="Delete & add to shopping list"
-                            >
-                              <ShoppingCart size={12} />
-                            </button>
-                          </div>
-                        )}
+                        <button
+                          style={s.deleteConfirmShop}
+                          onClick={() => handleDeleteToShopping(ing.id)}
+                          title="Delete & add to shopping list"
+                        >
+                          <ShoppingCart size={12} />
+                        </button>
                       </div>
-                    </div>
+                    )}
                   </div>
                 )
               ))}

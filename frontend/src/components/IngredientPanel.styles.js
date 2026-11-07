@@ -236,17 +236,16 @@ export const keptCountLabel = {
 }
 
 // ---------------------------------------------------------------------------
-// Delete confirm (inline buttons below delete icon)
+// Delete confirm (its own line under the row, right under the delete icon)
 // ---------------------------------------------------------------------------
 
+// In the flow, not floating: a group card clips what sticks out (overflow: hidden), so a
+// floating line under a group's last row was cut off
 export const deleteConfirm = {
-  position: 'absolute',
-  top: '100%',
-  right: 0,
   display: 'flex',
+  justifyContent: 'flex-end',
   gap: 3,
-  padding: '4px 0',
-  zIndex: 10,
+  padding: '0 16px 6px',
 }
 
 const _deleteConfirmBase = {
