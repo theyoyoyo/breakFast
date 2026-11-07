@@ -340,6 +340,8 @@ SAMPLE_MODES = {"picky": "favorites", "greek": "explore"}
 SCENARIOS = ("fresh", "chat", "pressed")
 # The time limit the chat asks for
 CHAT_MINUTES = 10
+# What each of the chat's four typed messages asks, in order: the chat persona's test scores a reply per message
+CHAT_MESSAGES = ("leave_out", "liked", "time", "allowed")
 # Seeds each sample's picks, so tests compare
 CHAT_SEED = 159
 # Basics and drinks are picked only when a fridge has too few other items ("No salt please" is no breakfast wish)

@@ -210,6 +210,22 @@ class TestChatPrompt:
         prompt = build_chat_prompt([], [], {}, [])
         assert "```json" not in prompt
 
+    def test_menus_go_to_suggest(self):
+        """The chat talks and sends the user to Suggest for a menu, with the reason, and has no rules for meals it mentions (#168)."""
+        prompt = build_chat_prompt([], [], {}, [])
+        assert "THE MENU COMES FROM THE SUGGEST BUTTON" in prompt
+        assert "leave dishes, recipes, amounts and cooking steps to it" in prompt
+        assert "card the user can edit, plan and log" in prompt
+        assert "tell them to tap Suggest" in prompt
+        assert "Ask one short question at a time" in prompt
+        for gone in ("INGREDIENT RULE", "Only suggest meals", "shape your suggestions", "What should I eat?"):
+            assert gone not in prompt
+
+    def test_ends_with_language_reminder(self):
+        """The language directive is the last thing the model reads, like every user-facing prompt."""
+        prompt = build_chat_prompt([], [], {}, [], language="tr")
+        assert prompt.rstrip().splitlines()[-1].startswith("FINAL REMINDER: Always respond in Turkish.")
+
     def test_includes_avoid_list_empty(self):
         prompt = build_chat_prompt([], [], {}, [])
         assert "No items on avoid list" in prompt

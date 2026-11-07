@@ -6,13 +6,13 @@ from unittest.mock import patch
 import pytest
 
 from services import pipeline
-from services.chat_block import format_chat_block
+from services.chat_block import chat_history, format_chat_block
 from services.fridge import same_name
 from tools.prompt_check import (
-    CHECKS, PERSONAS, chat_rows, check_plan, check_reply, compare, describe, is_clean, parse_args,
-    plan_once, recording_prompts, run, score_shopping, shop_once, suggest_once, summarize,
+    CHECKS, PERSONAS, chat_once, chat_rows, check_chat, check_plan, check_reply, compare, describe, is_clean,
+    parse_args, plan_once, recording_prompts, run, score_shopping, shop_once, suggest_once, summarize,
 )
-from tools.prompt_samples import CHAT_MINUTES, PLAN_CASES, SAMPLE_MODES, SAMPLES, SCENARIOS, chat_picks, chat_scenario
+from tools.prompt_samples import CHAT_MESSAGES, CHAT_MINUTES, PLAN_CASES, SAMPLE_MODES, SAMPLES, SCENARIOS, chat_picks, chat_scenario
 
 EN, TR = SAMPLES["en"], SAMPLES["tr"]
 
@@ -572,3 +572,80 @@ def test_all_samples():
     assert parse_args(["--samples", "all"]).samples == list(SAMPLES)
     assert parse_args(["--persona", "shopping", "--samples", "all"]).samples == list(SAMPLES)
     assert parse_args(["--persona", "plan", "--samples", "all"]).samples == list(PLAN_CASES)
+
+
+# A chat reply that talks and points to the Suggest button is clean; a number with a unit or a fridge item,
+# a numbered or timed step and a code block make a menu or a plan, while "10 minutes" is no food amount
+def test_chat_reply_checks():
+    talk = check_chat("Ten minutes is plenty! Tap Suggest when you're ready and I'll keep it quick.", EN)
+    assert is_clean(talk) and talk["note"] == "points to Suggest"
+
+    plan = check_chat(
+        "In 10 minutes you can make this:\n1. Boil 2 eggs\n**2.** Toast 1 slice of bread\n"
+        "7:05 Serve with 50 g Feta\n```json\n{}\n```", EN,
+    )
+    assert plan["issues"]["amounts"] == ["1 slice", "50 g", "2 eggs"]
+    assert plan["issues"]["steps"] == ["1. Boil 2 eggs", "**2.** Toast 1 slice of bread", "7:05 Serve with 50 g Feta"]
+    assert plan["issues"]["block"] == ["```"]
+    assert plan["note"] == "no Suggest"
+    assert check_chat("Adım 1: 2 yumurta haşla, 1 çay kaşığı tuz ekle.", TR)["issues"]["amounts"] == ["1 çay kaşığı", "2 yumurta"]
+    assert not check_chat("", EN)["json"]
+
+
+# Two or more fridge items the user didn't name put a meal together in a chat reply; repeating the user's
+# own foods, or naming one more, is talk
+def test_chat_reply_bringing_in_food():
+    said = ["No eggs please, and no simit either."]
+    idea = check_chat("Got it, no eggs or simit! How about a yogurt bowl with honey and walnuts?", EN, said)
+    assert idea["issues"]["food"] == ["Yogurt", "Honey", "Walnuts"]
+    assert check_chat("Got it, no eggs and no simit today. Tap Suggest when you're ready.", EN, said)["issues"]["food"] == []
+    assert check_chat("No eggs or simit, then. Some honey maybe?", EN, said)["issues"]["food"] == []
+
+
+# The chat persona gets the typed messages one at a time with the chat so far as history, an earlier
+# Suggest press as its button text and its card's one line (no JSON to copy), and each reply is kept under its message's kind
+async def test_chat_once_sends_the_typed_messages_in_turn():
+    calls = []
+
+    async def fake_stream(system_prompt, history, message, temperature=None):
+        calls.append((system_prompt, [dict(h) for h in history], message, temperature))
+        yield f"reply {len(calls)}"
+
+    scenario = chat_scenario("en", "pressed")
+    typed = [e["content"] for e in scenario["chat"] if "press" not in e]
+    sent = {}
+    with patch("services.suggestion.stream_response", fake_stream):
+        replies = await chat_once(EN, None, scenario, sent)
+    assert list(replies) == ["chat", *CHAT_MESSAGES]
+    assert replies["chat"] == "\n".join(typed) and replies["allowed"] == "reply 4"
+    assert [message for _, _, message, _ in calls] == typed
+    assert {temperature for *_, temperature in calls} == {None}
+    assert len(sent) == 1 and "breakfast assistant" in next(iter(sent))
+    # The first message comes after the first press; the last has the whole chat before it
+    first_history, last_history = calls[0][1], calls[-1][1]
+    assert first_history == chat_history(chat_rows(scenario["chat"][:1], None))
+    assert first_history[1]["content"].startswith("A breakfast for you.\n\nMenu shown: Breakfast plate.")
+    assert not any("```" in h["content"] for _, history, _, _ in calls for h in history)
+    assert len(last_history) == 2 * 2 + 3 * 2  # both presses, and the three typed messages before it with their replies
+    assert last_history[-1] == {"role": "assistant", "content": "reply 3"}
+
+
+# A chat persona run scores each reply by its message's kind, labelled by the scenario
+async def test_chat_persona_run():
+    async def fake_stream(system_prompt, history, message, temperature=None):
+        yield "Sounds good! Press Suggest when you're ready."
+
+    with patch("services.suggestion.stream_response", fake_stream):
+        records, _ = await run(["en"], 1, None, False, persona="chat", scenarios=["chat"])
+    assert [r["sample"] for r in records] == ["en:chat"]
+    assert list(records[0]["scores"]) == list(CHAT_MESSAGES)
+    assert all(is_clean(s) for s in records[0]["scores"].values())
+    assert "leave_out" in summarize(records, "chat")
+
+
+# The chat persona answers typed messages: chat by default, all is chat and pressed, and a fresh chat is refused
+def test_chat_persona_scenarios():
+    assert parse_args(["--persona", "chat"]).scenarios == ["chat"]
+    assert parse_args(["--persona", "chat", "--scenario", "all"]).scenarios == ["chat", "pressed"]
+    with pytest.raises(SystemExit):
+        parse_args(["--persona", "chat", "--scenario", "fresh"])

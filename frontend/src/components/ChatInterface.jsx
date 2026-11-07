@@ -400,16 +400,6 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       (step) => {
         setPipelineStep(step)
       },
-      // onMealUpdated — chat modified the current meal; update the selected block in place
-      (meal) => {
-        const normalized = normalizeMeal(meal)
-        setCheckedMealIdx((idx) => {
-          if (idx !== null) {
-            setMealBlocks((blocks) => ({ ...blocks, [idx]: normalized }))
-          }
-          return idx
-        })
-      },
       // onSessionUpdated — a session changed elsewhere: reload it if it's on screen,
       // else only Back / Next may have changed
       (changedId) => {

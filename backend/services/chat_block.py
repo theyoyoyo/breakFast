@@ -6,6 +6,9 @@ same thing: one block in chat order, oldest first and the latest last. It holds 
 messages (never the Suggest buttons' own text) and the meal cards in the chat as they are now,
 edits included. Nothing else the app wrote (chat replies, analyses, prep plans) goes in. The
 draft and the reviser both get the block, placed last in their message.
+
+The chat persona reads the same session as its history, with each meal card as its one line, and
+its reply loses any meal block before it is saved: meal cards come only from a Suggest press (#168).
 """
 
 from services.fridge import meal_ingredient_names
@@ -105,3 +108,32 @@ async def load_chat_block(db, session_id: str, user_id: int) -> str | None:
     ) as cur:
         rows = await cur.fetchall()
     return format_chat_block([{"role": r["role"], "content": r["content"]} for r in rows])
+
+
+# What a chat reply says when it was nothing but a meal block: the menu comes from a Suggest press
+CHAT_SUGGEST_TEXTS = {
+    "en": "Tap Suggest when you're ready, and the menu will follow what you told me.",
+    "tr": "Hazır olduğunuzda Suggest düğmesine basın, menü yazdıklarınıza göre hazırlanır.",
+}
+_FENCE = "```json"
+
+
+def chat_history(rows: list[dict]) -> list[dict]:
+    """The session's messages as the chat persona's history: each meal card becomes its one line
+    after the reply's own text, so the chat knows which menus were shown but has no meal JSON to
+    copy into its reply (the 7B model copied it into every reply after a Suggest press)."""
+    history = []
+    for row in rows:
+        content = str(row.get("content") or "")
+        meal = _meal_card(content) if row.get("role") == "assistant" else None
+        if meal:
+            text = content.split(_FENCE, 1)[0].strip()
+            content = "\n\n".join(part for part in (text, _card_line(meal)) if part)
+        history.append({"role": row.get("role"), "content": content})
+    return history
+
+
+def drop_meal_block(reply: str) -> str:
+    """A chat reply without its meal block, cut where the app stops showing it while it streams
+    (ChatInterface.jsx, stripStreamingJsonBlock), so a chat reply never becomes a meal card."""
+    return reply.split(_FENCE, 1)[0].rstrip()

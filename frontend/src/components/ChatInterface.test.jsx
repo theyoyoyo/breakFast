@@ -71,10 +71,10 @@ function lastSocket() {
   return sockets[sockets.length - 1]
 }
 function pushSessionUpdated(sessionId) {
-  act(() => lastSocket().callbacks[7](sessionId))
+  act(() => lastSocket().callbacks[6](sessionId))
 }
 function pushNotice(notice) {
-  act(() => lastSocket().callbacks[8](notice))
+  act(() => lastSocket().callbacks[7](notice))
 }
 
 function setVisibility(state) {

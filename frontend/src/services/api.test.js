@@ -149,7 +149,7 @@ describe('chat sync API', () => {
     vi.stubGlobal('WebSocket', class { constructor() { sockets.push(this) } })
     const onDone = vi.fn()
     const onSessionUpdated = vi.fn()
-    createChatSocket(vi.fn(), onDone, vi.fn(), null, null, null, null, onSessionUpdated)
+    createChatSocket(vi.fn(), onDone, vi.fn(), null, null, null, onSessionUpdated)
     sockets[0].onmessage({ data: JSON.stringify({ type: 'done', content: 'Hi', message_id: 5 }) })
     sockets[0].onmessage({ data: JSON.stringify({ type: 'session_updated', session_id: 's1' }) })
     expect(onDone).toHaveBeenCalledWith('Hi', 5)
