@@ -580,9 +580,18 @@ class TestSchedulerPrompt:
         assert "these exact names (case-sensitive): Stove, Air Fryer, Toaster, Oven;" in build_scheduler_prompt("", [], "", [])
 
     def test_dish_method_is_followed(self):
-        """One rule says a dish's method is how it was designed, so the plan makes it that way."""
+        """One rule says a dish's method is how it was designed, so the plan cooks each food that way."""
         prompt = build_scheduler_prompt("", [], "")
-        assert "A dish's method, in brackets after its name, is how the dish was designed, so plan it that way." in prompt
+        assert "A dish's method, in brackets after its name, is how the dish was designed, so cook each food the way it says." in prompt
+
+    def test_prep_before_heating_and_heating_on_an_appliance(self):
+        """Prep that keeps comes before the heating, so hot food doesn't wait, and a heating step names any
+        appliance from the list that does the job, since code serves hot food last (#160); no example dish."""
+        prompt = build_scheduler_prompt("", [], "", kitchen_appliances=["Stove", "Oven"])
+        assert "do the prep that keeps (slicing, chopping, mashing, mixing) before the steps that heat food" in prompt
+        assert "so hot food doesn't wait for the prep" in prompt
+        assert "A step that heats food names its appliance, any one from the list that does the job" in prompt
+        assert "avocado" not in prompt.lower() and "Stove, Oven" in prompt
 
 
 class TestSchedulerUserMessage:
