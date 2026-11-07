@@ -13,7 +13,7 @@ import pytest
 
 from services.personas.pipeline_analyst import CHAT_STEP
 from services.suggestion import build_pipeline_analyst_prompt
-from services.pipeline import revision_schema, run_suggestion_pipeline
+from services.pipeline import RETRY_TEXTS, revision_schema, run_suggestion_pipeline
 from utils import extract_json_block
 
 
@@ -44,8 +44,8 @@ def _meal(*ingredients: dict) -> dict:
     }
 
 
-def _draft(meal: dict) -> str:
-    return f"Enjoy!\n```json\n{json.dumps(meal)}\n```"
+def _draft(meal: dict, text: str = "Enjoy!") -> str:
+    return json.dumps({"text": text, "meal": meal})
 
 
 def _revision(meal, changes=()) -> str:
@@ -53,26 +53,26 @@ def _revision(meal, changes=()) -> str:
 
 
 async def _run(draft, revision, present="A warm start.", context=SAMPLE_CONTEXT, mode=None, temperature=0.6, chat_block=None):
-    """Run the pipeline on canned replies (an Exception raises instead); returns the events and every model call."""
+    """Run the pipeline on canned replies (an Exception raises instead): the draft and the reviser are
+    structured calls, the present step streams. Returns the events and every model call."""
     calls = []
 
     async def fake_stream(system_prompt, history, message, temperature=None):
-        streamed = [c for c in calls if c["kind"] == "stream"]
         calls.append({"kind": "stream", "system": system_prompt, "message": message, "temperature": temperature})
-        text = draft if not streamed else present
-        if isinstance(text, Exception):
-            raise text
-        for char in text:
+        if isinstance(present, Exception):
+            raise present
+        for char in present:
             yield char
 
     async def fake_chat_json(system_prompt, messages, schema, temperature=None):
+        reply = revision if any(c["kind"] == "json" for c in calls) else draft
         calls.append({
             "kind": "json", "system": system_prompt, "message": messages[0]["content"],
             "temperature": temperature, "schema": schema,
         })
-        if isinstance(revision, Exception):
-            raise revision
-        return revision
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
 
     with patch("services.pipeline.stream_response", fake_stream), patch("services.pipeline.chat_json", fake_chat_json):
         events = [
@@ -215,7 +215,7 @@ class TestPipelineOrchestrator:
             {"name": "Shellfish", "amount": 50, "unit": "g"}, {"name": "eggs", "amount": 1, "unit": "cup"},
         )
         events, calls = await _run(_draft(draft), _revision(_meal(EGGS)))
-        reviser = next(c for c in calls if c["kind"] == "json")
+        reviser = [c for c in calls if c["kind"] == "json"][1]
         assert reviser["message"].startswith('Draft menu:\n```json\n{\n  "menu"')
         assert "- Not in the fridge: Salt, Shellfish" in reviser["message"]
         assert "- On the avoid list: Shellfish" in reviser["message"]
@@ -246,7 +246,7 @@ class TestPipelineOrchestrator:
     @pytest.mark.asyncio
     async def test_code_check_silent_when_clean(self):
         events, calls = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)))
-        assert next(c for c in calls if c["kind"] == "json")["message"].endswith("Code check:\n- Nothing found.")
+        assert [c for c in calls if c["kind"] == "json"][1]["message"].endswith("Code check:\n- Nothing found.")
         assert next(e["content"] for e in events if e["type"] == "review") == "- No changes."
 
     # The revised meal reaches the app's format: a dish loses its servings, a simple item its method
@@ -301,7 +301,7 @@ class TestPipelineOrchestrator:
     @pytest.mark.asyncio
     async def test_present_reads_only_the_final_meal(self):
         events, calls = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)), temperature=0.9)
-        present = [c for c in calls if c["kind"] == "stream"][1]
+        present = next(c for c in calls if c["kind"] == "stream")
         assert "Introduce it in a few short lines" in present["system"]
         assert present["message"].startswith("Today's menu:\n```json\n")
         assert "Enjoy!" not in present["message"]
@@ -322,26 +322,53 @@ class TestPipelineOrchestrator:
         assert final.startswith("Enjoy!\n\n```json\n")
         assert extract_json_block(final) == _meal(EGGS)
 
-    # A draft with no meal block is a note to the user, sent as it is without a review
+    # The draft is a structured call: its text first, then the meal in the reviser's shape without a method
     @pytest.mark.asyncio
-    async def test_note_without_meal_is_sent_as_is(self):
-        events, calls = await _run("Your fridge is nearly empty.", _revision(_meal(EGGS)))
-        assert _final(events) == "Your fridge is nearly empty."
-        assert [c["kind"] for c in calls] == ["stream"]
+    async def test_draft_is_called_with_its_schema(self):
+        events, calls = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)), temperature=0.9)
+        draft = calls[0]
+        assert draft["kind"] == "json" and draft["temperature"] == 0.9
+        assert list(draft["schema"]["properties"]) == draft["schema"]["required"] == ["text", "meal"]
+        meal, revised = draft["schema"]["properties"]["meal"], revision_schema("en")["properties"]["meal"]
+        item = meal["properties"]["menu"]["items"]
+        assert list(item["properties"]) == item["required"] == ["ingredients", "name", "amount", "unit"]
+        revised_item = revised["properties"]["menu"]["items"]
+        assert {k: v for k, v in revised_item["properties"].items() if k != "method"} == item["properties"]
+        assert {k: v for k, v in revised["properties"].items() if k != "menu"} == {k: v for k, v in meal["properties"].items() if k != "menu"}
+        assert "Reply with one JSON object: first `text`" in draft["system"]
+        assert next(e["content"] for e in events if e["type"] == "draft").startswith("Enjoy!\n\n```json\n")
 
-    # A draft whose meal block can't be read goes to the reviser as text, and its meal is used
+    # The draft's meal reaches the reviser in the app's format: a dish loses its servings, a one-item dish named as itself is a simple item
     @pytest.mark.asyncio
-    async def test_broken_draft_meal_is_rebuilt_by_the_reviser(self):
-        events, calls = await _run("Enjoy!\n```json\n{\"menu\": [\n```", _revision(_meal(EGGS)))
-        assert "its meal block couldn't be read" in next(c for c in calls if c["kind"] == "json")["message"]
-        assert extract_json_block(_final(events)) == _meal(EGGS)
+    async def test_draft_meal_is_cleaned_for_the_reviser(self):
+        drafted = _meal({**EGGS, "prep": " "})
+        drafted["menu"][0].update(amount=1, unit="pcs")
+        drafted["menu"].append({"ingredients": [EGGS], "name": "eggs", "amount": 1, "unit": "pcs"})
+        _, calls = await _run(_draft(drafted), _revision(_meal(EGGS)))
+        sent = extract_json_block(calls[1]["message"])
+        assert sent["menu"] == [
+            {"name": "Boiled eggs", "ingredients": [EGGS]},
+            {"ingredients": [], "name": "eggs", "amount": 2, "unit": "pcs"},
+        ]
 
-    # A draft meal with fractions ("amount": 1/2) reaches the user with decimals, so the chat can read it again
+    # An empty menu is the fridge-too-small note: its text is sent as it is, without a review and with no meal block
     @pytest.mark.asyncio
-    async def test_draft_fractions_become_decimals(self):
-        halves = "Enjoy!\n```json\n" + json.dumps(_meal(EGGS)).replace('"amount": 2', '"amount": 1/2') + "\n```"
-        events, _ = await _run(halves, "not json")
-        assert extract_json_block(_final(events))["menu"][0]["ingredients"][0]["amount"] == 0.5
+    async def test_empty_menu_sends_the_note(self):
+        note = "Your fridge has only tea and salt. Add a few items in the Fridge tab."
+        events, calls = await _run(_draft({**_meal(EGGS), "menu": []}, text=note), _revision(_meal(EGGS)))
+        assert _final(events) == note and extract_json_block(note) is None
+        assert [c["kind"] for c in calls] == ["json"]
+        assert next(e["content"] for e in events if e["type"] == "review") == "- No meal in the draft, so nothing to revise."
+
+    # A draft reply that can't be read ends with the retry text in the reply language, with no meal block
+    @pytest.mark.asyncio
+    async def test_unreadable_draft_gets_the_retry_text(self):
+        for reply in ('{"text": "Enjoy!", "meal": {"menu": [', "[]", _draft({**_meal(EGGS), "menu": []}, text=" ")):
+            events, calls = await _run(reply, _revision(_meal(EGGS)))
+            assert _final(events) == RETRY_TEXTS["en"] and len(calls) == 1
+            assert next(e["content"] for e in events if e["type"] == "draft") == reply
+        events, _ = await _run("not json", _revision(_meal(EGGS)), context={**SAMPLE_CONTEXT, "language": "tr"})
+        assert _final(events) == RETRY_TEXTS["tr"]
 
     # The draft runs at the mode's temperature with the mode block, and the reviser cool with the mode line
     @pytest.mark.asyncio

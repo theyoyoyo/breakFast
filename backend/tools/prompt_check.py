@@ -269,8 +269,9 @@ def chat_problems(meal: dict, scenario: dict | None) -> tuple[dict, str]:
 
 def check_note(text: str, sample: dict) -> dict:
     """Score a reply for a fridge too small for any breakfast (a sample with expects_note): a note to
-    the user is clean, and its start is noted; a menu is flagged as one. "json" here means the reply
-    has the shape this sample asks for."""
+    the user is clean, and its start is noted; a menu is flagged as one, and the pipeline's retry
+    text for a draft it couldn't read is no note. "json" here means the reply has the shape this
+    sample asks for."""
     result = _no_json("suggest")
     meal = extract_json_block(text or "")
     menu = meal.get("menu") if isinstance(meal, dict) else None
@@ -278,7 +279,7 @@ def check_note(text: str, sample: dict) -> dict:
         names = [str(i.get("name", "")).strip() for i in menu if isinstance(i, dict)]
         result |= {"json": True, "dishes": sorted(n.lower() for n in names)}
         result["issues"]["menu"] = names
-    elif (text or "").strip() and "```" not in text:
+    elif (text or "").strip() and "```" not in text and text.strip() not in pipeline.RETRY_TEXTS.values():
         result |= {"json": True, "note": "note: " + " ".join(text.split())[:80]}
     result["issues"]["turkish"] = turkish_words(text or "", sample)
     return result

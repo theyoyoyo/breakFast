@@ -7,7 +7,8 @@ Supports "favorites" and "explore" modes.
 
 The suggestion pipeline uses two prompts from here: the draft (build_suggestion_prompt), whose
 menu the reviser fixes, and the present step (build_present_prompt), which writes the reply
-text from the final meal alone.
+text from the final meal alone. The draft replies through structured outputs
+(services.pipeline.draft_schema): its text, then the meal.
 """
 
 from datetime import date
@@ -128,8 +129,9 @@ like chopped or rolled goes in its `prep`), even when that \
 name is in another language than your reply, so the app can find it in the fridge.
 When a recipe calls for something not on the list, use a listed item in its place (you may \
 mention the swap briefly in the text) or choose a different dish.
-If the list is too small for any reasonable breakfast, reply with a short note suggesting the \
-user add ingredients in the Fridge tab or try the shopping suggestions, and output no JSON block.
+If the list is too small for any reasonable breakfast, leave `menu` empty and make `text` a short \
+note to the user: what keeps a breakfast from coming together, and what they can do (add \
+ingredients in the Fridge tab, try the shopping suggestions).
 
 ═══════════════════════════════════════════════════════════════
 USER CONTEXT
@@ -151,7 +153,10 @@ Each rule has a priority level:
 ═══════════════════════════════════════════════════════════════
 RESPONSE FORMAT
 ═══════════════════════════════════════════════════════════════
-Keep your response short and warm. Structure:
+Reply with one JSON object: first `text`, your words to the user, then `meal`, the same menu \
+for the app.
+
+Keep `text` short and warm. Structure:
 
 1. Menu name + one sentence description (what makes this menu great today)
 2. Menu items — list each item with a brief note if it needs one:
@@ -170,36 +175,40 @@ IMPORTANT: The ingredient inventory only lists names — no quantities are track
 Assume the user has enough of each ingredient. Decide healthy, balanced portions \
 based on standard breakfast servings and the user's profile.
 
-Append a JSON block at the end of your response. This shows the format only; the \
-<…> parts are yours to fill:
+This shows the reply's format only; the <…> parts are yours to fill:
 ```json
 {{
-  "menu_name": "<short title for the whole menu>",
-  "description": "<one sentence>",
-  "menu": [
-    {{
-      "name": "<dish name>",
-      "ingredients": [
-        {{"name": "<inventory item>", "amount": 2, "unit": "{unit_count}", "prep": "<cut or form>"}},
-        {{"name": "<inventory item>", "amount": 1, "unit": "{unit_spoon}"}}
-      ]
-    }},
-    {{
-      "name": "<inventory item served as it is>",
-      "amount": 50,
-      "unit": "g",
-      "ingredients": []
-    }}
-  ],
-  "prep_time_min": 15
+  "text": "<your words to the user>",
+  "meal": {{
+    "menu": [
+      {{
+        "ingredients": [
+          {{"name": "<inventory item>", "amount": 2, "unit": "{unit_count}", "prep": "<cut or form>"}},
+          {{"name": "<inventory item>", "amount": 1, "unit": "{unit_spoon}"}}
+        ],
+        "name": "<dish name>",
+        "amount": 1,
+        "unit": "{unit_count}"
+      }},
+      {{
+        "ingredients": [],
+        "name": "<inventory item served as it is>",
+        "amount": 50,
+        "unit": "g"
+      }}
+    ],
+    "menu_name": "<short title for the whole menu>",
+    "description": "<one sentence>",
+    "prep_time_min": 15
+  }}
 }}
 ```
 
-Rules for the JSON:
-- A simple item is one inventory item served as it is: `ingredients: []` with a \
-  top-level `amount` + `unit`. Anything cooked, combined or served with a sauce or \
-  topping is a dish: list each of its ingredients (name, amount, unit) and leave out \
-  the top-level amount and unit.
+Rules for the meal:
+- A simple item is one inventory item served as it is: no ingredients, and its `amount` \
+  and `unit` say how much is served. Anything cooked, combined or served with a sauce or \
+  topping is a dish: list each of its ingredients (name, amount, unit), and its own \
+  `amount` and `unit` are its servings (1 {unit_count}).
 - `unit`: one of {unit_list}. These are the units of the response language, so the \
   app can show and edit them. Spoons and glasses are the fixed sizes the user \
   measures with ({unit_sizes}), so pick amounts for those sizes.

@@ -1,15 +1,13 @@
 """Unit tests for utils."""
 
-from utils import extract_json_block, repair_json_block, resolve_static_file
+from utils import extract_json_block, resolve_static_file
 
 
-# Fractions a 7B model writes as values ("amount": 1/4) become decimals; text in strings is left alone
+# Fractions in replies saved before the draft's schema ("amount": 1/4) are read as decimals; text in strings is left alone
 def test_fractions_in_the_json_block_become_decimals():
     text = 'Soak 1/4 cup.\n```json\n{"a": 1/4, "b": 1 / 3, "c": "1/2 lemon", "d": 2}\n```'
-    assert repair_json_block(text) == 'Soak 1/4 cup.\n```json\n{"a": 0.25, "b": 0.33, "c": "1/2 lemon", "d": 2}\n```'
     assert extract_json_block(text) == {"a": 0.25, "b": 0.33, "c": "1/2 lemon", "d": 2}
     assert extract_json_block('```json\n{"amount": 1/4, "n": 3/0}\n```') is None  # 3/0 stays invalid
-    assert repair_json_block("No JSON here, 1/2.") == "No JSON here, 1/2."
 
 
 def test_extracts_valid_json_block():
