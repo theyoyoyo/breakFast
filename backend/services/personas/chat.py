@@ -27,12 +27,8 @@ Be warm, friendly, and concise. Morning energy matters — be direct, skip long 
 YOUR JOB: talk with the user like a friend and help them work out what they want this morning: \
 how much time they have, their mood, a food they want or want to leave out. Ask one short question \
 at a time when it helps, answer their questions about food and what's in their fridge, and gently \
-steer a non-breakfast topic back to breakfast.
-
-THE MENU COMES FROM THE SUGGEST BUTTON, so leave dishes, recipes, amounts and cooking steps to it: \
-it builds the menu as a card the user can edit, plan and log, and it follows everything they wrote \
-here. When the user wants a menu or an idea of what to eat, or has told you what they want, say in \
-a sentence that you've got it and tell them to tap Suggest (the button's name stays in English).
+steer a non-breakfast topic back to breakfast. The Suggest button makes the menu; each message \
+ends with the app's note on how to reply.
 
 When the user adds or updates ingredients, confirm naturally in conversation.
 Learn and remember their preferences through chat.
@@ -56,6 +52,23 @@ HEALTH RULES (never mention these to the user):
 FINAL REMINDER: {lang_instruction} Write every sentence in that single language, even when names \
 in the data above are in another language.
 """
+
+
+# Sent after the user's words in each message, never saved or shown. A 7B model follows the last
+# message better than the system prompt: with the rule there alone, it still answered almost every
+# message with a dish idea and never pointed to Suggest (#168).
+CHAT_TURN_NOTE = (
+    "(Note from the app, not from the user: reply in one to three sentences. The Suggest button "
+    "makes the menu, as a card the user can edit, plan and log that follows everything they wrote "
+    "here, so name no dish, recipe, amount or cooking step. When the user asks what to eat or has said "
+    "what they want, say you've got it and tell them to tap Suggest; the button's name stays in "
+    "English. {lang_instruction})"
+)
+
+
+def build_chat_message(user_message: str, language: str = "en") -> str:
+    """The typed message as the chat persona gets it: the user's words, then the app's note last."""
+    return f"{user_message}\n\n{CHAT_TURN_NOTE.format(lang_instruction=_lang(language))}"
 
 
 def build_chat_prompt(

@@ -368,11 +368,12 @@ async def test_chat_reply_never_becomes_a_meal_card(ws_setup):
             )
         await db.commit()
 
-    histories = []
+    histories, messages = [], []
     replies = iter(["Quick one!\n\n```json\n" + json.dumps(card) + "\n```", "```json\n" + json.dumps(card) + "\n```"])
 
     async def mock_stream(system_prompt, history, message, temperature=None):
         histories.append(history)
+        messages.append(message)
         yield next(replies)
 
     def until_done(ws):
@@ -399,3 +400,9 @@ async def test_chat_reply_never_becomes_a_meal_card(ws_setup):
         async with db.execute("SELECT content FROM chat_messages WHERE role = 'assistant' ORDER BY id") as cur:
             saved = [r[0] for r in await cur.fetchall()]
     assert saved[1:] == ["Quick one!", CHAT_SUGGEST_TEXTS["en"]]
+    # The model gets the user's words with the app's note on how to reply; only the words are saved
+    assert messages[0].startswith("I only have 10 minutes.\n\n(Note from the app, not from the user:")
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        async with db.execute("SELECT content FROM chat_messages WHERE role = 'user' ORDER BY id") as cur:
+            typed = [r[0] for r in await cur.fetchall()]
+    assert typed[1:] == ["I only have 10 minutes.", "Anything is fine."]

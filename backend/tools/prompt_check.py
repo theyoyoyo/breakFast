@@ -62,6 +62,7 @@ from services.fridge import (
     same_tokens,
 )
 from services.personas import build_scheduler_prompt, build_scheduler_user_message
+from services.personas.chat import build_chat_message
 from services.personas.shopping import build_shopping_prompt
 from services.shopping import (
     SUGGESTIONS_SCHEMA, dish_names, new_suggestions, parse_suggestions, pick_input, shopping_request,
@@ -643,7 +644,8 @@ async def chat_once(sample: dict, mode: str | None, scenario: dict, sent: dict) 
         if "press" in entry:
             history += chat_history(chat_rows([entry], mode))
             continue
-        reply = "".join([c async for c in suggestion.stream_response(prompt, history, entry["content"])])
+        message = build_chat_message(entry["content"], sample["language"])
+        reply = "".join([c async for c in suggestion.stream_response(prompt, history, message)])
         replies[next(kinds)] = reply
         history += [entry, {"role": "assistant", "content": reply}]
     return replies
