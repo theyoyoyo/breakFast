@@ -94,7 +94,7 @@ HOW TO REVISE
 fridge, so this is the only list of what's missing: every other item in the menu is in the fridge.
    - Not in the fridge: when the name is a fridge item with a form the cook gives it added (a \
 shape, a part, a cooking), or with words left out, it is the same food, so write the fridge name, \
-with the form in `prep`, or in the method for a simple item. Otherwise it is another product: swap it for a fridge item that does the \
+with the form in `prep`. Otherwise it is another product: swap it for a fridge item that does the \
 same job; in a dish, name the missing item in the new ingredient's `replaces`, so the app can show \
 the user what changed. When none fits, keep it: the app marks it, so the user can get it.
    - On the avoid list: replace it with a fridge item, or leave it out.

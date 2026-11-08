@@ -136,7 +136,7 @@ class TestReviserPrompt:
         assert "When none fits, keep it: the app marks it" in prompt
         assert "this is the only list of what's missing: every other item in the menu is in the fridge" in prompt
         assert "with a form the cook gives it added (a shape, a part, a cooking)" in prompt
-        assert "write the fridge name, with the form in `prep`, or in the method for a simple item. Otherwise it is another product" in prompt
+        assert "write the fridge name, with the form in `prep`. Otherwise it is another product" in prompt
         assert "name the missing item in the new ingredient's `replaces`" in prompt
         assert "The answer is usually no" in prompt
         assert "three changes at most" in prompt
