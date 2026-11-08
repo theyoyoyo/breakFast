@@ -135,7 +135,7 @@ class TestReviserPrompt:
         assert 'Fix every problem listed under "Code check"' in prompt
         assert "this is the only list of what's missing: every other item in the menu is in the fridge" in prompt
         assert "with only a cut or shape added, or with words left out, it is the same food" in prompt
-        assert "swap it only for a fridge item that does the same job in that dish" in prompt
+        assert "swap it only when the dish stays the same with a fridge item in its place" in prompt
         assert "When none fits or you are not sure, keep it as written: the app marks it" in prompt
         assert "name the missing item in the new ingredient's `replaces`" in prompt
         assert "The answer is usually no" in prompt
