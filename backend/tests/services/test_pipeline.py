@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import pytest
 
-from services.personas.pipeline_analyst import CHAT_STEP
+from services.personas.pipeline_analyst import CHAT_STEP, PREP_NOTE
 from services.suggestion import build_pipeline_analyst_prompt
 from services.pipeline import LOW_INGREDIENT_TEXTS, RETRY_TEXTS, revision_schema, reviser_names, run_suggestion_pipeline
 from utils import extract_json_block
@@ -136,7 +136,7 @@ class TestReviserPrompt:
         assert "When none fits, keep it: the app marks it" in prompt
         assert "this is the only list of what's missing: every other item in the menu is in the fridge" in prompt
         assert "with a form the cook gives it added (a shape, a part, a cooking)" in prompt
-        assert "write the fridge name, with the form in `prep`. Otherwise it is another product" in prompt
+        assert "write the fridge name, with the form in `prep`, or in the method for a simple item. Otherwise it is another product" in prompt
         assert "name the missing item in the new ingredient's `replaces`" in prompt
         assert "The answer is usually no" in prompt
         assert "three changes at most" in prompt
@@ -259,7 +259,7 @@ class TestPipelineOrchestrator:
         events, calls = await _run(_draft(_meal(EGGS)), revision, chat_block=block)
         draft, reviser, present = calls
         assert draft["message"] == f"Suggest\n\n{block}"
-        assert reviser["message"].endswith(f"Code check:\n- Nothing found.\n\n{block}")
+        assert reviser["message"].endswith(f"Code check:\n- Nothing found.\n\n{PREP_NOTE}\n\n{block}")
         assert reviser["schema"] == revision_schema("en", chat=True, names=["eggs", "Water"]) and CHAT_STEP in reviser["system"]
         assert "THE CHAT SO FAR" not in present["message"] + present["system"]
         review = next(e["content"] for e in events if e["type"] == "review")
@@ -268,11 +268,12 @@ class TestPipelineOrchestrator:
         _, fresh = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)))
         assert fresh[0]["message"] == "Suggest" and CHAT_STEP not in fresh[1]["system"]
 
-    # A clean draft tells the reviser that code found nothing
+    # A clean draft tells the reviser that code found nothing, and the prep check ends its message (#176)
     @pytest.mark.asyncio
     async def test_code_check_silent_when_clean(self):
         events, calls = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)))
-        assert [c for c in calls if c["kind"] == "json"][1]["message"].endswith("Code check:\n- Nothing found.")
+        message = [c for c in calls if c["kind"] == "json"][1]["message"]
+        assert message.endswith(f"Code check:\n- Nothing found.\n\n{PREP_NOTE}")
         assert next(e["content"] for e in events if e["type"] == "review") == "- No changes."
 
     # The revised meal reaches the app's format: a dish loses its servings, a simple item keeps its method

@@ -12,6 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from services.personas.chat import build_chat_message
+from services.personas.pipeline_analyst import PREP_NOTE
 from services.suggestion import (
     build_chat_prompt,
     build_suggestion_prompt,
@@ -713,14 +714,15 @@ class TestFridgeRule:
         assert "A dish combines or tops items" in prompt
         assert "Give every dish a `method`" not in prompt
 
-
-    # The reviser writes a dish ingredient's prep words as the form the cook gives it, when the dish needs that choice,
-    # and leaves out an obvious form or a word that changes nothing, since the plan turns them into steps (#176)
+    # The reviser's prep check gives the form the cook gives a dish ingredient when the dish needs that choice, and
+    # leaves out an obvious form or one that changes nothing, since the plan turns prep into steps (#176); it ends the
+    # reviser's message rather than the system prompt, where "to taste" still goes in prep
     def test_pipeline_analyst_checks_prep_words(self):
+        assert "since the prep plan turns it into a step" in PREP_NOTE
+        assert "(how it is cut, which part is used, how it is cooked first), as the method says" in PREP_NOTE
+        assert "Leave out a form that is obvious or doesn't change how the dish is made" in PREP_NOTE
         prompt = build_pipeline_analyst_prompt([])
-        assert "The plan also turns a dish ingredient's `prep` into a step" in prompt
-        assert "(how it is cut, which part is used, how it is cooked first), as the method says" in prompt
-        assert "leave out a form that is obvious or doesn't change how the dish is made" in prompt
+        assert PREP_NOTE not in prompt and "turns it into a step" not in prompt
         assert "like \"to taste\", becomes a small one in a listed unit (1 pinch), with the words in that ingredient's `prep`" in prompt
 
 

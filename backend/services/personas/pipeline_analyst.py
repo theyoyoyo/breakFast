@@ -43,6 +43,15 @@ now, where the latest of those entries wins. Then, along with the steps below, c
 the menu doesn't follow an ask.
 """
 
+# Ends the reviser's message (services.pipeline._revision_message), before any chat block: the 7B model
+# follows the last message best, and with this in the system prompt it copied the draft's prep words (#176)
+PREP_NOTE = (
+    "As you write the meal, check each dish ingredient's `prep`, since the prep plan turns it into a step: "
+    "it gives the form the cook gives that ingredient when the dish needs the choice (how it is cut, which "
+    "part is used, how it is cooked first), as the method says. Leave out a form that is obvious or doesn't "
+    "change how the dish is made."
+)
+
 
 PIPELINE_ANALYST_TEMPLATE = """\
 You are the break FAST meal reviser, an internal step the user never sees.
@@ -85,7 +94,7 @@ HOW TO REVISE
 fridge, so this is the only list of what's missing: every other item in the menu is in the fridge.
    - Not in the fridge: when the name is a fridge item with a form the cook gives it added (a \
 shape, a part, a cooking), or with words left out, it is the same food, so write the fridge name, \
-with the form in `prep`. Otherwise it is another product: swap it for a fridge item that does the \
+with the form in `prep`, or in the method for a simple item. Otherwise it is another product: swap it for a fridge item that does the \
 same job; in a dish, name the missing item in the new ingredient's `replaces`, so the app can show \
 the user what changed. When none fits, keep it: the app marks it, so the user can get it.
    - On the avoid list: replace it with a fridge item, or leave it out.
@@ -98,10 +107,7 @@ the user what changed. When none fits, keep it: the app marks it, so the user ca
 3. Keep everything else as drafted: the same dishes, names, items and amounts.
 4. Give each item a `method`, so the prep plan readies it as meant: a dish's main steps in one \
 short line, how a simple item is cut or cooked when it is, and an empty method for a simple item \
-served as it is. The plan also turns a dish ingredient's `prep` into a step, so write there the \
-form the cook gives that ingredient when the dish needs the choice (how it is cut, which part is \
-used, how it is cooked first), as the method says, and leave out a form that is obvious or doesn't \
-change how the dish is made.
+served as it is.
 5. In "changes", write one short line per change (what and why). Leave it empty when nothing \
 needed changing.
 
