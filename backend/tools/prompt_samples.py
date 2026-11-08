@@ -27,6 +27,11 @@ chat_scenario() gives the chat a Suggest press comes after (--scenario, #159): n
 typed messages (chat), or the same messages between two earlier presses (pressed).
 
 PLAN_CASES are menus for the prep plan test, shaped the way the Prep Plan button sends them.
+
+REVIEW_CASES are fixed drafts with items the fridge lacks, sent to the reviser alone (#148): a
+missing dish ingredient another fridge item can replace, one nothing replaces, a fridge item
+written with a cut on either side (big_fridge keeps "Turkey slices"), and a favorite's fridge
+item the review must keep.
 """
 
 import random
@@ -527,4 +532,41 @@ PLAN_CASES = {
         "meal_name": "Green morning",
         "menu": _SERVER_MENU,
     },
+}
+
+
+def _review(sample: str, name: str, minutes: int, *menu: dict) -> dict:
+    """A review case: the sample's user, in the Suggest mode they usually press, and a draft meal in
+    the app's format, the way the pipeline hands it to the reviser."""
+    for item in menu:
+        if not item.get("method"):  # the draft writes no methods; the reviser does
+            item.pop("method", None)
+    return {
+        **SAMPLES[sample],
+        "sample": sample,
+        "draft": {"menu": list(menu), "menu_name": name, "description": f"{name} from the fridge.", "prep_time_min": minutes},
+    }
+
+
+REVIEW_CASES = {
+    # The salmon has no fridge item that does its job, so it may stay missing (#148's frittata)
+    "frittata": _review("greek", "Aegean morning", 20,
+                        _dish("Salmon frittata", "", ("Eggs", 3, "pcs"), ("Smoked salmon", 50, "g"),
+                              ("Feta", 40, "g", "crumbled"), ("Red onion", 0.5, "pcs", "chopped")),
+                        _served("Pita bread", 1, "pcs"), _served("Greek coffee", 1, "tea glass")),
+    # Two missing items the review swapped for other missing ones before (Rice for Quinoa, O)
+    "omurice": _review("greek", "Tokyo morning", 20,
+                       _dish("Omurice", "", ("Eggs", 2, "pcs"), ("Rice", 1, "glass"), ("Soy sauce", 1, "tbsp"),
+                             ("Tomatoes", 1, "pcs", "chopped")),
+                       _served("Greek coffee", 1, "tea glass")),
+    # Renames both ways: the fridge's "Turkey slices" written plain, and "Avocado" written with its cut
+    "wrap": _review("big_fridge", "Wrap morning", 10,
+                    _dish("Turkey wrap", "", ("Tortillas", 1, "pcs"), ("Turkey", 60, "g"), ("Cream cheese", 1, "tbsp"),
+                          ("Sliced avocado", 0.5, "pcs"), ("Spinach", 1, "handful")),
+                    _served("Coffee", 1, "glass")),
+    # A missing fruit a fridge fruit replaces, beside orange juice the fridge has (O's picky case)
+    "pancakes": _review("picky", "Pancake morning", 25,
+                        _dish("Blueberry pancakes", "", ("Flour", 1, "glass"), ("Eggs", 2, "pcs"), ("Milk", 1, "glass"),
+                              ("Baking powder", 1, "tsp"), ("Blueberries", 80, "g"), ("Maple syrup", 2, "tbsp")),
+                        _served("Orange juice", 1, "glass")),
 }

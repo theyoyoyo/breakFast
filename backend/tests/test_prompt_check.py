@@ -8,12 +8,15 @@ import pytest
 from services import pipeline
 from services.chat_block import chat_history, format_chat_block
 from services.personas.chat import build_chat_message
-from services.fridge import same_name
+from services.fridge import find_missing_ingredients, same_name
 from tools.prompt_check import (
-    CHECKS, PERSONAS, chat_once, chat_rows, check_chat, check_plan, check_reply, compare, describe, is_clean,
-    parse_args, plan_once, recording_prompts, run, score_shopping, shop_once, suggest_once, summarize,
+    CHECKS, PERSONAS, chat_once, chat_rows, check_chat, check_plan, check_reply, check_review, compare, describe,
+    is_clean, parse_args, plan_once, recording_prompts, review_once, run, score_shopping, shop_once, suggest_once,
+    summarize,
 )
-from tools.prompt_samples import CHAT_MESSAGES, CHAT_MINUTES, PLAN_CASES, SAMPLE_MODES, SAMPLES, SCENARIOS, chat_picks, chat_scenario
+from tools.prompt_samples import (
+    CHAT_MESSAGES, CHAT_MINUTES, PLAN_CASES, REVIEW_CASES, SAMPLE_MODES, SAMPLES, SCENARIOS, chat_picks, chat_scenario,
+)
 
 EN, TR = SAMPLES["en"], SAMPLES["tr"]
 
@@ -615,6 +618,61 @@ async def test_plan_once_sends_the_menu_with_its_methods():
     assert "- Egg sandwich (Hard-boil the eggs, peel, slice into the buttered bread): Eggs (2 pcs)" in requests["boiled"]
     assert "- Sweet potato (Peel and cube the sweet potato, roast it in the air fryer): Sweet potato (300 g)" in requests["bowls"]
     assert set(calls) == {0.3}
+
+
+def _pancakes(*ingredients) -> str:
+    """The pancakes review case's reply with the dish made of these ingredients, beside its orange juice."""
+    dish = {"name": "Blueberry pancakes", "method": "Mix, fry", "ingredients": [
+        {"name": n, "amount": 1, "unit": "glass", **extra} for n, extra in ingredients
+    ]}
+    return _reply(dish, {"name": "Orange juice", "amount": 1, "unit": "glass", "ingredients": []})
+
+
+# A review that swaps the missing blueberries for strawberries and marks it is clean, its note naming the swap; one
+# that keeps them notes them as still missing, and one that brings in a food from outside the fridge and the draft
+# (raspberries) is flagged, its note naming the fridge food it dropped (the maple syrup)
+def test_review_scores_swaps_and_outside_names():
+    case = REVIEW_CASES["pancakes"]
+    draft = pipeline._meal_reply("", case["draft"])
+    base = [("Flour", {}), ("Eggs", {}), ("Milk", {}), ("Baking powder", {}), ("Maple syrup", {})]
+    swapped = check_review(_pancakes(*base, ("Strawberries", {"replaces": "Blueberries"})), case, draft)
+    assert is_clean(swapped), describe(swapped)
+    assert swapped["note"] == "replaced Strawberries for Blueberries (Blueberry pancakes)"
+    kept = check_review(_pancakes(*base, ("Blueberries", {})), case, draft)
+    assert is_clean(kept) and kept["note"] == "still missing: Blueberries"
+    outside = check_review(_pancakes(*base[:4], ("Raspberries", {})), case, draft)
+    assert outside["issues"]["outside"] == ["Raspberries"]
+    assert outside["note"] == "gone, no mark: Blueberries; dropped: Maple syrup"
+    assert describe(check_review("", case, draft)) == "no JSON"
+
+
+# A review run sends the case's draft and code check to the reviser in the case user's mode, and returns the draft,
+# the review lines and the revised meal; every case's draft has an item the fridge lacks
+async def test_review_once_sends_the_draft():
+    calls = []
+
+    async def fake_chat_json(system_prompt, messages, schema, temperature=None):
+        calls.append(messages[0]["content"])
+        meal = json.loads(json.dumps(REVIEW_CASES["pancakes"]["draft"]))
+        return json.dumps({"changes": ["Strawberries for the blueberries"], "meal": meal})
+
+    with patch("services.pipeline.chat_json", fake_chat_json):
+        replies = await review_once(REVIEW_CASES["pancakes"], "favorites")
+    assert "- Not in the fridge: Blueberries" in calls[0]
+    assert replies["review"] == "- CODE CHECK: Not in the fridge: Blueberries\n- Strawberries for the blueberries"
+    assert replies["draft"].startswith("Pancake morning\n\n```json") and replies["final"].startswith("Pancake morning")
+    assert "Blueberries" in replies["final"]
+    for case in REVIEW_CASES.values():
+        assert find_missing_ingredients(case["draft"], case["ingredients"])
+        assert all("method" not in item for item in case["draft"]["menu"])
+
+
+# The review persona runs every review case by default, each in its user's usual mode
+def test_review_samples():
+    assert parse_args(["--persona", "review"]).samples == list(REVIEW_CASES)
+    assert REVIEW_CASES["frittata"]["sample"] == "greek" and SAMPLE_MODES["greek"] == "explore"
+    with pytest.raises(SystemExit):
+        parse_args(["--persona", "review", "--samples", "en"])
 
 
 # The plan persona runs every plan menu by default and only knows plan menus

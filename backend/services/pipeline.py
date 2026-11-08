@@ -241,6 +241,43 @@ def _code_text(meal: dict) -> str:
     return "\n\n".join(part for part in (f"**{name}**" if name else "", description) if part)
 
 
+async def revise(
+    context: dict, draft_meal: dict, mode: str | None = None, chat_block: str | None = None,
+) -> tuple[list[str], list[str], list[str], dict | None]:
+    """Step 2 on its own, so the prompt test can send the reviser a fixed draft: code checks the
+    draft's meal, and the reviser returns the fixed meal through revision_schema. Returns the code
+    check's lines, what the reviser read in the chat, its changes and its meal (None when the meal
+    can't be read or the call fails)."""
+    language = context.get("language", "en")
+    reviser_prompt = build_pipeline_analyst_prompt(
+        recent_meal_history=context["history"],
+        user_profile=context["user_profile"],
+        supplements=context["supplements"],
+        health_rules=context["health_rules"],
+        ingredient_inventory=context["ingredients"],
+        avoid_list=context["avoid_list"],
+        preferences=context["preferences"],
+        mode=mode,
+        language=language,
+        chat=bool(chat_block),
+    )
+    problems = _code_check(draft_meal, context)
+    asks, changes, revised_meal = [], [], None
+    try:
+        reply = await chat_json(
+            system_prompt=reviser_prompt,
+            messages=[{"role": "user", "content": _with_chat(_revision_message(draft_meal, problems), chat_block)}],
+            schema=revision_schema(language, chat=bool(chat_block)),
+            temperature=REVISE_TEMPERATURE,
+        )
+        asks, changes, revised_meal = _parse_revision(reply)
+        if revised_meal is None:
+            logging.warning("Suggestion reviser: could not read the meal in %r", reply)
+    except Exception:
+        logging.exception("Suggestion reviser failed; the draft's meal is used")
+    return problems, asks, changes, revised_meal
+
+
 async def run_suggestion_pipeline(
     context: dict,
     user_message: str,
@@ -285,19 +322,6 @@ async def run_suggestion_pipeline(
         ratings=context.get("ratings"),
     )
 
-    reviser_prompt = build_pipeline_analyst_prompt(
-        recent_meal_history=context["history"],
-        user_profile=context["user_profile"],
-        supplements=context["supplements"],
-        health_rules=context["health_rules"],
-        ingredient_inventory=context["ingredients"],
-        avoid_list=context["avoid_list"],
-        preferences=context["preferences"],
-        mode=mode,
-        language=language,
-        chat=bool(chat_block),
-    )
-
     # --- Step 1: Draft ---
     yield {"type": "progress", "step": "drafting"}
 
@@ -331,20 +355,7 @@ async def run_suggestion_pipeline(
     # --- Step 2: Revise ---
     yield {"type": "progress", "step": "analyzing"}
 
-    problems = _code_check(draft_meal, context)
-    asks, changes, revised_meal = [], [], None
-    try:
-        reply = await chat_json(
-            system_prompt=reviser_prompt,
-            messages=[{"role": "user", "content": _with_chat(_revision_message(draft_meal, problems), chat_block)}],
-            schema=revision_schema(language, chat=bool(chat_block)),
-            temperature=REVISE_TEMPERATURE,
-        )
-        asks, changes, revised_meal = _parse_revision(reply)
-        if revised_meal is None:
-            logging.warning("Suggestion reviser: could not read the meal in %r", reply)
-    except Exception:
-        logging.exception("Suggestion reviser failed; the draft's meal is used")
+    problems, asks, changes, revised_meal = await revise(context, draft_meal, mode, chat_block)
     review = (
         [f"- CHAT ASKS: {a}" for a in asks]
         + [f"- CODE CHECK: {p}" for p in problems]
