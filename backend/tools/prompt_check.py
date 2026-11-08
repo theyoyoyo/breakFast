@@ -1045,7 +1045,7 @@ def history_lines(history: list[dict]) -> list[str]:
 
 
 # What the log calls the replies that aren't scored
-_UNSCORED = {"review": "Review feedback", "request": "Menu sent", "chat": "Chat sent"}
+_UNSCORED = {"draft": "Draft sent", "review": "Review feedback", "request": "Menu sent", "chat": "Chat sent"}
 
 
 def save_log(records: list[dict], prompts: dict, header: str, report: str, diff: str) -> Path:

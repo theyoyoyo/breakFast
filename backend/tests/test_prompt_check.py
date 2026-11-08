@@ -11,8 +11,8 @@ from services.personas.chat import build_chat_message
 from services.fridge import find_missing_ingredients, same_name
 from tools.prompt_check import (
     CHECKS, PERSONAS, chat_once, chat_rows, check_chat, check_plan, check_reply, check_review, compare, describe,
-    is_clean, parse_args, plan_once, recording_prompts, review_once, run, score_shopping, shop_once, suggest_once,
-    summarize,
+    is_clean, parse_args, plan_once, recording_prompts, review_once, run, save_log, score_shopping, shop_once,
+    suggest_once, summarize,
 )
 from tools.prompt_samples import (
     CHAT_MESSAGES, CHAT_MINUTES, PLAN_CASES, REVIEW_CASES, SAMPLE_MODES, SAMPLES, SCENARIOS, chat_picks, chat_scenario,
@@ -665,6 +665,18 @@ async def test_review_once_sends_the_draft():
     for case in REVIEW_CASES.values():
         assert find_missing_ingredients(case["draft"], case["ingredients"])
         assert all("method" not in item for item in case["draft"]["menu"])
+
+
+# A review run's log keeps the draft it sent, which isn't scored, under its own title beside the scored final
+def test_review_log_keeps_the_draft(tmp_path):
+    record = {
+        "sample": "pancakes", "mode": "favorites", "run": 1, "seconds": 9, "error": None,
+        "replies": {"draft": "Pancake morning", "review": "- No changes.", "final": "Pancake morning"},
+        "scores": {"final": check_review("", REVIEW_CASES["pancakes"], "")},
+    }
+    with patch("tools.prompt_check.RUNS_DIR", tmp_path):
+        text = save_log([record], {}, "header", "report", "").read_text(encoding="utf-8")
+    assert "### Draft sent" in text and "### Review feedback" in text and "### Final: no JSON" in text
 
 
 # The review persona runs every review case by default, each in its user's usual mode
