@@ -713,6 +713,13 @@ class TestFridgeRule:
         assert "A dish combines or tops items" in prompt
         assert "Give every dish a `method`" not in prompt
 
+    # The reviser keeps the draft's prep words, since a check of them made the 7B model add words that change nothing
+    # (#176), and an amount like "to taste" still becomes a small one with the words in prep
+    def test_pipeline_analyst_keeps_prep_words(self):
+        prompt = build_pipeline_analyst_prompt([])
+        assert "turns it into a step" not in prompt and "Keep everything else as drafted" in prompt
+        assert "like \"to taste\", becomes a small one in a listed unit (1 pinch), with the words in that ingredient's `prep`" in prompt
+
 
 # ---------------------------------------------------------------------------
 # Present step: the reply text from the final meal

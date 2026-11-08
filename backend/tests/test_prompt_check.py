@@ -55,6 +55,18 @@ def test_simple_item_methods_are_noted():
     assert is_clean(result) and describe(result) == "clean (simple items: White cheese: Serve as is)"
 
 
+# A dish ingredient's prep words are noted, not flagged, so a word that doesn't change how the dish is made shows in
+# the log (#176); an empty one isn't
+def test_prep_words_are_noted():
+    text = _reply({"name": "Menemen", "method": "Fry the tomatoes, stir in the eggs", "ingredients": [
+        {"name": "Eggs", "amount": 2, "unit": "pcs", "prep": "mixed"},
+        {"name": "Tomatoes", "amount": 1, "unit": "pcs", "prep": " diced "},
+        {"name": "Olive oil", "amount": 1, "unit": "tbsp", "prep": " "},
+    ]})
+    result = check_reply(text, EN)
+    assert is_clean(result) and result["note"] == "prep: Eggs: mixed; Tomatoes: diced"
+
+
 # A final notes the review's swaps (#148): a dish ingredient marked as standing in for a missing item, and a draft's
 # missing item gone with no mark; a rename to the fridge name and a missing item the review kept aren't gone
 def test_review_swaps_are_noted():
@@ -66,7 +78,7 @@ def test_review_swaps_are_noted():
         ing("Eggs"), ing("White cheese", replaces="Salmon"), ing("Tomatoes", prep="sliced"), ing("Chives"),
     ]})
     result = check_reply(final, EN, draft=draft)
-    assert result["note"] == "replaced White cheese for Salmon (Salmon omelette); gone, no mark: Quinoa"
+    assert result["note"] == "prep: Tomatoes: sliced; replaced White cheese for Salmon (Salmon omelette); gone, no mark: Quinoa"
     assert "note" not in check_reply(draft, EN)
 
 
@@ -644,6 +656,26 @@ def test_review_scores_swaps_and_outside_names():
     assert outside["issues"]["outside"] == ["Raspberries"]
     assert outside["note"] == "gone, no mark: Blueberries; dropped: Maple syrup"
     assert describe(check_review("", case, draft)) == "no JSON"
+
+
+# The omelette case may keep Egg whites as written, since a rename to Eggs loses the part, so a kept one is still
+# missing, not renamed; a kept Diced onion, a fridge item with its cut, is still flagged as renamed (#176)
+def test_review_case_may_keep_a_part():
+    case = REVIEW_CASES["omelette"]
+    draft = pipeline._meal_reply("", case["draft"])
+    ing = lambda name, **extra: {"name": name, "amount": 1, "unit": "pcs", **extra}
+    stocked = [ing("Sweet potatoes"), ing("Cheddar", prep="grated"), ing("Spinach")]
+    toast = {"name": "Jam toast", "method": "Toast the bread, spread the jam", "ingredients": [
+        ing("Whole wheat bread"), ing("Strawberry jam"),
+    ]}
+    coffee = {"name": "Coffee", "amount": 1, "unit": "glass", "ingredients": []}
+    omelette = lambda *items: {"name": "Sweet potato omelette", "method": "Cook", "ingredients": [*items, *stocked]}
+    kept = check_review(_reply(omelette(ing("Egg whites"), ing("Onion", prep="diced")), toast, coffee), case, draft)
+    assert is_clean(kept), describe(kept)
+    assert kept["note"].endswith("still missing: Egg whites")
+    renamed = check_review(_reply(omelette(ing("Egg whites"), ing("Diced onion")), toast, coffee), case, draft)
+    assert renamed["issues"]["renamed"] == ["Diced onion"]
+    assert case["may_keep"] == ["Egg whites", "Smoked cheddar"] and REVIEW_CASES["pancakes"]["may_keep"] == []
 
 
 # A review run sends the case's draft and code check to the reviser in the case user's mode, and returns the draft,

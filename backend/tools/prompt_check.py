@@ -35,8 +35,8 @@ Personas, each run for a sample user (tools/prompt_samples.py):
   the way the pipeline's step 2 sends it, in the case user's usual Suggest mode. A draft has
   items the fridge lacks, so the reply shows how the review swaps them (#148): a name it brings
   in that's neither in the fridge nor the draft is flagged (outside), and the note names each
-  swap, what stays missing (the review may keep an item nothing replaces) and the draft's fridge
-  items it dropped.
+  swap, what stays missing (the review may keep an item nothing replaces), the draft's fridge
+  items it dropped and the prep words it wrote (#176).
 - chat: the typed messages of a --scenario (chat by default, or pressed) sent to the chat
   persona one at a time, with the chat so far as history. The chat talks and menus come
   only from a Suggest press (#168), so a reply with food amounts, numbered steps or a
@@ -383,7 +383,18 @@ def check_reply(text: str, sample: dict, scenario: dict | None = None, draft: st
         f"{i.get('name')}: {i['method'].strip()}" for i in meal["menu"]
         if isinstance(i, dict) and not i.get("ingredients") and isinstance(i.get("method"), str) and i["method"].strip()
     ]
-    notes = [note, "simple items: " + "; ".join(readied) if readied else "", *swap_notes(meal, draft, sample["ingredients"])]
+    # Dish ingredients' prep words, so a word that doesn't change how the dish is made shows in the log (#176)
+    prepped = [
+        f"{ing.get('name')}: {ing['prep'].strip()}" for i in meal["menu"] if isinstance(i, dict)
+        for ing in i.get("ingredients") or []
+        if isinstance(ing, dict) and isinstance(ing.get("prep"), str) and ing["prep"].strip()
+    ]
+    notes = [
+        note,
+        "simple items: " + "; ".join(readied) if readied else "",
+        "prep: " + "; ".join(prepped) if prepped else "",
+        *swap_notes(meal, draft, sample["ingredients"]),
+    ]
     if any(notes):
         result["note"] = "; ".join(filter(None, notes))
     return result
@@ -392,8 +403,10 @@ def check_reply(text: str, sample: dict, scenario: dict | None = None, draft: st
 def check_review(text: str, case: dict, draft: str) -> dict:
     """Score the reviser's meal for a review case's fixed draft: check_reply's problems, except that a
     missing item is only noted, since the review may keep one nothing replaces, and a missing name the
-    draft didn't have is flagged as brought in from outside the fridge (`outside`). The note names the
-    swaps, what stays missing and the draft's fridge items the review dropped."""
+    draft didn't have is flagged as brought in from outside the fridge (`outside`). A name the case
+    lets the review keep as written (`may_keep`: another item that contains a fridge name, #176) is
+    still missing rather than renamed. The note names the swaps, what stays missing and the draft's
+    fridge items the review dropped."""
     result = check_reply(text, case, draft=draft)
     if not result["json"]:
         return _no_json("review")
@@ -401,10 +414,12 @@ def check_review(text: str, case: dict, draft: str) -> dict:
     missing = result["issues"]["missing"]
     result["issues"] = {p: result["issues"].get(p, []) for p in PERSONAS["review"]["problems"]}
     result["issues"]["outside"] = [n for n in missing if not any(same_name(n, d) for d in drafted)]
+    allowed = [r for r in result["issues"]["renamed"] if any(same_name(r, k) for k in case.get("may_keep", ()))]
+    result["issues"]["renamed"] = [r for r in result["issues"]["renamed"] if r not in allowed]
     final = meal_ingredient_names(meal)
     stocked = [n for n in drafted if n not in find_missing_ingredients(case["draft"], case["ingredients"])]
     dropped = [n for n in stocked if not any(same_name(n, f) for f in final)]
-    kept = [m for m in missing if m not in result["issues"]["outside"]]
+    kept = [m for m in missing if m not in result["issues"]["outside"]] + allowed
     notes = [
         result.get("note", ""),
         "still missing: " + ", ".join(kept) if kept else "",

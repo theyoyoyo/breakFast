@@ -83,11 +83,12 @@ HOW TO REVISE
 ═══════════════════════════════════════════════════════════════
 {chat_step}1. Fix every problem listed under "Code check". Code checked every name against the \
 fridge, so this is the only list of what's missing: every other item in the menu is in the fridge.
-   - Not in the fridge: when the name is a fridge item written another way, with a cut or form \
-added or left out, it is the same food, so write the fridge name, with the cut in `prep`. \
-Otherwise swap it for a fridge item that does the same job; in a dish, name the missing item in \
-the new ingredient's `replaces`, so the app can show the user what changed. When none fits, keep \
-it: the app marks it, so the user can get it.
+   - Not in the fridge: when the name is a fridge item with only a cut or shape added, or with \
+words left out, it is the same food, so write the fridge name, with the cut in `prep`. Otherwise \
+it is another item: swap it only for a fridge item that does the same job in that dish; in a \
+dish, name the missing item in the new ingredient's `replaces`, so the app can show the user what \
+changed. When none fits or you are not sure, keep it as written: the app marks it, so the user \
+can get it.
    - On the avoid list: replace it with a fridge item, or leave it out.
    - A unit the app can't show: give that amount in one of the units below.
 2. Then ask these questions. The answer is usually no, and then the menu stays as it is:

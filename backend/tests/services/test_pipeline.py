@@ -133,9 +133,10 @@ class TestReviserPrompt:
         prompt = build_pipeline_analyst_prompt([], ingredient_inventory=[{"name": "Yumurta"}])
         assert "Yumurta" in prompt
         assert 'Fix every problem listed under "Code check"' in prompt
-        assert "When none fits, keep it: the app marks it" in prompt
         assert "this is the only list of what's missing: every other item in the menu is in the fridge" in prompt
-        assert "write the fridge name, with the cut in `prep`" in prompt
+        assert "with only a cut or shape added, or with words left out, it is the same food" in prompt
+        assert "swap it only for a fridge item that does the same job in that dish" in prompt
+        assert "When none fits or you are not sure, keep it as written: the app marks it" in prompt
         assert "name the missing item in the new ingredient's `replaces`" in prompt
         assert "The answer is usually no" in prompt
         assert "three changes at most" in prompt
