@@ -35,8 +35,8 @@ Personas, each run for a sample user (tools/prompt_samples.py):
   the way the pipeline's step 2 sends it, in the case user's usual Suggest mode. A draft has
   items the fridge lacks, so the reply shows how the review swaps them (#148): a name it brings
   in that's neither in the fridge nor the draft is flagged (outside), and the note names each
-  swap, what stays missing (the review may keep an item nothing replaces) and the draft's fridge
-  items it dropped.
+  swap, what stays missing (the review may keep an item nothing replaces), the draft's fridge
+  items it dropped and the prep words it wrote (#176).
 - chat: the typed messages of a --scenario (chat by default, or pressed) sent to the chat
   persona one at a time, with the chat so far as history. The chat talks and menus come
   only from a Suggest press (#168), so a reply with food amounts, numbered steps or a
@@ -383,7 +383,18 @@ def check_reply(text: str, sample: dict, scenario: dict | None = None, draft: st
         f"{i.get('name')}: {i['method'].strip()}" for i in meal["menu"]
         if isinstance(i, dict) and not i.get("ingredients") and isinstance(i.get("method"), str) and i["method"].strip()
     ]
-    notes = [note, "simple items: " + "; ".join(readied) if readied else "", *swap_notes(meal, draft, sample["ingredients"])]
+    # Dish ingredients' prep words, so a word that doesn't change how the dish is made shows in the log (#176)
+    prepped = [
+        f"{ing.get('name')}: {ing['prep'].strip()}" for i in meal["menu"] if isinstance(i, dict)
+        for ing in i.get("ingredients") or []
+        if isinstance(ing, dict) and isinstance(ing.get("prep"), str) and ing["prep"].strip()
+    ]
+    notes = [
+        note,
+        "simple items: " + "; ".join(readied) if readied else "",
+        "prep: " + "; ".join(prepped) if prepped else "",
+        *swap_notes(meal, draft, sample["ingredients"]),
+    ]
     if any(notes):
         result["note"] = "; ".join(filter(None, notes))
     return result

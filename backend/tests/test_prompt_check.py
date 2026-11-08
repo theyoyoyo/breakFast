@@ -55,6 +55,18 @@ def test_simple_item_methods_are_noted():
     assert is_clean(result) and describe(result) == "clean (simple items: White cheese: Serve as is)"
 
 
+# A dish ingredient's prep words are noted, not flagged, so a word that doesn't change how the dish is made shows in
+# the log (#176); an empty one isn't
+def test_prep_words_are_noted():
+    text = _reply({"name": "Menemen", "method": "Fry the tomatoes, stir in the eggs", "ingredients": [
+        {"name": "Eggs", "amount": 2, "unit": "pcs", "prep": "mixed"},
+        {"name": "Tomatoes", "amount": 1, "unit": "pcs", "prep": " diced "},
+        {"name": "Olive oil", "amount": 1, "unit": "tbsp", "prep": " "},
+    ]})
+    result = check_reply(text, EN)
+    assert is_clean(result) and result["note"] == "prep: Eggs: mixed; Tomatoes: diced"
+
+
 # A final notes the review's swaps (#148): a dish ingredient marked as standing in for a missing item, and a draft's
 # missing item gone with no mark; a rename to the fridge name and a missing item the review kept aren't gone
 def test_review_swaps_are_noted():
@@ -66,7 +78,7 @@ def test_review_swaps_are_noted():
         ing("Eggs"), ing("White cheese", replaces="Salmon"), ing("Tomatoes", prep="sliced"), ing("Chives"),
     ]})
     result = check_reply(final, EN, draft=draft)
-    assert result["note"] == "replaced White cheese for Salmon (Salmon omelette); gone, no mark: Quinoa"
+    assert result["note"] == "prep: Tomatoes: sliced; replaced White cheese for Salmon (Salmon omelette); gone, no mark: Quinoa"
     assert "note" not in check_reply(draft, EN)
 
 
