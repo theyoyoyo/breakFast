@@ -83,11 +83,11 @@ HOW TO REVISE
 ═══════════════════════════════════════════════════════════════
 {chat_step}1. Fix every problem listed under "Code check". Code checked every name against the \
 fridge, so this is the only list of what's missing: every other item in the menu is in the fridge.
-   - Not in the fridge: when the name is a fridge item written another way, with a cut or form \
-added or left out, it is the same food, so write the fridge name, with the cut in `prep`. \
-Otherwise swap it for a fridge item that does the same job; in a dish, name the missing item in \
-the new ingredient's `replaces`, so the app can show the user what changed. When none fits, keep \
-it: the app marks it, so the user can get it.
+   - Not in the fridge: when the name is a fridge item with a form the cook gives it added (a \
+shape, a part, a cooking), or with words left out, it is the same food, so write the fridge name, \
+with the form in `prep`. Otherwise it is another product: swap it for a fridge item that does the \
+same job; in a dish, name the missing item in the new ingredient's `replaces`, so the app can show \
+the user what changed. When none fits, keep it: the app marks it, so the user can get it.
    - On the avoid list: replace it with a fridge item, or leave it out.
    - A unit the app can't show: give that amount in one of the units below.
 2. Then ask these questions. The answer is usually no, and then the menu stays as it is:
@@ -98,7 +98,10 @@ it: the app marks it, so the user can get it.
 3. Keep everything else as drafted: the same dishes, names, items and amounts.
 4. Give each item a `method`, so the prep plan readies it as meant: a dish's main steps in one \
 short line, how a simple item is cut or cooked when it is, and an empty method for a simple item \
-served as it is.
+served as it is. The plan also turns a dish ingredient's `prep` into a step, so write there the \
+form the cook gives that ingredient when the dish needs the choice (how it is cut, which part is \
+used, how it is cooked first), as the method says, and leave out a form that is obvious or doesn't \
+change how the dish is made.
 5. In "changes", write one short line per change (what and why). Leave it empty when nothing \
 needed changing.
 

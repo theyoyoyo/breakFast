@@ -714,6 +714,16 @@ class TestFridgeRule:
         assert "Give every dish a `method`" not in prompt
 
 
+    # The reviser writes a dish ingredient's prep words as the form the cook gives it, when the dish needs that choice,
+    # and leaves out an obvious form or a word that changes nothing, since the plan turns them into steps (#176)
+    def test_pipeline_analyst_checks_prep_words(self):
+        prompt = build_pipeline_analyst_prompt([])
+        assert "The plan also turns a dish ingredient's `prep` into a step" in prompt
+        assert "(how it is cut, which part is used, how it is cooked first), as the method says" in prompt
+        assert "leave out a form that is obvious or doesn't change how the dish is made" in prompt
+        assert "like \"to taste\", becomes a small one in a listed unit (1 pinch), with the words in that ingredient's `prep`" in prompt
+
+
 # ---------------------------------------------------------------------------
 # Present step: the reply text from the final meal
 # ---------------------------------------------------------------------------
