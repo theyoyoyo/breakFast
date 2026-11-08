@@ -43,15 +43,6 @@ now, where the latest of those entries wins. Then, along with the steps below, c
 the menu doesn't follow an ask.
 """
 
-# Ends the reviser's message (services.pipeline._revision_message), before any chat block: the 7B model
-# follows the last message best, and with this in the system prompt it copied the draft's prep words (#176)
-PREP_NOTE = (
-    "As you write the meal, check each dish ingredient's `prep`, since the prep plan turns it into a step: "
-    "keep a word that gives the form the cook gives that ingredient (how it is cut, which part is used, how "
-    "it is cooked first), and leave out one that doesn't change how the dish is made. The method tells the "
-    "plan the rest, so a form the draft didn't give needs no new prep word."
-)
-
 
 PIPELINE_ANALYST_TEMPLATE = """\
 You are the break FAST meal reviser, an internal step the user never sees.

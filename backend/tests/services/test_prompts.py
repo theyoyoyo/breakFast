@@ -12,7 +12,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from services.personas.chat import build_chat_message
-from services.personas.pipeline_analyst import PREP_NOTE
 from services.suggestion import (
     build_chat_prompt,
     build_suggestion_prompt,
@@ -714,16 +713,11 @@ class TestFridgeRule:
         assert "A dish combines or tops items" in prompt
         assert "Give every dish a `method`" not in prompt
 
-    # The reviser's prep check keeps a word that gives the form the cook gives a dish ingredient, leaves out one that
-    # changes nothing and adds none, since the plan turns prep into steps and the method tells it the rest (#176); it
-    # ends the reviser's message rather than the system prompt, where "to taste" still goes in prep
-    def test_pipeline_analyst_checks_prep_words(self):
-        assert "since the prep plan turns it into a step" in PREP_NOTE
-        assert "keep a word that gives the form the cook gives that ingredient (how it is cut, which part is used" in PREP_NOTE
-        assert "leave out one that doesn't change how the dish is made" in PREP_NOTE
-        assert "a form the draft didn't give needs no new prep word" in PREP_NOTE
+    # The reviser keeps the draft's prep words, since a check of them made the 7B model add words that change nothing
+    # (#176), and an amount like "to taste" still becomes a small one with the words in prep
+    def test_pipeline_analyst_keeps_prep_words(self):
         prompt = build_pipeline_analyst_prompt([])
-        assert PREP_NOTE not in prompt and "turns it into a step" not in prompt
+        assert "turns it into a step" not in prompt and "Keep everything else as drafted" in prompt
         assert "like \"to taste\", becomes a small one in a listed unit (1 pinch), with the words in that ingredient's `prep`" in prompt
 
 

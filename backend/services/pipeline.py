@@ -36,7 +36,6 @@ from typing import AsyncGenerator
 from models.units import unknown_units, units_for
 from services.fridge import find_avoided, find_missing_ingredients, in_fridge, meal_ingredient_names, same_name
 from services.llm import chat_json
-from services.personas.pipeline_analyst import PREP_NOTE
 from services.suggestion import (
     build_suggestion_prompt,
     build_pipeline_analyst_prompt,
@@ -280,10 +279,8 @@ def _with_chat(message: str, chat_block: str | None) -> str:
 
 
 def _revision_message(draft_meal: dict, problems: list[str]) -> str:
-    """The draft's meal, code's findings, then the prep check (PREP_NOTE, #176)."""
     check = "\n".join(f"- {p}" for p in problems) if problems else "- Nothing found."
-    meal = json.dumps(draft_meal, ensure_ascii=False, indent=2)
-    return f"Draft menu:\n```json\n{meal}\n```\n\nCode check:\n{check}\n\n{PREP_NOTE}"
+    return f"Draft menu:\n```json\n{json.dumps(draft_meal, ensure_ascii=False, indent=2)}\n```\n\nCode check:\n{check}"
 
 
 def _code_text(meal: dict) -> str:
