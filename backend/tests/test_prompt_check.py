@@ -52,6 +52,21 @@ def test_simple_item_methods_are_noted():
     assert is_clean(result) and describe(result) == "clean (simple items: White cheese: Serve as is)"
 
 
+# A final notes the review's swaps (#148): a dish ingredient marked as standing in for a missing item, and a draft's
+# missing item gone with no mark; a rename to the fridge name and a missing item the review kept aren't gone
+def test_review_swaps_are_noted():
+    ing = lambda name, **extra: {"name": name, "amount": 50, "unit": "g", **extra}
+    draft = _reply({"name": "Salmon omelette", "ingredients": [
+        ing("Eggs"), ing("Salmon"), ing("Quinoa"), ing("Sliced tomatoes"), ing("Chives"),
+    ]})
+    final = _reply({"name": "Salmon omelette", "ingredients": [
+        ing("Eggs"), ing("White cheese", replaces="Salmon"), ing("Tomatoes", prep="sliced"), ing("Chives"),
+    ]})
+    result = check_reply(final, EN, draft=draft)
+    assert result["note"] == "replaced White cheese for Salmon (Salmon omelette); gone, no mark: Quinoa"
+    assert "note" not in check_reply(draft, EN)
+
+
 # A reply without a meal JSON block fails the JSON check
 def test_no_meal_json():
     result = check_reply("Here is a lovely breakfast idea.", EN)

@@ -318,10 +318,34 @@ def check_note(text: str, sample: dict) -> dict:
     return result
 
 
-def check_reply(text: str, sample: dict, scenario: dict | None = None) -> dict:
+def swap_notes(meal: dict, draft_text: str | None, inventory: list[dict]) -> list[str]:
+    """The review's swaps for the log (#148): each dish ingredient marked as standing in for a missing
+    item ("replaced Feta for Salmon (Frittata)"), and, given the draft, the draft's missing items that
+    are gone from the final with no mark and no rename ("gone, no mark: Quinoa"). Notes only: an item
+    the reviser left out is gone too, and code doesn't guess which it was."""
+    swaps = [
+        (ing.get("name"), ing["replaces"].strip(), item.get("name"))
+        for item in meal["menu"] if isinstance(item, dict)
+        for ing in item.get("ingredients") or []
+        if isinstance(ing, dict) and isinstance(ing.get("replaces"), str) and ing["replaces"].strip()
+    ]
+    notes = ["replaced " + "; ".join(f"{new} for {old} ({dish})" for new, old, dish in swaps)] if swaps else []
+    draft = extract_json_block(draft_text or "")
+    if isinstance(draft, dict) and isinstance(draft.get("menu"), list):
+        missing = find_missing_ingredients(draft, inventory)
+        renamed = renamed_items(missing, inventory)
+        kept = meal_ingredient_names(meal) + [old for _, old, _ in swaps]
+        gone = [n for n in missing if n not in renamed and not any(same_name(n, k) for k in kept)]
+        if gone:
+            notes.append("gone, no mark: " + ", ".join(gone))
+    return notes
+
+
+def check_reply(text: str, sample: dict, scenario: dict | None = None, draft: str | None = None) -> dict:
     """Score one suggestion reply: does its meal JSON parse, what's wrong with the meal, and, after
     a chat, what it does against what the chat asks. A note with no menu counts as no meal, except
-    for a fridge too small for one (check_note)."""
+    for a fridge too small for one (check_note). Given the draft, a final's note names the review's
+    swaps (swap_notes)."""
     if sample.get("expects_note"):
         return check_note(text, sample)
     meal = extract_json_block(text or "")
@@ -351,8 +375,9 @@ def check_reply(text: str, sample: dict, scenario: dict | None = None) -> dict:
         f"{i.get('name')}: {i['method'].strip()}" for i in meal["menu"]
         if isinstance(i, dict) and not i.get("ingredients") and isinstance(i.get("method"), str) and i["method"].strip()
     ]
-    if note or readied:
-        result["note"] = "; ".join(filter(None, [note, "simple items: " + "; ".join(readied) if readied else ""]))
+    notes = [note, "simple items: " + "; ".join(readied) if readied else "", *swap_notes(meal, draft, sample["ingredients"])]
+    if any(notes):
+        result["note"] = "; ".join(filter(None, notes))
     return result
 
 
@@ -806,7 +831,10 @@ async def run(
                         s: check_chat(replies[s], sample, typed[:i + 1]) for i, s in enumerate(CHAT_MESSAGES) if s in replies
                     }
                 else:
-                    scores = {s: check_reply(replies[s], sample, scenario) for s in STAGES if s in replies}
+                    scores = {
+                        s: check_reply(replies[s], sample, scenario, draft=replies.get("draft") if s == "final" else None)
+                        for s in STAGES if s in replies
+                    }
                 record = {
                     "sample": label,
                     "mode": sample_mode if persona == "suggest" else None,
