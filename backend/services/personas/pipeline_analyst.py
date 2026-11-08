@@ -47,9 +47,9 @@ the menu doesn't follow an ask.
 # follows the last message best, and with this in the system prompt it copied the draft's prep words (#176)
 PREP_NOTE = (
     "As you write the meal, check each dish ingredient's `prep`, since the prep plan turns it into a step: "
-    "it gives the form the cook gives that ingredient when the dish needs the choice (how it is cut, which "
-    "part is used, how it is cooked first), as the method says. Leave out a form that is obvious or doesn't "
-    "change how the dish is made."
+    "keep a word that gives the form the cook gives that ingredient (how it is cut, which part is used, how "
+    "it is cooked first), and leave out one that doesn't change how the dish is made. The method tells the "
+    "plan the rest, so a form the draft didn't give needs no new prep word."
 )
 
 
@@ -92,11 +92,12 @@ HOW TO REVISE
 ═══════════════════════════════════════════════════════════════
 {chat_step}1. Fix every problem listed under "Code check". Code checked every name against the \
 fridge, so this is the only list of what's missing: every other item in the menu is in the fridge.
-   - Not in the fridge: when the name is a fridge item with a form the cook gives it added (a \
-shape, a part, a cooking), or with words left out, it is the same food, so write the fridge name, \
-with the form in `prep`. Otherwise it is another product: swap it for a fridge item that does the \
-same job; in a dish, name the missing item in the new ingredient's `replaces`, so the app can show \
-the user what changed. When none fits, keep it: the app marks it, so the user can get it.
+   - Not in the fridge: when the name is a fridge item with only a cut or shape added, or with \
+words left out, it is the same food, so write the fridge name, with the cut in `prep`. Otherwise \
+it is another item: swap it only for a fridge item that does the same job in that dish; in a \
+dish, name the missing item in the new ingredient's `replaces`, so the app can show the user what \
+changed. When none fits or you are not sure, keep it as written: the app marks it, so the user \
+can get it.
    - On the avoid list: replace it with a fridge item, or leave it out.
    - A unit the app can't show: give that amount in one of the units below.
 2. Then ask these questions. The answer is usually no, and then the menu stays as it is:

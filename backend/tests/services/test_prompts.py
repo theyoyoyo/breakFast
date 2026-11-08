@@ -714,13 +714,14 @@ class TestFridgeRule:
         assert "A dish combines or tops items" in prompt
         assert "Give every dish a `method`" not in prompt
 
-    # The reviser's prep check gives the form the cook gives a dish ingredient when the dish needs that choice, and
-    # leaves out an obvious form or one that changes nothing, since the plan turns prep into steps (#176); it ends the
-    # reviser's message rather than the system prompt, where "to taste" still goes in prep
+    # The reviser's prep check keeps a word that gives the form the cook gives a dish ingredient, leaves out one that
+    # changes nothing and adds none, since the plan turns prep into steps and the method tells it the rest (#176); it
+    # ends the reviser's message rather than the system prompt, where "to taste" still goes in prep
     def test_pipeline_analyst_checks_prep_words(self):
         assert "since the prep plan turns it into a step" in PREP_NOTE
-        assert "(how it is cut, which part is used, how it is cooked first), as the method says" in PREP_NOTE
-        assert "Leave out a form that is obvious or doesn't change how the dish is made" in PREP_NOTE
+        assert "keep a word that gives the form the cook gives that ingredient (how it is cut, which part is used" in PREP_NOTE
+        assert "leave out one that doesn't change how the dish is made" in PREP_NOTE
+        assert "a form the draft didn't give needs no new prep word" in PREP_NOTE
         prompt = build_pipeline_analyst_prompt([])
         assert PREP_NOTE not in prompt and "turns it into a step" not in prompt
         assert "like \"to taste\", becomes a small one in a listed unit (1 pinch), with the words in that ingredient's `prep`" in prompt
