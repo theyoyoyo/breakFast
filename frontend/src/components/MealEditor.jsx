@@ -143,9 +143,16 @@ export default function MealEditor({
     }
   }
 
-  // The name's cell fills the row, while the mark and its tap stay on the text itself
-  const nameCell = (name) => (
-    <span style={s.itemText}><span {...markProps(name)}>{name}</span></span>
+  // The name's cell fills the row, while the mark and its tap stay on the text itself. A dish ingredient
+  // the review put in for a missing one gets a small ✱ beside that text (#148), outside the mark, so a tap
+  // on it marks nothing; the ℹ️ panel says what it stands in for.
+  const nameCell = (name, replaces = '') => (
+    <span style={s.itemText}>
+      <span {...markProps(name)}>{name}</span>
+      {replaces && (
+        <span style={s.replacedMark} role="img" title={`Instead of ${replaces}`} aria-label={`Instead of ${replaces}`}>✱</span>
+      )}
+    </span>
   )
 
   // ── Top-level item handlers ──────────────────────────────────────────────
@@ -307,16 +314,18 @@ export default function MealEditor({
 
   const handleSave = () => onSave?.(buildCurrentMeal())
 
-  // How the suggestion meant each item to be made, behind the ℹ️ button: a dish's method and its ingredients'
-  // prep words ("Oats: rolled"), and the method of a simple item that is cut or cooked (#156)
+  // How the suggestion meant each item to be made, behind the ℹ️ button: a dish's method, its ingredients'
+  // prep words ("Oats: rolled") and the ones the review put in for a missing item (#148), and the method
+  // of a simple item that is cut or cooked (#156)
   const prepDetails = menuMode
     ? items
         .map(item => ({
           dish: item.name,
           method: typeof item.method === 'string' ? item.method.trim() : '',
           notes: (item.ingredients || []).filter(sub => typeof sub.prep === 'string' && sub.prep.trim()),
+          swaps: isSimpleItem(item) ? [] : (item.ingredients || []).filter(sub => replacedName(sub)),
         }))
-        .filter(({ method, notes }) => method || notes.length > 0)
+        .filter(({ method, notes, swaps }) => method || notes.length > 0 || swaps.length > 0)
     : []
 
   // This meal is a favorite when one has its name (as typed now: exact, any case, like the server's
@@ -413,12 +422,17 @@ export default function MealEditor({
 
       {detailsOpen && prepDetails.length > 0 && (
         <div style={s.detailsBox}>
-          {prepDetails.map(({ dish, method, notes }, di) => (
+          {prepDetails.map(({ dish, method, notes, swaps }, di) => (
             <div key={di}>
               <div style={s.detailsDish}>{dish}</div>
               {method && <div style={s.detailsMethod}>{method}</div>}
               {notes.map((sub, ni) => (
-                <div key={ni} style={s.detailsLine}>{sub.name}: {sub.prep.trim()}</div>
+                <div key={`prep-${ni}`} style={s.detailsLine}>{sub.name}: {sub.prep.trim()}</div>
+              ))}
+              {swaps.map((sub, wi) => (
+                <div key={`swap-${wi}`} style={s.detailsLine}>
+                  {sub.name}: instead of {replacedName(sub)} (not in your fridge)
+                </div>
               ))}
             </div>
           ))}
@@ -517,7 +531,7 @@ export default function MealEditor({
                         <button style={s.arrowBtn} onClick={() => handleSubQtyStep(idx, si, 1)}>▲</button>
                       </div>
                       <UnitSelect unit={sub.unit} units={units} language={language} onChange={(unit) => handleSubUnitChange(idx, si, unit)} />
-                      {nameCell(sub.name)}
+                      {nameCell(sub.name, replacedName(sub))}
                       <div style={s.itemActions}>
                         <button style={s.deleteBtn} onClick={() => handleSubDelete(idx, si)} title="Delete">🗑️</button>
                       </div>
@@ -605,4 +619,13 @@ function initItems(meal, menuMode) {
  */
 function isSimpleItem(item) {
   return item.amount != null
+}
+
+/**
+ * The missing item a dish ingredient stands in for, when the review swapped one in (#148); '' otherwise.
+ * Only dish ingredients carry it. The field rides along with the row through edits, like prep words,
+ * and a row the user adds has none, so a name the user typed never gets the mark.
+ */
+function replacedName(sub) {
+  return typeof sub?.replaces === 'string' ? sub.replaces.trim() : ''
 }

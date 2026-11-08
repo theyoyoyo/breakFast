@@ -166,7 +166,8 @@ export function normalizeMeal(meal) {
 
 // A meal's food as one string, so two copies of a meal compare equal whatever their order: each
 // item is its name (any case), amount and unit (in English), a dish lists its ingredients the same
-// way, and both lists are sorted. Marks, times, notes, methods and prep words don't count.
+// way, and both lists are sorted. Marks, times, notes, methods, prep words and what an ingredient
+// replaces (#148) don't count.
 export function menuKey(meal) {
   if (!meal) return ''
   const menu = meal.menu?.length ? meal.menu : meal.menu_items

@@ -37,6 +37,13 @@ describe('menuKey', () => {
     expect(menuKey({ menu: [olives, { name: 'Toast', ingredients: [{ name: 'Bread', amount: 3, unit: 'slice' }] }] })).not.toBe(key)
   })
 
+  // A dish ingredient the review put in for a missing one is the same food with or without its replaces note
+  it('ignores what a dish ingredient replaces', () => {
+    const frittata = (feta) => ({ menu: [{ name: 'Frittata', ingredients: [{ name: 'Eggs', amount: 3, unit: 'pcs' }, feta] }] })
+    const feta = { name: 'Feta', amount: 50, unit: 'g' }
+    expect(menuKey(frittata({ ...feta, replaces: 'Salmon' }))).toBe(menuKey(frittata(feta)))
+  })
+
   // An old flat meal compares like a menu of simple items, and an item with no amount counts as one
   it('reads flat ingredients and missing amounts like the editor does', () => {
     expect(menuKey({ ingredients: [{ name: 'Egg', quantity: 2, unit: 'pcs' }] }))
@@ -66,6 +73,13 @@ describe('normalizeMeal', () => {
     expect(meal.menu).toEqual([menemen, cheese])
     expect(meal.meal_name).toBe('Breakfast')
     expect(meal.ingredients.map(i => i.name)).toEqual(['Egg', 'Cheese'])
+  })
+
+  // A dish ingredient keeps what it replaces, beside its prep words
+  it('keeps what a dish ingredient replaces', () => {
+    const feta = { name: 'Feta', amount: 50, unit: 'g', prep: 'crumbled', replaces: 'Salmon' }
+    const meal = normalizeMeal({ menu_name: 'Breakfast', menu: [{ name: 'Frittata', ingredients: [feta] }] })
+    expect(meal.menu[0].ingredients).toEqual([feta])
   })
 
   it('leaves old flat-format meals without a menu', () => {
