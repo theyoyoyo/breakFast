@@ -535,15 +535,18 @@ PLAN_CASES = {
 }
 
 
-def _review(sample: str, name: str, minutes: int, *menu: dict) -> dict:
+def _review(sample: str, name: str, minutes: int, *menu: dict, may_keep: tuple = ()) -> dict:
     """A review case: the sample's user, in the Suggest mode they usually press, and a draft meal in
-    the app's format, the way the pipeline hands it to the reviser."""
+    the app's format, the way the pipeline hands it to the reviser. `may_keep` names missing items
+    the review may keep as written although they contain a fridge name, so they count as still
+    missing, not renamed (#176)."""
     for item in menu:
         if not item.get("method"):  # the draft writes no methods; the reviser does
             item.pop("method", None)
     return {
         **SAMPLES[sample],
         "sample": sample,
+        "may_keep": list(may_keep),
         "draft": {"menu": list(menu), "menu_name": name, "description": f"{name} from the fridge.", "prep_time_min": minutes},
     }
 
@@ -569,14 +572,14 @@ REVIEW_CASES = {
                         _dish("Blueberry pancakes", "", ("Flour", 1, "glass"), ("Eggs", 2, "pcs"), ("Milk", 1, "glass"),
                               ("Baking powder", 1, "tsp"), ("Blueberries", 80, "g"), ("Maple syrup", 2, "tbsp")),
                         _served("Orange juice", 1, "glass")),
-    # Prep words (#176): a fridge item written with a shape (Diced onion) and a part of one (Egg whites), both the
-    # fridge item with the form in prep; a product (Smoked cheddar), a swap or kept, and then flagged as renamed, since
-    # code can't tell a product from a form; a word that changes nothing (mixed) and one that belongs to the bread
-    # (toasted), fixed or dropped; and sweet potatoes, whose form the omelette needs
+    # Prep words (#176): a fridge item written with a cut (Diced onion), the fridge item with the cut in prep; a part
+    # of one (Egg whites) and a product (Smoked cheddar), kept as written unless a swap does the same job, since a
+    # rename loses the part; a word that changes nothing (mixed) and one that belongs to the bread (toasted), dropped;
+    # and sweet potatoes with no prep word, which the method covers
     "omelette": _review("big_fridge", "Garden morning", 25,
                         _dish("Sweet potato omelette", "", ("Egg whites", 4, "pcs"), ("Sweet potatoes", 150, "g"),
                               ("Diced onion", 0.5, "pcs"), ("Smoked cheddar", 30, "g", "grated"),
                               ("Spinach", 1, "handful", "mixed")),
                         _dish("Jam toast", "", ("Whole wheat bread", 2, "slice"), ("Strawberry jam", 1, "tbsp", "toasted")),
-                        _served("Coffee", 1, "glass")),
+                        _served("Coffee", 1, "glass"), may_keep=("Egg whites", "Smoked cheddar")),
 }

@@ -658,6 +658,26 @@ def test_review_scores_swaps_and_outside_names():
     assert describe(check_review("", case, draft)) == "no JSON"
 
 
+# The omelette case may keep Egg whites as written, since a rename to Eggs loses the part, so a kept one is still
+# missing, not renamed; a kept Diced onion, a fridge item with its cut, is still flagged as renamed (#176)
+def test_review_case_may_keep_a_part():
+    case = REVIEW_CASES["omelette"]
+    draft = pipeline._meal_reply("", case["draft"])
+    ing = lambda name, **extra: {"name": name, "amount": 1, "unit": "pcs", **extra}
+    stocked = [ing("Sweet potatoes"), ing("Cheddar", prep="grated"), ing("Spinach")]
+    toast = {"name": "Jam toast", "method": "Toast the bread, spread the jam", "ingredients": [
+        ing("Whole wheat bread"), ing("Strawberry jam"),
+    ]}
+    coffee = {"name": "Coffee", "amount": 1, "unit": "glass", "ingredients": []}
+    omelette = lambda *items: {"name": "Sweet potato omelette", "method": "Cook", "ingredients": [*items, *stocked]}
+    kept = check_review(_reply(omelette(ing("Egg whites"), ing("Onion", prep="diced")), toast, coffee), case, draft)
+    assert is_clean(kept), describe(kept)
+    assert kept["note"].endswith("still missing: Egg whites")
+    renamed = check_review(_reply(omelette(ing("Egg whites"), ing("Diced onion")), toast, coffee), case, draft)
+    assert renamed["issues"]["renamed"] == ["Diced onion"]
+    assert case["may_keep"] == ["Egg whites", "Smoked cheddar"] and REVIEW_CASES["pancakes"]["may_keep"] == []
+
+
 # A review run sends the case's draft and code check to the reviser in the case user's mode, and returns the draft,
 # the review lines and the revised meal; every case's draft has an item the fridge lacks
 async def test_review_once_sends_the_draft():
