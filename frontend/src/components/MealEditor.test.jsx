@@ -2,7 +2,8 @@
  * Tests for MealEditor's fridge check: missing ingredients are underlined, never removed,
  * and can be marked as obtained for the meal (yellow → green), a dish's all at once with a tap
  * on its name. Also the header (☆ filled when a favorite has the meal's name and food, a note
- * when another favorite has the name, prep time in min) and units that follow the AI language.
+ * when another favorite has the name, prep time in min), the ✱ and ℹ️ line on a dish ingredient the
+ * review put in for a missing one, and units that follow the AI language.
  * The backend check is mocked — no real network calls are made.
  */
 
@@ -383,6 +384,98 @@ describe('MealEditor prep words', () => {
     const dish = onChange.mock.lastCall[0].menu[0]
     expect(dish.method).toBe('Hard-boil the eggs, peel, slice into the bread')
     expect(dish.ingredients[0]).toMatchObject({ name: 'Eggs', amount: 3 })
+  })
+})
+
+describe('MealEditor replaced ingredients', () => {
+  beforeEach(() => { vi.mocked(checkMissingIngredients).mockReset() })
+
+  const SWAP_MEAL = {
+    menu_name: 'Frittata',
+    menu: [
+      { name: 'Frittata', ingredients: [
+        { name: 'Eggs', amount: 3, unit: 'pcs' },
+        { name: 'Feta', amount: 50, unit: 'g', replaces: 'Salmon' },
+      ] },
+      { name: 'Olives', amount: 10, unit: 'pcs', ingredients: [] },
+    ],
+  }
+
+  // The ✱ sits right after the name of the ingredient the review put in, and names the missing item it stands in for
+  it('marks a replaced dish ingredient with a ✱ that names the missing item', () => {
+    render(<MealEditor meal={SWAP_MEAL} menuMode />)
+    expect(screen.queryByText('✱')).toBeNull() // the dish is closed
+    fireEvent.click(screen.getByText('▶ Ingredients'))
+    const marks = screen.getAllByRole('img', { name: 'Instead of Salmon' })
+    expect(marks).toHaveLength(1)
+    expect(marks[0]).toHaveTextContent('✱')
+    expect(marks[0]).toHaveAttribute('title', 'Instead of Salmon')
+    expect(marks[0].previousSibling).toHaveTextContent(/^Feta$/)
+  })
+
+  // The ℹ️ panel has one line per replaced ingredient under its dish, and the button shows when that's the only detail
+  it('lists a replaced ingredient behind the info button, also when it is the only detail', () => {
+    render(<MealEditor meal={SWAP_MEAL} menuMode />)
+    fireEvent.click(screen.getByTitle('Preparation details'))
+    const line = screen.getByText('Feta: instead of Salmon (not in your fridge)')
+    expect(line.parentElement.firstChild).toHaveTextContent('Frittata')
+    expect(screen.queryByText('Olives', { selector: 'div' })).toBeNull()
+  })
+
+  // A simple item never shows the mark or the line, even if it carries the field
+  it('shows no mark or info line for a simple item', () => {
+    const meal = { menu_name: 'Plate', menu: [{ name: 'Olives', amount: 10, unit: 'pcs', replaces: 'Capers', ingredients: [] }] }
+    render(<MealEditor meal={meal} menuMode />)
+    expect(screen.queryByText('✱')).toBeNull()
+    expect(screen.queryByTitle('Preparation details')).toBeNull()
+  })
+
+  // The ✱ sits outside the missing mark: a tap on it changes no mark and keeps the dish open, a tap on the name still marks
+  it('keeps the missing mark and its tap on the name, not on the ✱', async () => {
+    checkMissingIngredients.mockResolvedValue({ missing: ['Feta'] })
+    render(<MealEditor meal={SWAP_MEAL} menuMode checkFridge />)
+    fireEvent.click(screen.getByText('▶ Ingredients'))
+    const feta = await screen.findByTitle(MISSING)
+    expect(feta).toHaveTextContent(/^Feta$/)
+    fireEvent.click(screen.getByText('✱'))
+    expect(feta).toHaveAttribute('title', MISSING)
+    expect(screen.getByText('Eggs')).toBeInTheDocument()
+    fireEvent.click(feta)
+    expect(feta).toHaveAttribute('title', OBTAINED)
+  })
+
+  // Like prep words, the field rides along with its row through amount and unit edits, other rows' edits and Save
+  it('keeps replaces through edits and Save', () => {
+    const onChange = vi.fn()
+    const onSave = vi.fn()
+    render(<MealEditor meal={SWAP_MEAL} menuMode onChange={onChange} onSave={onSave} />)
+    fireEvent.click(screen.getByText('▶ Ingredients'))
+    fireEvent.click(screen.getAllByText('▲')[1]) // Eggs, Feta, then Olives
+    fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'tbsp' } })
+    fireEvent.click(screen.getAllByText('▲')[2])
+    fireEvent.click(screen.getAllByTitle('Delete')[1]) // the dish's trash first, then Eggs
+    const expected = [{ name: 'Feta', amount: 51, unit: 'tbsp', replaces: 'Salmon' }]
+    expect(onChange.mock.lastCall[0].menu[0].ingredients).toEqual(expected)
+    expect(screen.getByRole('img', { name: 'Instead of Salmon' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(onSave.mock.calls[0][0].menu[0].ingredients).toEqual(expected)
+    expect(onSave.mock.calls[0][0].menu_items[0].ingredients).toEqual(expected)
+  })
+
+  // The editor changes a row's name by deleting it and adding another, and the new row has no replaces (no ✱, no ℹ️ line)
+  it('drops replaces when the ingredient gives way to another name', () => {
+    const onChange = vi.fn()
+    render(<MealEditor meal={SWAP_MEAL} menuMode onChange={onChange} />)
+    fireEvent.click(screen.getByText('▶ Ingredients'))
+    fireEvent.click(screen.getAllByTitle('Delete')[2]) // the dish's trash, Eggs, then Feta
+    const add = screen.getByPlaceholderText('Add ingredient…')
+    fireEvent.change(add, { target: { value: 'Halloumi' } })
+    fireEvent.keyDown(add, { key: 'Enter' })
+    const subs = onChange.mock.lastCall[0].menu[0].ingredients
+    expect(subs.map(sub => sub.name)).toEqual(['Eggs', 'Halloumi'])
+    expect(subs.some(sub => 'replaces' in sub)).toBe(false)
+    expect(screen.queryByText('✱')).toBeNull()
+    expect(screen.queryByTitle('Preparation details')).toBeNull()
   })
 })
 

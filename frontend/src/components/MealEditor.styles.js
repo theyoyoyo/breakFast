@@ -236,6 +236,17 @@ export const missingName = ({ dotted = false, obtained = false } = {}) => ({
   textUnderlineOffset: 3,
 })
 
+// ✱ at the top right of a dish ingredient the review put in for a missing one: small and muted, and
+// lineHeight 0 keeps the raised mark from making the row taller
+export const replacedMark = {
+  fontSize: '0.7em',
+  verticalAlign: 'super',
+  lineHeight: 0,
+  marginLeft: 2,
+  color: 'var(--text-muted)',
+  cursor: 'default',
+}
+
 export const itemActions = {
   display: 'flex',
   gap: 4,

@@ -8,6 +8,7 @@ Run from backend/, with the server's Ollama reachable (docs/SETUPALL.md, BONUS C
     python -m tools.prompt_check --persona shopping --samples mixed,demo
     python -m tools.prompt_check --samples all --note "baseline"
     python -m tools.prompt_check --persona plan
+    python -m tools.prompt_check --persona review
     python -m tools.prompt_check --samples en,picky --scenario all
     python -m tools.prompt_check --persona chat --samples en,picky --scenario all
     python -m tools.prompt_check --history
@@ -26,10 +27,16 @@ Personas, each run for a sample user (tools/prompt_samples.py):
   the same prompt, reply schema and code dedupe.
 - plan: one Prep Plan press per menu in PLAN_CASES (every menu by default), with the
   planner's real prompt and menu message. It flags food the menu doesn't list, a
-  dish cooked another way than its method says (fry vs boil), a dish that cuts other
-  food after heating something (the heated food waits), and a heating step with no
-  appliance from the kitchen, and notes how many steps each dish got and how often
-  the plan the app builds from them switches dishes.
+  dish cooked another way than its method says (fry vs boil), and a dish that cuts other
+  food after heating something (the heated food waits), and notes how many steps each
+  dish got, how often the plan the app builds from them switches dishes, and a heating
+  step with no appliance from the kitchen (the cook can use one they have).
+- review: the reviser alone on each fixed draft in REVIEW_CASES (every case by default), sent
+  the way the pipeline's step 2 sends it, in the case user's usual Suggest mode. A draft has
+  items the fridge lacks, so the reply shows how the review swaps them (#148): a name it brings
+  in that's neither in the fridge nor the draft is flagged (outside), and the note names each
+  swap, what stays missing (the review may keep an item nothing replaces) and the draft's fridge
+  items it dropped.
 - chat: the typed messages of a --scenario (chat by default, or pressed) sent to the chat
   persona one at a time, with the chat so far as history. The chat talks and menus come
   only from a Suggest press (#168), so a reply with food amounts, numbered steps or a
@@ -69,7 +76,7 @@ from services.personas.shopping import build_shopping_prompt
 from services.shopping import (
     SUGGESTIONS_SCHEMA, dish_names, new_suggestions, parse_suggestions, pick_input, shopping_request,
 )
-from tools.prompt_samples import CHAT_MESSAGES, PLAN_CASES, SAMPLE_MODES, SAMPLES, SCENARIOS, chat_scenario
+from tools.prompt_samples import CHAT_MESSAGES, PLAN_CASES, REVIEW_CASES, SAMPLE_MODES, SAMPLES, SCENARIOS, chat_scenario
 from utils import extract_json_block
 
 BACKEND = Path(__file__).resolve().parent.parent
@@ -117,12 +124,13 @@ PERSONAS = {
         ),
     },
     "shopping": {"stages": ("suggest", "more"), "problems": ("dish", "vague", "repeat", "turkish")},
-    "plan": {"stages": ("plan",), "problems": ("unlisted", "method", "order", "appliance", "turkish")},
+    "plan": {"stages": ("plan",), "problems": ("unlisted", "method", "order", "turkish")},
+    "review": {"stages": ("final",), "problems": ("outside", "renamed", "units", "amounts", "avoided", "named", "turkish")},
     "chat": {"stages": CHAT_MESSAGES, "problems": ("food", "amounts", "steps", "block", "turkish")},
 }
 STAGES = PERSONAS["suggest"]["stages"]
 # Bumped when a check changes what counts as clean, so a test is compared only with tests scored the same way
-CHECKS = 5
+CHECKS = 6
 _TURKISH_LETTERS = set("çğıöşüÇĞİÖŞÜ")
 
 # Shopping names that aren't one specific product: alternatives, examples or filler words
@@ -318,10 +326,34 @@ def check_note(text: str, sample: dict) -> dict:
     return result
 
 
-def check_reply(text: str, sample: dict, scenario: dict | None = None) -> dict:
+def swap_notes(meal: dict, draft_text: str | None, inventory: list[dict]) -> list[str]:
+    """The review's swaps for the log (#148): each dish ingredient marked as standing in for a missing
+    item ("replaced Feta for Salmon (Frittata)"), and, given the draft, the draft's missing items that
+    are gone from the final with no mark and no rename ("gone, no mark: Quinoa"). Notes only: an item
+    the reviser left out is gone too, and code doesn't guess which it was."""
+    swaps = [
+        (ing.get("name"), ing["replaces"].strip(), item.get("name"))
+        for item in meal["menu"] if isinstance(item, dict)
+        for ing in item.get("ingredients") or []
+        if isinstance(ing, dict) and isinstance(ing.get("replaces"), str) and ing["replaces"].strip()
+    ]
+    notes = ["replaced " + "; ".join(f"{new} for {old} ({dish})" for new, old, dish in swaps)] if swaps else []
+    draft = extract_json_block(draft_text or "")
+    if isinstance(draft, dict) and isinstance(draft.get("menu"), list):
+        missing = find_missing_ingredients(draft, inventory)
+        renamed = renamed_items(missing, inventory)
+        kept = meal_ingredient_names(meal) + [old for _, old, _ in swaps]
+        gone = [n for n in missing if n not in renamed and not any(same_name(n, k) for k in kept)]
+        if gone:
+            notes.append("gone, no mark: " + ", ".join(gone))
+    return notes
+
+
+def check_reply(text: str, sample: dict, scenario: dict | None = None, draft: str | None = None) -> dict:
     """Score one suggestion reply: does its meal JSON parse, what's wrong with the meal, and, after
     a chat, what it does against what the chat asks. A note with no menu counts as no meal, except
-    for a fridge too small for one (check_note)."""
+    for a fridge too small for one (check_note). Given the draft, a final's note names the review's
+    swaps (swap_notes)."""
     if sample.get("expects_note"):
         return check_note(text, sample)
     meal = extract_json_block(text or "")
@@ -351,8 +383,36 @@ def check_reply(text: str, sample: dict, scenario: dict | None = None) -> dict:
         f"{i.get('name')}: {i['method'].strip()}" for i in meal["menu"]
         if isinstance(i, dict) and not i.get("ingredients") and isinstance(i.get("method"), str) and i["method"].strip()
     ]
-    if note or readied:
-        result["note"] = "; ".join(filter(None, [note, "simple items: " + "; ".join(readied) if readied else ""]))
+    notes = [note, "simple items: " + "; ".join(readied) if readied else "", *swap_notes(meal, draft, sample["ingredients"])]
+    if any(notes):
+        result["note"] = "; ".join(filter(None, notes))
+    return result
+
+
+def check_review(text: str, case: dict, draft: str) -> dict:
+    """Score the reviser's meal for a review case's fixed draft: check_reply's problems, except that a
+    missing item is only noted, since the review may keep one nothing replaces, and a missing name the
+    draft didn't have is flagged as brought in from outside the fridge (`outside`). The note names the
+    swaps, what stays missing and the draft's fridge items the review dropped."""
+    result = check_reply(text, case, draft=draft)
+    if not result["json"]:
+        return _no_json("review")
+    meal, drafted = extract_json_block(text), meal_ingredient_names(case["draft"])
+    missing = result["issues"]["missing"]
+    result["issues"] = {p: result["issues"].get(p, []) for p in PERSONAS["review"]["problems"]}
+    result["issues"]["outside"] = [n for n in missing if not any(same_name(n, d) for d in drafted)]
+    final = meal_ingredient_names(meal)
+    stocked = [n for n in drafted if n not in find_missing_ingredients(case["draft"], case["ingredients"])]
+    dropped = [n for n in stocked if not any(same_name(n, f) for f in final)]
+    kept = [m for m in missing if m not in result["issues"]["outside"]]
+    notes = [
+        result.get("note", ""),
+        "still missing: " + ", ".join(kept) if kept else "",
+        "dropped: " + ", ".join(dropped) if dropped else "",
+    ]
+    result["note"] = "; ".join(n for n in notes if n)
+    if not result["note"]:
+        result.pop("note")
     return result
 
 
@@ -515,7 +575,8 @@ def heated_before_prep(steps: list[tuple[str, list[dict]]], case: dict) -> list[
 def unheated_steps(steps: list[tuple[str, list[dict]]], case: dict) -> list[str]:
     """Heating steps with no appliance from the case's kitchen, as "Toast the bread (Avocado toast)":
     code serves food from a hot appliance last, so a heating step without one may be made first (#160).
-    Any appliance from the kitchen passes."""
+    Any appliance from the kitchen passes. It's a note, not a problem: the cook can toast in the Oven
+    when the plan says Toaster."""
     kitchen = {a.lower() for a in case["kitchen_appliances"]}
     return [
         f"{action} ({dish_name})" for dish_name, dish_steps in steps for step in dish_steps
@@ -532,15 +593,16 @@ def switches(plan: dict, case: dict) -> int:
 
 def check_plan(text: str, case: dict) -> dict:
     """Score one prep plan reply: does its JSON parse, does it plan only the menu, each dish as designed,
-    its prep before its heating, and its heating on an appliance. The note counts each dish's steps, so
-    a plan of one step per dish shows, and the plan's switches between dishes, so a plan that hops from
-    dish to dish every minute shows too."""
+    and its prep before its heating. The note counts each dish's steps, so a plan of one step per dish
+    shows, and the plan's switches between dishes, so a plan that hops from dish to dish every minute
+    shows too, and names heating steps with no appliance from the kitchen."""
     plan = extract_json_block(text or "")
     if not isinstance(plan, dict) or not isinstance(plan.get("dishes"), list):
         return _no_json("plan")
     dishes, dish_steps = _plan_dishes(plan), _plan_steps(plan)
     fridge = {"language": case["language"], "ingredients": [{"name": n} for n in _menu_names(case["menu"])]}
     steps = ", ".join(f"{name or '?'} {len(actions)}" for name, actions in dishes) or "none"
+    unheated = unheated_steps(dish_steps, case)
     return {
         "json": True,
         # The plan's steps, to count distinct plans across runs
@@ -549,10 +611,9 @@ def check_plan(text: str, case: dict) -> dict:
             "unlisted": unlisted_food([text for name, actions in dishes for text in (name, *actions)], case),
             "method": contradicted_methods(dishes, case),
             "order": heated_before_prep(dish_steps, case),
-            "appliance": unheated_steps(dish_steps, case),
             "turkish": turkish_words(text, fridge),
         },
-        "note": f"steps {steps}; switches {switches(plan, case)}",
+        "note": f"steps {steps}; switches {switches(plan, case)}" + (f"; no appliance: {', '.join(unheated)}" if unheated else ""),
     }
 
 
@@ -699,6 +760,20 @@ async def plan_once(case: dict, sent: dict) -> dict:
     return {"request": message, "plan": "".join(chunks)}
 
 
+async def review_once(case: dict, mode: str | None) -> dict:
+    """The reviser alone on the case's fixed draft, the way the pipeline's step 2 sends it:
+    {"draft": the draft as a reply, "review": the code check and the changes, "final": the revised
+    meal as a reply, empty when it can't be read}."""
+    draft = json.loads(json.dumps(case["draft"]))  # the reviser's meal is cleaned in place
+    problems, _, changes, meal = await pipeline.revise(case, draft, mode)
+    review = [f"- CODE CHECK: {p}" for p in problems] + [f"- {c}" for c in changes]
+    return {
+        "draft": pipeline._meal_reply(case["draft"]["menu_name"], case["draft"]),
+        "review": "\n".join(review) or "- No changes.",
+        "final": pipeline._meal_reply(meal["menu_name"], meal) if meal else "",
+    }
+
+
 def chat_prompt(sample: dict) -> str:
     """The chat persona's system prompt, built the way routers/chat.py builds it."""
     return suggestion.build_chat_prompt(
@@ -756,6 +831,11 @@ def recording_prompts(into: dict):
         pipeline.stream_response, pipeline.chat_json = send, send_json
 
 
+def _pool(persona: str) -> dict:
+    """What a persona's --samples name: plan menus, review drafts, or sample users."""
+    return {"plan": PLAN_CASES, "review": REVIEW_CASES}.get(persona, SAMPLES)
+
+
 def _cases(samples: list[str], scenarios: list[str]) -> list[tuple[str, str, dict | None]]:
     """(label, sample, chat scenario) for every sample and scenario: "en" for a fresh chat, "en:chat"
     after one. A scenario the sample's fridge is too small for is skipped with a note."""
@@ -778,8 +858,8 @@ async def run(
     prompts sent. Without a mode, each sample's user presses Suggest the way they usually do."""
     records, prompts = [], {}
     for label, key, scenario in _cases(samples, scenarios if persona in ("suggest", "chat") else ["fresh"]):
-        sample, sent = (PLAN_CASES if persona == "plan" else SAMPLES)[key], {}
-        sample_mode = mode or SAMPLE_MODES.get(key)
+        sample, sent = _pool(persona)[key], {}
+        sample_mode = mode or SAMPLE_MODES.get(sample.get("sample", key))
         with recording_prompts(sent):
             for i in range(1, runs + 1):
                 start = time.monotonic()
@@ -788,6 +868,8 @@ async def run(
                         replies = await shop_once(sample, sent)
                     elif persona == "plan":
                         replies = await plan_once(sample, sent)
+                    elif persona == "review":
+                        replies = await review_once(sample, sample_mode)
                     elif persona == "chat":
                         replies = await chat_once(sample, sample_mode, scenario, sent)
                     else:
@@ -799,16 +881,21 @@ async def run(
                     scores = score_shopping(replies, sample)
                 elif persona == "plan":
                     scores = {"plan": check_plan(replies["plan"], sample)} if "plan" in replies else {}
+                elif persona == "review":
+                    scores = {"final": check_review(replies["final"], sample, replies["draft"])} if "final" in replies else {}
                 elif persona == "chat":
                     typed = [e["content"] for e in scenario["chat"] if "press" not in e]
                     scores = {
                         s: check_chat(replies[s], sample, typed[:i + 1]) for i, s in enumerate(CHAT_MESSAGES) if s in replies
                     }
                 else:
-                    scores = {s: check_reply(replies[s], sample, scenario) for s in STAGES if s in replies}
+                    scores = {
+                        s: check_reply(replies[s], sample, scenario, draft=replies.get("draft") if s == "final" else None)
+                        for s in STAGES if s in replies
+                    }
                 record = {
                     "sample": label,
-                    "mode": sample_mode if persona == "suggest" else None,
+                    "mode": sample_mode if persona in ("suggest", "review") else None,
                     "run": i,
                     "seconds": time.monotonic() - start,
                     "error": error,
@@ -958,7 +1045,7 @@ def history_lines(history: list[dict]) -> list[str]:
 
 
 # What the log calls the replies that aren't scored
-_UNSCORED = {"review": "Review feedback", "request": "Menu sent", "chat": "Chat sent"}
+_UNSCORED = {"draft": "Draft sent", "review": "Review feedback", "request": "Menu sent", "chat": "Chat sent"}
 
 
 def save_log(records: list[dict], prompts: dict, header: str, report: str, diff: str) -> Path:
@@ -993,7 +1080,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--samples",
         help=f"comma-separated or all, from: {', '.join(SAMPLES)} (default: en); "
-             f"plan menus: {', '.join(PLAN_CASES)} (default: all)",
+             f"plan menus: {', '.join(PLAN_CASES)}; review drafts: {', '.join(REVIEW_CASES)} (both default: all)",
     )
     parser.add_argument("--persona", choices=list(PERSONAS), default="suggest", help="what to test (default: suggest)")
     parser.add_argument(
@@ -1010,9 +1097,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--note", default="", help="what this prompt version changes, kept in the history")
     parser.add_argument("--history", action="store_true", help="list earlier tests and exit")
     args = parser.parse_args(argv)
-    pool = PLAN_CASES if args.persona == "plan" else SAMPLES
+    pool = _pool(args.persona)
     args.samples = [s.strip() for s in (args.samples or "").split(",") if s.strip()] or (
-        list(PLAN_CASES) if args.persona == "plan" else ["en"]
+        list(pool) if pool is not SAMPLES else ["en"]
     )
     if args.samples == ["all"]:
         args.samples = list(pool)

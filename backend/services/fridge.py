@@ -81,14 +81,18 @@ def meal_ingredient_names(meal: dict) -> list[str]:
     return [n.strip() for n in names if n and n.strip()]
 
 
+def in_fridge(name: str, inventory: list[dict]) -> bool:
+    """The name is a fridge item (exact name, same_name), or water, which needs none."""
+    return _is_water(name) or any(same_name(name, i["name"]) for i in inventory if i.get("name"))
+
+
 def find_missing_ingredients(meal: dict | None, inventory: list[dict]) -> list[str]:
     """Ingredients of the meal that are not in the inventory."""
     if not isinstance(meal, dict):
         return []
-    stock = [i["name"] for i in inventory if i.get("name")]
     missing = []
     for name in meal_ingredient_names(meal):
-        if _is_water(name) or any(same_name(name, s) for s in stock):
+        if in_fridge(name, inventory):
             continue
         if name not in missing:
             missing.append(name)

@@ -13,7 +13,7 @@ import pytest
 
 from services.personas.pipeline_analyst import CHAT_STEP
 from services.suggestion import build_pipeline_analyst_prompt
-from services.pipeline import LOW_INGREDIENT_TEXTS, RETRY_TEXTS, revision_schema, run_suggestion_pipeline
+from services.pipeline import LOW_INGREDIENT_TEXTS, RETRY_TEXTS, revision_schema, reviser_names, run_suggestion_pipeline
 from utils import extract_json_block
 
 
@@ -134,6 +134,9 @@ class TestReviserPrompt:
         assert "Yumurta" in prompt
         assert 'Fix every problem listed under "Code check"' in prompt
         assert "When none fits, keep it: the app marks it" in prompt
+        assert "this is the only list of what's missing: every other item in the menu is in the fridge" in prompt
+        assert "write the fridge name, with the cut in `prep`" in prompt
+        assert "name the missing item in the new ingredient's `replaces`" in prompt
         assert "The answer is usually no" in prompt
         assert "three changes at most" in prompt
         assert "water" not in prompt.lower()
@@ -184,6 +187,27 @@ class TestRevisionSchema:
         tr_unit = revision_schema("tr")["properties"]["meal"]["properties"]["menu"]["items"]
         assert "tbsp" not in tr_unit["properties"]["unit"]["enum"]
 
+    # A dish ingredient's name is limited to the given names, while an item's name stays free for a renamed dish;
+    # `replaces` is optional, names only the draft's missing items, and is left out when nothing is missing
+    def test_names_and_replaces(self):
+        item = revision_schema("en", names=["Eggs", "Water"], missing=["Salmon"])["properties"]["meal"]["properties"]["menu"]["items"]
+        ingredient = item["properties"]["ingredients"]["items"]
+        assert ingredient["properties"]["name"] == {"type": "string", "enum": ["Eggs", "Water"]}
+        assert item["properties"]["name"] == {"type": "string"}
+        assert ingredient["properties"]["replaces"] == {"type": "string", "enum": ["Salmon"]}
+        assert list(ingredient["properties"]) == ["name", "amount", "unit", "prep", "replaces"]
+        assert "replaces" not in ingredient["required"] and "replaces" not in item["properties"]
+        plain = revision_schema("en", names=["Eggs"])["properties"]["meal"]["properties"]["menu"]["items"]
+        assert "replaces" not in plain["properties"]["ingredients"]["items"]["properties"]
+
+    # The reviser's names are the fridge's first, then the draft's own and water, one spelling each
+    def test_reviser_names(self):
+        draft = _meal({"name": "eggs", "amount": 2, "unit": "pcs"}, {"name": "Salmon", "amount": 50, "unit": "g"})
+        draft["menu"].append({"name": "Hot water", "amount": 1, "unit": "glass", "ingredients": []})
+        assert reviser_names(draft, [{"name": "Eggs"}, {"name": "Feta"}]) == ["Eggs", "Feta", "Salmon", "Hot water", "Water"]
+        assert reviser_names({"menu": []}, [{"name": "Su"}], "tr") == ["Su"]
+        assert reviser_names({"menu": []}, [{"name": "Yumurta"}], "tr") == ["Yumurta", "Su"]
+
 
 # ---------------------------------------------------------------------------
 # Pipeline orchestrator
@@ -220,7 +244,8 @@ class TestPipelineOrchestrator:
         assert "- Not in the fridge: Salt, Shellfish" in reviser["message"]
         assert "- On the avoid list: Shellfish" in reviser["message"]
         assert "- Units the app can't show: cup" in reviser["message"]
-        assert reviser["schema"] == revision_schema("en")
+        names = ["eggs", "Salt", "Shellfish", "Water"]
+        assert reviser["schema"] == revision_schema("en", names=names, missing=["Salt", "Shellfish"])
         review = next(e["content"] for e in events if e["type"] == "review")
         assert review.startswith("- CODE CHECK: Not in the fridge: Salt, Shellfish")
 
@@ -234,7 +259,7 @@ class TestPipelineOrchestrator:
         draft, reviser, present = calls
         assert draft["message"] == f"Suggest\n\n{block}"
         assert reviser["message"].endswith(f"Code check:\n- Nothing found.\n\n{block}")
-        assert reviser["schema"] == revision_schema("en", chat=True) and CHAT_STEP in reviser["system"]
+        assert reviser["schema"] == revision_schema("en", chat=True, names=["eggs", "Water"]) and CHAT_STEP in reviser["system"]
         assert "THE CHAT SO FAR" not in present["message"] + present["system"]
         review = next(e["content"] for e in events if e["type"] == "review")
         assert review == "- CHAT ASKS: Simit is fine again (from #2, #4)\n- CHAT ASKS: Ready in 10 minutes\n- Shorter prep"
@@ -263,6 +288,23 @@ class TestPipelineOrchestrator:
                         "method": "Boil for 8 minutes"}
         assert readied == {"ingredients": [], "name": "eggs", "method": "Fry in the pan", "amount": 1, "unit": "pcs"}
         assert served == {"ingredients": [], "name": "eggs", "amount": 1, "unit": "pcs"}
+
+    # A swap's mark stays only when it's true (#148): feta stands in for the missing salmon. A mark naming an item the
+    # draft had in the fridge, one on an ingredient the fridge lacks, one whose item is still in the dish, and an
+    # empty one are dropped
+    @pytest.mark.asyncio
+    async def test_only_true_swaps_keep_their_mark(self):
+        context = {**SAMPLE_CONTEXT, "ingredients": [{"name": "eggs"}, {"name": "Feta"}, {"name": "Milk"}]}
+        draft = _meal(EGGS, {"name": "Salmon", "amount": 50, "unit": "g"}, {"name": "Chives", "amount": 1, "unit": "tbsp"})
+        g = lambda name, **extra: {"name": name, "amount": 50, "unit": "g", **extra}
+        revised = _meal(
+            g("eggs", replaces=" "), g("Feta", replaces="salmon"), g("Milk", replaces="eggs"),
+            g("Quark", replaces="Salmon"), g("Chives"), g("Feta", replaces="Chives"),
+        )
+        events, _ = await _run(_draft(draft), _revision(revised), context=context)
+        ingredients = extract_json_block(_final(events))["menu"][0]["ingredients"]
+        assert [i.get("replaces") for i in ingredients] == [None, "salmon", None, None, None, None]
+        assert "replaces" not in ingredients[0]
 
     # A "dish" made of one item named as itself (Banana: Banana) is that item on its own, and keeps its method
     @pytest.mark.asyncio

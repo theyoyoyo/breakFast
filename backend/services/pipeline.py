@@ -34,7 +34,7 @@ import re
 from typing import AsyncGenerator
 
 from models.units import unknown_units, units_for
-from services.fridge import find_avoided, find_missing_ingredients, same_name
+from services.fridge import find_avoided, find_missing_ingredients, in_fridge, meal_ingredient_names, same_name
 from services.llm import chat_json
 from services.suggestion import (
     build_suggestion_prompt,
@@ -67,24 +67,30 @@ def in_language(texts: dict, language: str) -> str:
     return texts.get(language, texts["en"])
 
 
-def _meal_schema(language: str, method: bool = True) -> dict:
+def _meal_schema(language: str, method: bool = True, names: list[str] | None = None, missing: list[str] = ()) -> dict:
     """The meal the draft and the reviser both return, one shape so the two stay the same. Each
     menu item lists its ingredients before its name, so a dish's name is written after what goes
     in, and every item has a numeric amount in the app's units (a dish's servings, which code
     drops; a simple item's portion). One item shape for both: offered a choice of shapes, the 7B
     model dropped a dish's ingredients. The draft's items have no `method`: the reviser writes it,
-    and a method rule in the draft scored worse."""
+    and a method rule in the draft scored worse.
+
+    For the reviser, `names` limits a dish ingredient's name to these (reviser_names), and
+    `missing`, the draft's items the fridge lacks, are what an optional `replaces` may name. Item
+    names stay free, since a dish may need a new name after a swap."""
     units = units_for(language)
     ingredient = {
         "type": "object",
         "properties": {
-            "name": {"type": "string"},
+            "name": {"type": "string", "enum": names} if names else {"type": "string"},
             "amount": {"type": "number"},
             "unit": {"type": "string", "enum": units},
             "prep": {"type": "string"},
         },
         "required": ["name", "amount", "unit"],
     }
+    if missing:
+        ingredient["properties"]["replaces"] = {"type": "string", "enum": list(missing)}
     fields = {"ingredients": {"type": "array", "items": ingredient}, "name": {"type": "string"}}
     if method:
         fields["method"] = {"type": "string"}
@@ -110,8 +116,9 @@ def draft_schema(language: str) -> dict:
     return {"type": "object", "properties": properties, "required": list(properties)}
 
 
-def revision_schema(language: str, chat: bool = False) -> dict:
-    """The reviser's reply: its changes first, then the meal (the draft's shape, with methods).
+def revision_schema(language: str, chat: bool = False, names: list[str] | None = None, missing: list[str] = ()) -> dict:
+    """The reviser's reply: its changes first, then the meal (the draft's shape, with methods, its
+    ingredient names limited to `names` and an optional `replaces` naming one of `missing`).
     After a chat it starts with `chat_asks`, what the chat asks for now, so it holds the meal
     against each ask. Each ask lists the chat entries it comes from before its words, so a later
     message is read together with the earlier one it changes (one general shape, no field per kind
@@ -122,8 +129,48 @@ def revision_schema(language: str, chat: bool = False) -> dict:
         "required": ["from", "ask"],
     }
     properties = {"chat_asks": {"type": "array", "items": ask}} if chat else {}
-    properties |= {"changes": {"type": "array", "items": {"type": "string"}}, "meal": _meal_schema(language)}
+    properties |= {
+        "changes": {"type": "array", "items": {"type": "string"}},
+        "meal": _meal_schema(language, names=names, missing=missing),
+    }
     return {"type": "object", "properties": properties, "required": list(properties)}
+
+
+# Recipes may list water, a utility the fridge doesn't hold, so the reviser may name it too
+_WATER = {"en": "Water", "tr": "Su"}
+
+
+def reviser_names(draft_meal: dict, inventory: list[dict], language: str = "en") -> list[str]:
+    """The names the reviser may give a dish's ingredients: the fridge's, so a swap brings in only
+    what the user has, then the draft's own, so a missing item it keeps keeps its name, and water.
+    One spelling per name (same_name), the fridge's first."""
+    names = []
+    for name in [i["name"] for i in inventory if i.get("name")] + meal_ingredient_names(draft_meal) + [_WATER.get(language, "Water")]:
+        if name and not any(same_name(name, n) for n in names):
+            names.append(name)
+    return names
+
+
+def _check_swaps(meal: dict, missing: list[str], inventory: list[dict]) -> dict:
+    """Keep a dish ingredient's `replaces` only when it's true (#148): the item it names was missing
+    in the draft, the ingredient itself is in the fridge, and the item it names is gone from that
+    dish. A simple item isn't a recipe, so it carries none."""
+    for item in meal["menu"]:
+        if not isinstance(item, dict):
+            continue
+        item.pop("replaces", None)
+        dish = [str(i.get("name", "")) for i in item.get("ingredients") or [] if isinstance(i, dict)]
+        for ingredient in item.get("ingredients") or []:
+            if not isinstance(ingredient, dict):
+                continue
+            old = str(ingredient.pop("replaces", "") or "").strip()
+            if (
+                old and any(same_name(old, m) for m in missing)
+                and in_fridge(str(ingredient.get("name", "")), inventory)
+                and not any(same_name(old, n) for n in dish)
+            ):
+                ingredient["replaces"] = old
+    return meal
 
 
 def _readable_meal(meal) -> dict | None:
@@ -170,8 +217,9 @@ def _clean_meal(meal: dict) -> dict:
         if not str(item.get("method") or "").strip():
             item.pop("method", None)
         for ingredient in item["ingredients"]:
-            if isinstance(ingredient, dict) and not str(ingredient.get("prep") or "").strip():
-                ingredient.pop("prep", None)
+            for key in ("prep", "replaces"):
+                if isinstance(ingredient, dict) and not str(ingredient.get(key) or "").strip():
+                    ingredient.pop(key, None)
     return meal
 
 
@@ -241,6 +289,50 @@ def _code_text(meal: dict) -> str:
     return "\n\n".join(part for part in (f"**{name}**" if name else "", description) if part)
 
 
+async def revise(
+    context: dict, draft_meal: dict, mode: str | None = None, chat_block: str | None = None,
+) -> tuple[list[str], list[str], list[str], dict | None]:
+    """Step 2 on its own, so the prompt test can send the reviser a fixed draft: code checks the
+    draft's meal, and the reviser returns the fixed meal through revision_schema, its ingredient
+    names limited to the fridge's and the draft's own (reviser_names). Code keeps an ingredient's
+    `replaces` only when it's true (_check_swaps). Returns the code check's lines, what the reviser
+    read in the chat, its changes and its meal (None when the meal can't be read or the call fails)."""
+    language = context.get("language", "en")
+    reviser_prompt = build_pipeline_analyst_prompt(
+        recent_meal_history=context["history"],
+        user_profile=context["user_profile"],
+        supplements=context["supplements"],
+        health_rules=context["health_rules"],
+        ingredient_inventory=context["ingredients"],
+        avoid_list=context["avoid_list"],
+        preferences=context["preferences"],
+        mode=mode,
+        language=language,
+        chat=bool(chat_block),
+    )
+    problems = _code_check(draft_meal, context)
+    missing = find_missing_ingredients(draft_meal, context["ingredients"])
+    schema = revision_schema(
+        language, chat=bool(chat_block), names=reviser_names(draft_meal, context["ingredients"], language), missing=missing,
+    )
+    asks, changes, revised_meal = [], [], None
+    try:
+        reply = await chat_json(
+            system_prompt=reviser_prompt,
+            messages=[{"role": "user", "content": _with_chat(_revision_message(draft_meal, problems), chat_block)}],
+            schema=schema,
+            temperature=REVISE_TEMPERATURE,
+        )
+        asks, changes, revised_meal = _parse_revision(reply)
+        if revised_meal is None:
+            logging.warning("Suggestion reviser: could not read the meal in %r", reply)
+    except Exception:
+        logging.exception("Suggestion reviser failed; the draft's meal is used")
+    if revised_meal is not None:
+        _check_swaps(revised_meal, missing, context["ingredients"])
+    return problems, asks, changes, revised_meal
+
+
 async def run_suggestion_pipeline(
     context: dict,
     user_message: str,
@@ -285,19 +377,6 @@ async def run_suggestion_pipeline(
         ratings=context.get("ratings"),
     )
 
-    reviser_prompt = build_pipeline_analyst_prompt(
-        recent_meal_history=context["history"],
-        user_profile=context["user_profile"],
-        supplements=context["supplements"],
-        health_rules=context["health_rules"],
-        ingredient_inventory=context["ingredients"],
-        avoid_list=context["avoid_list"],
-        preferences=context["preferences"],
-        mode=mode,
-        language=language,
-        chat=bool(chat_block),
-    )
-
     # --- Step 1: Draft ---
     yield {"type": "progress", "step": "drafting"}
 
@@ -331,20 +410,7 @@ async def run_suggestion_pipeline(
     # --- Step 2: Revise ---
     yield {"type": "progress", "step": "analyzing"}
 
-    problems = _code_check(draft_meal, context)
-    asks, changes, revised_meal = [], [], None
-    try:
-        reply = await chat_json(
-            system_prompt=reviser_prompt,
-            messages=[{"role": "user", "content": _with_chat(_revision_message(draft_meal, problems), chat_block)}],
-            schema=revision_schema(language, chat=bool(chat_block)),
-            temperature=REVISE_TEMPERATURE,
-        )
-        asks, changes, revised_meal = _parse_revision(reply)
-        if revised_meal is None:
-            logging.warning("Suggestion reviser: could not read the meal in %r", reply)
-    except Exception:
-        logging.exception("Suggestion reviser failed; the draft's meal is used")
+    problems, asks, changes, revised_meal = await revise(context, draft_meal, mode, chat_block)
     review = (
         [f"- CHAT ASKS: {a}" for a in asks]
         + [f"- CODE CHECK: {p}" for p in problems]

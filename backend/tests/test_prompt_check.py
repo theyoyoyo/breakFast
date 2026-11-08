@@ -8,12 +8,15 @@ import pytest
 from services import pipeline
 from services.chat_block import chat_history, format_chat_block
 from services.personas.chat import build_chat_message
-from services.fridge import same_name
+from services.fridge import find_missing_ingredients, same_name
 from tools.prompt_check import (
-    CHECKS, PERSONAS, chat_once, chat_rows, check_chat, check_plan, check_reply, compare, describe, is_clean,
-    parse_args, plan_once, recording_prompts, run, score_shopping, shop_once, suggest_once, summarize,
+    CHECKS, PERSONAS, chat_once, chat_rows, check_chat, check_plan, check_reply, check_review, compare, describe,
+    is_clean, parse_args, plan_once, recording_prompts, review_once, run, save_log, score_shopping, shop_once,
+    suggest_once, summarize,
 )
-from tools.prompt_samples import CHAT_MESSAGES, CHAT_MINUTES, PLAN_CASES, SAMPLE_MODES, SAMPLES, SCENARIOS, chat_picks, chat_scenario
+from tools.prompt_samples import (
+    CHAT_MESSAGES, CHAT_MINUTES, PLAN_CASES, REVIEW_CASES, SAMPLE_MODES, SAMPLES, SCENARIOS, chat_picks, chat_scenario,
+)
 
 EN, TR = SAMPLES["en"], SAMPLES["tr"]
 
@@ -50,6 +53,21 @@ def test_simple_item_methods_are_noted():
     )
     result = check_reply(text, EN)
     assert is_clean(result) and describe(result) == "clean (simple items: White cheese: Serve as is)"
+
+
+# A final notes the review's swaps (#148): a dish ingredient marked as standing in for a missing item, and a draft's
+# missing item gone with no mark; a rename to the fridge name and a missing item the review kept aren't gone
+def test_review_swaps_are_noted():
+    ing = lambda name, **extra: {"name": name, "amount": 50, "unit": "g", **extra}
+    draft = _reply({"name": "Salmon omelette", "ingredients": [
+        ing("Eggs"), ing("Salmon"), ing("Quinoa"), ing("Sliced tomatoes"), ing("Chives"),
+    ]})
+    final = _reply({"name": "Salmon omelette", "ingredients": [
+        ing("Eggs"), ing("White cheese", replaces="Salmon"), ing("Tomatoes", prep="sliced"), ing("Chives"),
+    ]})
+    result = check_reply(final, EN, draft=draft)
+    assert result["note"] == "replaced White cheese for Salmon (Salmon omelette); gone, no mark: Quinoa"
+    assert "note" not in check_reply(draft, EN)
 
 
 # A reply without a meal JSON block fails the JSON check
@@ -497,7 +515,7 @@ def test_plan_against_the_method_and_off_the_menu():
     result = check_plan(text, PLAN_CASES["boiled"])
     assert result["issues"]["method"] == ["Fry the eggs in oil (Egg sandwich: boil)"]
     assert result["issues"]["unlisted"] == ["oil", "tomatoes", "cucumbers"]
-    assert result["note"] == "steps Egg sandwich 2, Salad 1; switches 1"
+    assert result["note"] == "steps Egg sandwich 2, Salad 1; switches 1; no appliance: Fry the eggs in oil (Egg sandwich)"
 
 
 # Each plan dish is held to its own menu dish's method: the omelette may fry eggs beside boiled eggs,
@@ -552,19 +570,21 @@ def test_plan_heating_before_prep():
     assert check_plan(turkish, PLAN_CASES["menemen"])["issues"]["order"] == ["Domatesleri doğra (after Yumurtaları haşla)"]
 
 
-# A heating step needs an appliance from the case's kitchen: toast in the Oven passes where there is no Toaster,
-# a Toaster there doesn't, and spreading on the toast or cooling the boiled eggs isn't heating
-def test_plan_heating_needs_an_appliance():
+# A heating step with no appliance from the case's kitchen is noted, not a problem, since the cook can use one
+# they have: toast in the Oven where there is no Toaster isn't noted, a Toaster there is, and spreading on the
+# toast or cooling the boiled eggs isn't heating
+def test_plan_heating_without_an_appliance_is_noted():
     cooled = _plan(Boiled_eggs=[("Hard-boil the eggs", "Stove"), "Cool the boiled eggs in cold water"])
-    assert check_plan(cooled, PLAN_CASES["omelette"])["issues"]["appliance"] == []
-    assert check_plan(_plan(Boiled_eggs=["Hard-boil the eggs"]), PLAN_CASES["omelette"])["issues"]["appliance"] == [
-        "Hard-boil the eggs (Boiled eggs)",
-    ]
+    assert "no appliance" not in check_plan(cooled, PLAN_CASES["omelette"])["note"]
+    bare = check_plan(_plan(Boiled_eggs=["Hard-boil the eggs"]), PLAN_CASES["omelette"])
+    assert is_clean(bare), describe(bare)
+    assert bare["note"].endswith("; no appliance: Hard-boil the eggs (Boiled eggs)")
     steps = lambda appliance: _plan(Avocado_toast=["Mash the avocado", ("Toast the bread", appliance), "Spread it on the toast"])
-    assert check_plan(steps("Oven"), PLAN_CASES["avocado_oven"])["issues"]["appliance"] == []
-    assert check_plan(steps("Toaster"), PLAN_CASES["avocado_oven"])["issues"]["appliance"] == ["Toast the bread (Avocado toast)"]
-    assert check_plan(steps(""), PLAN_CASES["avocado"])["issues"]["appliance"] == ["Toast the bread (Avocado toast)"]
-    assert check_plan(steps("Toaster"), PLAN_CASES["avocado"])["issues"]["appliance"] == []
+    noted = lambda appliance, case: check_plan(steps(appliance), PLAN_CASES[case])["note"].partition("; no appliance: ")[2]
+    assert noted("Oven", "avocado_oven") == ""
+    assert noted("Toaster", "avocado_oven") == "Toast the bread (Avocado toast)"
+    assert noted("", "avocado") == "Toast the bread (Avocado toast)"
+    assert noted("Toaster", "avocado") == ""
 
 
 # Turkish suffixes still match: boiling the eggs of a menemen is flagged, its peppers and tomatoes are on the menu;
@@ -598,6 +618,73 @@ async def test_plan_once_sends_the_menu_with_its_methods():
     assert "- Egg sandwich (Hard-boil the eggs, peel, slice into the buttered bread): Eggs (2 pcs)" in requests["boiled"]
     assert "- Sweet potato (Peel and cube the sweet potato, roast it in the air fryer): Sweet potato (300 g)" in requests["bowls"]
     assert set(calls) == {0.3}
+
+
+def _pancakes(*ingredients) -> str:
+    """The pancakes review case's reply with the dish made of these ingredients, beside its orange juice."""
+    dish = {"name": "Blueberry pancakes", "method": "Mix, fry", "ingredients": [
+        {"name": n, "amount": 1, "unit": "glass", **extra} for n, extra in ingredients
+    ]}
+    return _reply(dish, {"name": "Orange juice", "amount": 1, "unit": "glass", "ingredients": []})
+
+
+# A review that swaps the missing blueberries for strawberries and marks it is clean, its note naming the swap; one
+# that keeps them notes them as still missing, and one that brings in a food from outside the fridge and the draft
+# (raspberries) is flagged, its note naming the fridge food it dropped (the maple syrup)
+def test_review_scores_swaps_and_outside_names():
+    case = REVIEW_CASES["pancakes"]
+    draft = pipeline._meal_reply("", case["draft"])
+    base = [("Flour", {}), ("Eggs", {}), ("Milk", {}), ("Baking powder", {}), ("Maple syrup", {})]
+    swapped = check_review(_pancakes(*base, ("Strawberries", {"replaces": "Blueberries"})), case, draft)
+    assert is_clean(swapped), describe(swapped)
+    assert swapped["note"] == "replaced Strawberries for Blueberries (Blueberry pancakes)"
+    kept = check_review(_pancakes(*base, ("Blueberries", {})), case, draft)
+    assert is_clean(kept) and kept["note"] == "still missing: Blueberries"
+    outside = check_review(_pancakes(*base[:4], ("Raspberries", {})), case, draft)
+    assert outside["issues"]["outside"] == ["Raspberries"]
+    assert outside["note"] == "gone, no mark: Blueberries; dropped: Maple syrup"
+    assert describe(check_review("", case, draft)) == "no JSON"
+
+
+# A review run sends the case's draft and code check to the reviser in the case user's mode, and returns the draft,
+# the review lines and the revised meal; every case's draft has an item the fridge lacks
+async def test_review_once_sends_the_draft():
+    calls = []
+
+    async def fake_chat_json(system_prompt, messages, schema, temperature=None):
+        calls.append(messages[0]["content"])
+        meal = json.loads(json.dumps(REVIEW_CASES["pancakes"]["draft"]))
+        return json.dumps({"changes": ["Strawberries for the blueberries"], "meal": meal})
+
+    with patch("services.pipeline.chat_json", fake_chat_json):
+        replies = await review_once(REVIEW_CASES["pancakes"], "favorites")
+    assert "- Not in the fridge: Blueberries" in calls[0]
+    assert replies["review"] == "- CODE CHECK: Not in the fridge: Blueberries\n- Strawberries for the blueberries"
+    assert replies["draft"].startswith("Pancake morning\n\n```json") and replies["final"].startswith("Pancake morning")
+    assert "Blueberries" in replies["final"]
+    for case in REVIEW_CASES.values():
+        assert find_missing_ingredients(case["draft"], case["ingredients"])
+        assert all("method" not in item for item in case["draft"]["menu"])
+
+
+# A review run's log keeps the draft it sent, which isn't scored, under its own title beside the scored final
+def test_review_log_keeps_the_draft(tmp_path):
+    record = {
+        "sample": "pancakes", "mode": "favorites", "run": 1, "seconds": 9, "error": None,
+        "replies": {"draft": "Pancake morning", "review": "- No changes.", "final": "Pancake morning"},
+        "scores": {"final": check_review("", REVIEW_CASES["pancakes"], "")},
+    }
+    with patch("tools.prompt_check.RUNS_DIR", tmp_path):
+        text = save_log([record], {}, "header", "report", "").read_text(encoding="utf-8")
+    assert "### Draft sent" in text and "### Review feedback" in text and "### Final: no JSON" in text
+
+
+# The review persona runs every review case by default, each in its user's usual mode
+def test_review_samples():
+    assert parse_args(["--persona", "review"]).samples == list(REVIEW_CASES)
+    assert REVIEW_CASES["frittata"]["sample"] == "greek" and SAMPLE_MODES["greek"] == "explore"
+    with pytest.raises(SystemExit):
+        parse_args(["--persona", "review", "--samples", "en"])
 
 
 # The plan persona runs every plan menu by default and only knows plan menus
