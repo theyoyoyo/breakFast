@@ -118,7 +118,8 @@ def input_view(entry: dict | None, persona: str) -> dict:
         "fridge": [i["name"] for i in data.get("ingredients") or [] if i.get("name")],
         "avoid": data.get("avoid_list") or [],
         "dislikes": [v for k, v in (data.get("preferences") or {}).items() if k.startswith("dislike:")],
-        "health": [r.get("rule") or r.get("text") or str(r) for r in data.get("health_rules") or []],
+        "health": [r.get("rule_text") or str(r) for r in data.get("health_rules") or []],
+        "kitchen": data.get("kitchen_appliances"),
     }
     if persona == "review":
         view["draft"] = data.get("draft")
