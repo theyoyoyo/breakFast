@@ -330,14 +330,15 @@ def test_chat_scenarios():
 def test_scenario_chat_is_the_server_block():
     chat, pressed = chat_scenario("en", "chat"), chat_scenario("en", "pressed")
     typed = [e["content"] for e in chat["chat"]]
+    a, b, c, d = chat_picks(EN, "en")
     rows = chat_rows(pressed["chat"], None)
     assert [r["role"] for r in rows] == ["user", "assistant", "user", "user", "assistant", "user", "user", "user"]
     assert rows[0]["content"] == "Suggest Breakfast" and '"menu_name": "Breakfast plate"' in rows[1]["content"]
     assert chat_rows(pressed["chat"], "favorites")[0]["content"] == "Suggest breakfast from my favorite meals"
     assert format_chat_block(rows).split("\n\n", 1)[1].splitlines() == [
-        "- #1 Menu shown: Breakfast plate. Items: Eggs, Cucumber, Simit",
+        f"- #1 Menu shown: Breakfast plate. Items: {a}, {b}, {c}",
         f"- #2 User: {typed[0]}",
-        "- #3 Menu shown: Light plate. Items: Cucumber, Milk",
+        f"- #3 Menu shown: Light plate. Items: {b}, {d}",
         f"- #4 User: {typed[1]}",
         f"- #5 User: {typed[2]}",
         f"- #6 User (latest message): {typed[3]}",
