@@ -12,6 +12,7 @@ from config import (
     OLLAMA_BASE_URL,
     OLLAMA_MODEL,
     OLLAMA_NUM_CTX,
+    OLLAMA_ROUTES,
     OLLAMA_THINK,
 )
 
@@ -68,18 +69,27 @@ async def check_llm_availability() -> bool:
         return False
 
 
+def model_for(task: str | None = None, language: str | None = None) -> tuple[str, bool | None]:
+    """The model and think value for a call (#192): its reply language's model, else its task's
+    (config.MODEL_TASKS), else OLLAMA_MODEL with OLLAMA_THINK. Read on every call."""
+    return OLLAMA_ROUTES.get(language) or OLLAMA_ROUTES.get(task) or (OLLAMA_MODEL, OLLAMA_THINK)
+
+
 async def chat_stream(
     system_prompt: str,
     messages: list[dict],
     temperature: float | None = None,
+    task: str | None = None,
+    language: str | None = None,
 ) -> AsyncGenerator[str, None]:
     """
-    Stream response tokens. Raises LLMUnavailableError if Ollama is down.
+    Stream response tokens from the model for this task and reply language. Raises
+    LLMUnavailableError if Ollama is down.
     """
     if not await check_llm_availability():
         raise LLMUnavailableError(LLM_UNAVAILABLE_MESSAGE)
 
-    async for chunk in _ollama_stream(system_prompt, messages, temperature=temperature):
+    async for chunk in _ollama_stream(system_prompt, messages, temperature=temperature, task=task, language=language):
         yield chunk
 
 
@@ -99,21 +109,25 @@ async def chat_json(
     messages: list[dict],
     schema: dict,
     temperature: float | None = None,
+    task: str | None = None,
+    language: str | None = None,
 ) -> str:
-    """Non-streaming call whose reply Ollama constrains to the JSON schema (structured outputs).
+    """Non-streaming call whose reply Ollama constrains to the JSON schema (structured outputs),
+    sent to the model for this task and reply language.
 
     Returns the raw reply text; callers parse it. Needs Ollama 0.5 or later.
     """
     if not await check_llm_availability():
         raise LLMUnavailableError(LLM_UNAVAILABLE_MESSAGE)
 
+    model, think = model_for(task, language)
     payload = {
-        "model": OLLAMA_MODEL,
+        "model": model,
         "messages": [{"role": "system", "content": system_prompt}] + messages,
         "stream": False,
         "format": schema,
         "options": _options(temperature),
-        **_think(),
+        **_think(think),
     }
     async with httpx.AsyncClient(timeout=120.0) as client:
         response = await client.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload)
@@ -136,22 +150,25 @@ def _options(temperature: float | None) -> dict:
     return options
 
 
-def _think() -> dict:
-    """The think field when OLLAMA_THINK is set, else nothing (the model's own default)."""
-    return {} if OLLAMA_THINK is None else {"think": OLLAMA_THINK}
+def _think(think: bool | None) -> dict:
+    """The think field when the call's model has a think value, else nothing (the model's own default)."""
+    return {} if think is None else {"think": think}
 
 
 async def _ollama_stream(
     system_prompt: str,
     messages: list[dict],
     temperature: float | None = None,
+    task: str | None = None,
+    language: str | None = None,
 ) -> AsyncGenerator[str, None]:
+    model, think = model_for(task, language)
     payload = {
-        "model": OLLAMA_MODEL,
+        "model": model,
         "messages": [{"role": "system", "content": system_prompt}] + messages,
         "stream": True,
         "options": _options(temperature),
-        **_think(),
+        **_think(think),
     }
     async with httpx.AsyncClient(timeout=120.0) as client:
         async with client.stream(

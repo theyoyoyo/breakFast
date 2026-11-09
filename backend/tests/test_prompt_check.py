@@ -11,7 +11,7 @@ from services.personas.chat import build_chat_message
 from services.fridge import find_missing_ingredients, same_name
 from tools.prompt_check import (
     CHECKS, PERSONAS, chat_once, chat_rows, check_chat, check_plan, check_reply, check_review, compare, data_name, describe,
-    is_clean, model_folder, parse_args, plan_once, recording_prompts, review_once, run, save_log, save_model_data,
+    is_clean, model_folder, model_label, parse_args, plan_once, recording_prompts, review_once, run, save_log, save_model_data,
     score_shopping, shop_once, suggest_once, summarize,
 )
 from tools.prompt_samples import (
@@ -262,11 +262,11 @@ _MEAL = {
 _DRAFT = "Enjoy!\n\n```json\n" + json.dumps(_MEAL, ensure_ascii=False, indent=2) + "\n```"
 
 
-async def _fake_stream(system_prompt, history, message, temperature=None):
+async def _fake_stream(system_prompt, history, message, temperature=None, **_):
     yield "A warm start."
 
 
-async def _fake_chat_json(system_prompt, messages, schema, temperature=None):
+async def _fake_chat_json(system_prompt, messages, schema, temperature=None, **_):
     """The draft's reply for the draft's schema (its text first), else the reviser's."""
     if "text" in schema["properties"]:
         return json.dumps({"text": "Enjoy!", "meal": _MEAL})
@@ -397,7 +397,7 @@ async def test_run_labels_each_scenario():
 async def test_scenarios_run_through_the_pipeline():
     drafts, revisions = [], []
 
-    async def chat_json(system_prompt, messages, schema, temperature=None):
+    async def chat_json(system_prompt, messages, schema, temperature=None, **_):
         (drafts if "text" in schema["properties"] else revisions).append(messages[-1]["content"])
         return await _fake_chat_json(system_prompt, messages, schema, temperature)
 
@@ -541,7 +541,7 @@ def test_shopping_checks():
 async def test_shop_once_asks_for_more_with_what_was_shown():
     requests = []
 
-    async def fake_chat_json(system_prompt, messages, schema, temperature=None):
+    async def fake_chat_json(system_prompt, messages, schema, temperature=None, **_):
         requests.append(messages[0]["content"])
         return _shopping_reply("Spinach", "Domates") if len(requests) == 1 else _shopping_reply("Kale")
 
@@ -683,7 +683,7 @@ def test_turkish_plan_against_the_method():
 async def test_plan_once_sends_the_menu_with_its_methods():
     calls = []
 
-    async def fake_stream(system_prompt, history, message, temperature=None):
+    async def fake_stream(system_prompt, history, message, temperature=None, **_):
         calls.append(temperature)
         yield "ok"
 
@@ -751,7 +751,7 @@ def test_review_case_may_keep_a_part():
 async def test_review_once_sends_the_draft():
     calls = []
 
-    async def fake_chat_json(system_prompt, messages, schema, temperature=None):
+    async def fake_chat_json(system_prompt, messages, schema, temperature=None, **_):
         calls.append(messages[0]["content"])
         meal = json.loads(json.dumps(REVIEW_CASES["pancakes"]["draft"]))
         return json.dumps({"changes": ["Strawberries for the blueberries"], "meal": meal})
@@ -844,7 +844,7 @@ def test_chat_reply_bringing_in_food():
 async def test_chat_once_sends_the_typed_messages_in_turn():
     calls = []
 
-    async def fake_stream(system_prompt, history, message, temperature=None):
+    async def fake_stream(system_prompt, history, message, temperature=None, **_):
         calls.append((system_prompt, [dict(h) for h in history], message, temperature))
         yield f"reply {len(calls)}"
 
@@ -871,7 +871,7 @@ async def test_chat_once_sends_the_typed_messages_in_turn():
 
 # A chat persona run scores each reply by its message's kind, labelled by the scenario
 async def test_chat_persona_run():
-    async def fake_stream(system_prompt, history, message, temperature=None):
+    async def fake_stream(system_prompt, history, message, temperature=None, **_):
         yield "Sounds good! Press Suggest when you're ready."
 
     with patch("services.suggestion.stream_response", fake_stream):
@@ -895,3 +895,14 @@ def test_model_and_think_options():
     args = parse_args(["--model", "gemma3:4b", "--think", "off"])
     assert (args.model, args.think) == ("gemma3:4b", "off")
     assert (parse_args([]).model, parse_args([]).think) == (None, None)
+
+
+# The header names the models as the app picks them: OLLAMA_MODEL, then each model a task or language has of its own (#192)
+def test_model_label_names_the_routes(monkeypatch):
+    from services import llm
+    monkeypatch.setattr(llm, "OLLAMA_MODEL", "gemma4:e4b-it-qat")
+    monkeypatch.setattr(llm, "OLLAMA_THINK", False)
+    monkeypatch.setattr(llm, "OLLAMA_ROUTES", {})
+    assert model_label() == "gemma4:e4b-it-qat (think off)"
+    monkeypatch.setattr(llm, "OLLAMA_ROUTES", {"tr": ("gemma4:e2b-it-q4_K_M", True), "shopping": ("gemma4:e2b-it-q4_K_M", True)})
+    assert model_label() == "gemma4:e4b-it-qat (think off); tr, shopping: gemma4:e2b-it-q4_K_M (think on)"

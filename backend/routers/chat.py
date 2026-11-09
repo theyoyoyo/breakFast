@@ -229,7 +229,10 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                 try:
                     # The user's words with the app's note on how to reply; the words alone are saved
                     message = build_chat_message(user_message, cached_context.get("language", "en"))
-                    async for chunk in stream_response(system_prompt, conversation_history, message, temperature=temperature):
+                    async for chunk in stream_response(
+                        system_prompt, conversation_history, message, temperature=temperature,
+                        task="chat", language=cached_context.get("language", "en"),
+                    ):
                         full_response.append(chunk)
                         await send_live({"type": "token", "content": chunk})
 

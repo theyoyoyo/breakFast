@@ -337,6 +337,8 @@ async def get_shopping_suggestions(
                 messages=[{"role": "user", "content": shopping_request(ctx["language"], shown, fridge)}],
                 schema=SUGGESTIONS_SCHEMA,
                 temperature=0.6,
+                task="shopping",
+                language=ctx["language"],
             )
         except LLMUnavailableError:
             return {"suggestions": [], "lyric": lyric_cycler.next()}

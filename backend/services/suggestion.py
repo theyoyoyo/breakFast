@@ -49,7 +49,10 @@ async def stream_response(
     conversation_history: list[dict],
     user_message: str,
     temperature: float | None = None,
+    task: str | None = None,
+    language: str | None = None,
 ) -> AsyncGenerator[str, None]:
+    """Stream a reply to the user message from the model for this task and reply language (#192)."""
     messages = conversation_history + [{"role": "user", "content": user_message}]
-    async for chunk in chat_stream(system_prompt, messages, temperature=temperature):
+    async for chunk in chat_stream(system_prompt, messages, temperature=temperature, task=task, language=language):
         yield chunk

@@ -371,7 +371,7 @@ async def test_chat_reply_never_becomes_a_meal_card(ws_setup):
     histories, messages = [], []
     replies = iter(["Quick one!\n\n```json\n" + json.dumps(card) + "\n```", "```json\n" + json.dumps(card) + "\n```"])
 
-    async def mock_stream(system_prompt, history, message, temperature=None):
+    async def mock_stream(system_prompt, history, message, temperature=None, **_):
         histories.append(history)
         messages.append(message)
         yield next(replies)
