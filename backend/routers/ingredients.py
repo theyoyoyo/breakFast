@@ -10,10 +10,7 @@ from pydantic import BaseModel
 from database import get_db
 from auth import require_user
 from fastapi import HTTPException
-from models.ingredient import (
-    Ingredient, IngredientCreate, IngredientUpdate,
-    INGREDIENT_GROUPS, DEFAULT_GROUP,
-)
+from models.ingredient import Ingredient, IngredientCreate, IngredientUpdate, INGREDIENT_GROUPS
 from services.fridge import find_missing_ingredients
 from services.ingredient_groups import remember, resolve_groups
 
@@ -27,7 +24,6 @@ def _validate_group(group_name: str | None) -> str | None:
     return group_name
 
 
-# Shared upsert SQL used by both single-add and bulk-add
 _UPSERT_SQL = """
     INSERT INTO ingredient_inventory (user_id, name, expiry_date, group_name)
     VALUES (?, ?, ?, ?)
@@ -36,12 +32,6 @@ _UPSERT_SQL = """
         group_name = excluded.group_name,
         updated_at = datetime('now')
 """
-
-
-@router.get("/groups")
-async def list_groups():
-    """Return the fixed list of ingredient groups."""
-    return {"groups": INGREDIENT_GROUPS, "default": DEFAULT_GROUP}
 
 
 @router.get("/", response_model=list[Ingredient])
@@ -130,22 +120,6 @@ async def delete_ingredient(ingredient_id: int, user_id: int = Depends(require_u
             (ingredient_id, user_id),
         )
         await db.commit()
-
-
-@router.post("/bulk", status_code=201)
-async def bulk_add_ingredients(ingredients: list[IngredientCreate], user_id: int = Depends(require_user)):
-    """Add or update multiple ingredients at once (used after NL parsing)."""
-    for item in ingredients:
-        _validate_group(item.group_name)
-
-    async with get_db() as db:
-        groups = await resolve_groups(db, user_id, [item.name for item in ingredients])
-        for item in ingredients:
-            group = item.group_name or groups[item.name]
-            await db.execute(_UPSERT_SQL, (user_id, item.name, item.expiry_date, group))
-            await remember(db, user_id, item.name, group, picked=bool(item.group_name))
-        await db.commit()
-    return {"added": len(ingredients)}
 
 
 # ---------------------------------------------------------------------------
@@ -252,24 +226,6 @@ async def handle_expired_action(body: ExpiredActionRequest, user_id: int = Depen
         "kept": len(body.keep_ids),
         "to_shopping": len(body.shopping_ids),
     }
-
-
-# Keep old endpoint for backward compat with existing tests
-class ThrownRequest(BaseModel):
-    ids: list[int]
-
-
-@router.post("/expired/thrown", status_code=200)
-async def confirm_thrown(body: ThrownRequest, user_id: int = Depends(require_user)):
-    """Remove expired ingredients that the user has confirmed as thrown away."""
-    async with get_db() as db:
-        for ingredient_id in body.ids:
-            await db.execute(
-                "DELETE FROM ingredient_inventory WHERE id = ? AND user_id = ?",
-                (ingredient_id, user_id),
-            )
-        await db.commit()
-    return {"removed": len(body.ids)}
 
 
 # ---------------------------------------------------------------------------

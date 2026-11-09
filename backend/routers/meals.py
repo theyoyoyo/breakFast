@@ -25,45 +25,6 @@ async def list_meals(limit: int = 50, user_id: int = Depends(require_user)):
             return [row_to_meal(r) for r in await cur.fetchall()]
 
 
-@router.get("/weekly", response_model=list[Meal])
-async def weekly_meals(user_id: int = Depends(require_user)):
-    """Return last 7 meals with no date gaps — stops at the first missing day.
-
-    Walks backward from the most recent meal's date. If a calendar day has no
-    meal, that's the boundary. Returns up to 7 meals within the consecutive
-    streak, most recent first.
-    """
-    from datetime import date as dt_date, timedelta
-
-    async with get_db() as db:
-        async with db.execute(
-            "SELECT * FROM meal_history WHERE user_id = ? ORDER BY logged_at DESC LIMIT 50",
-            (user_id,),
-        ) as cur:
-            rows = [row_to_meal(r) for r in await cur.fetchall()]
-    if not rows:
-        return []
-
-    result = []
-    prev_date = None
-    for meal in rows:
-        meal_date = meal["logged_at"][:10]  # "YYYY-MM-DD"
-        try:
-            d = dt_date.fromisoformat(meal_date)
-        except ValueError:
-            continue
-        if prev_date is None:
-            prev_date = d
-        elif d < prev_date:
-            if prev_date - d > timedelta(days=1):
-                break  # gap detected
-            prev_date = d
-        result.append(meal)
-        if len(result) >= 7:
-            break
-    return result
-
-
 class WeeklyReviewResponse(BaseModel):
     narrative: str
     scores: list[dict]
