@@ -15,7 +15,8 @@ from tools.prompt_check import (
     score_shopping, shop_once, suggest_once, summarize,
 )
 from tools.prompt_samples import (
-    CHAT_MESSAGES, CHAT_MINUTES, PLAN_CASES, REVIEW_CASES, SAMPLE_MODES, SAMPLES, SCENARIOS, chat_picks, chat_scenario,
+    CHAT_MESSAGES, CHAT_MINUTES, NO_CHAT, PLAN_CASES, REVIEW_CASES, SAMPLE_MODES, SAMPLES, SCENARIOS, chat_picks, chat_scenario,
+    chat_texts,
 )
 
 EN, TR = SAMPLES["en"], SAMPLES["tr"]
@@ -310,6 +311,14 @@ def test_chat_scenarios():
         f"I only have {CHAT_MINUTES} minutes.", f"Actually {c.lower()} is fine again.",
     ]
     assert chat["max_minutes"] == CHAT_MINUTES
+    # A Turkish user writes in Turkish (#178), and mixed has no chat: en and tr cover it
+    tr = chat_scenario("tr", "chat")
+    (tr_a,), (tr_c,) = tr["leave_out"], tr["allowed"]
+    assert [e["content"] for e in tr["chat"]][::3] == [
+        f"{tr_a} ve {tr_c.lower()} olmasın lütfen.", f"Aslında {tr_c.lower()} olabilir, sorun değil.",
+    ]
+    assert chat_scenario("mixed", "chat") is None and chat_scenario("mixed", "pressed") is None
+    assert chat_texts("Irmik", "Bal", "Islak kek", "tr")[0] == "Irmik ve ıslak kek olmasın lütfen."
     assert [e.get("content") for e in pressed["chat"]] == [None, typed[0], None, *typed[1:]]
     first, second = (e["press"] for e in pressed["chat"] if "press" in e)
     assert [i["name"] for i in first["menu"]] == [a, b, c]
@@ -393,7 +402,7 @@ async def test_scenarios_run_through_the_pipeline():
 
     with patch("services.pipeline.stream_response", _fake_stream), patch("services.pipeline.chat_json", chat_json):
         for key, sample in SAMPLES.items():
-            if sample.get("expects_note"):
+            if sample.get("expects_note") or key in NO_CHAT:
                 continue
             for name in ("chat", "pressed"):
                 scenario = chat_scenario(key, name)

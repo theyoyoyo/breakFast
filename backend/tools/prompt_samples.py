@@ -24,7 +24,8 @@ Five users from the 15-fridge test (2026-10-30), whose replies looked clean but 
 SAMPLE_MODES holds the Suggest mode a sample's user usually presses.
 
 chat_scenario() gives the chat a Suggest press comes after (--scenario, #159): none (fresh), a few
-typed messages (chat), or the same messages between two earlier presses (pressed).
+typed messages (chat), or the same messages between two earlier presses (pressed). The messages are
+in the sample's reply language, and mixed has no chat: en and tr cover it (#178).
 
 PLAN_CASES are menus for the prep plan test, shaped the way the Prep Plan button sends them.
 
@@ -351,6 +352,8 @@ CHAT_MESSAGES = ("leave_out", "liked", "time", "allowed")
 CHAT_SEED = 159
 # Basics and drinks are picked only when a fridge has too few other items ("No salt please" is no breakfast wish)
 _BASICS = {"🫙 Pantry", "🧂 Spices", "☕ Beverages"}
+# Samples with no chat scenario: mixed tests Turkish fridge names with English replies, and en and tr cover the chat
+NO_CHAT = {"mixed"}
 
 
 def chat_picks(sample: dict, key: str) -> list[str] | None:
@@ -376,32 +379,48 @@ def _plate(name: str, items: list[str], language: str) -> dict:
     }
 
 
+def _lower(name: str, language: str) -> str:
+    """A fridge name inside a sentence: lowercase, with Turkish I and İ as ı and i."""
+    return (name.replace("I", "ı").replace("İ", "i") if language == "tr" else name).lower()
+
+
+def chat_texts(a: str, b: str, c: str, language: str) -> tuple[str, ...]:
+    """The four typed messages, in the user's reply language: leave out A and C, love B, the time limit,
+    then allow C again. A Turkish sentence starts with a fridge name, so no case ending is needed."""
+    if language == "tr":
+        return (
+            f"{a} ve {_lower(c, language)} olmasın lütfen.",
+            f"{b} olsun mutlaka, çok seviyorum.",
+            f"Sadece {CHAT_MINUTES} dakikam var.",
+            f"Aslında {_lower(c, language)} olabilir, sorun değil.",
+        )
+    return (
+        f"No {a.lower()} please, and no {c.lower()} either.",
+        f"I love {b.lower()}.",
+        f"I only have {CHAT_MINUTES} minutes.",
+        f"Actually {c.lower()} is fine again.",
+    )
+
+
 def chat_scenario(key: str, name: str) -> dict | None:
     """The chat before the Suggest press under test, and what it asks, so code can check the reply.
 
     chat lists the user's typed messages ({"role": "user", "content": ...}) and earlier Suggest presses
     ({"press": meal}, the menu that press got), oldest first. leave_out is still asked to be left out,
     liked and allowed (a ban taken back) must not be left out, and max_minutes is the time the chat gives.
-    None for a fresh chat, or when the sample's fridge is too small."""
-    if name == "fresh":
+    None for a fresh chat, a sample in NO_CHAT, or when the sample's fridge is too small."""
+    if name == "fresh" or key in NO_CHAT:
         return None
     sample = SAMPLES[key]
     picks = chat_picks(sample, key)
     if picks is None:
         return None
     a, b, c, d = picks
-    typed = [
-        {"role": "user", "content": text} for text in (
-            f"No {a.lower()} please, and no {c.lower()} either.",
-            f"I love {b.lower()}.",
-            f"I only have {CHAT_MINUTES} minutes.",
-            f"Actually {c.lower()} is fine again.",
-        )
-    ]
+    language = sample["language"]
+    typed = [{"role": "user", "content": text} for text in chat_texts(a, b, c, language)]
     if name == "chat":
         chat = typed
     else:
-        language = sample["language"]
         chat = [
             {"press": _plate("Breakfast plate", [a, b, c], language)},
             typed[0],

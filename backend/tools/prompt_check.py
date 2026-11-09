@@ -855,13 +855,13 @@ def _pool(persona: str) -> dict:
 
 def _cases(samples: list[str], scenarios: list[str]) -> list[tuple[str, str, dict | None]]:
     """(label, sample, chat scenario) for every sample and scenario: "en" for a fresh chat, "en:chat"
-    after one. A scenario the sample's fridge is too small for is skipped with a note."""
+    after one. A sample with no such scenario (a fridge too small, or not tested after a chat) is skipped with a note."""
     cases = []
     for key in samples:
         for name in scenarios:
             scenario = chat_scenario(key, name)
             if name != "fresh" and scenario is None:
-                print(f"{key}: fridge too small for the {name} scenario, skipped", flush=True)
+                print(f"{key}: no {name} scenario, skipped", flush=True)
                 continue
             cases.append((key if name == "fresh" else f"{key}:{name}", key, scenario))
     return cases

@@ -25,7 +25,8 @@ LLMFIT and an online search.
 
    `tools/model_battery.py` loads the model at the app's 8192 context and prints how much of
    it is on the GPU. Then it runs the same set of prompt tests for every model (`SUITES`):
-   - Suggest on all 12 samples, first fresh and then after a chat
+   - Suggest on all 12 samples fresh, and on 10 after a chat (bare's fridge is too small, and en and tr
+     cover mixed's)
    - the reviser cases and the prep plan cases
    - shopping for en, tr, vegan and diabetic
    - chat replies for en, tr and student
