@@ -12,6 +12,7 @@ from config import (
     OLLAMA_BASE_URL,
     OLLAMA_MODEL,
     OLLAMA_NUM_CTX,
+    OLLAMA_THINK,
 )
 
 
@@ -112,6 +113,7 @@ async def chat_json(
         "stream": False,
         "format": schema,
         "options": _options(temperature),
+        **_think(),
     }
     async with httpx.AsyncClient(timeout=120.0) as client:
         response = await client.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload)
@@ -134,6 +136,11 @@ def _options(temperature: float | None) -> dict:
     return options
 
 
+def _think() -> dict:
+    """The think field when OLLAMA_THINK is set, else nothing (the model's own default)."""
+    return {} if OLLAMA_THINK is None else {"think": OLLAMA_THINK}
+
+
 async def _ollama_stream(
     system_prompt: str,
     messages: list[dict],
@@ -144,6 +151,7 @@ async def _ollama_stream(
         "messages": [{"role": "system", "content": system_prompt}] + messages,
         "stream": True,
         "options": _options(temperature),
+        **_think(),
     }
     async with httpx.AsyncClient(timeout=120.0) as client:
         async with client.stream(

@@ -820,3 +820,10 @@ def test_chat_persona_scenarios():
     assert parse_args(["--persona", "chat", "--scenario", "all"]).scenarios == ["chat", "pressed"]
     with pytest.raises(SystemExit):
         parse_args(["--persona", "chat", "--scenario", "fresh"])
+
+
+# --model and --think choose the model and Ollama's think field for one test
+def test_model_and_think_options():
+    args = parse_args(["--model", "gemma3:4b", "--think", "off"])
+    assert (args.model, args.think) == ("gemma3:4b", "off")
+    assert (parse_args([]).model, parse_args([]).think) == (None, None)

@@ -1109,6 +1109,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
              "(chat or pressed, default: chat)",
     )
     parser.add_argument("--draft", action="store_true", help="stop each run after the draft")
+    parser.add_argument("--model", help="Ollama model to test (default: OLLAMA_MODEL)")
+    parser.add_argument(
+        "--think", choices=["on", "off"],
+        help="send Ollama's think field on every call (default: OLLAMA_THINK, unset sends none)",
+    )
     parser.add_argument("--note", default="", help="what this prompt version changes, kept in the history")
     parser.add_argument("--history", action="store_true", help="list earlier tests and exit")
     args = parser.parse_args(argv)
@@ -1136,12 +1141,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
+def _think_label() -> str:
+    """How the test sets Ollama's think field, for the header."""
+    return "" if llm.OLLAMA_THINK is None else f" (think {'on' if llm.OLLAMA_THINK else 'off'})"
+
+
 async def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     if args.history:
         print("\n".join(history_lines(load_history())))
         return 0
     llm.OLLAMA_BASE_URL = args.url  # llm reads it on every call, so every persona uses this server
+    if args.model:
+        llm.OLLAMA_MODEL = args.model
+    if args.think:
+        llm.OLLAMA_THINK = args.think == "on"
     if not await llm.check_llm_availability():
         print(f"Ollama isn't reachable at {args.url}. See docs/SETUPALL.md, BONUS C.")
         return 1
@@ -1149,7 +1163,8 @@ async def main(argv: list[str] | None = None) -> int:
     mode, prompt, commit = args.mode or "usual", prompt_id(), _commit()
     diff = _git("diff", "HEAD", "--", *PROMPT_SOURCES)
     header = (
-        f"Prompt {prompt} · commit {commit} · {llm.OLLAMA_MODEL} at {args.url} · {args.persona} · mode {mode} · "
+        f"Prompt {prompt} · commit {commit} · {llm.OLLAMA_MODEL}{_think_label()} at {args.url} · {args.persona} · "
+        f"mode {mode} · "
         f"{args.runs} runs per sample" + (f" · scenario {args.scenario}" if args.scenario != "fresh" else "")
         + (" · draft only" if args.draft else "") + (f' · "{args.note}"' if args.note else "")
     )
@@ -1161,6 +1176,7 @@ async def main(argv: list[str] | None = None) -> int:
     if results:
         entry = {
             "date": f"{datetime.now():%Y-%m-%d %H:%M}", "prompt": prompt, "commit": commit,
+            "model": llm.OLLAMA_MODEL, "think": llm.OLLAMA_THINK,
             "persona": args.persona, "mode": mode, "scenario": args.scenario, "checks": CHECKS,
             "draft_only": args.draft, "runs": args.runs, "note": args.note, "log": log.name, "results": results,
         }
