@@ -497,6 +497,23 @@ def test_model_data_files(tmp_path):
     assert parse_args(["--data"]).data and not parse_args([]).data
 
 
+# A rerun of some samples replaces only theirs in the model's file, in place, and keeps the rest; outputs from
+# another prompt version are dropped, not mixed in
+def test_model_data_rerun_keeps_other_samples(tmp_path):
+    def rec(sample, reply):
+        return {"sample": sample, "mode": None, "run": 1, "seconds": 9.0, "error": None, "replies": {"final": reply}, "scores": {}}
+
+    meta = {"model": "gemma3:4b", "think": None, "prompt": "aaaaaaa", "gpu": 100}
+    with patch("tools.prompt_check.MODELS_DIR", tmp_path):
+        save_model_data([rec("en:chat", "old en"), rec("tr:chat", "old tr")], "suggest", "suggest-chat", meta)
+        inputs, outputs = save_model_data([rec("tr:chat", "new tr"), rec("vegan:chat", "new vegan")], "suggest", "suggest-chat", meta)
+        out = json.loads(outputs.read_text(encoding="utf-8"))["records"]
+        assert [(r["sample"], r["replies"]["final"]) for r in out] == [("en:chat", "old en"), ("tr:chat", "new tr"), ("vegan:chat", "new vegan")]
+        assert list(json.loads(inputs.read_text(encoding="utf-8"))["samples"]) == ["en:chat", "tr:chat", "vegan:chat"]
+        save_model_data([rec("tr:chat", "newer tr")], "suggest", "suggest-chat", {**meta, "prompt": "bbbbbbb"})
+        assert [r["sample"] for r in json.loads(outputs.read_text(encoding="utf-8"))["records"]] == ["tr:chat"]
+
+
 def _shopping_reply(*names) -> str:
     return json.dumps({"items": [{"name": n, "reason": "Good"} for n in names]}, ensure_ascii=False)
 

@@ -1131,14 +1131,37 @@ def sample_inputs(records: list[dict], persona: str) -> dict:
     return inputs
 
 
+def _read_json(path: Path) -> dict:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _merged(old: list[dict], new: list[dict]) -> list[dict]:
+    """The old records with each sample the new run has replaced in place by its new records; new samples go last."""
+    ran, out, placed = {r["sample"] for r in new}, [], set()
+    for r in old:
+        if r["sample"] not in ran:
+            out.append(r)
+        elif r["sample"] not in placed:
+            out += [n for n in new if n["sample"] == r["sample"]]
+            placed.add(r["sample"])
+    return out + [n for n in new if n["sample"] not in placed]
+
+
 def save_model_data(records: list[dict], persona: str, test: str, meta: dict) -> tuple[Path, Path]:
     """The test's inputs, the same for every model, and this model's outputs, in tools/runs/models/. A rerun
-    of the model replaces its outputs."""
+    of the model replaces its outputs for the samples it ran, and keeps the other samples' when they came from
+    the same prompt version (a rerun of one sample keeps the rest)."""
     inputs = MODELS_DIR / "inputs" / f"{test}.json"
     outputs = MODELS_DIR / model_folder(meta["model"], meta["think"]) / f"{test}.json"
+    old = _read_json(outputs)
+    kept = old.get("records", []) if old.get("prompt") == meta["prompt"] else []
     for path, data in (
-        (inputs, {"test": test, "persona": persona, "samples": sample_inputs(records, persona)}),
-        (outputs, {**meta, "test": test, "persona": persona, "records": records}),
+        (inputs, {"test": test, "persona": persona,
+                  "samples": {**_read_json(inputs).get("samples", {}), **sample_inputs(records, persona)}}),
+        (outputs, {**meta, "test": test, "persona": persona, "records": _merged(kept, records)}),
     ):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, ensure_ascii=False, indent=1, default=str) + "\n", encoding="utf-8")
