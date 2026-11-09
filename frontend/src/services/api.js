@@ -84,9 +84,24 @@ export const login = async (name, pin) => {
   return r.json()
 }
 
-export const logout = () => {
+/**
+ * Log this device out: forget its stored session, then end it on the server too.
+ * The device is logged out even when the server can't be reached or the call fails.
+ * Storage is cleared before the call, so a login made while it runs keeps its new session.
+ */
+export const logout = async () => {
+  const token = getToken()
   localStorage.removeItem('bf_token')
   localStorage.removeItem('bf_user')
+  if (!token) return
+  try {
+    await fetch(`${BASE_URL}/auth/logout`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+  } catch {
+    // Offline: the session ends on the server at its next restart
+  }
 }
 
 export const checkAuth = () =>
