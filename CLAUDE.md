@@ -228,7 +228,7 @@ breakFAST/
 │       ├── units.py                 ← UNIT_PAIRS English ↔ Turkish (source of truth)
 │       └── meal.py                  ← MealLog, Meal (includes menu_items)
 └── frontend/src/
-    ├── App.jsx                      ← tab nav (Chat, Fridge, Preferences, Settings)
+    ├── App.jsx                      ← tab nav (Chat, Fridge, Preferences, Settings); the open tab is in the link (#fridge…, Chat has none, replaced so Back doesn't step through tabs), so a refresh reopens it, and a login starts on Chat
     ├── utils/ingredients.js         ← ingredient helpers, units per language + unit memory
     ├── utils/language.js            ← AI language store (cached per device, like the theme)
     ├── utils/countries.js           ← Country list (name + ISO code) for Settings → Profile
