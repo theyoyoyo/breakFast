@@ -1152,16 +1152,17 @@ def _merged(old: list[dict], new: list[dict]) -> list[dict]:
 
 def save_model_data(records: list[dict], persona: str, test: str, meta: dict) -> tuple[Path, Path]:
     """The test's inputs, the same for every model, and this model's outputs, in tools/runs/models/. A rerun
-    of the model replaces its outputs for the samples it ran, and keeps the other samples' when they came from
-    the same prompt version (a rerun of one sample keeps the rest)."""
+    of the model replaces its outputs for the samples it ran and keeps the others (a rerun of one sample keeps
+    the rest). Each record names the prompt version it ran on, since a sample change gives a new one too."""
     inputs = MODELS_DIR / "inputs" / f"{test}.json"
     outputs = MODELS_DIR / model_folder(meta["model"], meta["think"]) / f"{test}.json"
     old = _read_json(outputs)
-    kept = old.get("records", []) if old.get("prompt") == meta["prompt"] else []
+    kept = [{"prompt": old.get("prompt"), **r} for r in old.get("records", [])]
+    ran = [{**r, "prompt": meta["prompt"]} for r in records]
     for path, data in (
         (inputs, {"test": test, "persona": persona,
                   "samples": {**_read_json(inputs).get("samples", {}), **sample_inputs(records, persona)}}),
-        (outputs, {**meta, "test": test, "persona": persona, "records": _merged(kept, records)}),
+        (outputs, {**meta, "test": test, "persona": persona, "records": _merged(kept, ran)}),
     ):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, ensure_ascii=False, indent=1, default=str) + "\n", encoding="utf-8")

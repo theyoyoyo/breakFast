@@ -40,8 +40,8 @@ LLMFIT and an online search.
    `tools/runs/models/`: `inputs/<test>.json`, what every model gets for each sample (the same
    for every model), and `<model>/<test>.json`, one folder per model and think setting, with
    each sample's replies, the code's flags, seconds and errors, the prompt version and the GPU
-   share. A rerun replaces that model's outputs for the samples it ran and keeps the others
-   (from the same prompt version), so one sample can be run again on its own.
+   share. A rerun replaces that model's outputs for the samples it ran and keeps the others, so
+   one sample can be run again on its own; each output names the prompt version it ran on.
 3. Run `qwen2.5:7b` first as the baseline.
 4. Run one test at a time from one PC. Tests share the server's GPU, and the timings only
    compare when nothing else is using it.

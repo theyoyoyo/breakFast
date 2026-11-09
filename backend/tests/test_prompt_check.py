@@ -497,8 +497,8 @@ def test_model_data_files(tmp_path):
     assert parse_args(["--data"]).data and not parse_args([]).data
 
 
-# A rerun of some samples replaces only theirs in the model's file, in place, and keeps the rest; outputs from
-# another prompt version are dropped, not mixed in
+# A rerun of some samples replaces only theirs in the model's file, in place, and keeps the rest, each record
+# naming the prompt version it ran on (a sample change gives a new one too)
 def test_model_data_rerun_keeps_other_samples(tmp_path):
     def rec(sample, reply):
         return {"sample": sample, "mode": None, "run": 1, "seconds": 9.0, "error": None, "replies": {"final": reply}, "scores": {}}
@@ -511,7 +511,9 @@ def test_model_data_rerun_keeps_other_samples(tmp_path):
         assert [(r["sample"], r["replies"]["final"]) for r in out] == [("en:chat", "old en"), ("tr:chat", "new tr"), ("vegan:chat", "new vegan")]
         assert list(json.loads(inputs.read_text(encoding="utf-8"))["samples"]) == ["en:chat", "tr:chat", "vegan:chat"]
         save_model_data([rec("tr:chat", "newer tr")], "suggest", "suggest-chat", {**meta, "prompt": "bbbbbbb"})
-        assert [r["sample"] for r in json.loads(outputs.read_text(encoding="utf-8"))["records"]] == ["tr:chat"]
+        out = json.loads(outputs.read_text(encoding="utf-8"))
+        assert [(r["sample"], r["prompt"]) for r in out["records"]] == [("en:chat", "aaaaaaa"), ("tr:chat", "bbbbbbb"), ("vegan:chat", "aaaaaaa")]
+        assert out["prompt"] == "bbbbbbb"
 
 
 def _shopping_reply(*names) -> str:
