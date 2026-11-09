@@ -143,7 +143,32 @@ Clean replies per test, average seconds per sample in brackets:
   - once put white bread in a diabetic user's menu.
 - **Both:** odd prep words ("eggs: chopped"), filler methods on simple items, and occasional food the chat persona shouldn't propose.
 - **Blindness:** Claude saw the per-test clean counts before voting, so a pair where only one reply had a flag could hint at its model. The votes judge the replies themselves.
-- **Your votes:** still to come.
+- **Your votes** (prompt a5c7028, against `qwen2.5:7b`):
+  - `gemma3:4b`: 14–14, equal 15. The two tr chat pairs still need a vote on their Turkish replies.
+  - `gemma4:e2b-it-q4_K_M` think on: 9–9, equal 24. Every Turkish sample went to gemma4 (5–0: suggest, after a chat, plan, shopping, chat), and shopping 2–0. Suggest went 3–2 to qwen2.5, and after a chat 3–2.
+  - `gemma4:e4b-it-qat` think off: 17–3, equal 22. Suggest 6–0, plan 6–0, every Turkish sample 5–0, after a chat 2–1, review 1–0, shopping 1–1, chat 1–1.
+
+### Chosen models
+
+The app can run a model per task and reply language, so each test has its chosen model (`SELECTED` in `tools/compare_runs.py`), and a page without `--baseline` pairs a candidate with the model chosen for each sample's test and language:
+
+| Test or language | Model | Why |
+|---|---|---|
+| Every test | `gemma4:e4b-it-qat` think off | Beat qwen2.5 17–3 |
+| Shopping | `gemma4:e2b-it-q4_K_M` think on | Beat qwen2.5 2–0 in shopping; your pick |
+| Turkish replies | `gemma4:e2b-it-q4_K_M` think on | Beat qwen2.5 5–0 on Turkish samples; your pick |
+
+e4b think off also beat qwen2.5 on every Turkish sample, so `compare_selected__vs__gemma4_e4b-it-qat-think-off.html` puts the two gemmas head to head on shopping and Turkish.
+
+### To fix in the chosen models
+
+Found in the votes. When the models are chosen, add each one's code flags and the pairs it lost, then rework its prompts for them. The replies are in `tools/runs/models/<model>/<test>.json` and the run logs in `tools/runs/`.
+
+- **Plan, fried** (`qwen2.5:7b`, run `2026-11-09_035602`): the cucumber, served as it is, gets a "Chop cucumber" step, and so does Eggs on toast, whose recipe doesn't use it. The `unlisted` check passes it, since cucumber is on the menu.
+- **Plan, boiled** (`gemma4:e2b` think on, run `2026-11-09_205202`): butters the bread, then slices it, though it comes as slices (2 slice).
+- **Suggest, sparse** (`gemma3:4b`, run `2026-11-09_065448`): bread twice, a slice in the omelette and 50 g served on its own.
+- **Review, pancakes** (`qwen2.5:7b` and `gemma4:e4b` think off): swaps the blueberries for strawberries and keeps the name "Blueberry pancakes". A dish's name should follow its food.
+- **Review, frittata** (`qwen2.5:7b` and `gemma4:e4b` think off): drops the smoked salmon, which nothing replaces, and keeps the name "Salmon frittata". The salmon should stay as written, marked missing, or the name should change.
 
 ## Models
 
