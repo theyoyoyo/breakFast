@@ -107,6 +107,42 @@ the model thinks.
   the models apart. Use `--runs 2` or more for the finalists, and let the blind votes decide
   the rest.
 
+### Battery, 2026-11-09 (prompt 80fe68c, one press per sample)
+
+Clean replies per test, average seconds per sample in brackets:
+
+| Model | Suggest | After a chat | Review | Plan | Shopping | Chat | GPU |
+|---|---|---|---|---|---|---|---|
+| `qwen2.5:7b` | 10/12 (31) | 9/11 (35) | 4/5 (15) | 6/8 (12) | 0/4 (25) | 1/3 (8) | 100%, 4.8 GB |
+| `qwen3.5:4b` think off | 10/12 (29) | 8/11 (33) | 5/5 (13) | 6/8 (10) | 1/4 (20) | 1/3 (10) | 100%, 3.2 GB |
+
+**Claude's blind votes** on the 43 pairs: `qwen3.5:4b` 27, `qwen2.5:7b` 14, equal 2.
+
+| Test | qwen2.5:7b | qwen3.5:4b | Equal |
+|---|---|---|---|
+| Suggest | 3 | 9 | 0 |
+| After a chat | 4 | 6 | 1 |
+| Review | 3 | 2 | 0 |
+| Plan | 4 | 4 | 0 |
+| Shopping | 0 | 3 | 1 |
+| Chat | 0 | 3 | 0 |
+
+- **qwen3.5:4b stronger:**
+  - sent bare's note instead of a menu;
+  - made a good Greek plate where qwen2.5 made a "hummus soup" with nori;
+  - kept the egg-white intent in the review's omelette;
+  - wrote more coherent Turkish menus and chat replies;
+  - kept its shopping lists from repeating the fridge.
+- **qwen3.5:4b weaker:**
+  - set chia pudding for 45–60 minutes in two plans (49 and 62 minutes in all);
+  - left a swap unmarked in the pancakes;
+  - garbled the mixed sample's dish names;
+  - cooked on a buttered pan after a butter ban;
+  - once put white bread in a diabetic user's menu.
+- **Both:** odd prep words ("eggs: chopped"), filler methods on simple items, and occasional food the chat persona shouldn't propose.
+- **Blindness:** Claude saw the per-test clean counts before voting, so a pair where only one reply had a flag could hint at its model. The votes judge the replies themselves.
+- **Your votes:** still to come.
+
 ## Models
 
 Fit is estimated for an 8192-token context: download size plus KV cache. LLMFIT is the
@@ -118,7 +154,7 @@ tool's verdict, run with an 8192-token context cap.
 |---|---|---|---|---|---|---|
 | Qwen3 4B Instruct 2507 | `qwen3:4b-instruct-2507-q8_0` | 4.3 GB | 100% GPU | Perfect, ~46 tok/s | No thinking. `-q4_K_M` is 2.5 GB | |
 | Gemma 3 4B | `gemma3:4b` | 3.4 GB | 100% GPU | Perfect (base model) | Strong across many languages | |
-| Qwen3.5 4B 🧠 | `qwen3.5:4b` | 3.3–4.0 GB | 100% GPU | Perfect, ~40 tok/s | 2026, top 6 GB pick in several guides | |
+| Qwen3.5 4B 🧠 | `qwen3.5:4b` | 3.3–4.0 GB | 100% GPU | Perfect, ~40 tok/s | 2026, top 6 GB pick in several guides | Think off: code scores as the baseline, a little faster; Claude's blind votes 27–14 for it (2026-11-09) |
 | Gemma 4 E2B | `gemma4:e2b-it-q4_K_M` | 4.6 GB | 100% GPU | Perfect, ~48 tok/s | 2026 | |
 
 ### 2. About 8B, at the edge of 6 GB
