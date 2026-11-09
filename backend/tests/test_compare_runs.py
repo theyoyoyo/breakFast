@@ -3,7 +3,7 @@
 import json
 from unittest.mock import patch
 
-from tools.compare_runs import build_page, build_pairs, output_view, overview, pair_name
+from tools.compare_runs import build_page, build_pairs, output_view, overview, pair_name, selected_folder, selected_outputs
 from tools.prompt_samples import PLAN_CASES
 
 CLEAN = {"json": True, "issues": {"missing": []}}
@@ -84,7 +84,33 @@ def test_overview_marks_other_prompt(tmp_path):
     base, cand = (m["tests"]["suggest"] for m in models)
     assert (base["clean"], base["count"], base["seconds"], base["other_prompt"]) == (1, 2, 20, False)
     assert base["samples"]["tr"] == {"clean": False, "flags": ["missing: Salmon"], "seconds": 10}
-    assert cand["other_prompt"] and models[1]["label"] == "gemma3:4b" and models[0]["baseline"]
+    assert cand["other_prompt"] and models[1]["label"] == "gemma3:4b" and base["chosen"] and not cand["chosen"]
+
+
+# Without a baseline, each candidate reply is paired with the model chosen for its test and reply language (the
+# language's first), samples the candidate is chosen for itself are left out, and the reveal names each pair's model
+def test_selected_baseline(tmp_path):
+    path = tmp_path / "inputs" / "suggest.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"samples": {s: {"sample": s, "mode": None, "data": {"language": lang}, "chat": None}
+                                            for s, lang in (("en", "en"), ("tr", "tr"), ("vegan", "en"))}}))
+    _write(tmp_path, "main_7b", "main:7b", [_record("en", "Main en"), _record("tr", "Main tr"), _record("vegan", "Main vegan")])
+    _write(tmp_path, "turkish_4b-think-on", "turkish:4b", [_record("tr", "Turkish tr")], think=True)
+    _write(tmp_path, "turkish_4b-think-on", "turkish:4b", [_record("en", "Turkish shop")], think=True, test="shopping")
+    _write(tmp_path, "cand_8b", "cand:8b", [_record("en", "Cand en"), _record("tr", "Cand tr")])
+    _write(tmp_path, "cand_8b", "cand:8b", [_record("en", "Cand shop")], test="shopping")
+    selected = {"default": ("main:7b", None), "tests": {"shopping": ("turkish:4b", True)}, "languages": {"tr": ("turkish:4b", True)}}
+    with patch("tools.compare_runs.MODELS_DIR", tmp_path), patch("tools.compare_runs.SELECTED", selected):
+        assert selected_folder("shopping", "en") == selected_folder("suggest", "tr") == "turkish_4b-think-on"
+        page, _, unpaired = build_page(None, "cand_8b")
+        _, kept, bases, skipped = selected_outputs("turkish_4b-think-on")
+    data = json.loads(page.read_text(encoding="utf-8").split("const DATA = ", 1)[1].split(";\nconst store", 1)[0])
+    assert data["pair"] == "selected__vs__cand_8b" and unpaired == []
+    assert data["reveal"]["bases"] == {"shopping|en|1": "turkish:4b (think on)", "suggest|en|1": "main:7b", "suggest|tr|1": "turkish:4b (think on)"}
+    names = {p["id"]: {p[s]["meal"]["menu_name"] for s in "AB"} for p in data["pairs"] if p["test"] == "suggest"}
+    assert names == {"suggest|en|1": {"Main en", "Cand en"}, "suggest|tr|1": {"Turkish tr", "Cand tr"}}
+    assert skipped == ["shopping en run 1: the candidate is the model chosen for it", "suggest tr run 1: the candidate is the model chosen for it"]
+    assert kept["suggest"]["records"] == [] and bases == {}
 
 
 # A plan reply shows as the plan the app builds from it, shopping as its two lists, and chat as one reply per message

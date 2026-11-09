@@ -3,8 +3,8 @@
     python -m tools.compare_runs qwen3.5:4b --think off
     python -m tools.compare_runs qwen3.5:4b --think off --baseline qwen2.5:7b
 
-It pairs the baseline's outputs with the candidate's by test, sample and run, and writes into
-tools/runs/models/:
+It pairs the candidate's outputs by test, sample and run with the model chosen for each test and reply
+language (SELECTED), or with one --baseline model, and writes into tools/runs/models/:
 - compare_<pair>.html: one page with the blind A/B votes (Reveal shows which model was which and
   the tally) and every model tried, as charts per test and a table of samples by models;
 - votes/<pair>__blind.json: the same pairs without the models or seconds, for Claude's blind votes;
@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 from routers.scheduler import _build_plan, served_items
-from tools.prompt_check import BASELINE_MODEL, MODELS_DIR, describe, is_clean, model_folder
+from tools.prompt_check import MODELS_DIR, describe, is_clean, model_folder
 from utils import extract_json_block
 
 # The stages a test is judged on, in the order the page shows them
@@ -132,6 +132,47 @@ def pair_name(base: str, cand: str) -> str:
     return f"{base}__vs__{cand}"
 
 
+# The models chosen so far, moved by the user's blind votes: one for every test, unless a reply language or a
+# test has its own (the language first). A page without --baseline pairs each candidate reply with the reply of
+# the model chosen for its test and language, as an app with a model per task would answer.
+SELECTED = {
+    "default": ("gemma4:e4b-it-qat", False),
+    "tests": {"shopping": ("gemma4:e2b-it-q4_K_M", True)},
+    "languages": {"tr": ("gemma4:e2b-it-q4_K_M", True)},
+}
+SELECTED_NAME = "selected"
+
+
+def selected_folder(test: str, language: str | None, selected: dict | None = None) -> str:
+    """The folder of the model chosen for a test and reply language."""
+    selected = selected or SELECTED
+    model, think = selected["languages"].get(language) or selected["tests"].get(test) or selected["default"]
+    return model_folder(model, think)
+
+
+def selected_outputs(cand_folder: str, selected: dict | None = None) -> tuple[dict, dict, dict, list[str]]:
+    """The chosen models' replies as one baseline for a candidate: per test, each of the candidate's samples with
+    the reply of the model chosen for its test and language. Returns that baseline, the candidate's outputs without
+    the samples it is chosen for itself, which model each pair's baseline is, and the samples left out."""
+    cand, cache, base, kept, bases, skipped = model_outputs(cand_folder), {}, {}, {}, {}, []
+    for test, data in cand.items():
+        inputs = (_load(MODELS_DIR / "inputs" / f"{test}.json") or {}).get("samples", {})
+        base[test], kept[test] = {"records": []}, {**data, "records": []}
+        for r in data["records"]:
+            language = ((inputs.get(r["sample"]) or {}).get("data") or {}).get("language")
+            folder = selected_folder(test, language, selected)
+            if folder == cand_folder:
+                skipped.append(f"{test} {r['sample']} run {r['run']}: the candidate is the model chosen for it")
+                continue
+            kept[test]["records"].append(r)
+            chosen = cache.setdefault(folder, model_outputs(folder)).get(test) or {}
+            match = next((c for c in chosen.get("records", []) if (c["sample"], c["run"]) == (r["sample"], r["run"])), None)
+            if match:
+                base[test]["records"].append(match)
+                bases[f"{test}|{r['sample']}|{r['run']}"] = model_label(chosen)
+    return base, kept, bases, skipped
+
+
 def build_pairs(base: dict[str, dict], cand: dict[str, dict], name: str) -> tuple[list[dict], dict, list[str]]:
     """Pairs of the two models' replies by test, sample and run, each with its input; which side is A
     (seeded by the pair, so a rebuild keeps it); and what only one model has."""
@@ -163,29 +204,31 @@ def build_pairs(base: dict[str, dict], cand: dict[str, dict], name: str) -> tupl
     return pairs, key, unpaired
 
 
-def overview(folders: list[str], base_folder: str) -> dict:
-    """Every model tried: per test its clean share, average seconds, errors and GPU share, a mark when its
-    prompt version isn't the baseline's, and each sample's flags."""
-    base = model_outputs(base_folder)
-    models = []
+def overview(folders: list[str], chosen) -> dict:
+    """Every model tried: per test its clean share, average seconds, errors and GPU share, whether it is the
+    model chosen for the test, a mark when its prompt version isn't the chosen model's, and each sample's flags.
+    `chosen` is the baseline's folder, or a function giving the folder chosen for a test."""
+    pick = chosen if callable(chosen) else (lambda test: chosen)
+    cache, models = {}, []
     for folder in folders:
         outputs = model_outputs(folder)
         if not outputs:
             continue
         tests = {}
         for test, data in outputs.items():
-            persona, records = _persona(test), data["records"]
+            persona, records, ref = _persona(test), data["records"], pick(test)
+            base = cache.setdefault(ref, model_outputs(ref)).get(test)
             tests[test] = {
                 "clean": sum(_clean(r, persona) for r in records), "count": len(records),
                 "seconds": round(sum(r.get("seconds") or 0 for r in records) / max(len(records), 1)),
                 "errors": sum(bool(r.get("error")) for r in records), "gpu": data.get("gpu"),
-                "other_prompt": test in base and data.get("prompt") != base[test].get("prompt"),
+                "chosen": folder == ref, "other_prompt": bool(base) and data.get("prompt") != base.get("prompt"),
                 "samples": {f"{r['sample']} · {r['run']}" if data.get("runs", 1) > 1 else r["sample"]:
                             {"clean": _clean(r, persona), "flags": _flags(r, persona), "seconds": round(r.get("seconds") or 0)}
                             for r in records},
             }
         label = model_label(next(iter(outputs.values())))
-        models.append({"folder": folder, "label": label, "baseline": folder == base_folder, "tests": tests})
+        models.append({"folder": folder, "label": label, "tests": tests})
     return {"models": models}
 
 
@@ -199,18 +242,31 @@ def _votes(name: str) -> dict:
     return found
 
 
-def build_page(base_folder: str, cand_folder: str) -> tuple[Path, Path, list[str]]:
-    """Write the page, the blind pairs and the key; return the page, the blind file and what isn't paired."""
-    base, cand = model_outputs(base_folder), model_outputs(cand_folder)
-    if not base or not cand:
-        missing = base_folder if not base else cand_folder
-        raise SystemExit(f"No model test data in {MODELS_DIR / missing}. Run tools.model_battery first.")
-    name = pair_name(base_folder, cand_folder)
-    pairs, key, unpaired = build_pairs(base, cand, name)
+def _no_data(folder: str) -> SystemExit:
+    return SystemExit(f"No model test data in {MODELS_DIR / folder}. Run tools.model_battery first.")
+
+
+def build_page(base_folder: str | None, cand_folder: str) -> tuple[Path, Path, list[str]]:
+    """Write the page, the blind pairs and the key; return the page, the blind file and what isn't paired.
+    Without a baseline folder, each sample's baseline is the model chosen for its test and language (SELECTED)."""
+    cand = model_outputs(cand_folder)
+    if not cand:
+        raise _no_data(cand_folder)
+    if base_folder:
+        base, bases, notes = model_outputs(base_folder), {}, []
+        if not base:
+            raise _no_data(base_folder)
+        base_label = model_label(next(iter(base.values())))
+    else:
+        base, cand_kept, bases, notes = selected_outputs(cand_folder)
+        base_label = "chosen: " + ", ".join(sorted(set(bases.values()))) if bases else "the chosen models"
+    name = pair_name(base_folder or SELECTED_NAME, cand_folder)
+    pairs, key, unpaired = build_pairs(base, cand if base_folder else cand_kept, name)
     folders = sorted(p.name for p in MODELS_DIR.iterdir() if p.is_dir() and p.name not in ("inputs", "votes"))
+    chosen = base_folder or (lambda test: selected_folder(test, None))
     data = {
-        "pair": name, "pairs": pairs, "unpaired": unpaired, "overview": overview(folders, base_folder),
-        "reveal": {"base": model_label(next(iter(base.values()))), "cand": model_label(next(iter(cand.values()))),
+        "pair": name, "pairs": pairs, "unpaired": notes + unpaired, "overview": overview(folders, chosen),
+        "reveal": {"base": base_label, "bases": bases, "cand": model_label(next(iter(cand.values()))),
                    "key": key, "votes": _votes(name)},
     }
     votes_dir = MODELS_DIR / "votes"
@@ -219,7 +275,9 @@ def build_page(base_folder: str, cand_folder: str) -> tuple[Path, Path, list[str
     blind_pairs = [{**p, "A": {k: v for k, v in p["A"].items() if k != "seconds"},
                     "B": {k: v for k, v in p["B"].items() if k != "seconds"}} for p in pairs]
     blind.write_text(json.dumps({"pairs": blind_pairs}, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    (votes_dir / f"{name}__key.json").write_text(json.dumps(data["reveal"]["key"], indent=1) + "\n", encoding="utf-8")
+    (votes_dir / f"{name}__key.json").write_text(json.dumps(key, indent=1) + "\n", encoding="utf-8")
+    if bases:  # which chosen model each pair's baseline is
+        (votes_dir / f"{name}__bases.json").write_text(json.dumps(bases, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     page = MODELS_DIR / f"compare_{name}.html"
     payload = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     page.write_text(PAGE.replace("__DATA__", payload), encoding="utf-8")
@@ -230,12 +288,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Build the blind model comparison page from tools/runs/models/.")
     parser.add_argument("model", help="the candidate's Ollama tag, e.g. qwen3.5:4b")
     parser.add_argument("--think", choices=["on", "off"], help="the candidate's think setting (default: none sent)")
-    parser.add_argument("--baseline", default=BASELINE_MODEL, help=f"the model to compare with (default: {BASELINE_MODEL})")
+    parser.add_argument("--baseline", help="one model to compare with (default: the model chosen for each test and language)")
     parser.add_argument("--baseline-think", choices=["on", "off"], help="the baseline's think setting")
     args = parser.parse_args(argv)
     think = {"on": True, "off": False}
     page, blind, unpaired = build_page(
-        model_folder(args.baseline, think.get(args.baseline_think)), model_folder(args.model, think.get(args.think)),
+        args.baseline and model_folder(args.baseline, think.get(args.baseline_think)),
+        model_folder(args.model, think.get(args.think)),
     )
     for line in unpaired:
         print(f"Not paired: {line}")
@@ -372,7 +431,7 @@ function inputHtml(p) {
 }
 function label(side, pid) {
   const k = DATA.reveal.key[pid];
-  const base = DATA.reveal.base, cand = DATA.reveal.cand;
+  const base = (DATA.reveal.bases || {})[pid] || DATA.reveal.base, cand = DATA.reveal.cand;
   return side === "A" ? (k === "base" ? base : cand) : (k === "base" ? cand : base);
 }
 const VOTE_TEXT = { A: "A better", tie: "Both equally good", B: "B better" };
@@ -439,11 +498,11 @@ function renderAll() {
   const box = document.getElementById("all"), models = DATA.overview.models;
   if (!revealed) { box.innerHTML = "<p>This tab names the models and their flags, so it opens after Reveal.</p>"; return; }
   const tests = [...new Set(models.flatMap(m => Object.keys(m.tests)))].sort();
-  let html = `<p class="legend">Clean share of the judged stages per test, then average seconds per sample. A grey bar ran on another prompt version than the baseline, so it doesn't compare. GPU share is how much of the model Ollama held on the GPU.</p>`;
+  let html = `<p class="legend">Clean share of the judged stages per test, then average seconds per sample. ★ marks the model chosen for the test (Turkish samples may have their own). A grey bar ran on another prompt version than the chosen model, so it doesn't compare. GPU share is how much of the model Ollama held on the GPU.</p>`;
   for (const t of tests) {
     const rows = models.filter(m => m.tests[t]).map(m => ({ m, r: m.tests[t] }));
     html += `<h3>${esc(t)}</h3>`
-      + bars(rows.map(({ m, r }) => ({ label: m.label + (m.baseline ? " ★" : ""), value: r.clean / Math.max(r.count, 1), mark: r.other_prompt, r })), 1,
+      + bars(rows.map(({ m, r }) => ({ label: m.label + (r.chosen ? " ★" : ""), value: r.clean / Math.max(r.count, 1), mark: r.other_prompt, r })), 1,
              v => `${v.r.clean}/${v.r.count} clean${v.r.errors ? `, ${v.r.errors} errors` : ""}${v.r.gpu != null ? ` · GPU ${v.r.gpu}%` : ""}`)
       + bars(rows.map(({ m, r }) => ({ label: m.label, value: r.seconds, mark: r.other_prompt })), Math.max(...rows.map(x => x.r.seconds), 1), v => `${v.value} s`);
     const samples = [...new Set(rows.flatMap(x => Object.keys(x.r.samples)))];
