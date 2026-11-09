@@ -38,8 +38,8 @@ echo Frontend dependencies installed.
 echo.
 
 REM Pull the Ollama model
-echo Pulling LLM model (qwen2.5:7b) — this may take a few minutes on first run...
-ollama pull qwen2.5:7b
+echo Pulling LLM model (gemma4:e4b-it-qat) — this may take a few minutes on first run...
+ollama pull gemma4:e4b-it-qat
 if errorlevel 1 (
     echo WARNING: Could not pull model. Make sure Ollama is installed and running.
     echo Download Ollama from https://ollama.com then re-run setup.bat.

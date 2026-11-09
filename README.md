@@ -54,7 +54,7 @@ flowchart LR
     subgraph Server["Home server (LAN or Tailscale)"]
         API["FastAPI backend"]
         DB[("SQLite")]
-        LLM["Ollama: qwen2.5:7b"]
+        LLM["Ollama: gemma4:e4b-it-qat"]
         FB["Lyric fallback"]
     end
     UI -- "REST + WebSocket" --> API
@@ -79,7 +79,7 @@ The backend loads each user's context (inventory, recent meals, profile, supplem
 |---|---|
 | Frontend | React 18, Vite, PWA (vite-plugin-pwa) |
 | Backend | Python, FastAPI, WebSockets |
-| Local LLM | Ollama + Qwen 2.5 7B (configurable) |
+| Local LLM | Ollama + Gemma 4 E4B (configurable per task and language) |
 | LLM fallback | Song-lyric cycling |
 | Database | SQLite (aiosqlite) |
 | Voice | Web Speech API |
@@ -126,7 +126,7 @@ Open <http://localhost:5173> and log in with the name and PIN you created.
 ### Local LLM
 
 ```bash
-ollama pull qwen2.5:7b
+ollama pull gemma4:e4b-it-qat
 ```
 
 To use another model, pull it and set `OLLAMA_MODEL` in `.env`. Without Ollama the app still runs; AI features answer with the lyric fallback.
@@ -193,7 +193,9 @@ All backend settings are environment variables, documented in [`.env.example`](.
 | Variable | Default | Purpose |
 |---|---|---|
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server |
-| `OLLAMA_MODEL` | `qwen2.5:7b` | Model used by every persona |
+| `OLLAMA_MODEL` | `gemma4:e4b-it-qat` | Model for every persona, unless a task or language has its own |
+| `OLLAMA_THINK` | `false` with the default model | Ollama's think field for that model |
+| `OLLAMA_MODEL_<TASK or LANGUAGE>` | none | A model for one task (`SHOPPING`, `PLAN`, …) or reply language (`TR`), with `OLLAMA_THINK_<KEY>` |
 | `DATABASE_PATH` | `./breakFAST.db` | SQLite file, relative to `backend/` |
 | `CORS_ORIGINS` | `*` | Comma-separated allowed origins |
 | `SERVE_FRONTEND` | `false` | Serve `frontend/dist` from FastAPI |
