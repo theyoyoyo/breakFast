@@ -125,6 +125,26 @@ fit and every reply gets much slower. Then, on the Ollama server:
 
 2. Quit Ollama from the tray icon, start it again, and check `ollama ps` once more.
 
+### A model per task or language (optional)
+
+One model serves every call by default. A task or a reply language can have its own
+model in `.env`, with its own think value; pull it too (`ollama pull <model>`):
+
+```
+OLLAMA_MODEL_SHOPPING=gemma4:e2b-it-q4_K_M
+OLLAMA_THINK_SHOPPING=true
+OLLAMA_MODEL_TR=gemma4:e2b-it-q4_K_M
+OLLAMA_THINK_TR=true
+```
+
+The tasks are `CHAT`, `SUGGESTION` (the draft and the reply text), `REVIEW`, `ANALYST`,
+`SHOPPING`, `PLAN` and `WEEKLY`, and the languages `EN` and `TR`. A call uses its reply
+language's model, else its task's, else `OLLAMA_MODEL`. `docs/MODEL_TESTS.md` has the
+models chosen per task.
+
+Two models that don't fit the GPU together can't both stay loaded, so Ollama reloads one
+at every switch, and the first call after a switch waits for the load.
+
 ---
 
 ## Step 2 — Clone the Repository
