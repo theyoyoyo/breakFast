@@ -31,11 +31,39 @@ LLMFIT and an online search.
    - chat replies for en, tr and student
 
    Each test is saved in `tools/runs/` and `history.jsonl` with the model and the think
-   setting. A single test still runs with `python -m tools.prompt_check ... --model <tag>
-   --think on|off`. The app's servers aren't needed: the tests call Ollama directly.
+   setting, and compared only with earlier tests of the same model and think setting. A
+   single test still runs with `python -m tools.prompt_check ... --model <tag> --think
+   on|off`. The app's servers aren't needed: the tests call Ollama directly.
+
+   The battery also writes the data the comparison page reads (`--data`), in the git-ignored
+   `tools/runs/models/`: `inputs/<test>.json`, what every model gets for each sample (the same
+   for every model), and `<model>/<test>.json`, one folder per model and think setting, with
+   each sample's replies, the code's flags, seconds and errors, the prompt version and the GPU
+   share. A rerun replaces that model's file.
 3. Run `qwen2.5:7b` first as the baseline.
 4. Run one test at a time from one PC. Tests share the server's GPU, and the timings only
    compare when nothing else is using it.
+5. Build the comparison page against the baseline:
+
+   ```powershell
+   python -m tools.compare_runs qwen3.5:4b --think off
+   ```
+
+   It writes `tools/runs/models/compare_<baseline>__vs__<model>.html`, one page to open in a
+   browser:
+   - **Blind A/B:** each sample's input (the fridge, the chat, the draft or menu) above the
+     two models' replies, as A and B in an order seeded by the pair, so a rebuild keeps it.
+     Votes are A, B or both equally good, with a note, kept in the browser; **Download
+     votes** saves them as `<pair>__user.json`. Save it in `tools/runs/models/votes/` so a
+     rebuild shows it.
+   - **Reveal** names the models on every pair and shows the tally, yours and Claude's.
+   - **All models**, after Reveal: a chart per test of every model tried (clean share,
+     seconds, GPU share; a grey bar ran on another prompt version than the baseline), and a
+     table of samples by models.
+
+   `votes/<pair>__blind.json` has the same pairs without the models or seconds, for Claude's
+   blind votes (`votes/<pair>__claude.json`, `{"votes": {pair id: {"vote": "A"|"B"|"tie",
+   "reason": ...}}}`); `votes/<pair>__key.json` says which model each pair's A is.
 
 Ollama keeps only one of these models in 6 GB of VRAM at a time. A test of another model
 unloads `qwen2.5:7b`, and the app's next call loads it again (a few seconds).
@@ -55,12 +83,10 @@ the model thinks.
 1. **Code scores.** Run the test set for every model in the tables below, and twice for
    each 🧠 model (think off and on). Record the clean share per persona, errors and
    timeouts, average seconds per press, and the GPU share in the Result column.
-2. **Blind comparison page.** A page that reads two runs and shows each sample's replies
-   side by side as "A" and "B" (the menu, reply text, prep plan or chat reply, with the
-   code's flags and seconds), the models hidden. You vote **A**, **B** or **both equally
-   good**, and the page shows which model was which and the tally at the end.
-   It needs the runs as data: `save_log` writes only Markdown now, so add a JSON file per
-   run next to the `.md` (records with replies and scores, plus the header).
+2. **Blind comparison page** (`tools/compare_runs.py`, step 5 above). It shows each
+   sample's replies side by side as "A" and "B" (the menu, reply text, prep plan or chat
+   reply, with the code's flags and seconds), the models hidden. You vote **A**, **B** or
+   **both equally good**, and the page shows which model was which and the tally at the end.
 3. **Claude rates the breakfasts.** Claude reads the same pairs blind and votes too, with a
    short reason for each, judging breakfast quality: does it make a real, balanced
    breakfast from the fridge, are portions sensible, is the text natural English or
