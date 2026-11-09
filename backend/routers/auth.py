@@ -1,14 +1,14 @@
 """
-/auth — login endpoint.
+/auth — login and logout endpoints.
 """
 
 import asyncio
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Header, HTTPException, Request, Response
 import config
 from database import get_db
 from auth import (
-    hash_pin, verify_pin, needs_rehash, unknown_user_hash, create_token,
-    login_wait, record_login_failure, clear_login_failures,
+    hash_pin, verify_pin, needs_rehash, unknown_user_hash, create_token, revoke_token,
+    bearer_token, login_wait, record_login_failure, clear_login_failures,
 )
 from models.user import UserLogin, TokenOut
 
@@ -71,3 +71,14 @@ async def login(body: UserLogin, request: Request):
             "created_at": user["created_at"],
         },
     }
+
+
+@router.post("/logout", status_code=204)
+async def logout(authorization: str | None = Header(None)):
+    """End the session this request is made with, so its token no longer works.
+    The user's other devices keep their own sessions. An unknown or already ended session
+    gets 204 too, so logging out twice is harmless."""
+    token = bearer_token(authorization)
+    if token is not None:
+        revoke_token(token)
+    return Response(status_code=204)

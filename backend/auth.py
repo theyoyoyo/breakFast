@@ -138,7 +138,7 @@ def create_token(user_id: int) -> str:
 
 
 def revoke_token(token: str) -> None:
-    """Remove a token (logout)."""
+    """End a session (logout); an unknown or already ended token is ignored."""
     _active_tokens.pop(token, None)
 
 
@@ -147,16 +147,23 @@ def get_user_id_from_token(token: str) -> int | None:
     return _active_tokens.get(token)
 
 
+def bearer_token(authorization: str | None) -> str | None:
+    """The token in an "Authorization: Bearer <token>" header, or None for any other header."""
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    return authorization[7:]
+
+
 async def require_user(authorization: str = Header(..., alias="Authorization")) -> int:
     """
     FastAPI dependency that extracts user_id from the Authorization header.
     Header format: "Bearer <token>"
     Returns user_id or raises 401.
     """
-    if not authorization.startswith("Bearer "):
+    token = bearer_token(authorization)
+    if token is None:
         raise HTTPException(status_code=401, detail="Invalid authorization header")
 
-    token = authorization[7:]
     user_id = get_user_id_from_token(token)
     if user_id is None:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
