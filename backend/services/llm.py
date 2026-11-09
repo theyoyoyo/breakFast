@@ -82,17 +82,6 @@ async def chat_stream(
         yield chunk
 
 
-async def chat_complete(
-    system_prompt: str,
-    messages: list[dict],
-) -> str:
-    """Non-streaming call. Returns the full response as a single string."""
-    chunks = []
-    async for chunk in chat_stream(system_prompt, messages):
-        chunks.append(chunk)
-    return "".join(chunks)
-
-
 async def chat_json(
     system_prompt: str,
     messages: list[dict],
