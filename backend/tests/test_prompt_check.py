@@ -10,9 +10,9 @@ from services.chat_block import chat_history, format_chat_block
 from services.personas.chat import build_chat_message
 from services.fridge import find_missing_ingredients, same_name
 from tools.prompt_check import (
-    CHECKS, PERSONAS, chat_once, chat_rows, check_chat, check_plan, check_reply, check_review, compare, describe,
-    is_clean, parse_args, plan_once, recording_prompts, review_once, run, save_log, score_shopping, shop_once,
-    suggest_once, summarize,
+    CHECKS, PERSONAS, chat_once, chat_rows, check_chat, check_plan, check_reply, check_review, compare, data_name, describe,
+    is_clean, model_folder, parse_args, plan_once, recording_prompts, review_once, run, save_log, save_model_data,
+    score_shopping, shop_once, suggest_once, summarize,
 )
 from tools.prompt_samples import (
     CHAT_MESSAGES, CHAT_MINUTES, PLAN_CASES, REVIEW_CASES, SAMPLE_MODES, SAMPLES, SCENARIOS, chat_picks, chat_scenario,
@@ -447,6 +447,45 @@ def test_compare_with_best_earlier_test():
         "en final: 1/2 clean, 2 distinct ▼ best 2/2 clean, 2 distinct: prompt bbbbbbb (2026-10-27 23:21)",
         "en draft: 0/2 clean, 1 distinct · first test",
     ]
+
+
+# A test is compared only with earlier tests of its model and think setting (#178); a test from before --model
+# counts as the baseline model's
+def test_compare_by_model():
+    old = {"date": "2026-11-08 18:11", "prompt": "aaaaaaa", "mode": "usual", "checks": CHECKS, "note": "",
+           "results": {"en final": {"clean": 2, "scored": 2, "distinct": 2}}}
+    other = {**old, "prompt": "ccccccc", "model": "gemma3:4b", "results": {"en final": {"clean": 1, "scored": 2, "distinct": 1}}}
+    thinking = {**other, "think": True, "results": {"en final": {"clean": 2, "scored": 2, "distinct": 2}}}
+    now = {"en final": {"clean": 1, "scored": 2, "distinct": 1}}
+    assert compare(now, [old, other, thinking], "usual", model="gemma3:4b")[0].endswith("= best 1/2 clean, 1 distinct: prompt ccccccc (2026-11-08 18:11)")
+    assert "best 2/2 clean" in compare(now, [old, other, thinking], "usual")[0]
+    assert "best 2/2 clean" in compare(now, [old, other, thinking], "usual", model="gemma3:4b", think=True)[0]
+    assert compare(now, [old], "usual", model="llama3.1:8b") == ["en final: 1/2 clean, 1 distinct · first test"]
+
+
+# A model test's data files (#178): the inputs by sample label, with the chat a press comes after, and the model's
+# outputs in a folder per model and think setting, named after the test
+def test_model_data_files(tmp_path):
+    records = [
+        {"sample": "en", "mode": None, "run": 1, "seconds": 9.5, "error": None, "replies": {"final": "Hi"}, "scores": {}},
+        {"sample": "en:chat", "mode": None, "run": 1, "seconds": 8.0, "error": None, "replies": {"final": "Hi"}, "scores": {}},
+    ]
+    meta = {"model": "qwen3.5:4b", "think": False, "prompt": "aaaaaaa", "gpu": 100}
+    with patch("tools.prompt_check.MODELS_DIR", tmp_path):
+        inputs, outputs = save_model_data(records, "suggest", data_name("suggest", "all"), meta)
+    assert inputs == tmp_path / "inputs" / "suggest-all.json"
+    assert outputs == tmp_path / "qwen3.5_4b-think-off" / "suggest-all.json"
+    saved = json.loads(inputs.read_text(encoding="utf-8"))["samples"]
+    assert saved["en"]["chat"] is None and saved["en"]["data"]["ingredients"] == EN["ingredients"]
+    assert saved["en:chat"]["chat"] == chat_scenario("en", "chat")
+    out = json.loads(outputs.read_text(encoding="utf-8"))
+    assert (out["model"], out["think"], out["gpu"], out["test"]) == ("qwen3.5:4b", False, 100, "suggest-all")
+    assert [r["sample"] for r in out["records"]] == ["en", "en:chat"]
+    assert [data_name("suggest", "fresh"), data_name("chat", "chat"), data_name("review", "fresh", "explore")] == [
+        "suggest", "chat", "review-explore",
+    ]
+    assert model_folder("qwen2.5:7b", None) == "qwen2.5_7b"
+    assert parse_args(["--data"]).data and not parse_args([]).data
 
 
 def _shopping_reply(*names) -> str:

@@ -51,7 +51,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print(load(args.url, args.model), flush=True)
     note = f"model {args.model}" + (f" think {args.think}" if args.think else "")
-    extra = ["--model", args.model, "--url", args.url, "--note", note] + (["--think", args.think] if args.think else [])
+    extra = ["--model", args.model, "--url", args.url, "--note", note, "--data"] + (["--think", args.think] if args.think else [])
     failed = 0
     for persona, options in SUITES:
         print(f"\n### {persona} {' '.join(options)}", flush=True)
