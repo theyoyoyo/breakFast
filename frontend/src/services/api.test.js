@@ -13,6 +13,7 @@ import {
   updateSessionMessage,
   createChatSocket,
   login,
+  logout,
   LoginLimitError,
   getRemovedSuggestionCount,
   bringBackRemovedSuggestions,
@@ -73,6 +74,68 @@ describe('login', () => {
     const err = await login('Alice', '999999').catch(e => e)
     expect(err).not.toBeInstanceOf(LoginLimitError)
     expect(err.message).toBe('Login failed')
+  })
+})
+
+
+describe('logout', () => {
+  function storeSession(token) {
+    localStorage.setItem('bf_token', token)
+    localStorage.setItem('bf_user', JSON.stringify({ id: 1, name: 'Alice' }))
+  }
+
+  beforeEach(() => localStorage.clear())
+
+  // Logout ends the stored session on the server with its own token and clears it on the device
+  it('POSTs /auth/logout with the session token and clears the stored session', async () => {
+    storeSession('tok-1')
+    const stub = vi.fn().mockResolvedValue({ ok: true, status: 204 })
+    vi.stubGlobal('fetch', stub)
+    await logout()
+    expect(stub).toHaveBeenCalledWith(
+      expect.stringMatching(/\/auth\/logout$/),
+      expect.objectContaining({ method: 'POST', headers: { Authorization: 'Bearer tok-1' } }),
+    )
+    expect(localStorage.getItem('bf_token')).toBeNull()
+    expect(localStorage.getItem('bf_user')).toBeNull()
+  })
+
+  // An unreachable server still logs the device out, without an error
+  it('clears the stored session when the server cannot be reached', async () => {
+    storeSession('tok-1')
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+    await expect(logout()).resolves.toBeUndefined()
+    expect(localStorage.getItem('bf_token')).toBeNull()
+    expect(localStorage.getItem('bf_user')).toBeNull()
+  })
+
+  // A server error still logs the device out, without an error
+  it('clears the stored session when the server answers with an error', async () => {
+    storeSession('tok-1')
+    vi.stubGlobal('fetch', mockFetch(500, { detail: 'Server error' }))
+    await expect(logout()).resolves.toBeUndefined()
+    expect(localStorage.getItem('bf_token')).toBeNull()
+  })
+
+  // The session is gone before the server answers, so a login made meanwhile keeps its new one
+  it('clears the stored session before the call answers', async () => {
+    storeSession('tok-1')
+    let answer
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(resolve => { answer = resolve })))
+    const done = logout()
+    expect(localStorage.getItem('bf_token')).toBeNull()
+    storeSession('tok-2')
+    answer({ ok: true, status: 204 })
+    await done
+    expect(localStorage.getItem('bf_token')).toBe('tok-2')
+  })
+
+  // With no stored session there is nothing to end, so no call is made
+  it('makes no call without a stored session', async () => {
+    const stub = vi.fn()
+    vi.stubGlobal('fetch', stub)
+    await logout()
+    expect(stub).not.toHaveBeenCalled()
   })
 })
 

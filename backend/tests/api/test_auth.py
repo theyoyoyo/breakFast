@@ -1,5 +1,5 @@
 """
-Tests for auth — login, token management, endpoint protection.
+Tests for auth — login, logout, token management, endpoint protection.
 """
 
 import hashlib
@@ -12,6 +12,8 @@ import aiosqlite
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
+from starlette.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 import auth
 import config
@@ -261,6 +263,59 @@ async def test_endpoints_work_with_auth(unauth_client):
 
     r = await unauth_client.get("/preferences/", headers=headers)
     assert r.status_code == 200
+
+
+async def _session(client) -> dict:
+    """Log Alice in and return the Authorization header of the new session."""
+    r = await client.post("/auth/login", json={"name": "Alice", "pin": "1234"})
+    return {"Authorization": f"Bearer {r.json()['token']}"}
+
+
+def _socket_close_code(headers: dict) -> int | None:
+    """Open the chat socket with a session's token: None when it opens, else the close code."""
+    from main import app
+
+    token = headers["Authorization"].removeprefix("Bearer ")
+    try:
+        with TestClient(app).websocket_connect(f"/chat?token={token}"):
+            return None
+    except WebSocketDisconnect as exc:
+        return exc.code
+
+
+# After a logout the session's token gets 401 on REST and the chat socket refuses it
+async def test_logout_ends_the_session(unauth_client):
+    headers = await _session(unauth_client)
+    assert (await unauth_client.get("/health/auth", headers=headers)).status_code == 200
+    assert _socket_close_code(headers) is None
+
+    r = await unauth_client.post("/auth/logout", headers=headers)
+    assert r.status_code == 204
+    assert r.content == b""
+    assert (await unauth_client.get("/health/auth", headers=headers)).status_code == 401
+    assert (await unauth_client.get("/ingredients/", headers=headers)).status_code == 401
+    assert _socket_close_code(headers) == 4001
+
+
+# Logging out twice, with a token the server never gave or with no token at all gets 204
+async def test_logout_is_harmless_when_repeated(unauth_client):
+    headers = await _session(unauth_client)
+    assert (await unauth_client.post("/auth/logout", headers=headers)).status_code == 204
+    assert (await unauth_client.post("/auth/logout", headers=headers)).status_code == 204
+
+    unknown = {"Authorization": "Bearer never-given"}
+    assert (await unauth_client.post("/auth/logout", headers=unknown)).status_code == 204
+    assert (await unauth_client.post("/auth/logout")).status_code == 204
+
+
+# Logging out on one device leaves the same user's session on another device working
+async def test_logout_keeps_other_sessions(unauth_client):
+    phone, desktop = await _session(unauth_client), await _session(unauth_client)
+    assert (await unauth_client.post("/auth/logout", headers=phone)).status_code == 204
+
+    assert (await unauth_client.get("/health/auth", headers=phone)).status_code == 401
+    assert (await unauth_client.get("/health/auth", headers=desktop)).status_code == 200
+    assert _socket_close_code(desktop) is None
 
 
 async def test_user_data_isolation(tmp_path, monkeypatch):

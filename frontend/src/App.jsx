@@ -19,6 +19,15 @@ const TABS = [
   { key: 'Settings', label: 'Settings', Icon: Settings },
 ]
 
+// The open tab's name in the link (#fridge, #settings…), so a refresh reopens it; Chat has none
+const tabHash = (key) => (key === 'Chat' ? '' : `#${TABS.find(t => t.key === key).label.toLowerCase()}`)
+
+// The tab the link names, or Chat when it names none or an unknown one
+const tabFromLink = () => {
+  const hash = window.location.hash.toLowerCase()
+  return TABS.find(t => tabHash(t.key) === hash)?.key ?? 'Chat'
+}
+
 function getStoredAuth() {
   const token = localStorage.getItem('bf_token')
   const userStr = localStorage.getItem('bf_user')
@@ -45,9 +54,32 @@ function useIsNarrow(breakpoint = 540) {
 export default function App() {
   const [auth, setAuth] = useState(getStoredAuth)
   const [authChecked, setAuthChecked] = useState(false)
-  const [activeTab, setActiveTab] = useState('Chat')
+  // A refresh with a stored session reopens the link's tab; a login starts on Chat
+  const [activeTab, setActiveTab] = useState(() => (auth ? tabFromLink() : 'Chat'))
   const [offline, setOffline] = useState(false)
   const narrow = useIsNarrow()
+
+  // When the device's session ends (Logout, or refused at start), the next login starts on Chat
+  useEffect(() => {
+    if (!auth) setActiveTab('Chat')
+  }, [auth])
+
+  // Keep the open tab in the link while logged in. The link is replaced, not pushed,
+  // so Back doesn't step through tabs.
+  useEffect(() => {
+    const hash = auth ? tabHash(activeTab) : ''
+    if (window.location.hash === hash) return
+    const { pathname, search } = window.location
+    window.history.replaceState(window.history.state, '', pathname + search + hash)
+  }, [auth, activeTab])
+
+  // A tab typed into the link opens too
+  useEffect(() => {
+    if (!auth) return
+    const onHashChange = () => setActiveTab(tabFromLink())
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [auth])
 
   // Validate stored token against backend on app start
   useEffect(() => {
