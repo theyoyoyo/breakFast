@@ -164,7 +164,7 @@ Clean replies per test, average seconds per sample in brackets, and the model's 
 | `qwen3.5:4b` think on | 1/12, 11 timeouts | 1/10, 9 timeouts | 0/5 | 5/8 (169) | 0/4, 4 timeouts | 3/3 (333) | 100% |
 | `qwen3:4b-instruct-2507-q8_0` | 10/12 (42) | 3/10 (44) | 5/5 (20) | 6/8 (12) | 0/4 (34) | 3/3 (6) | 87% |
 | `qwen3:8b` think off | 10/12 (72) | 10/10 (76) | 5/5 (30) | 6/8 (21) | 0/4 (44) | 2/3 (14) | 79% |
-| `qwen3:8b` think on | 12/12 (196) | 9/10 (190) | 3/5 (84) | 6/8 (208) | 1/4 (166) | 1/3 (94) | 79% |
+| `qwen3:8b` think on | 12/12 (196) | 10/10 (195) | 4/5 (83) | 6/8 (208) | 1/4 (170), 1 timeout | 1/3 (94) | 79% |
 | `llama3.1:8b` | 10/12 (43) | 7/10 (42) | 3/5 (18) | 8/8 (18) | 1/4 (32) | 1/3 (13) | 83% |
 | `granite4.2:8b` think off | 7/12 (94) | 4/10 (96) | 5/5 (42) | 7/8 (30) | 0/4 (73) | 0/3 (23) | 75% |
 | `granite4.2:8b` think on | 0/12, all timeouts | 0/10, all timeouts | 0/5 | 4/8 (645) | 0/4, all timeouts | 3/3 (142) | 75% |
@@ -174,6 +174,8 @@ Clean replies per test, average seconds per sample in brackets, and the model's 
 | `qwen3.5:9b` think on | 2/12, 10 timeouts | 0/10, all timeouts | 3/5 (91) | 4/8 (433) | 0/4, all timeouts | 3/3 (597) | 80% |
 
 Shopping is almost never clean for any model: most flags are repeats, which the dedupe drops in the app.
+
+**At 150 s** (`OLLAMA_TIMEOUT`, 2026-11-10), the replies that timed out ran again. `qwen3:8b` think on finished the after-a-chat press and one of the two reviews and shopping presses that had timed out (its row above). `qwen3.5:4b`, `qwen3.5:9b` and `granite4.2:8b` think on still timed out on their first two suggestions, so the rest was skipped: they think for minutes per call, too slow for a morning press.
 
 ### Chosen models
 
@@ -198,7 +200,7 @@ Found in the votes. When the models are chosen, add each one's code flags and th
 - **Review, frittata** (`qwen2.5:7b` and `gemma4:e4b` think off): drops the smoked salmon, which nothing replaces, and keeps the name "Salmon frittata". The salmon should stay as written, marked missing, or the name should change. With the fuller samples (#188), e4b still drops it, adds spinach and renames the dish "Feta & Spinach Frittata", before and after #193 (runs `2026-11-10_050715`, `2026-11-10_051033`).
 - **Review, omurice** (`gemma4:e4b` think off, both runs above): swaps the rice for pita bread and keeps the name "Omurice", a rice dish. The `named` label can't see it, since "rice" sits inside the word.
 - **Prep words** (`gemma4:e4b` think off, the runs above and `2026-11-10_050918`, `2026-11-10_051219`): the reviser fills obvious forms with "N/A", "as is", "No prep needed" or "Cold". Prep words are for a form the dish needs.
-- **Shopping, copied examples** (`gemma4:e2b` think on, runs `2026-11-10_050336`, `2026-11-10_050555`): the naming rule's examples come back as items, "Dried apricots" in 5 of the 8 presses and "Smoked salmon" in 4, before and after #190.
+- **Shopping, copied examples** (`gemma4:e2b` think on, runs `2026-11-10_050336`, `2026-11-10_050555`): the naming rule's examples come back as items, "Dried apricots" in 5 of the 8 presses and "Smoked salmon" in 4, before and after #190. With the rule in plain words (run `2026-11-10_140449`, `ab/190/after2-190/`): no smoked salmon, dried apricots twice, more spices and herbs, but "Fresh" came back three times and the diabetic list put qualifiers last ("Greek yogurt plain", "Berries mixed").
 
 ## Models
 
