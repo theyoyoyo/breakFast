@@ -220,3 +220,39 @@ describe('chat sync API', () => {
     vi.unstubAllGlobals()
   })
 })
+
+
+describe('chat socket auth', () => {
+  function stubSockets() {
+    const sockets = []
+    vi.stubGlobal('WebSocket', class {
+      constructor(url, protocols) {
+        this.url = url
+        this.protocols = protocols
+        sockets.push(this)
+      }
+    })
+    return sockets
+  }
+
+  beforeEach(() => localStorage.clear())
+
+  // The token goes in the Sec-WebSocket-Protocol header as bearer plus the token, and the URL carries none
+  it('opens /chat with the token as a subprotocol, not in the URL', () => {
+    localStorage.setItem('bf_token', 'tok-1')
+    const sockets = stubSockets()
+    createChatSocket(vi.fn(), vi.fn(), vi.fn())
+    expect(sockets[0].url).toMatch(/\/chat$/)
+    expect(sockets[0].url).not.toContain('tok-1')
+    expect(sockets[0].protocols).toEqual(['bearer', 'tok-1'])
+    vi.unstubAllGlobals()
+  })
+
+  // Without a stored session the socket sends bearer alone, since an empty subprotocol would throw
+  it('opens /chat with bearer alone when there is no stored session', () => {
+    const sockets = stubSockets()
+    createChatSocket(vi.fn(), vi.fn(), vi.fn())
+    expect(sockets[0].protocols).toEqual(['bearer'])
+    vi.unstubAllGlobals()
+  })
+})
