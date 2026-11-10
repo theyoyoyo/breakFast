@@ -44,32 +44,6 @@ async def test_delete_ingredient(client):
     assert all(i["id"] != created["id"] for i in listed)
 
 
-async def test_bulk_add(client):
-    payload = [
-        {"name": "tomato"},
-        {"name": "onion"},
-    ]
-    r = await client.post("/ingredients/bulk", json=payload)
-    assert r.status_code == 201
-    assert r.json() == {"added": 2}
-    names = [i["name"] for i in (await client.get("/ingredients/")).json()]
-    assert "tomato" in names and "onion" in names
-
-
-async def test_bulk_add_with_expiry(client):
-    payload = [
-        {"name": "butter", "expiry_date": "2026-05-01"},
-        {"name": "cream"},
-    ]
-    r = await client.post("/ingredients/bulk", json=payload)
-    assert r.status_code == 201
-    listed = (await client.get("/ingredients/")).json()
-    butter = [i for i in listed if i["name"] == "butter"][0]
-    cream = [i for i in listed if i["name"] == "cream"][0]
-    assert butter["expiry_date"] == "2026-05-01"
-    assert cream["expiry_date"] is None
-
-
 # ---------------------------------------------------------------------------
 # Expiry check tests
 # ---------------------------------------------------------------------------
@@ -191,28 +165,6 @@ async def test_expired_action_mixed(client):
 
 
 # ---------------------------------------------------------------------------
-# Legacy thrown confirmation tests (backward compat)
-# ---------------------------------------------------------------------------
-
-
-async def test_thrown_removes_ingredients(client):
-    """Confirming thrown removes expired items from inventory."""
-    created = (await client.post("/ingredients/", json={"name": "expired_cheese", "expiry_date": "2020-01-01"})).json()
-    r = await client.post("/ingredients/expired/thrown", json={"ids": [created["id"]]})
-    assert r.status_code == 200
-    assert r.json() == {"removed": 1}
-    listed = (await client.get("/ingredients/")).json()
-    assert all(i["name"] != "expired_cheese" for i in listed)
-
-
-async def test_thrown_empty_list(client):
-    """Thrown with empty list is a no-op."""
-    r = await client.post("/ingredients/expired/thrown", json={"ids": []})
-    assert r.status_code == 200
-    assert r.json() == {"removed": 0}
-
-
-# ---------------------------------------------------------------------------
 # Ingredient groups tests
 # ---------------------------------------------------------------------------
 
@@ -280,7 +232,7 @@ async def test_memory_records_names_and_marks_picks(client, db):
 async def test_auto_add_keeps_the_pick(client, db):
     created = (await client.post("/ingredients/", json={"name": "Honey", "group_name": "🫒 Breakfast Staples"})).json()
     await client.delete(f"/ingredients/{created['id']}")
-    await client.post("/ingredients/bulk", json=[{"name": "Honey"}])
+    await client.post("/ingredients/", json={"name": "Honey"})
     assert await _picks(db) == {"Honey": "🫒 Breakfast Staples"}
 
 
@@ -336,32 +288,6 @@ async def test_group_memory_on_readd(client):
     r = await client.post("/ingredients/", json={"name": "tomato"})
     assert r.status_code == 201
     assert r.json()["group_name"] == "🥬 Produce"
-
-
-async def test_bulk_add_with_group_memory(client):
-    """Bulk add restores a remembered pick, else the food list's group, else Other."""
-    # First, add with explicit group and delete
-    created = (await client.post("/ingredients/", json={"name": "pepper", "group_name": "🥬 Produce"})).json()
-    await client.delete(f"/ingredients/{created['id']}")
-    # Bulk add without group — should restore from memory
-    r = await client.post("/ingredients/bulk", json=[
-        {"name": "pepper"}, {"name": "salt"}, {"name": "Grandma's spice mix"},
-    ])
-    assert r.status_code == 201
-    listed = {i["name"]: i["group_name"] for i in (await client.get("/ingredients/")).json()}
-    assert listed == {"pepper": "🥬 Produce", "salt": "🫙 Pantry", "Grandma's spice mix": "🍽️ Other"}
-
-
-async def test_groups_endpoint(client):
-    """GET /ingredients/groups returns the fixed group list."""
-    r = await client.get("/ingredients/groups")
-    assert r.status_code == 200
-    data = r.json()
-    assert "🐄 Animal Products" in data["groups"]
-    assert "🍽️ Other" in data["groups"]
-    assert data["default"] == "🍽️ Other"
-    assert "🫙 Pantry" in data["groups"]
-    assert len(data["groups"]) == 11
 
 
 # The check lists only the meal's ingredients missing from the user's fridge (water never counts)

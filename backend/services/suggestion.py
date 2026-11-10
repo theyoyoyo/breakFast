@@ -19,7 +19,7 @@ from services.personas import (
     build_shopping_prompt,
 )
 
-# Import shared formatters from knowledge module — re-exported for test imports
+# Shared formatters from the knowledge module, importable from here too
 from services.knowledge import (
     format_ingredients,
     format_history,
@@ -31,17 +31,6 @@ from services.knowledge import (
     format_user_profile,
     format_supplements,
 )
-
-# Private aliases — used by tests
-_format_ingredients = format_ingredients
-_format_history = format_history
-_format_preferences = format_preferences
-_format_habits = format_habits
-_format_health_rules = format_health_rules
-_format_avoid_list = format_avoid_list
-_format_behavioral = format_behavioral
-_format_user_profile = format_user_profile
-_format_supplements = format_supplements
 
 
 async def stream_response(

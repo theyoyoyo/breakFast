@@ -16,15 +16,17 @@ from services.suggestion import (
     build_chat_prompt,
     build_suggestion_prompt,
     build_analyst_prompt,
-    _format_ingredients,
-    _format_history,
-    _format_preferences,
-    _format_habits,
-    _format_health_rules,
-    _format_behavioral,
-    _format_user_profile,
-    _format_supplements,
-    _format_avoid_list,
+)
+from services.knowledge import (
+    format_ingredients,
+    format_history,
+    format_preferences,
+    format_habits,
+    format_health_rules,
+    format_behavioral,
+    format_user_profile,
+    format_supplements,
+    format_avoid_list,
 )
 from services.personas import (
     build_pipeline_analyst_prompt,
@@ -42,45 +44,45 @@ from services.personas import (
 
 class TestFormatters:
     def test_format_ingredients_empty(self):
-        assert _format_ingredients([]) == "none listed yet"
+        assert format_ingredients([]) == "none listed yet"
 
     def test_format_ingredients_with_data(self):
         items = [
             {"name": "eggs", "quantity": "6", "unit": "pcs"},
             {"name": "milk", "quantity": "1", "unit": "L"},
         ]
-        result = _format_ingredients(items)
+        result = format_ingredients(items)
         assert "eggs" in result
         assert "milk" in result
 
     def test_format_history_empty(self):
-        assert _format_history([]) == "no history yet"
+        assert format_history([]) == "no history yet"
 
     def test_format_history_with_limit(self):
         meals = [{"meal_name": f"meal_{i}"} for i in range(10)]
-        result = _format_history(meals, limit=3)
+        result = format_history(meals, limit=3)
         # History comes newest first, so the first 3 are the newest
         assert "meal_0" in result
         assert "meal_2" in result
         assert "meal_3" not in result
 
     def test_format_preferences_empty(self):
-        assert _format_preferences({}) == "none set yet"
+        assert format_preferences({}) == "none set yet"
 
     def test_format_preferences_with_data(self):
-        result = _format_preferences({"favorite": "eggs"})
+        result = format_preferences({"favorite": "eggs"})
         assert "eggs" in result
 
     def test_format_habits_empty(self):
-        assert _format_habits([]) == "none stated yet"
+        assert format_habits([]) == "none stated yet"
 
     def test_format_habits_with_data(self):
-        result = _format_habits(["early breakfast", "no sugar"])
+        result = format_habits(["early breakfast", "no sugar"])
         assert "early breakfast" in result
         assert "no sugar" in result
 
     def test_format_health_rules_empty_deprioritize_not_exclude(self):
-        result = _format_health_rules([])
+        result = format_health_rules([])
         assert "deprioritize" in result
         assert "NEVER fully exclude" in result
 
@@ -90,7 +92,7 @@ class TestFormatters:
             {"rule_text": "Avoid gluten", "priority": "critical"},
             {"rule_text": "Favor omega-3", "priority": "low"},
         ]
-        result = _format_health_rules(rules)
+        result = format_health_rules(rules)
         assert "TOP PRIORITY" in result
         assert "Avoid gluten" in result
         assert "Nice to have" in result
@@ -99,33 +101,33 @@ class TestFormatters:
 
     # Backwards-compatible with plain string lists
     def test_format_health_rules_plain_strings(self):
-        result = _format_health_rules(["Avoid gluten", "Favor omega-3"])
+        result = format_health_rules(["Avoid gluten", "Favor omega-3"])
         assert "Avoid gluten" in result
         assert "Favor omega-3" in result
 
     def test_format_avoid_list_empty(self):
-        assert "No items" in _format_avoid_list(None)
-        assert "No items" in _format_avoid_list([])
+        assert "No items" in format_avoid_list(None)
+        assert "No items" in format_avoid_list([])
 
     def test_format_avoid_list_with_data(self):
-        result = _format_avoid_list(["shellfish", "peanuts"])
+        result = format_avoid_list(["shellfish", "peanuts"])
         assert "shellfish" in result
         assert "peanuts" in result
         assert "NEVER" in result
         assert "cross-contamination" in result
 
     def test_format_behavioral_empty(self):
-        assert _format_behavioral(None) == ""
-        assert _format_behavioral([]) == ""
+        assert format_behavioral(None) == ""
+        assert format_behavioral([]) == ""
 
     def test_format_behavioral_with_data(self):
-        result = _format_behavioral(["eats eggs daily", "rarely has fruit"])
+        result = format_behavioral(["eats eggs daily", "rarely has fruit"])
         assert "eats eggs daily" in result
         assert "DIVERSIFY" in result
 
     def test_format_user_profile_empty(self):
-        assert "Not provided" in _format_user_profile(None)
-        assert "Not provided" in _format_user_profile({})
+        assert "Not provided" in format_user_profile(None)
+        assert "Not provided" in format_user_profile({})
 
     def test_format_user_profile_with_data(self):
         profile = {
@@ -133,31 +135,31 @@ class TestFormatters:
             "height_cm": 180, "weight_kg": 75,
             "activity_level": "orta",
         }
-        result = _format_user_profile(profile)
+        result = format_user_profile(profile)
         assert "30" in result
         assert "180" in result
         assert "75" in result
         assert "orta" in result
 
     def test_format_supplements_empty(self):
-        assert "No supplements" in _format_supplements(None)
-        assert "No supplements" in _format_supplements([])
+        assert "No supplements" in format_supplements(None)
+        assert "No supplements" in format_supplements([])
 
     def test_format_supplements_daily(self):
         supps = [{"name": "Vitamin D", "frequency": "daily", "contents": "1000IU D3"}]
-        result = _format_supplements(supps)
+        result = format_supplements(supps)
         assert "Vitamin D" in result
         assert "daily" in result
         assert "1000IU D3" in result
 
     def test_format_supplements_sometimes_taken(self):
         supps = [{"name": "Omega-3", "frequency": "sometimes", "contents": "1000mg EPA/DHA", "taken_today": True}]
-        result = _format_supplements(supps)
+        result = format_supplements(supps)
         assert "taken today" in result
 
     def test_format_supplements_sometimes_not_taken(self):
         supps = [{"name": "Omega-3", "frequency": "sometimes", "contents": "", "taken_today": False}]
-        result = _format_supplements(supps)
+        result = format_supplements(supps)
         assert "NOT taken today" in result
 
 

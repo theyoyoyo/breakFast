@@ -233,7 +233,7 @@ breakFast/
 │   ├── components/        React UI (chat, fridge, preferences, settings, ...)
 │   ├── services/api.js    REST and WebSocket client
 │   └── hooks/useVoice.js  Web Speech API
-├── docs/                  server setup guide and feature specs
+├── docs/                  server setup guide
 ├── CLAUDE.md              product decisions and conventions (context for AI-assisted development)
 └── setup.bat, start.bat, start-server.bat   Windows helpers
 ```
