@@ -143,7 +143,11 @@ language's model, else its task's, else `OLLAMA_MODEL`. `docs/MODEL_TESTS.md` ha
 models chosen per task.
 
 Two models that don't fit the GPU together can't both stay loaded, so Ollama reloads one
-at every switch, and the first call after a switch waits for the load.
+at every switch, and the first call after a switch waits for the load. On a 6 GB laptop
+GPU, a switch between `gemma4:e4b-it-qat` and `gemma4:e2b-it-q4_K_M` took about 13 s
+either way (Ollama's `load_duration`, with the app's context length). With the example
+above, an English user's shopping press waits that long, and so does their next call; a
+Turkish user's calls all go to one model, so only a switch between users costs a load.
 
 ---
 
