@@ -154,6 +154,18 @@ def bearer_token(authorization: str | None) -> str | None:
     return authorization[7:]
 
 
+# A browser can't set headers on a WebSocket except its subprotocols, so the app sends its
+# token there as "bearer" then the token, and the server accepts with "bearer"
+SOCKET_AUTH_PROTOCOL = "bearer"
+
+
+def socket_token(protocols: list[str]) -> str | None:
+    """The token in a socket's Sec-WebSocket-Protocol header ("bearer", then the token), or None."""
+    if len(protocols) != 2 or protocols[0] != SOCKET_AUTH_PROTOCOL:
+        return None
+    return protocols[1]
+
+
 async def require_user(authorization: str = Header(..., alias="Authorization")) -> int:
     """
     FastAPI dependency that extracts user_id from the Authorization header.

@@ -23,6 +23,7 @@ from starlette.testclient import TestClient
 import database
 from auth import hash_pin, create_token
 from services import chat_sync
+from tests.chat_socket import open_chat
 
 
 @pytest_asyncio.fixture
@@ -86,8 +87,8 @@ async def test_second_socket_gets_session_updated_after_reply(sync_setup):
     app, users = sync_setup
     token, _, session_id = users["ada"]
     with _fake_llm(), TestClient(app) as client:
-        with client.websocket_connect(f"/chat?token={token}") as phone, \
-             client.websocket_connect(f"/chat?token={token}") as desktop:
+        with open_chat(client, token) as phone, \
+             open_chat(client, token) as desktop:
             asked = _chat(phone, session_id=session_id)
             assert _pushes(asked) == []
             assert asked[-1]["content"] == "Hi there"
@@ -107,8 +108,8 @@ async def test_other_users_socket_gets_nothing(sync_setup):
     ada_token, _, ada_session = users["ada"]
     bob_token, _, _ = users["bob"]
     with _fake_llm(), TestClient(app) as client:
-        with client.websocket_connect(f"/chat?token={ada_token}") as ada, \
-             client.websocket_connect(f"/chat?token={bob_token}") as bob:
+        with open_chat(client, ada_token) as ada, \
+             open_chat(client, bob_token) as bob:
             _chat(ada, session_id=ada_session)
             assert _pushes(_chat(bob)) == []
 
@@ -120,8 +121,8 @@ async def test_rest_save_notifies_users_sockets(sync_setup):
     ada_token, _, ada_session = users["ada"]
     bob_token, _, _ = users["bob"]
     with _fake_llm(), TestClient(app) as client:
-        with client.websocket_connect(f"/chat?token={ada_token}") as ada, \
-             client.websocket_connect(f"/chat?token={bob_token}") as bob:
+        with open_chat(client, ada_token) as ada, \
+             open_chat(client, bob_token) as bob:
             r = client.post(
                 f"/sessions/{ada_session}/messages",
                 json={"role": "assistant", "content": "📊 Analysis"},
@@ -144,7 +145,7 @@ async def test_message_edit_replaces_content_and_notifies(sync_setup):
         message_id = client.post(
             f"/sessions/{ada_session}/messages", json={"role": "assistant", "content": "old"}, headers=ada_auth,
         ).json()["id"]
-        with client.websocket_connect(f"/chat?token={ada_token}") as ada:
+        with open_chat(client, ada_token) as ada:
             r = client.put(f"/sessions/{ada_session}/messages/{message_id}", json={"content": "new"}, headers=ada_auth)
             assert r.status_code == 200
             assert _pushes(_chat(ada)) == [{"type": "session_updated", "session_id": ada_session}]
@@ -174,7 +175,7 @@ async def test_ate_draft_saved_on_message_and_pushed(sync_setup):
         message_id = client.post(url, json={"role": "assistant", "content": "card"}, headers=ada_auth).json()["id"]
         assert client.get(url, headers=ada_auth).json()[0]["ate_draft"] is None
 
-        with client.websocket_connect(f"/chat?token={ada_token}") as ada:
+        with open_chat(client, ada_token) as ada:
             r = client.put(f"{url}/{message_id}", json={"ate_draft": draft}, headers=ada_auth)
             assert r.status_code == 200
             assert _pushes(_chat(ada)) == [{"type": "session_updated", "session_id": ada_session}]
@@ -218,7 +219,7 @@ async def test_selected_card_saved_and_pushed(sync_setup):
         second = client.post(url, json={"role": "assistant", "content": "card 2"}, headers=ada_auth).json()["id"]
         assert [m["selected"] for m in client.get(url, headers=ada_auth).json()] == [False, False]
 
-        with client.websocket_connect(f"/chat?token={ada_token}") as ada:
+        with open_chat(client, ada_token) as ada:
             r = client.put(f"/sessions/{ada_session}/selected", json={"message_id": second}, headers=ada_auth)
             assert r.status_code == 200
             assert _pushes(_chat(ada)) == [{"type": "session_updated", "session_id": ada_session}]
@@ -259,7 +260,7 @@ async def test_suggestion_becomes_selected_card(sync_setup):
         yield {"type": "done", "content": reply}
 
     with patch("routers.chat.run_suggestion_pipeline", pipeline), TestClient(app) as client:
-        with client.websocket_connect(f"/chat?token={ada_token}") as ws:
+        with open_chat(client, ada_token) as ws:
             ws.send_text(json.dumps({"message": "Suggest Breakfast", "type": "suggest", "session_id": ada_session}))
             while ws.receive_json()["type"] != "meal_logged":
                 pass
@@ -275,8 +276,8 @@ async def test_supplement_changes_notify_users_sockets(sync_setup):
     bob_token, _, _ = users["bob"]
     ada_auth = {"Authorization": f"Bearer {ada_token}"}
     with _fake_llm(), TestClient(app) as client:
-        with client.websocket_connect(f"/chat?token={ada_token}") as ada, \
-             client.websocket_connect(f"/chat?token={bob_token}") as bob:
+        with open_chat(client, ada_token) as ada, \
+             open_chat(client, bob_token) as bob:
             supp_id = client.post("/profile/supplements", json={"name": "Vitamin D"}, headers=ada_auth).json()["id"]
             edit = {"name": "Vitamin D3", "contents": "1000 IU", "frequency": "sometimes"}
             assert client.put(f"/profile/supplements/{supp_id}", json=edit, headers=ada_auth).status_code == 200
@@ -294,7 +295,7 @@ async def test_shopping_suggestions_change_notifies_users_sockets(sync_setup):
     ada_token, _, _ = users["ada"]
     bob_token, _, _ = users["bob"]
     with _fake_llm(), TestClient(app) as client:
-        with client.websocket_connect(f"/chat?token={ada_token}") as ada,              client.websocket_connect(f"/chat?token={bob_token}") as bob:
+        with open_chat(client, ada_token) as ada,              open_chat(client, bob_token) as bob:
             r = client.put(
                 "/shopping/suggestions",
                 json={"items": [{"name": "Salmon", "reason": "Omega-3"}]},
@@ -310,10 +311,12 @@ async def test_shopping_suggestions_change_notifies_users_sockets(sync_setup):
 class _DroppingSocket:
     """A chat socket whose device drops (a locked phone) as soon as the reply starts streaming."""
 
-    def __init__(self, payload):
+    def __init__(self, payload, token):
         self._incoming = [json.dumps(payload)]
+        # The token in the Sec-WebSocket-Protocol header, as the app sends it
+        self.scope = {"subprotocols": ["bearer", token]}
 
-    async def accept(self):
+    async def accept(self, subprotocol=None):
         pass
 
     async def receive_text(self):
@@ -346,7 +349,7 @@ async def test_reply_is_saved_when_socket_drops_mid_stream(sync_setup):
     chat_sync.register(user_id, other)
     try:
         with _fake_llm():
-            await chat_endpoint(_DroppingSocket({"message": "hello", "session_id": session_id}), token=token)
+            await chat_endpoint(_DroppingSocket({"message": "hello", "session_id": session_id}, token))
     finally:
         chat_sync.unregister(user_id, other)
 
