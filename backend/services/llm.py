@@ -13,6 +13,7 @@ from config import (
     OLLAMA_MODEL,
     OLLAMA_NUM_CTX,
     OLLAMA_THINK,
+    OLLAMA_TIMEOUT,
 )
 
 
@@ -115,7 +116,7 @@ async def chat_json(
         "options": _options(temperature),
         **_think(),
     }
-    async with httpx.AsyncClient(timeout=120.0) as client:
+    async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
         response = await client.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload)
         try:
             response.raise_for_status()
@@ -153,7 +154,7 @@ async def _ollama_stream(
         "options": _options(temperature),
         **_think(),
     }
-    async with httpx.AsyncClient(timeout=120.0) as client:
+    async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
         async with client.stream(
             "POST",
             f"{OLLAMA_BASE_URL}/api/chat",

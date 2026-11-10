@@ -8,6 +8,9 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
 # Context length sent with every call. Chat history is about 6000 tokens, so
 # Ollama's own 4096 would drop the oldest messages without saying so.
 OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "8192"))
+# Seconds a call may wait for Ollama (to connect, and between the bytes of a reply). A
+# JSON reply comes all at once, so a model that thinks first must finish within it.
+OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "150"))
 # Ollama's think field, for models that can think before they answer: "true" or "false"
 # sends it with every call. Unset sends nothing, so each model keeps its own default
 # (Ollama refuses the field for a model that can't think).
