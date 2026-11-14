@@ -14,6 +14,7 @@ import pytest_asyncio
 
 import database
 from auth import hash_pin, create_token
+from tests.chat_socket import open_chat
 
 
 @pytest_asyncio.fixture
@@ -38,30 +39,59 @@ async def ws_setup(tmp_path, monkeypatch):
     return app, token, user_id
 
 
+def _close_code(app, url="/chat", subprotocols=None) -> int | None:
+    """Open the chat socket: None when it opens, else the code it was refused with."""
+    from starlette.testclient import TestClient
+    from starlette.websockets import WebSocketDisconnect
+
+    try:
+        with TestClient(app).websocket_connect(url, subprotocols=subprotocols):
+            return None
+    except WebSocketDisconnect as exc:
+        return exc.code
+
+
+# The socket opens with the token in its header and answers "bearer", which a browser needs to keep it open
+@pytest.mark.asyncio
+async def test_websocket_opens_with_token_in_header(ws_setup):
+    app, token, _ = ws_setup
+    from starlette.testclient import TestClient
+
+    with open_chat(TestClient(app), token) as ws:
+        assert ws.accepted_subprotocol == "bearer"
+
+
+# A socket without a token is refused
 @pytest.mark.asyncio
 async def test_websocket_rejects_missing_token(ws_setup):
-    """WebSocket without token query param should fail."""
     app, _, _ = ws_setup
-    from starlette.testclient import TestClient
-
-    client = TestClient(app)
-    # Missing token — FastAPI returns 422 (validation error) for missing required query param
-    with pytest.raises(Exception):
-        with client.websocket_connect("/chat"):
-            pass
+    assert _close_code(app) == 4001
 
 
+# A socket with an unknown token is refused
 @pytest.mark.asyncio
 async def test_websocket_rejects_invalid_token(ws_setup):
-    """WebSocket with invalid token should be closed with 4001."""
     app, _, _ = ws_setup
-    from starlette.testclient import TestClient
+    assert _close_code(app, subprotocols=["bearer", "invalid_token_xxx"]) == 4001
 
-    client = TestClient(app)
-    with pytest.raises(Exception):
-        with client.websocket_connect("/chat?token=invalid_token_xxx") as ws:
-            # Should be closed immediately
-            ws.receive_json()
+
+# A valid token in the URL no longer opens the socket, so a token can't end up in a URL by mistake
+@pytest.mark.asyncio
+async def test_websocket_rejects_token_in_url(ws_setup):
+    app, token, _ = ws_setup
+    assert _close_code(app, url=f"/chat?token={token}") == 4001
+
+
+# Only "bearer" followed by the token opens the socket; any other header shape is refused, even with a valid token
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "protocols",
+    [["TOKEN"], ["bearer"], ["TOKEN", "bearer"], ["bearer", "TOKEN", "extra"], ["Bearer", "TOKEN"]],
+)
+async def test_websocket_rejects_other_header_shapes(ws_setup, protocols):
+    app, token, _ = ws_setup
+    sent = [token if p == "TOKEN" else p for p in protocols]
+    assert _close_code(app, subprotocols=sent) == 4001
 
 
 @pytest.mark.asyncio
@@ -82,7 +112,7 @@ async def test_websocket_accepts_valid_token(ws_setup):
 
     with patch("routers.chat.build_chat_prompt", return_value="test prompt"), \
          patch("routers.chat.stream_response", mock_stream):
-        with client.websocket_connect(f"/chat?token={token}") as ws:
+        with open_chat(client, token) as ws:
             ws.send_text(json.dumps({"message": "hello"}))
 
             # Should get done message with a fallback lyric line
@@ -107,7 +137,7 @@ async def test_websocket_handles_generic_exception(ws_setup):
 
     with patch("routers.chat.build_chat_prompt", return_value="test prompt"), \
          patch("routers.chat.stream_response", mock_stream_crash):
-        with client.websocket_connect(f"/chat?token={token}") as ws:
+        with open_chat(client, token) as ws:
             ws.send_text(json.dumps({"message": "hello"}))
 
             msg = ws.receive_json()
@@ -132,7 +162,7 @@ async def test_websocket_build_chat_prompt_no_mock(ws_setup):
         yield
 
     with patch("routers.chat.stream_response", mock_stream):
-        with client.websocket_connect(f"/chat?token={token}") as ws:
+        with open_chat(client, token) as ws:
             ws.send_text(json.dumps({"message": "hello"}))
 
             msg = ws.receive_json()
@@ -157,7 +187,7 @@ async def test_websocket_suggest_type_uses_pipeline(ws_setup):
     mock_fn = MagicMock(side_effect=mock_pipeline)
 
     with patch("routers.chat.run_suggestion_pipeline", mock_fn):
-        with client.websocket_connect(f"/chat?token={token}") as ws:
+        with open_chat(client, token) as ws:
             ws.send_text(json.dumps({"message": "Bana kahvaltı öner", "type": "suggest"}))
 
             messages = []
@@ -187,7 +217,7 @@ async def test_websocket_suggest_with_mode_passes_mode(ws_setup):
     mock_fn = MagicMock(side_effect=mock_pipeline)
 
     with patch("routers.chat.run_suggestion_pipeline", mock_fn):
-        with client.websocket_connect(f"/chat?token={token}") as ws:
+        with open_chat(client, token) as ws:
             ws.send_text(json.dumps({
                 "message": "Sevdiğim yemeklerden öner",
                 "type": "suggest",
@@ -256,7 +286,7 @@ async def test_websocket_logs_chat_reply_crash(ws_setup, caplog):
         yield
 
     with patch("routers.chat.build_chat_prompt", return_value="test prompt"),          patch("routers.chat.stream_response", mock_stream_crash):
-        with TestClient(app).websocket_connect(f"/chat?token={token}") as ws:
+        with open_chat(TestClient(app), token) as ws:
             ws.send_text(json.dumps({"message": "hello"}))
             msg = ws.receive_json()
 
@@ -278,7 +308,7 @@ async def test_websocket_logs_suggestion_crash(ws_setup, caplog):
         yield
 
     with patch("routers.chat.run_suggestion_pipeline", mock_pipeline_crash):
-        with TestClient(app).websocket_connect(f"/chat?token={token}") as ws:
+        with open_chat(TestClient(app), token) as ws:
             ws.send_text(json.dumps({"message": "Suggest breakfast", "type": "suggest", "mode": "favorites"}))
             msg = ws.receive_json()
 
@@ -306,7 +336,7 @@ async def test_websocket_suggest_empty_or_unreachable(ws_setup):
     replies = []
     for pipeline in (mock_pipeline_silent, mock_pipeline_unreachable):
         with patch("routers.chat.run_suggestion_pipeline", pipeline):
-            with TestClient(app).websocket_connect(f"/chat?token={token}") as ws:
+            with open_chat(TestClient(app), token) as ws:
                 ws.send_text(json.dumps({"message": "Suggest breakfast", "type": "suggest", "mode": "favorites"}))
                 msg = ws.receive_json()
                 while msg["type"] == "progress":
@@ -338,7 +368,7 @@ async def test_websocket_suggest_reads_the_chat_from_the_session(ws_setup):
 
     mock_fn = MagicMock(side_effect=mock_pipeline)
     with patch("routers.chat.run_suggestion_pipeline", mock_fn):
-        with TestClient(app).websocket_connect(f"/chat?token={token}") as ws:
+        with open_chat(TestClient(app), token) as ws:
             ws.send_text(json.dumps({
                 "message": "Suggest Breakfast", "type": "suggest", "session_id": "s1", "chat_context": ["Sent by an old client"],
             }))
@@ -384,7 +414,7 @@ async def test_chat_reply_never_becomes_a_meal_card(ws_setup):
 
     with patch("routers.chat.build_chat_prompt", return_value="test prompt"), \
          patch("routers.chat.stream_response", mock_stream):
-        with TestClient(app).websocket_connect(f"/chat?token={token}") as ws:
+        with open_chat(TestClient(app), token) as ws:
             ws.send_text(json.dumps({"message": "I only have 10 minutes.", "session_id": "s1"}))
             first = until_done(ws)
             ws.send_text(json.dumps({"message": "Anything is fine.", "session_id": "s1"}))

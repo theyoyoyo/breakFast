@@ -20,6 +20,7 @@ import config
 import database
 from auth import hash_pin, verify_pin, needs_rehash
 from models.ingredient import DEMO_FRIDGE
+from tests.chat_socket import open_chat
 
 
 @pytest_asyncio.fixture
@@ -277,7 +278,7 @@ def _socket_close_code(headers: dict) -> int | None:
 
     token = headers["Authorization"].removeprefix("Bearer ")
     try:
-        with TestClient(app).websocket_connect(f"/chat?token={token}"):
+        with open_chat(TestClient(app), token):
             return None
     except WebSocketDisconnect as exc:
         return exc.code

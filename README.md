@@ -208,6 +208,7 @@ break FAST is built for a trusted home network (LAN or Tailscale), not the open 
 - Users log in with a name and a PIN of 6 to 10 digits, stored as a salted scrypt hash. Hashes from older versions (plain SHA-256) still work and are upgraded on the next login, and PINs shorter than 6 digits from before the rule keep working until `set-pin` replaces them.
 - Failed logins are rate limited with exponential backoff, per name on each IP. Other users on that device, and the same user on other devices, can still log in.
 - Session tokens are random 256-bit values kept in memory, so everyone logs in again after a server restart.
+- Tokens travel only in headers, never in URLs, so they stay out of logs: REST calls send them in `Authorization`, and the chat WebSocket in `Sec-WebSocket-Protocol`.
 - Logging out ends the session on the server as well as on the device, so its token can't be used again. Each device has its own session, so the user's other devices stay logged in.
 - Do not expose port 8000 to the public internet. Use Tailscale for remote access.
 

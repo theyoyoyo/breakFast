@@ -4,6 +4,8 @@ Tests for /sessions endpoints — chat session management and message persistenc
 
 import pytest
 
+from tests.chat_socket import open_chat
+
 
 @pytest.mark.asyncio
 async def test_create_session(client):
@@ -113,7 +115,7 @@ async def test_messages_persist_via_websocket(client, tmp_path, monkeypatch):
 
     with patch("routers.chat.build_chat_prompt", return_value="test prompt"), \
          patch("routers.chat.stream_response", mock_stream):
-        with sync_client.websocket_connect(f"/chat?token={token}") as ws:
+        with open_chat(sync_client, token) as ws:
             ws.send_text(json.dumps({"message": "hello", "session_id": sid}))
             msg = ws.receive_json()
             assert msg["type"] == "done"

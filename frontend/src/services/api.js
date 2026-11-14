@@ -384,14 +384,17 @@ export const getSchedule = (meal_name, steps, ingredients, meal_id = null, menu 
 // ---------------------------------------------------------------------------
 
 /**
- * Open a WebSocket to /chat with auth token as query param.
+ * Open a WebSocket to /chat. The session token goes in the Sec-WebSocket-Protocol header
+ * ("bearer", then the token), the one header a page can set on a WebSocket, so it stays
+ * out of the URL. Without a stored token the socket sends "bearer" alone, which the
+ * server refuses (an empty subprotocol would throw).
  * onDone gets the reply and its saved message id; onSessionUpdated gets the id of a
  * session another device (or a REST save) changed; onNotice gets any other notice
  * ({ type: 'supplements_updated' }, …) for the rest of the app.
  */
 export function createChatSocket(onToken, onDone, onMealLogged, onError, onClose, onProgress, onSessionUpdated, onNotice) {
   const token = getToken()
-  const ws = new WebSocket(`${WS_URL}/chat?token=${token}`)
+  const ws = new WebSocket(`${WS_URL}/chat`, token ? ['bearer', token] : ['bearer'])
 
   ws.onmessage = (event) => {
     try {

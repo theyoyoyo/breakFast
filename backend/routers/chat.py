@@ -9,9 +9,9 @@ Each open socket is registered in services/chat_sync, so a saved reply reaches t
 import json
 import logging
 import uuid
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from database import get_db
-from auth import get_user_id_from_token
+from auth import SOCKET_AUTH_PROTOCOL, get_user_id_from_token, socket_token
 from services.llm import LLMUnavailableError, lyric_cycler
 from services.suggestion import build_chat_prompt, stream_response
 from services.personas.chat import build_chat_message
@@ -103,14 +103,15 @@ async def _load_session_history(db, session_id: str, user_id: int) -> list[dict]
 
 
 @router.websocket("/chat")
-async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
-    # Authenticate via query param: ws://host/chat?token=xxx
-    user_id = get_user_id_from_token(token)
+async def chat_endpoint(websocket: WebSocket):
+    # The token comes in the Sec-WebSocket-Protocol header, never the URL, so it stays out of logs
+    token = socket_token(websocket.scope.get("subprotocols", []))
+    user_id = get_user_id_from_token(token) if token else None
     if user_id is None:
         await websocket.close(code=4001, reason="Invalid or expired token")
         return
 
-    await websocket.accept()
+    await websocket.accept(subprotocol=SOCKET_AUTH_PROTOCOL)
     chat_sync.register(user_id, websocket)
     cached_context: dict | None = None
     session_id: str | None = None
