@@ -147,6 +147,8 @@ Clean replies per test, average seconds per sample in brackets:
   - `gemma3:4b`: 14–14, equal 15. The two tr chat pairs still need a vote on their Turkish replies.
   - `gemma4:e2b-it-q4_K_M` think on: 9–9, equal 24. Every Turkish sample went to gemma4 (5–0: suggest, after a chat, plan, shopping, chat), and shopping 2–0. Suggest went 3–2 to qwen2.5, and after a chat 3–2.
   - `gemma4:e4b-it-qat` think off: 17–3, equal 22. Suggest 6–0, plan 6–0, every Turkish sample 5–0, after a chat 2–1, review 1–0, shopping 1–1, chat 1–1.
+- **Your votes against the chosen models** (prompt a5c7028, each pair against the model chosen for its test and language):
+  - `gemma4:e4b-it-qat` think on: 12–15, equal 15, at about 2.5 times the time (93 s per Suggest press against 37 s). Suggest 4–2, after a chat 4–5, plan 2–4 (two of the losses are its unreadable plans), review 0–3, shopping 0–1, chat 2–0. Against e4b think off it went 11–13, and against e2b think on 1–2. Its wins were mostly small fridges (demo, sparse, student, vegan) and its losses mostly big ones (en, big_fridge, picky, greek). Thinking isn't a large gain, so the chosen models stay, and `qwen3:8b` think on (about 196 s per press) isn't worth a vote.
 
 ### Every model, 2026-11-09 and 10 (prompt a5c7028, one press per sample)
 
