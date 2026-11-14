@@ -89,6 +89,9 @@ the model thinks.
    sample's replies side by side as "A" and "B" (the menu, reply text, prep plan or chat
    reply, with the code's flags and seconds), the models hidden. You vote **A**, **B** or
    **both equally good**, and the page shows which model was which and the tally at the end.
+   A page holds 15 English pairs (`VOTE_SET`): suggest 4, after a chat 3, plan 3, review 2,
+   shopping 2 and chat 1, mostly the samples earlier votes told apart most often. Turkish
+   waits for a Turkish focus, and `--all` pairs every sample.
 3. **Claude rates the breakfasts.** Claude reads the same pairs blind and votes too, with a
    short reason for each, judging breakfast quality: does it make a real, balanced
    breakfast from the fridge, are portions sensible, is the text natural English or
