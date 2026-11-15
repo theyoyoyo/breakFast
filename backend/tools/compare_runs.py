@@ -148,7 +148,7 @@ VOTE_SET = {
     "suggest": ["en", "diabetic", "big_fridge", "vegan"],
     "suggest-chat": ["en:chat", "greek:chat", "student:chat"],
     "plan": ["boiled", "fried", "avocado"],
-    "review": ["omurice", "pancakes"],
+    "review": ["tamagoyaki", "pancakes"],
     "shopping": ["en", "diabetic"],
     "chat": ["en:chat"],
 }

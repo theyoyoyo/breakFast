@@ -608,11 +608,12 @@ REVIEW_CASES = {
                         _dish("Salmon frittata", "", ("Eggs", 3, "pcs"), ("Smoked salmon", 50, "g"),
                               ("Feta", 40, "g", "crumbled"), ("Red onion", 0.5, "pcs", "chopped")),
                         _served("Pita bread", 1, "pcs"), _served("Greek coffee", 1, "tea glass")),
-    # Two missing items the review swapped for other missing ones before (Rice for Quinoa, O)
-    "omurice": _review("greek", "Tokyo morning", 20,
-                       _dish("Omurice", "", ("Eggs", 2, "pcs"), ("Rice", 1, "glass"), ("Soy sauce", 1, "tbsp"),
-                             ("Tomatoes", 1, "pcs", "chopped")),
-                       _served("Greek coffee", 1, "tea glass")),
+    # A far dish whose base the fridge has, like greek's real explore drafts (miso soup, edamame pancakes): two missing
+    # seasonings in one dish, Sugar, which Honey replaces, and Soy sauce, which nothing in the fridge replaces
+    "tamagoyaki": _review("greek", "Tokyo morning", 15,
+                          _dish("Tamagoyaki", "", ("Eggs", 3, "pcs"), ("Sugar", 1, "tsp"), ("Soy sauce", 1, "tsp"),
+                                ("Olive oil", 1, "tsp")),
+                          _served("Mountain tea", 1, "glass")),
     # Renames both ways: the fridge's "Turkey slices" written plain, and "Avocado" written with its cut
     "wrap": _review("big_fridge", "Wrap morning", 10,
                     _dish("Turkey wrap", "", ("Tortillas", 1, "pcs"), ("Turkey", 60, "g"), ("Cream cheese", 1, "tbsp"),
