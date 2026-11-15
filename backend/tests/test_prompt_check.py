@@ -720,8 +720,8 @@ def test_review_scores_swaps_and_outside_names():
     assert swapped["note"] == "replaced Strawberries for Blueberries (Blueberry pancakes)"
     kept = check_review(_pancakes(*base, ("Blueberries", {})), case, draft)
     assert is_clean(kept) and kept["note"] == "still missing: Blueberries"
-    outside = check_review(_pancakes(*base[:4], ("Raspberries", {})), case, draft)
-    assert outside["issues"]["outside"] == ["Raspberries"]
+    outside = check_review(_pancakes(*base[:4], ("Mango", {})), case, draft)
+    assert outside["issues"]["outside"] == ["Mango"]
     assert outside["note"] == "gone, no mark: Blueberries; dropped: Maple syrup"
     assert describe(check_review("", case, draft)) == "no JSON"
 
