@@ -194,7 +194,10 @@ export default function SettingsPanel({ visible }) {
         : 'No meals older than one month')
     } catch {
       setOldMealsNote('Failed to delete old meals')
+      return
     }
+    // Reload the history so its count and list drop the deleted meals (a failure here keeps the old list)
+    getMeals().then(setMeals).catch(() => {})
   }
 
   // Rating handlers
