@@ -249,3 +249,79 @@ async def test_select_message_with_bad_id_gets_422(client, db, message_id):
 
     assert r.status_code == 422
 
+
+def _socket_chat(token: str, frames: list[dict]) -> None:
+    """Send chat frames over a socket, each message frame waiting for its reply, with the LLM faked."""
+    import json
+    from starlette.testclient import TestClient
+    from unittest.mock import patch
+    from main import app
+
+    async def mock_stream(*args, **kwargs):
+        yield "Reply."
+
+    with patch("routers.chat.build_chat_prompt", return_value="test prompt"), \
+         patch("routers.chat.stream_response", mock_stream):
+        with open_chat(TestClient(app), token) as ws:
+            for frame in frames:
+                ws.send_text(json.dumps(frame))
+                if "message" in frame:
+                    while ws.receive_json()["type"] != "done":
+                        pass
+
+
+# A message frame naming another user's session or a made-up one stores nothing under it;
+# the message goes to the user's own latest session
+@pytest.mark.parametrize("session_id", ["bob-session", "made-up-session"])
+async def test_socket_message_for_session_not_own_is_saved_in_own_session(client, db, session_id):
+    await _add_session(db, "testuser", "own-session")
+    await _add_session(db, "Bob", "bob-session")
+    token = client.headers["Authorization"].replace("Bearer ", "")
+
+    _socket_chat(token, [{"message": "hello", "session_id": session_id}])
+
+    assert await _message_count(db, session_id) == 0
+    assert await _updated_at(db, "bob-session") == "2026-01-01 08:00:00"
+    assert await _message_count(db, "own-session") == 2
+
+
+# A Suggest press naming another user's session saves its suggestion and meal card in the user's own session
+async def test_socket_suggestion_for_session_not_own_is_saved_in_own_session(client, db):
+    import json
+    from starlette.testclient import TestClient
+    from unittest.mock import patch
+    from main import app
+
+    await _add_session(db, "testuser", "own-session")
+    await _add_session(db, "Bob", "bob-session")
+    token = client.headers["Authorization"].replace("Bearer ", "")
+    meal = {"menu_name": "Plate", "menu": [{"name": "Olives", "amount": 5, "unit": "pcs", "ingredients": []}]}
+
+    async def pipeline(**kwargs):
+        yield {"type": "done", "content": "Try this.\n\n```json\n" + json.dumps(meal) + "\n```"}
+
+    with patch("routers.chat.run_suggestion_pipeline", pipeline):
+        with open_chat(TestClient(app), token) as ws:
+            ws.send_text(json.dumps({"message": "Suggest Breakfast", "type": "suggest", "session_id": "bob-session"}))
+            while ws.receive_json()["type"] != "meal_logged":
+                pass
+
+    async with db.execute("SELECT session_id FROM suggested_meals") as cur:
+        assert [r[0] for r in await cur.fetchall()] == ["own-session"]
+    assert await _message_count(db, "bob-session") == 0
+    async with db.execute("SELECT selected_message_id FROM chat_sessions WHERE id = 'bob-session'") as cur:
+        assert (await cur.fetchone())[0] is None
+
+
+# A session-only frame naming another user's session keeps the socket on the user's current session
+async def test_socket_session_frame_for_session_not_own_is_ignored(client, db):
+    await _add_session(db, "testuser", "older-session")
+    await _add_session(db, "testuser", "current-session")
+    await _add_session(db, "Bob", "bob-session")
+    token = client.headers["Authorization"].replace("Bearer ", "")
+
+    _socket_chat(token, [{"session_id": "older-session"}, {"session_id": "bob-session"}, {"message": "hello"}])
+
+    assert await _message_count(db, "bob-session") == 0
+    assert await _message_count(db, "older-session") == 2
+    assert await _message_count(db, "current-session") == 0
