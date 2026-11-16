@@ -2,7 +2,7 @@
 Shared database helper functions.
 
 Provides reusable JSON field parsing and serialization used across
-multiple routers (meals, favorites, suggestions).
+multiple routers (meals, favorites, suggestions), and the chat session ownership check.
 """
 
 import json
@@ -36,6 +36,14 @@ def serialize_json_field(value) -> str:
         else:
             serialized.append(item)
     return json.dumps(serialized, ensure_ascii=False)
+
+
+async def owns_session(db, session_id: str, user_id: int) -> bool:
+    """True when the chat session exists and belongs to the user (session ids come from the client)."""
+    async with db.execute(
+        "SELECT 1 FROM chat_sessions WHERE id = ? AND user_id = ?", (session_id, user_id)
+    ) as cur:
+        return await cur.fetchone() is not None
 
 
 def row_to_meal(row) -> dict:

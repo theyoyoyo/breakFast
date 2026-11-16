@@ -145,14 +145,107 @@ async def _updated_at(db, session_id: str) -> str:
         return (await cur.fetchone())[0]
 
 
+async def _message_count(db, session_id: str) -> int:
+    async with db.execute("SELECT COUNT(*) FROM chat_messages WHERE session_id = ?", (session_id,)) as cur:
+        return (await cur.fetchone())[0]
+
+
 # Saving a message touches the user's own session, but not another user's session with that id
 async def test_save_message_touches_only_own_session(client, db):
     await _add_session(db, "testuser", "own-session")
     await _add_session(db, "Bob", "bob-session")
 
-    for sid in ("own-session", "bob-session"):
-        r = await client.post(f"/sessions/{sid}/messages", json={"role": "assistant", "content": "Menemen"})
-        assert r.status_code == 200
+    r = await client.post("/sessions/own-session/messages", json={"role": "assistant", "content": "Menemen"})
+    assert r.status_code == 200
+    r = await client.post("/sessions/bob-session/messages", json={"role": "assistant", "content": "Menemen"})
+    assert r.status_code == 404
 
     assert await _updated_at(db, "own-session") != "2026-01-01 08:00:00"
     assert await _updated_at(db, "bob-session") == "2026-01-01 08:00:00"
+
+
+# A message for another user's session or a session that doesn't exist gets 404 and stores nothing
+@pytest.mark.parametrize("session_id", ["bob-session", "made-up-session"])
+async def test_save_message_to_session_not_own_gets_404(client, db, session_id):
+    await _add_session(db, "Bob", "bob-session")
+
+    r = await client.post(f"/sessions/{session_id}/messages", json={"role": "user", "content": "Menemen", "select": True})
+
+    assert r.status_code == 404
+    assert await _message_count(db, session_id) == 0
+
+
+# A role other than user or assistant is refused with 422 and stores nothing
+@pytest.mark.parametrize("role", ["system", "admin", "", 5, None])
+async def test_save_message_with_unknown_role_gets_422(client, db, role):
+    await _add_session(db, "testuser", "own-session")
+
+    r = await client.post("/sessions/own-session/messages", json={"role": role, "content": "Menemen"})
+
+    assert r.status_code == 422
+    assert await _message_count(db, "own-session") == 0
+
+
+# Content that isn't text, or a select that isn't a bool, is refused with 422 and stores nothing
+@pytest.mark.parametrize("body", [
+    {"role": "assistant", "content": 5},
+    {"role": "assistant", "content": ["Menemen"]},
+    {"role": "assistant", "content": {"text": "Menemen"}},
+    {"role": "assistant", "content": "Menemen", "select": "maybe"},
+])
+async def test_save_message_with_bad_body_gets_422(client, db, body):
+    await _add_session(db, "testuser", "own-session")
+
+    r = await client.post("/sessions/own-session/messages", json=body)
+
+    assert r.status_code == 422
+    assert await _message_count(db, "own-session") == 0
+
+
+# A body with no role is saved as the assistant's, as meals sent to chat are
+async def test_save_message_role_defaults_to_assistant(client, db):
+    await _add_session(db, "testuser", "own-session")
+
+    r = await client.post("/sessions/own-session/messages", json={"content": "Menemen"})
+
+    assert r.status_code == 200
+    messages = (await client.get("/sessions/own-session/messages")).json()
+    assert [(m["role"], m["content"]) for m in messages] == [("assistant", "Menemen")]
+
+
+# A message edit whose content isn't text is refused with 422 and leaves the message as it was
+@pytest.mark.parametrize("content", [5, ["new"], {"text": "new"}])
+async def test_update_message_with_non_text_content_gets_422(client, db, content):
+    await _add_session(db, "testuser", "own-session")
+    message_id = (await client.post("/sessions/own-session/messages", json={"content": "old"})).json()["id"]
+
+    r = await client.put(f"/sessions/own-session/messages/{message_id}", json={"content": content})
+
+    assert r.status_code == 422
+    assert (await client.get("/sessions/own-session/messages")).json()[0]["content"] == "old"
+
+
+# A saved "Today I ate" version is cleared by a null, and the edit changes only that field
+async def test_update_message_null_ate_draft_clears_it(client, db):
+    await _add_session(db, "testuser", "own-session")
+    url = "/sessions/own-session/messages"
+    message_id = (await client.post(url, json={"content": "card"})).json()["id"]
+    draft = {"menu_name": "Plate", "menu": [{"name": "Olives", "amount": 5, "unit": "pcs", "ingredients": []}]}
+
+    assert (await client.put(f"{url}/{message_id}", json={"ate_draft": draft})).status_code == 200
+    assert (await client.get(url)).json()[0]["ate_draft"] == draft
+    assert (await client.put(f"{url}/{message_id}", json={"ate_draft": None})).status_code == 200
+
+    saved = (await client.get(url)).json()[0]
+    assert (saved["content"], saved["ate_draft"]) == ("card", None)
+
+
+# A selected card id that is a bool or a list is refused with 422
+@pytest.mark.parametrize("message_id", [True, [1], 1.5])
+async def test_select_message_with_bad_id_gets_422(client, db, message_id):
+    await _add_session(db, "testuser", "own-session")
+
+    r = await client.put("/sessions/own-session/selected", json={"message_id": message_id})
+
+    assert r.status_code == 422
+
