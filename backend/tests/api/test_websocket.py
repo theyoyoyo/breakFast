@@ -436,3 +436,59 @@ async def test_chat_reply_never_becomes_a_meal_card(ws_setup):
         async with db.execute("SELECT content FROM chat_messages WHERE role = 'user' ORDER BY id") as cur:
             typed = [r[0] for r in await cur.fetchall()]
     assert typed[1:] == ["I only have 10 minutes.", "Anything is fine."]
+
+
+# Two messages and their replies saved in the same second reach the chat persona as message 1, reply 1, message 2, reply 2
+@pytest.mark.asyncio
+async def test_chat_history_keeps_each_message_before_its_reply(ws_setup):
+    app, token, user_id = ws_setup
+    from starlette.testclient import TestClient
+    from unittest.mock import patch
+
+    chat = [("user", "Any eggs left?"), ("assistant", "Yes, six."), ("user", "And bread?"), ("assistant", "Half a loaf.")]
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        await db.execute("INSERT INTO chat_sessions (id, user_id) VALUES ('s1', ?)", (user_id,))
+        for role, content in chat:
+            await db.execute(
+                "INSERT INTO chat_messages (session_id, user_id, role, content, created_at) "
+                "VALUES ('s1', ?, ?, ?, '2026-01-01 08:00:00')",
+                (user_id, role, content),
+            )
+        await db.commit()
+
+    histories = []
+
+    async def mock_stream(system_prompt, history, message, temperature=None):
+        histories.append(history)
+        yield "Sounds good."
+
+    with patch("routers.chat.build_chat_prompt", return_value="test prompt"), \
+         patch("routers.chat.stream_response", mock_stream):
+        with open_chat(TestClient(app), token) as ws:
+            ws.send_text(json.dumps({"message": "Thanks!", "session_id": "s1"}))
+            while ws.receive_json()["type"] != "done":
+                pass
+
+    assert histories == [[{"role": role, "content": content} for role, content in chat]]
+
+
+# A session with more than 20 messages gives the chat persona its newest 20, in chat order
+@pytest.mark.asyncio
+async def test_chat_history_is_the_newest_20_messages(ws_setup):
+    _, _, user_id = ws_setup
+    from routers.chat import _load_session_history
+
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        await db.execute("INSERT INTO chat_sessions (id, user_id) VALUES ('s1', ?)", (user_id,))
+        for n in range(1, 26):
+            # A message and its reply share a second, as the chat saves them
+            await db.execute(
+                "INSERT INTO chat_messages (session_id, user_id, role, content, created_at) VALUES ('s1', ?, ?, ?, ?)",
+                (user_id, "user" if n % 2 else "assistant", f"Message {n}", f"2026-01-01 08:00:{(n - 1) // 2:02d}"),
+            )
+        await db.commit()
+        history = await _load_session_history(db, "s1", user_id)
+
+    assert [m["content"] for m in history] == [f"Message {n}" for n in range(6, 26)]
+    assert [m["role"] for m in history] == ["assistant", "user"] * 10

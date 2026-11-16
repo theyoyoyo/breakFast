@@ -88,17 +88,19 @@ async def _save_message(db, session_id: str, user_id: int, role: str, content: s
 
 
 async def _load_session_history(db, session_id: str, user_id: int) -> list[dict]:
-    """Load persisted messages for a session (last 20 for LLM context)."""
+    """Load persisted messages for a session (last 20 for LLM context), oldest first.
+    Sorted by id, the order they were saved in, not by created_at: it counts whole seconds, and
+    a message and its reply are saved in the same second, so by time a reply came before its message."""
     async with db.execute(
         """
         SELECT role, content FROM chat_messages
         WHERE session_id = ? AND user_id = ?
-        ORDER BY created_at DESC LIMIT 20
+        ORDER BY id DESC LIMIT 20
         """,
         (session_id, user_id),
     ) as cur:
         rows = await cur.fetchall()
-    # Reverse to chronological order
+    # Reverse to chat order
     return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
 
 
