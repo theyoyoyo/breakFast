@@ -492,3 +492,56 @@ async def test_chat_history_is_the_newest_20_messages(ws_setup):
 
     assert [m["content"] for m in history] == [f"Message {n}" for n in range(6, 26)]
     assert [m["role"] for m in history] == ["assistant", "user"] * 10
+
+
+# A frame that is valid JSON but not an object (123, "hi", [1]) is read as plain text and the socket stays open
+@pytest.mark.asyncio
+@pytest.mark.parametrize("frame", ["123", '"hi"', "[1]"])
+async def test_chat_frame_that_is_not_an_object_is_plain_text(ws_setup, frame):
+    app, token, _ = ws_setup
+    from starlette.testclient import TestClient
+    from unittest.mock import patch
+
+    seen = []
+
+    async def mock_stream(system_prompt, history, message, temperature=None):
+        seen.append(message)
+        yield "Reply."
+
+    with patch("routers.chat.build_chat_prompt", return_value="test prompt"),          patch("routers.chat.stream_response", mock_stream):
+        with open_chat(TestClient(app), token) as ws:
+            for text in (frame, "Next one"):
+                ws.send_text(text)
+                while (event := ws.receive_json())["type"] != "done":
+                    pass
+                assert event["content"] == "Reply."
+
+    assert len(seen) == 2 and frame in seen[0] and "Next one" in seen[1]
+
+
+# A message that isn't a string, or a session id, type or mode that isn't, is ignored and the next message still gets its reply
+@pytest.mark.asyncio
+@pytest.mark.parametrize("frame", [
+    {"message": 5},
+    {"message": ["a"]},
+    {"session_id": ["x"]},
+    {"message": "Hello", "session_id": {"a": 1}, "type": ["suggest"], "mode": ["explore"]},
+])
+async def test_chat_frame_with_a_value_of_the_wrong_type_is_ignored(ws_setup, frame):
+    app, token, _ = ws_setup
+    from starlette.testclient import TestClient
+    from unittest.mock import patch
+
+    async def mock_stream(system_prompt, history, message, temperature=None):
+        yield "Reply."
+
+    with patch("routers.chat.build_chat_prompt", return_value="test prompt"),          patch("routers.chat.stream_response", mock_stream):
+        with open_chat(TestClient(app), token) as ws:
+            ws.send_text(json.dumps(frame))
+            if "message" in frame and isinstance(frame["message"], str):
+                while ws.receive_json()["type"] != "done":
+                    pass
+            ws.send_text(json.dumps({"message": "Normal message"}))
+            while (event := ws.receive_json())["type"] != "done":
+                pass
+            assert event["content"] == "Reply."

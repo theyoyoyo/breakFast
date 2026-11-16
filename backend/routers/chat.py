@@ -138,22 +138,32 @@ async def chat_endpoint(websocket: WebSocket):
                 payload = json.loads(raw)
             except json.JSONDecodeError:
                 payload = {"message": raw}
+            # Valid JSON that isn't an object (123, "hi", [1]) is plain text too
+            if not isinstance(payload, dict):
+                payload = {"message": raw}
 
             # Handle session management messages
+            # (a session id, mode or type that isn't a string is ignored: it would crash a lookup)
             if "session_id" in payload and "message" not in payload:
-                session_id = payload["session_id"]
+                if isinstance(payload["session_id"], str):
+                    session_id = payload["session_id"]
                 continue
 
-            user_message = payload.get("message", "").strip()
+            message_text = payload.get("message", "")
+            user_message = message_text.strip() if isinstance(message_text, str) else ""
             if not user_message:
                 continue
 
             # Determine prompt type: "suggest" uses suggestion persona, default uses chat
             prompt_type = payload.get("type", "chat")
             suggest_mode = payload.get("mode")  # "favorites" or "explore"
+            if not isinstance(prompt_type, str):
+                prompt_type = "chat"
+            if not isinstance(suggest_mode, str):
+                suggest_mode = None
 
             # Use session_id from payload if provided, otherwise keep current
-            if "session_id" in payload:
+            if isinstance(payload.get("session_id"), str):
                 session_id = payload["session_id"]
 
             # Ensure we have a session
