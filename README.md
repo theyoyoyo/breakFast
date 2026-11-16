@@ -37,7 +37,7 @@ break FAST knows what is in each person's fridge, which kitchen appliances they 
 - **Weekly nutrition review.** A holistic seven-day review with four scores and a short narrative.
 - **Fridge management.** Ingredient groups (including a pantry for basics and long-life items), expiry tracking, a staples list, a shopping list and AI shopping suggestions.
 - **Health-aware, silently.** Per-user health rules with priorities, a hard *avoid* list, physical profile and supplements taken today all shape suggestions without being lectured back at you.
-- **Learns from behaviour.** Meal history is distilled into inferred habits that push suggestions toward variety, not repetition.
+- **Learns from behaviour.** The last 30 days of meals are distilled into inferred habits: what the user already eats often and their average prep time.
 - **Breakfast chat.** A friendly assistant with persistent chat sessions and voice input (Web Speech API).
 - **Logging and history.** "Today I ate", saved favorite meals, ratings and meal history.
 - **English by default, Turkish optional.** The AI answers in the language you choose; the interface is in English.
