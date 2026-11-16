@@ -82,6 +82,14 @@ async def update_ingredient(ingredient_id: int, body: IngredientUpdate, user_id:
         updates["group_name"] = body.group_name
 
     async with get_db() as db:
+        if updates.get("name") is not None:
+            # Names are unique per user, so a taken name is refused before anything is written
+            async with db.execute(
+                "SELECT 1 FROM ingredient_inventory WHERE user_id = ? AND name = ? AND id != ?",
+                (user_id, updates["name"], ingredient_id),
+            ) as cur:
+                if await cur.fetchone():
+                    raise HTTPException(status_code=409, detail="An item with this name is already in your fridge")
         if updates:
             set_clause = ", ".join(f"{k} = ?" for k in updates)
             cursor = await db.execute(

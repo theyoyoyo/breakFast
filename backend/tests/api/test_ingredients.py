@@ -258,6 +258,60 @@ async def test_memory_matches_the_same_name(client, db):
     assert set(await _names(db)) == {"Peanut butter", "peanut butter"}
 
 
+# A rename to a name another item has is refused with 409, and both items stay as they were
+async def test_rename_to_a_taken_name_is_refused(client):
+    eggs = (await client.post("/ingredients/", json={"name": "Eggs", "expiry_date": "2026-12-01"})).json()
+    milk = (await client.post("/ingredients/", json={"name": "Milk"})).json()
+    r = await client.patch(f"/ingredients/{milk['id']}", json={"name": "Eggs", "expiry_date": "2026-12-05"})
+    assert r.status_code == 409
+    assert r.json()["detail"] == "An item with this name is already in your fridge"
+    listed = {i["id"]: i for i in (await client.get("/ingredients/")).json()}
+    assert listed[eggs["id"]]["name"] == "Eggs"
+    assert listed[eggs["id"]]["expiry_date"] == "2026-12-01"
+    assert listed[milk["id"]]["name"] == "Milk"
+    assert listed[milk["id"]]["expiry_date"] is None
+
+
+# A refused rename writes nothing to the group memory, not even the group it sent along
+async def test_refused_rename_leaves_the_group_memory_alone(client, db):
+    await client.post("/ingredients/", json={"name": "Eggs"})
+    milk = (await client.post("/ingredients/", json={"name": "Milk"})).json()
+    names, picks = await _names(db), await _picks(db)
+    r = await client.patch(f"/ingredients/{milk['id']}", json={"name": "Eggs", "group_name": "🧂 Spices"})
+    assert r.status_code == 409
+    assert await _names(db) == names
+    assert await _picks(db) == picks
+
+
+# Saving an item under its own current name is fine
+async def test_rename_to_its_own_name_works(client):
+    eggs = (await client.post("/ingredients/", json={"name": "Eggs"})).json()
+    r = await client.patch(f"/ingredients/{eggs['id']}", json={"name": "Eggs", "expiry_date": "2026-12-01"})
+    assert r.status_code == 200
+    assert r.json()["name"] == "Eggs"
+    assert r.json()["expiry_date"] == "2026-12-01"
+
+
+# A blank or spaces-only name is refused with 422 on add and on rename, and the item keeps its name
+async def test_blank_name_is_refused(client):
+    for blank in ["", "   "]:
+        assert (await client.post("/ingredients/", json={"name": blank})).status_code == 422
+    eggs = (await client.post("/ingredients/", json={"name": "Eggs"})).json()
+    for blank in ["", "   "]:
+        r = await client.patch(f"/ingredients/{eggs['id']}", json={"name": blank})
+        assert r.status_code == 422
+    assert [i["name"] for i in (await client.get("/ingredients/")).json()] == ["Eggs"]
+
+
+# The spaces around a name are cut on add and on rename
+async def test_names_are_trimmed(client):
+    added = (await client.post("/ingredients/", json={"name": "  Honey "})).json()
+    assert added["name"] == "Honey"
+    r = await client.patch(f"/ingredients/{added['id']}", json={"name": " Jam  "})
+    assert r.json()["name"] == "Jam"
+    assert [i["name"] for i in (await client.get("/ingredients/")).json()] == ["Jam"]
+
+
 async def test_add_ingredient_with_group(client):
     """Adding with explicit group assigns it correctly."""
     r = await client.post("/ingredients/", json={"name": "sucuk", "group_name": "🐄 Animal Products"})

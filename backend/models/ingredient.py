@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
 
 
@@ -42,16 +42,30 @@ DEMO_FRIDGE = [
 ]
 
 
+def _clean_name(name: str | None) -> str | None:
+    """Trim a fridge name; a blank one is refused (422). None stays None."""
+    if name is None:
+        return None
+    name = name.strip()
+    if not name:
+        raise ValueError("Name can't be blank")
+    return name
+
+
 class IngredientCreate(BaseModel):
     name: str
     expiry_date: Optional[str] = None
     group_name: Optional[str] = None
 
+    _trim_name = field_validator("name")(_clean_name)
+
 
 class IngredientUpdate(BaseModel):
-    name: Optional[str] = None
+    name: Optional[str] = None  # None leaves the name as it is
     expiry_date: Optional[str] = None
     group_name: Optional[str] = None
+
+    _trim_name = field_validator("name")(_clean_name)
 
 
 class Ingredient(BaseModel):
