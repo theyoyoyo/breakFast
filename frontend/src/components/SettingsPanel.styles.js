@@ -252,7 +252,7 @@ export const priorityBtn = (active, level) => {
   }
 }
 
-// Bulk delete ("Delete meals older than 1 year") — shared delete look, full width
+// Bulk delete ("Delete meals older than one month") — shared delete look, full width
 export const dangerBtn = {
   ...deleteBtn,
   width: '100%',
@@ -503,4 +503,12 @@ export const bringBackBtn = (active) => ({
 // Holds the shared ConfirmPrompt under the row
 export const bringBackPrompt = {
   marginTop: 8,
+}
+
+// How many meals the old-meals delete removed, under its button
+export const oldMealsNote = {
+  marginTop: 8,
+  fontSize: 13,
+  color: 'var(--text-muted)',
+  textAlign: 'center',
 }

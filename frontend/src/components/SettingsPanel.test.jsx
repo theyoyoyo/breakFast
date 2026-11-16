@@ -3,7 +3,8 @@
  * "Occasional" for occasional ones, and can be edited with ✏️; the theme picker offers all five themes;
  * the header shows the app name and the tab's name; the optional country saves with the profile, listed as
  * "Name (CODE)" and shown as its code; the profile boxes can shrink to a phone's width; removed shopping
- * suggestions can be brought back from AI settings after an "Are you sure?" prompt.
+ * suggestions can be brought back from AI settings after an "Are you sure?" prompt; meals older than one month
+ * are deleted after one too, with a note saying how many went.
  * API calls are mocked — no real network calls are made.
  */
 
@@ -199,5 +200,36 @@ describe('SettingsPanel', () => {
     api.getRemovedSuggestionCount.mockResolvedValue({ count: 1 })
     act(() => emitSyncNotice({ type: 'shopping_suggestions_updated' }))
     expect(await screen.findByRole('button', { name: 'Bring back (1)' })).toBeEnabled()
+  })
+
+  // The first tap only asks; Delete removes the old meals and the note says how many
+  it('deletes meals older than one month after the prompt and shows the count', async () => {
+    api.deleteOldMeals.mockResolvedValue({ deleted: 2 })
+    render(<SettingsPanel visible />)
+    fireEvent.click(await screen.findByRole('button', { name: /Delete meals older than one month/ }))
+    expect(screen.getByText(/Are you sure you want to delete every meal older than one month/)).toBeInTheDocument()
+    expect(api.deleteOldMeals).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    expect(await screen.findByText('2 meals older than one month deleted')).toBeInTheDocument()
+    expect(api.deleteOldMeals).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText(/Are you sure/)).toBeNull()
+  })
+
+  // With nothing older than a month, the note says there were none
+  it('says when there were no meals older than one month', async () => {
+    api.deleteOldMeals.mockResolvedValue({ deleted: 0 })
+    render(<SettingsPanel visible />)
+    fireEvent.click(await screen.findByRole('button', { name: /Delete meals older than one month/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    expect(await screen.findByText('No meals older than one month')).toBeInTheDocument()
+  })
+
+  // Cancel closes the prompt without deleting anything
+  it('cancels the old-meals prompt', async () => {
+    render(<SettingsPanel visible />)
+    fireEvent.click(await screen.findByRole('button', { name: /Delete meals older than one month/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByText(/Are you sure/)).toBeNull()
+    expect(api.deleteOldMeals).not.toHaveBeenCalled()
   })
 })
