@@ -1,6 +1,7 @@
 """
-Meal history insights — aggregate patterns from old meals into inferred habits,
-then prune old records. Runs once at startup via lifespan.
+Meal history insights — aggregate patterns from the last PATTERN_DAYS of meals into
+inferred habits. Runs once at startup via lifespan. Nothing is deleted here: older meals
+stay in the history and only fall out of the patterns (Settings deletes them on request).
 
 The goal is DIVERSIFICATION, not reinforcement:
 - Frequently eaten items → "already getting enough"
@@ -11,8 +12,8 @@ The goal is DIVERSIFICATION, not reinforcement:
 import json
 from database import get_db
 
-# Meals older than this are pruned after insights are extracted
-_RETENTION_DAYS = 30
+# The patterns look at the meals of the last this many days only
+PATTERN_DAYS = 30
 
 # Health-aligned items from the system prompt — used to detect gaps
 _HEALTHY_POOL = {
@@ -23,17 +24,17 @@ _HEALTHY_POOL = {
 
 
 async def _count_meals(db, user_id: int) -> int:
-    """Total meals in the retention window."""
+    """Total meals in the pattern window."""
     async with db.execute(
         "SELECT COUNT(*) as c FROM meal_history WHERE user_id = ? AND logged_at >= datetime('now', ?)",
-        (user_id, f"-{_RETENTION_DAYS} days"),
+        (user_id, f"-{PATTERN_DAYS} days"),
     ) as cur:
         return (await cur.fetchone())["c"]
 
 
 async def _top_ingredients(db, user_id: int, limit: int = 10) -> list[dict]:
     """
-    Most frequently used ingredients in the retention window.
+    Most frequently used ingredients in the pattern window.
     Returns [{"name": "eggs", "count": 18}, ...].
     """
     async with db.execute(
@@ -41,7 +42,7 @@ async def _top_ingredients(db, user_id: int, limit: int = 10) -> list[dict]:
         SELECT ingredients FROM meal_history
         WHERE user_id = ? AND logged_at >= datetime('now', ?)
         """,
-        (user_id, f"-{_RETENTION_DAYS} days"),
+        (user_id, f"-{PATTERN_DAYS} days"),
     ) as cur:
         rows = await cur.fetchall()
 
@@ -78,7 +79,7 @@ async def _avg_prep_time(db, user_id: int) -> float | None:
         WHERE user_id = ? AND prep_time_min IS NOT NULL
           AND logged_at >= datetime('now', ?)
         """,
-        (user_id, f"-{_RETENTION_DAYS} days"),
+        (user_id, f"-{PATTERN_DAYS} days"),
     ) as cur:
         row = await cur.fetchone()
         return round(row["avg_time"], 1) if row["avg_time"] else None
@@ -91,7 +92,7 @@ async def _high_rated_patterns(db, user_id: int) -> list[str]:
         SELECT ingredients FROM meal_history
         WHERE user_id = ? AND rating = 5 AND logged_at >= datetime('now', ?)
         """,
-        (user_id, f"-{_RETENTION_DAYS} days"),
+        (user_id, f"-{PATTERN_DAYS} days"),
     ) as cur:
         rows = await cur.fetchall()
 
@@ -154,7 +155,6 @@ async def refresh_insights_for_user(user_id: int) -> int:
     Refresh insights for a specific user.
     1. Aggregate insights from meal history
     2. Replace old inferred habits with fresh ones
-    3. Prune meals older than the retention window
     Returns the number of insights written.
     """
     async with get_db() as db:
@@ -172,12 +172,6 @@ async def refresh_insights_for_user(user_id: int) -> int:
                 "INSERT INTO user_habits (user_id, description, source) VALUES (?, ?, 'inferred')",
                 [(user_id, desc) for desc in insights],
             )
-
-        # Prune old meals for this user
-        await db.execute(
-            "DELETE FROM meal_history WHERE user_id = ? AND logged_at < datetime('now', ?)",
-            (user_id, f"-{_RETENTION_DAYS} days"),
-        )
 
         await db.commit()
 
