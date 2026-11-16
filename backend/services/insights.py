@@ -10,7 +10,7 @@ The goal is DIVERSIFICATION, not reinforcement:
 """
 
 from database import get_db
-from services.knowledge import _json_list
+from services.knowledge import json_list
 
 # The patterns look at the meals of the last this many days only
 PATTERN_DAYS = 30
@@ -62,12 +62,12 @@ def _meal_items(row) -> list:
     """What a meal had, as eaten: its menu's dish ingredients and simple items (a dish's own name
     isn't one), or an old flat meal's ingredients. For a menu card the flat list is the menu as
     first suggested, and "Today I ate" edits change only the menu."""
-    menu = _json_list(row["menu_items"])
+    menu = json_list(row["menu_items"])
     if not menu:
-        return _json_list(row["ingredients"])
+        return json_list(row["ingredients"])
     items = []
     for item in menu:
-        sub = _json_list(item.get("ingredients")) if isinstance(item, dict) else []
+        sub = json_list(item.get("ingredients")) if isinstance(item, dict) else []
         items += sub if sub else [item]
     return items
 
