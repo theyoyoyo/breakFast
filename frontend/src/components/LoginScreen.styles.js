@@ -46,6 +46,13 @@ export const btn = {
   transition: 'opacity 0.15s',
 }
 
+// Information, not an error: muted, so it reads calmly above the form
+export const note = {
+  color: 'var(--text-muted)',
+  fontSize: 14,
+  textAlign: 'center',
+}
+
 export const error = {
   color: '#e74c3c',
   fontSize: 14,

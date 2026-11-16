@@ -88,17 +88,19 @@ async def _save_message(db, session_id: str, user_id: int, role: str, content: s
 
 
 async def _load_session_history(db, session_id: str, user_id: int) -> list[dict]:
-    """Load persisted messages for a session (last 20 for LLM context)."""
+    """Load persisted messages for a session (last 20 for LLM context), oldest first.
+    Sorted by id, the order they were saved in, not by created_at: it counts whole seconds, and
+    a message and its reply are saved in the same second, so by time a reply came before its message."""
     async with db.execute(
         """
         SELECT role, content FROM chat_messages
         WHERE session_id = ? AND user_id = ?
-        ORDER BY created_at DESC LIMIT 20
+        ORDER BY id DESC LIMIT 20
         """,
         (session_id, user_id),
     ) as cur:
         rows = await cur.fetchall()
-    # Reverse to chronological order
+    # Reverse to chat order
     return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
 
 
@@ -136,22 +138,32 @@ async def chat_endpoint(websocket: WebSocket):
                 payload = json.loads(raw)
             except json.JSONDecodeError:
                 payload = {"message": raw}
+            # Valid JSON that isn't an object (123, "hi", [1]) is plain text too
+            if not isinstance(payload, dict):
+                payload = {"message": raw}
 
             # Handle session management messages
+            # (a session id, mode or type that isn't a string is ignored: it would crash a lookup)
             if "session_id" in payload and "message" not in payload:
-                session_id = payload["session_id"]
+                if isinstance(payload["session_id"], str):
+                    session_id = payload["session_id"]
                 continue
 
-            user_message = payload.get("message", "").strip()
+            message_text = payload.get("message", "")
+            user_message = message_text.strip() if isinstance(message_text, str) else ""
             if not user_message:
                 continue
 
             # Determine prompt type: "suggest" uses suggestion persona, default uses chat
             prompt_type = payload.get("type", "chat")
             suggest_mode = payload.get("mode")  # "favorites" or "explore"
+            if not isinstance(prompt_type, str):
+                prompt_type = "chat"
+            if not isinstance(suggest_mode, str):
+                suggest_mode = None
 
             # Use session_id from payload if provided, otherwise keep current
-            if "session_id" in payload:
+            if isinstance(payload.get("session_id"), str):
                 session_id = payload["session_id"]
 
             # Ensure we have a session

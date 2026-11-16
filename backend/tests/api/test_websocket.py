@@ -436,3 +436,112 @@ async def test_chat_reply_never_becomes_a_meal_card(ws_setup):
         async with db.execute("SELECT content FROM chat_messages WHERE role = 'user' ORDER BY id") as cur:
             typed = [r[0] for r in await cur.fetchall()]
     assert typed[1:] == ["I only have 10 minutes.", "Anything is fine."]
+
+
+# Two messages and their replies saved in the same second reach the chat persona as message 1, reply 1, message 2, reply 2
+@pytest.mark.asyncio
+async def test_chat_history_keeps_each_message_before_its_reply(ws_setup):
+    app, token, user_id = ws_setup
+    from starlette.testclient import TestClient
+    from unittest.mock import patch
+
+    chat = [("user", "Any eggs left?"), ("assistant", "Yes, six."), ("user", "And bread?"), ("assistant", "Half a loaf.")]
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        await db.execute("INSERT INTO chat_sessions (id, user_id) VALUES ('s1', ?)", (user_id,))
+        for role, content in chat:
+            await db.execute(
+                "INSERT INTO chat_messages (session_id, user_id, role, content, created_at) "
+                "VALUES ('s1', ?, ?, ?, '2026-01-01 08:00:00')",
+                (user_id, role, content),
+            )
+        await db.commit()
+
+    histories = []
+
+    async def mock_stream(system_prompt, history, message, temperature=None):
+        histories.append(history)
+        yield "Sounds good."
+
+    with patch("routers.chat.build_chat_prompt", return_value="test prompt"), \
+         patch("routers.chat.stream_response", mock_stream):
+        with open_chat(TestClient(app), token) as ws:
+            ws.send_text(json.dumps({"message": "Thanks!", "session_id": "s1"}))
+            while ws.receive_json()["type"] != "done":
+                pass
+
+    assert histories == [[{"role": role, "content": content} for role, content in chat]]
+
+
+# A session with more than 20 messages gives the chat persona its newest 20, in chat order
+@pytest.mark.asyncio
+async def test_chat_history_is_the_newest_20_messages(ws_setup):
+    _, _, user_id = ws_setup
+    from routers.chat import _load_session_history
+
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        await db.execute("INSERT INTO chat_sessions (id, user_id) VALUES ('s1', ?)", (user_id,))
+        for n in range(1, 26):
+            # A message and its reply share a second, as the chat saves them
+            await db.execute(
+                "INSERT INTO chat_messages (session_id, user_id, role, content, created_at) VALUES ('s1', ?, ?, ?, ?)",
+                (user_id, "user" if n % 2 else "assistant", f"Message {n}", f"2026-01-01 08:00:{(n - 1) // 2:02d}"),
+            )
+        await db.commit()
+        history = await _load_session_history(db, "s1", user_id)
+
+    assert [m["content"] for m in history] == [f"Message {n}" for n in range(6, 26)]
+    assert [m["role"] for m in history] == ["assistant", "user"] * 10
+
+
+# A frame that is valid JSON but not an object (123, "hi", [1]) is read as plain text and the socket stays open
+@pytest.mark.asyncio
+@pytest.mark.parametrize("frame", ["123", '"hi"', "[1]"])
+async def test_chat_frame_that_is_not_an_object_is_plain_text(ws_setup, frame):
+    app, token, _ = ws_setup
+    from starlette.testclient import TestClient
+    from unittest.mock import patch
+
+    seen = []
+
+    async def mock_stream(system_prompt, history, message, temperature=None):
+        seen.append(message)
+        yield "Reply."
+
+    with patch("routers.chat.build_chat_prompt", return_value="test prompt"),          patch("routers.chat.stream_response", mock_stream):
+        with open_chat(TestClient(app), token) as ws:
+            for text in (frame, "Next one"):
+                ws.send_text(text)
+                while (event := ws.receive_json())["type"] != "done":
+                    pass
+                assert event["content"] == "Reply."
+
+    assert len(seen) == 2 and frame in seen[0] and "Next one" in seen[1]
+
+
+# A message that isn't a string, or a session id, type or mode that isn't, is ignored and the next message still gets its reply
+@pytest.mark.asyncio
+@pytest.mark.parametrize("frame", [
+    {"message": 5},
+    {"message": ["a"]},
+    {"session_id": ["x"]},
+    {"message": "Hello", "session_id": {"a": 1}, "type": ["suggest"], "mode": ["explore"]},
+])
+async def test_chat_frame_with_a_value_of_the_wrong_type_is_ignored(ws_setup, frame):
+    app, token, _ = ws_setup
+    from starlette.testclient import TestClient
+    from unittest.mock import patch
+
+    async def mock_stream(system_prompt, history, message, temperature=None):
+        yield "Reply."
+
+    with patch("routers.chat.build_chat_prompt", return_value="test prompt"),          patch("routers.chat.stream_response", mock_stream):
+        with open_chat(TestClient(app), token) as ws:
+            ws.send_text(json.dumps(frame))
+            if "message" in frame and isinstance(frame["message"], str):
+                while ws.receive_json()["type"] != "done":
+                    pass
+            ws.send_text(json.dumps({"message": "Normal message"}))
+            while (event := ws.receive_json())["type"] != "done":
+                pass
+            assert event["content"] == "Reply."

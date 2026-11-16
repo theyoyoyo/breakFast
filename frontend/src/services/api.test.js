@@ -15,6 +15,8 @@ import {
   login,
   logout,
   LoginLimitError,
+  NetworkError,
+  onSessionEnded,
   getRemovedSuggestionCount,
   bringBackRemovedSuggestions,
 } from './api'
@@ -43,6 +45,71 @@ describe('apiFetch error handling', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 204 }))
     const result = await deleteIngredient(1)
     expect(result).toBeUndefined()
+  })
+})
+
+
+describe('ended session', () => {
+  let ended
+  let stopListening
+
+  function storeSession(token) {
+    localStorage.setItem('bf_token', token)
+    localStorage.setItem('bf_user', JSON.stringify({ id: 1, name: 'Alice' }))
+  }
+
+  beforeEach(() => {
+    localStorage.clear()
+    ended = vi.fn()
+    stopListening?.()
+    stopListening = onSessionEnded(ended)
+  })
+
+  // A 401 clears the stored session, tells the app once, and still throws for the caller
+  it('clears the stored session and tells the app on 401', async () => {
+    storeSession('tok-1')
+    const stub = mockFetch(401, { detail: 'Not authenticated' })
+    vi.stubGlobal('fetch', stub)
+    const err = await getIngredients().catch(e => e)
+    expect(err.status).toBe(401)
+    expect(localStorage.getItem('bf_token')).toBeNull()
+    expect(localStorage.getItem('bf_user')).toBeNull()
+    expect(ended).toHaveBeenCalledTimes(1)
+    expect(stub).toHaveBeenCalledTimes(1) // no /auth/logout for a session the server already ended
+  })
+
+  // A 401 for a request sent with an old token leaves a session made meanwhile alone
+  it('keeps a newer session when a 401 for an older token arrives', async () => {
+    storeSession('tok-1')
+    let answer
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(resolve => { answer = resolve })))
+    const done = getIngredients().catch(e => e)
+    storeSession('tok-2')
+    answer({ ok: false, status: 401, json: () => Promise.resolve({}) })
+    expect((await done).status).toBe(401)
+    expect(localStorage.getItem('bf_token')).toBe('tok-2')
+    expect(localStorage.getItem('bf_user')).not.toBeNull()
+    expect(ended).not.toHaveBeenCalled()
+  })
+
+  // An unreachable server is not a logout: the session stays and the app isn't told
+  it('keeps the session on a network error', async () => {
+    storeSession('tok-1')
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+    await expect(getIngredients()).rejects.toBeInstanceOf(NetworkError)
+    expect(localStorage.getItem('bf_token')).toBe('tok-1')
+    expect(ended).not.toHaveBeenCalled()
+  })
+
+  // Other errors (404, 500) keep the session and the app isn't told
+  it('keeps the session on other errors', async () => {
+    storeSession('tok-1')
+    for (const status of [404, 500]) {
+      vi.stubGlobal('fetch', mockFetch(status, {}))
+      await expect(getIngredients()).rejects.toThrow(`API error ${status}`)
+    }
+    expect(localStorage.getItem('bf_token')).toBe('tok-1')
+    expect(ended).not.toHaveBeenCalled()
   })
 })
 

@@ -29,8 +29,24 @@ function getToken() {
   return localStorage.getItem('bf_token') || ''
 }
 
-function authHeaders() {
-  return { Authorization: `Bearer ${getToken()}` }
+function authHeaders(token = getToken()) {
+  return { Authorization: `Bearer ${token}` }
+}
+
+// The server refused this device's session (it restarted, or the session was ended):
+// apiFetch clears it and tells the app through one window event, so it can show the login
+const SESSION_ENDED_EVENT = 'bf:session-ended'
+
+function endSession() {
+  localStorage.removeItem('bf_token')
+  localStorage.removeItem('bf_user')
+  window.dispatchEvent(new Event(SESSION_ENDED_EVENT))
+}
+
+/** Call `handler()` when a request is refused for an ended session; returns the unsubscribe. */
+export function onSessionEnded(handler) {
+  window.addEventListener(SESSION_ENDED_EVENT, handler)
+  return () => window.removeEventListener(SESSION_ENDED_EVENT, handler)
 }
 
 // ---------------------------------------------------------------------------
@@ -39,8 +55,9 @@ function authHeaders() {
 
 /** Fetch a URL, throw on non-2xx, and return parsed JSON (or undefined for 204). */
 async function apiFetch(url, options = {}) {
+  const token = getToken()
   const headers = {
-    ...authHeaders(),
+    ...authHeaders(token),
     ...(options.body ? { 'Content-Type': 'application/json' } : {}),
   }
   let r
@@ -50,6 +67,8 @@ async function apiFetch(url, options = {}) {
     throw new NetworkError()
   }
   if (!r.ok) {
+    // A refused session ends here, unless a login made while the request ran stored a new one
+    if (r.status === 401 && token === getToken()) endSession()
     // The status lets a caller tell a refusal (like 409, a name already taken) from other errors
     const err = new Error(`API error ${r.status}: ${url}`)
     err.status = r.status

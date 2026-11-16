@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react'
-import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, saveSessionMessage, updateSessionMessage, saveAteDraft, selectSessionMessage, getTodaySupplements, toggleSupplement, analyzeMeal, getSchedule } from '../services/api'
+import { createChatSocket, checkAuth, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, saveSessionMessage, updateSessionMessage, saveAteDraft, selectSessionMessage, getTodaySupplements, toggleSupplement, analyzeMeal, getSchedule } from '../services/api'
 import { useVoice } from '../hooks/useVoice'
 import { emitSyncNotice, useSyncNotice } from '../hooks/useSyncNotice'
 import SuggestButton from './SuggestButton'
@@ -175,6 +175,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
   const messagesEndRef = useRef(null)
   const reconnectTimer = useRef(null)
   const reconnectDelay = useRef(1000)
+  const unmountedRef = useRef(false) // a session check that answers after unmount mustn't reconnect
   const onMealLoggedRef = useRef(onMealLogged)
   const sessionIdRef = useRef(null)
   const abortedRef = useRef(false)
@@ -341,6 +342,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     const state = wsRef.current?.readyState
     if (state === WebSocket.OPEN || state === WebSocket.CONNECTING) return wsRef.current
 
+    let opened = false
     const ws = createChatSocket(
       // onToken — skip if aborted; clear pipeline step when tokens start flowing
       (chunk) => {
@@ -391,10 +393,18 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
         abortedRef.current = false
         setAborted(false)
         wsRef.current = null
-        reconnectTimer.current = setTimeout(() => {
-          reconnectDelay.current = Math.min(reconnectDelay.current * 2, 30000)
-          ensureSocket()
-        }, reconnectDelay.current)
+        const reconnect = () => {
+          reconnectTimer.current = setTimeout(() => {
+            reconnectDelay.current = Math.min(reconnectDelay.current * 2, 30000)
+            ensureSocket()
+          }, reconnectDelay.current)
+        }
+        if (opened) { reconnect(); return }
+        // Never opened: the server may have refused the session (a restart ends them all), which a
+        // socket can't tell. One request can: its 401 ends the session and the app shows the login,
+        // so only another answer reconnects (skipped after unmount or once a new socket is open).
+        const retry = () => { if (!unmountedRef.current && !wsRef.current) reconnect() }
+        checkAuth().then(retry, (err) => { if (err?.status !== 401) retry() })
       },
       // onProgress — pipeline step updates
       (step) => {
@@ -410,6 +420,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       emitSyncNotice
     )
     ws.addEventListener('open', () => {
+      opened = true
       hasConnectedRef.current = true
       setConnected(true)
       reconnectDelay.current = 1000 // reset backoff on successful connect
@@ -422,8 +433,10 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
 
   // Open the socket on mount so other devices' changes arrive; close it on unmount
   useEffect(() => {
+    unmountedRef.current = false
     ensureSocket()
     return () => {
+      unmountedRef.current = true
       clearTimeout(reconnectTimer.current)
       const ws = wsRef.current
       wsRef.current = null // tells onClose not to reconnect

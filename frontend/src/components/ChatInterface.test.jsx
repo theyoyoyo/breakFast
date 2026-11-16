@@ -6,17 +6,18 @@
  * notices reach the rest of the app; "Today I ate" saves its version with the card, opens
  * from it, and drops unsaved edits on Close; the selected meal card is the same on every
  * device, and a second tap unselects it. Prep plans in the new format are colored by dish,
- * while older plans and lyric fallbacks render as plain Markdown.
+ * while older plans and lyric fallbacks render as plain Markdown. A socket that closes before
+ * it ever opened checks the session once before it reconnects, and a refused one stops reconnecting.
  * API calls and the chat socket are mocked — no real network calls are made.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import ChatInterface from './ChatInterface'
 import MarkdownText from './MarkdownText'
 import { LYRIC_PLAN, OLD_PLAN, PLAN } from '../utils/prepPlan.fixtures'
 import {
-  createChatSocket, getActiveSession, listSessions, getSessionMessages,
+  createChatSocket, checkAuth, getActiveSession, listSessions, getSessionMessages,
   saveSessionMessage, updateSessionMessage, saveAteDraft, selectSessionMessage, analyzeMeal, getTodaySupplements,
   checkMissingIngredients, getRatings, logMeal,
 } from '../services/api'
@@ -24,6 +25,7 @@ import { SYNC_NOTICE_EVENT } from '../hooks/useSyncNotice'
 
 vi.mock('../services/api', () => ({
   createChatSocket: vi.fn(),
+  checkAuth: vi.fn(),
   getActiveSession: vi.fn(),
   createSession: vi.fn(),
   deleteSession: vi.fn(),
@@ -115,6 +117,7 @@ describe('ChatInterface sync', () => {
     selectSessionMessage.mockResolvedValue({ status: 'ok' })
     checkMissingIngredients.mockResolvedValue({ missing: [] })
     getRatings.mockResolvedValue([])
+    checkAuth.mockResolvedValue({})
   })
 
   // Coming back to the page (phone app resumed) reloads the open chat from the server
@@ -341,6 +344,91 @@ describe('ChatInterface sync', () => {
 
     await screen.findByText('Lots of protein.', { exact: false })
     expect(saveSessionMessage).toHaveBeenCalledWith('s1', 'assistant', '📊 Test Breakfast — Nutrition Analysis\n\nLots of protein.')
+  })
+})
+
+describe('ChatInterface ended session', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    Element.prototype.scrollIntoView = vi.fn()
+    sockets = []
+    createChatSocket.mockImplementation((...callbacks) => {
+      const listeners = {}
+      const ws = {
+        readyState: WebSocket.CONNECTING,
+        send: vi.fn(),
+        close: vi.fn(),
+        addEventListener: vi.fn((type, fn) => { listeners[type] = fn }),
+        callbacks,
+        listeners,
+      }
+      sockets.push(ws)
+      return ws
+    })
+    getActiveSession.mockResolvedValue({ id: 's1' })
+    listSessions.mockResolvedValue([{ id: 's1' }])
+    getSessionMessages.mockResolvedValue([HELLO])
+    getTodaySupplements.mockResolvedValue([])
+    checkAuth.mockResolvedValue({})
+  })
+
+  afterEach(() => vi.useRealTimers())
+
+  // Close the last socket, let the session check answer, then run every pending reconnect timer
+  async function closeAndWait() {
+    vi.useFakeTimers()
+    act(() => lastSocket().callbacks[4]()) // onClose
+    await act(async () => { await Promise.resolve() })
+    act(() => { vi.advanceTimersByTime(60000) })
+  }
+
+  // A socket that closes before it opened checks the session once, then reconnects when it's fine
+  it('checks the session once when a socket closes before it opened', async () => {
+    await renderChat()
+    await closeAndWait()
+    expect(checkAuth).toHaveBeenCalledTimes(1)
+    expect(sockets).toHaveLength(2)
+  })
+
+  // A socket that had opened reconnects as before, with no session check
+  it('reconnects without a check when an opened socket closes', async () => {
+    await renderChat()
+    act(() => lastSocket().listeners.open())
+    await closeAndWait()
+    expect(checkAuth).not.toHaveBeenCalled()
+    expect(sockets).toHaveLength(2)
+  })
+
+  // A refused session check stops the reconnects, since the app leaves for the login
+  it('stops reconnecting when the session check is refused', async () => {
+    checkAuth.mockRejectedValue(Object.assign(new Error('API error 401'), { status: 401 }))
+    await renderChat()
+    await closeAndWait()
+    expect(checkAuth).toHaveBeenCalledTimes(1)
+    expect(sockets).toHaveLength(1)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  // A server that can't be reached during the check still gets the usual reconnect
+  it('reconnects when the session check cannot reach the server', async () => {
+    checkAuth.mockRejectedValue(new Error('Cannot reach server'))
+    await renderChat()
+    await closeAndWait()
+    expect(sockets).toHaveLength(2)
+  })
+
+  // A session check that answers after unmount sets no reconnect timer
+  it('sets no timer when the check answers after unmount', async () => {
+    let answer
+    checkAuth.mockReturnValue(new Promise(resolve => { answer = resolve }))
+    const { unmount } = render(<ChatInterface visible />)
+    await screen.findByText('Hello')
+    vi.useFakeTimers()
+    act(() => lastSocket().callbacks[4]()) // onClose
+    unmount()
+    await act(async () => { answer({}) })
+    expect(vi.getTimerCount()).toBe(0)
+    expect(sockets).toHaveLength(1)
   })
 })
 

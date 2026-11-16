@@ -1,5 +1,5 @@
 /**
- * Tests for the login screen's error messages.
+ * Tests for the login screen's error messages and its note for an ended session.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -52,5 +52,11 @@ describe('LoginScreen', () => {
     render(<LoginScreen onLogin={vi.fn()} />)
     submit('Alice', '999999')
     expect(await screen.findByText('Invalid name or PIN')).toBeInTheDocument()
+  })
+
+  // The note for an ended session is shown in the muted text color, not the error style
+  it('shows a note in a muted style', () => {
+    render(<LoginScreen onLogin={vi.fn()} note="Your session ended. Please log in again." />)
+    expect(screen.getByText('Your session ended. Please log in again.')).toHaveStyle({ color: 'var(--text-muted)' })
   })
 })

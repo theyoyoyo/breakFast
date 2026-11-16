@@ -16,7 +16,8 @@ function errorMessage(err) {
   return 'Invalid name or PIN'
 }
 
-export default function LoginScreen({ onLogin }) {
+/** `note` tells the user why the login is back (their session ended); none on a plain start. */
+export default function LoginScreen({ onLogin, note = '' }) {
   const [name, setName] = useState('demo')
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
@@ -45,6 +46,7 @@ export default function LoginScreen({ onLogin }) {
     <div style={s.container}>
       <div style={s.title}>break FAST</div>
       <form style={s.form} onSubmit={handleSubmit}>
+        {note && <div style={s.note}>{note}</div>}
         <input
           style={s.input}
           type="text"

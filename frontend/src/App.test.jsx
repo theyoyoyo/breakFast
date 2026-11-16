@@ -1,6 +1,7 @@
 /**
  * Tests for App's tabs: the open tab is in the link while logged in, so a refresh with a live
- * session reopens it, and a login starts on Chat.
+ * session reopens it, and a login starts on Chat. A session the server ends while the app is
+ * open brings back the login with a note, which the next login clears.
  * The panels, the login screen and API calls are mocked — no real network calls are made.
  */
 
@@ -16,6 +17,11 @@ vi.mock('./services/api', () => {
     logout: vi.fn(),
     checkAuth: vi.fn(() => Promise.resolve({})),
     getPreferences: vi.fn(() => Promise.resolve([])),
+    // The real one listens for apiFetch's window event; here a test sends that event itself
+    onSessionEnded: vi.fn((handler) => {
+      window.addEventListener('bf:session-ended', handler)
+      return () => window.removeEventListener('bf:session-ended', handler)
+    }),
   }
 })
 vi.mock('./utils/theme', () => ({ applyTheme: vi.fn() }))
@@ -34,8 +40,11 @@ vi.mock('./components/PreferencesPanel', () => ({ default: () => <div>Preference
 vi.mock('./components/FavoritesPanel', () => ({ default: () => <div>Favorites panel</div> }))
 vi.mock('./components/SettingsPanel', () => ({ default: () => <div>Settings panel</div> }))
 vi.mock('./components/LoginScreen', () => ({
-  default: ({ onLogin }) => (
-    <button onClick={() => onLogin({ token: 'tok-2', user: { id: 2, name: 'Bob' } })}>Log in</button>
+  default: ({ onLogin, note }) => (
+    <>
+      {note && <div>{note}</div>}
+      <button onClick={() => onLogin({ token: 'tok-2', user: { id: 2, name: 'Bob' } })}>Log in</button>
+    </>
   ),
 }))
 
@@ -121,6 +130,30 @@ describe('App tabs', () => {
     fireEvent.click(await screen.findByText('Log in'))
     expect(screen.getByText('Chat panel')).toBeVisible()
     expect(window.location.hash).toBe('')
+  })
+
+  // A session ended while the app is open shows the login with a note, and the next login clears it
+  it('shows the login with a note when the session ends', async () => {
+    storeSession()
+    openAt('#settings')
+    render(<App />)
+    expect(await screen.findByText('Settings panel')).toBeVisible()
+
+    act(() => { window.dispatchEvent(new Event('bf:session-ended')) })
+    expect(screen.getByText('Your session ended. Please log in again.')).toBeInTheDocument()
+    expect(screen.queryByText('Settings panel')).toBeNull()
+    expect(api.logout).not.toHaveBeenCalled() // the server already ended it
+
+    fireEvent.click(screen.getByText('Log in'))
+    expect(screen.getByText('Chat panel')).toBeVisible()
+    expect(screen.queryByText('Your session ended. Please log in again.')).toBeNull()
+  })
+
+  // A plain start without a session shows the login with no note
+  it('shows no note on a plain login', async () => {
+    render(<App />)
+    await screen.findByText('Log in')
+    expect(screen.queryByText('Your session ended. Please log in again.')).toBeNull()
   })
 
   // Opened offline, the app keeps its stored session and so the link's tab

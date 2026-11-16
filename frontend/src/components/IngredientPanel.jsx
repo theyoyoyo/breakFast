@@ -320,11 +320,12 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
   }
 
   const handleEdit = async () => {
-    if (!editName.trim()) return
+    const name = editName.trim()
+    if (!name) return
     try {
       setError(null)
       await updateIngredient(editingId, {
-        name: editName.trim(),
+        name,
         expiry_date: editExpiry || '',
         group_name: editGroup,
       })
@@ -332,7 +333,8 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
       load()
       refreshExpiredCount()
     } catch (e) {
-      setError('Failed to update ingredient')
+      // 409: another item has the name; the edit stays open so the user can pick another
+      setError(e.status === 409 ? `${name} is already in your fridge` : 'Failed to update ingredient')
     }
   }
 
