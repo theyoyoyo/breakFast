@@ -9,8 +9,8 @@ The goal is DIVERSIFICATION, not reinforcement:
 - Rating patterns → guide the style of new suggestions
 """
 
-import json
 from database import get_db
+from services.knowledge import _json_list
 
 # The patterns look at the meals of the last this many days only
 PATTERN_DAYS = 30
@@ -39,7 +39,7 @@ async def _top_ingredients(db, user_id: int, limit: int = 10) -> list[dict]:
     """
     async with db.execute(
         """
-        SELECT ingredients FROM meal_history
+        SELECT ingredients, menu_items FROM meal_history
         WHERE user_id = ? AND logged_at >= datetime('now', ?)
         """,
         (user_id, f"-{PATTERN_DAYS} days"),
@@ -49,17 +49,27 @@ async def _top_ingredients(db, user_id: int, limit: int = 10) -> list[dict]:
     # Flatten JSON ingredient lists and count occurrences
     counts: dict[str, int] = {}
     for row in rows:
-        try:
-            items = json.loads(row["ingredients"]) if row["ingredients"] else []
-        except (json.JSONDecodeError, TypeError):
-            continue
-        for item in items:
+        for item in _meal_items(row):
             name = _extract_name(item)
             if name:
                 counts[name] = counts.get(name, 0) + 1
 
     sorted_items = sorted(counts.items(), key=lambda x: x[1], reverse=True)
     return [{"name": n, "count": c} for n, c in sorted_items[:limit]]
+
+
+def _meal_items(row) -> list:
+    """What a meal had, as eaten: its menu's dish ingredients and simple items (a dish's own name
+    isn't one), or an old flat meal's ingredients. For a menu card the flat list is the menu as
+    first suggested, and "Today I ate" edits change only the menu."""
+    menu = _json_list(row["menu_items"])
+    if not menu:
+        return _json_list(row["ingredients"])
+    items = []
+    for item in menu:
+        sub = _json_list(item.get("ingredients")) if isinstance(item, dict) else []
+        items += sub if sub else [item]
+    return items
 
 
 def _extract_name(item) -> str:
@@ -89,7 +99,7 @@ async def _high_rated_patterns(db, user_id: int) -> list[str]:
     """Ingredient names that appear most in highly-rated meals (rating=5)."""
     async with db.execute(
         """
-        SELECT ingredients FROM meal_history
+        SELECT ingredients, menu_items FROM meal_history
         WHERE user_id = ? AND rating = 5 AND logged_at >= datetime('now', ?)
         """,
         (user_id, f"-{PATTERN_DAYS} days"),
@@ -98,11 +108,7 @@ async def _high_rated_patterns(db, user_id: int) -> list[str]:
 
     counts: dict[str, int] = {}
     for row in rows:
-        try:
-            items = json.loads(row["ingredients"]) if row["ingredients"] else []
-        except (json.JSONDecodeError, TypeError):
-            continue
-        for item in items:
+        for item in _meal_items(row):
             name = _extract_name(item)
             if name:
                 counts[name] = counts.get(name, 0) + 1
