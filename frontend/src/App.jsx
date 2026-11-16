@@ -6,7 +6,7 @@ import PreferencesPanel from './components/PreferencesPanel'
 import FavoritesPanel from './components/FavoritesPanel'
 import SettingsPanel from './components/SettingsPanel'
 import LoginScreen from './components/LoginScreen'
-import { logout, checkAuth, getPreferences, NetworkError } from './services/api'
+import { logout, checkAuth, getPreferences, onSessionEnded, NetworkError } from './services/api'
 import { applyTheme } from './utils/theme'
 import { applyLanguage } from './utils/language'
 import * as s from './App.styles'
@@ -57,7 +57,15 @@ export default function App() {
   // A refresh with a stored session reopens the link's tab; a login starts on Chat
   const [activeTab, setActiveTab] = useState(() => (auth ? tabFromLink() : 'Chat'))
   const [offline, setOffline] = useState(false)
+  // The login screen says why it's back when the server refused the session
+  const [sessionEnded, setSessionEnded] = useState(false)
   const narrow = useIsNarrow()
+
+  // A refused request already cleared the stored session: show the login with a note
+  useEffect(() => onSessionEnded(() => {
+    setAuth(null)
+    setSessionEnded(true)
+  }), [])
 
   // When the device's session ends (Logout, or refused at start), the next login starts on Chat
   useEffect(() => {
@@ -127,7 +135,12 @@ export default function App() {
 
   if (!authChecked) return null // wait for token validation
   if (!auth) {
-    return <LoginScreen onLogin={(data) => setAuth(data)} />
+    return (
+      <LoginScreen
+        note={sessionEnded ? 'Your session ended. Please log in again.' : ''}
+        onLogin={(data) => { setSessionEnded(false); setAuth(data) }}
+      />
+    )
   }
 
   // Demo triggers (name click, re-clicking Chat/Fridge) are for the demo account only
