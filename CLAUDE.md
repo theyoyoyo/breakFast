@@ -22,7 +22,7 @@ Multiple users share one instance, each fully isolated. Auth is a name and a PIN
 
 **Local-first, free forever.** Primary LLM is Ollama on the user's own hardware. Song lyric fallback when unreachable.
 
-**The system learns.** Stated habits are a warm prior. Actual behavior updates what gets recommended.
+**The system learns.** Stated habits are a warm prior. Actual behavior updates what gets recommended. The patterns come from the last 30 days of logged meals (`PATTERN_DAYS` in `services/insights.py`), each counted from its menu as eaten; nothing is deleted automatically, and Settings can delete meals older than a month.
 
 ---
 
