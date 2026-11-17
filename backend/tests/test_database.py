@@ -428,3 +428,44 @@ async def test_start_prints_database_path_and_version(db_path, capsys):
     async with lifespan(app):
         pass
     assert f"Database: {db_path} (schema version {LATEST})" in capsys.readouterr().out
+
+
+# A database at version 2 loses its rows without a parent (chained ones too) and rows under another user's parent, and keeps the rest
+async def test_orphan_rows_are_cleaned(db_path):
+    await database.init_db()
+    with closing(sqlite3.connect(db_path)) as db:
+        db.executescript("""
+            INSERT INTO users (id, name, pin_hash) VALUES (1, 'Alice', 'x'), (2, 'Bob', 'x');
+            INSERT INTO chat_sessions (id, user_id) VALUES ('alice-chat', 1), ('gone-user-chat', 99);
+            INSERT INTO chat_messages (session_id, user_id, role, content) VALUES
+                ('alice-chat', 1, 'user', 'Kept'),
+                ('alice-chat', 2, 'user', 'Bob in Alice''s chat'),
+                ('gone-chat', 1, 'user', 'No chat'),
+                ('gone-user-chat', 99, 'user', 'No user');
+            INSERT INTO suggested_meals (user_id, session_id, meal_name) VALUES (1, 'alice-chat', 'Kept'), (1, 'gone-chat', 'No chat');
+            INSERT INTO user_supplements (id, user_id, name, frequency) VALUES (1, 1, 'Iron', 'sometimes');
+            INSERT INTO supplement_daily_log (user_id, supplement_id, date, taken) VALUES
+                (1, 1, '2026-11-01', 1), (1, 7, '2026-11-01', 1), (2, 1, '2026-11-01', 1);
+            INSERT INTO shopping_list (user_id, item_name) VALUES (1, 'Milk'), (99, 'Ghost milk');
+            PRAGMA user_version = 2;
+        """)
+
+    await database.init_db()
+    assert _query(db_path, "PRAGMA foreign_key_check") == []
+    assert _query(db_path, "SELECT id FROM chat_sessions") == [("alice-chat",)]
+    assert _query(db_path, "SELECT content FROM chat_messages") == [("Kept",)]
+    assert _query(db_path, "SELECT meal_name FROM suggested_meals") == [("Kept",)]
+    assert _query(db_path, "SELECT user_id, supplement_id FROM supplement_daily_log") == [(1, 1)]
+    assert _query(db_path, "SELECT item_name FROM shopping_list") == [("Milk",)]
+    assert _query(db_path, "PRAGMA user_version") == [(LATEST,)]
+
+
+# The app's connections enforce foreign keys, so a row can't point to a chat that doesn't exist
+async def test_app_connections_enforce_foreign_keys(db_path):
+    await database.init_db()
+    async with database.get_db() as db:
+        await db.execute("INSERT INTO users (id, name, pin_hash) VALUES (1, 'Alice', 'x')")
+        with pytest.raises(sqlite3.IntegrityError):
+            await db.execute(
+                "INSERT INTO chat_messages (session_id, user_id, role, content) VALUES ('made-up', 1, 'user', 'Hi')"
+            )

@@ -247,3 +247,23 @@ async def test_cli_sets_up_a_new_database(cli_db):
     with closing(sqlite3.connect(cli_db)) as db:
         assert db.execute("PRAGMA user_version").fetchone() == (database.MIGRATIONS[-1][0],)
         assert db.execute("SELECT name FROM users").fetchall() == [("alice",)]
+
+
+# With foreign keys on, delete-user removes a user with chats, suggestions and supplement logs, children before parents
+async def test_delete_user_with_linked_rows(cli_db):
+    await database.init_db()
+    await manage.add_user("alice", "135792")
+    async with aiosqlite.connect(cli_db) as db:
+        await db.executescript("""
+            INSERT INTO chat_sessions (id, user_id) SELECT 's1', id FROM users WHERE name = 'alice';
+            INSERT INTO chat_messages (session_id, user_id, role, content) SELECT 's1', id, 'user', 'Hi' FROM users WHERE name = 'alice';
+            INSERT INTO suggested_meals (user_id, session_id, meal_name) SELECT id, 's1', 'Plate' FROM users WHERE name = 'alice';
+            INSERT INTO user_supplements (id, user_id, name, frequency) SELECT 1, id, 'Iron', 'sometimes' FROM users WHERE name = 'alice';
+            INSERT INTO supplement_daily_log (user_id, supplement_id, date, taken) SELECT id, 1, '2026-11-01', 1 FROM users WHERE name = 'alice';
+        """)
+
+    await manage.delete_user("alice")
+
+    with closing(sqlite3.connect(cli_db)) as db:
+        for table in ("users", "chat_sessions", "chat_messages", "suggested_meals", "user_supplements", "supplement_daily_log"):
+            assert db.execute(f"SELECT COUNT(*) FROM {table}").fetchone() == (0,)

@@ -260,10 +260,12 @@ CREATE INDEX IF NOT EXISTS idx_weekly_summaries_user_week ON weekly_summaries(us
 
 @asynccontextmanager
 async def get_db():
-    """Async context manager that yields an open, row-factory-enabled connection."""
+    """Async context manager that yields an open, row-factory-enabled connection with
+    foreign keys enforced (SQLite leaves them off unless each connection asks)."""
     db = await aiosqlite.connect(DATABASE_PATH)
     db.row_factory = aiosqlite.Row
     try:
+        await db.execute("PRAGMA foreign_keys = ON")
         yield db
     finally:
         await db.close()
@@ -423,10 +425,41 @@ async def _regroup(db) -> None:
     await regroup_once(db)
 
 
+# Child rows that must belong to the same user as their parent row: (child, column, parent)
+_SAME_USER_CHILDREN = [
+    ("chat_messages", "session_id", "chat_sessions"),
+    ("suggested_meals", "session_id", "chat_sessions"),
+    ("supplement_daily_log", "supplement_id", "user_supplements"),
+]
+
+
+async def _drop_orphans(db) -> None:
+    """Step 3 (#216): remove rows whose parent row is gone, before foreign keys are enforced.
+
+    Foreign keys used to be off, so a deleted user, a deleted chat or an unchecked id could
+    leave rows nothing points to; nobody can see them. A child row under another user's
+    parent row goes too, since it would block that user's deletes. Removing a row can orphan
+    its own children, so the check runs until it finds nothing.
+    """
+    for child, column, parent in _SAME_USER_CHILDREN:
+        await db.execute(
+            f"DELETE FROM {child} WHERE EXISTS (SELECT 1 FROM {parent} p "
+            f"WHERE p.id = {child}.{column} AND p.user_id != {child}.user_id)"
+        )
+    while True:
+        async with db.execute("PRAGMA foreign_key_check") as cur:
+            orphans = [(row[0], row[1]) for row in await cur.fetchall()]
+        if not orphans:
+            return
+        for table, rowid in orphans:
+            await db.execute(f"DELETE FROM {table} WHERE rowid = ?", (rowid,))
+
+
 # (number, what it does, step). The number is the PRAGMA user_version once the step has run.
 MIGRATIONS = [
     (1, "group picks and the built-in food list", _regroup),
     (2, "tables and columns added before the numbered steps", _legacy_schema),
+    (3, "rows left without their parent row", _drop_orphans),
 ]
 
 

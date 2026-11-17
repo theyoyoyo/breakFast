@@ -20,7 +20,7 @@ import getpass
 import io
 import sqlite3
 import sys
-from contextlib import closing
+from contextlib import asynccontextmanager, closing
 from datetime import datetime
 from pathlib import Path
 
@@ -64,6 +64,14 @@ async def _check_schema() -> None:
         sys.exit(1)
 
 
+@asynccontextmanager
+async def _connect():
+    """A connection to the database with foreign keys enforced, like the server's."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("PRAGMA foreign_keys = ON")
+        yield db
+
+
 def _ask_pin() -> str:
     """Ask for a PIN twice without showing it."""
     pin = getpass.getpass("PIN (6-10 digits): ")
@@ -76,7 +84,7 @@ def _ask_pin() -> str:
 async def add_user(name: str, pin: str, is_admin: bool = False) -> None:
     _check_pin(pin)
     await _check_schema()
-    async with aiosqlite.connect(DATABASE_PATH) as db:
+    async with _connect() as db:
         try:
             await db.execute(
                 "INSERT INTO users (name, pin_hash, is_admin) VALUES (?, ?, ?)",
@@ -94,7 +102,7 @@ async def set_pin(name: str, pin: str) -> None:
     """Give a user a new PIN (6-10 digits); their old PIN stops working."""
     _check_pin(pin)
     await _check_schema()
-    async with aiosqlite.connect(DATABASE_PATH) as db:
+    async with _connect() as db:
         cur = await db.execute("UPDATE users SET pin_hash = ? WHERE name = ?", (hash_pin(pin), name))
         await db.commit()
     if not cur.rowcount:
@@ -105,7 +113,7 @@ async def set_pin(name: str, pin: str) -> None:
 
 async def list_users() -> None:
     await _check_schema()
-    async with aiosqlite.connect(DATABASE_PATH) as db:
+    async with _connect() as db:
         db.row_factory = aiosqlite.Row
         async with db.execute("SELECT id, name, is_admin, created_at FROM users ORDER BY id") as cur:
             rows = await cur.fetchall()
@@ -123,7 +131,7 @@ async def list_users() -> None:
 
 async def delete_user(name: str) -> None:
     await _check_schema()
-    async with aiosqlite.connect(DATABASE_PATH) as db:
+    async with _connect() as db:
         # Delete all user data first
         async with db.execute("SELECT id FROM users WHERE name = ?", (name,)) as cur:
             row = await cur.fetchone()
