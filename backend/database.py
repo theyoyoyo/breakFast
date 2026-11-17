@@ -9,6 +9,8 @@ Usage in routers:
 
 import logging
 import sqlite3
+from datetime import datetime
+from pathlib import Path
 
 import aiosqlite
 from contextlib import asynccontextmanager
@@ -443,9 +445,65 @@ async def _is_empty(db) -> bool:
     return tables == 0
 
 
+# Backups taken before pending steps: "<database name>_before_migration_<time>_v<version>.db"
+# beside the database, the newest few kept
+_MIGRATION_BACKUP_MARK = "_before_migration_"
+MIGRATION_BACKUPS_KEPT = 3
+# SQLite's own check of the backup file: "ok" when it's sound, else the first problem
+_BACKUP_CHECK = "PRAGMA integrity_check(1)"
+
+
+async def _database_file(db) -> Path | None:
+    """The file behind a connection (None for a database in memory)."""
+    async with db.execute("PRAGMA database_list") as cur:
+        for _, name, file in await cur.fetchall():
+            if name == "main" and file:
+                return Path(file)
+    return None
+
+
+async def _backup_before_migration(db, version: int) -> Path | None:
+    """Copy the database as it is now, before a pending step changes it.
+
+    A step that runs cleanly can still be wrong, and its transaction is gone by then, so
+    this copy is the way back. SQLite's backup API takes a consistent snapshot, writes
+    still in the WAL included. A backup that can't be made or read back stops the start:
+    migrating without one is the risk this is here for.
+    """
+    src = await _database_file(db)
+    if src is None:
+        return None
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    dst = src.with_name(f"{src.stem}{_MIGRATION_BACKUP_MARK}{stamp}_v{version}.db")
+    dst.unlink(missing_ok=True)
+    async with aiosqlite.connect(dst) as backup:
+        await db.backup(backup)
+        # One self-contained file, so the backup needs no -wal beside it
+        await backup.execute("PRAGMA journal_mode=DELETE")
+        async with backup.execute(_BACKUP_CHECK) as cur:
+            (result,) = await cur.fetchone()
+    if result != "ok":
+        dst.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"The backup before the database migration failed its integrity check ({result}); "
+            "nothing was migrated."
+        )
+    logger.info("Database backed up to %s before migrating from version %s", dst, version)
+
+    # Keep the newest few (the time in the name sorts them)
+    backups = sorted(src.parent.glob(f"{src.stem}{_MIGRATION_BACKUP_MARK}*.db"))
+    for old in backups[:-MIGRATION_BACKUPS_KEPT]:
+        old.unlink(missing_ok=True)
+    return dst
+
+
 async def migrate(db) -> None:
-    """Bring the database to the latest schema. One that is already there is not written to."""
+    """Bring the database to the latest schema. One that is already there is not written to.
+
+    A database with data is backed up once before its first pending step.
+    """
     latest = MIGRATIONS[-1][0]
+    backed_up = False
     while True:
         version = await _user_version(db)
         if version > latest:
@@ -455,6 +513,10 @@ async def migrate(db) -> None:
             )
         if version >= latest:
             return
+
+        if not backed_up and not await _is_empty(db):
+            await _backup_before_migration(db, version)
+            backed_up = True
 
         # The write lock comes first and the version is read again under it, so two
         # processes that start together (the server and manage.py) never run a step twice.

@@ -317,3 +317,72 @@ async def test_add_column_skips_existing(db_path):
         await database._add_column(db, "users", "last_expiry_check", "TEXT")
         await database._add_column(db, "users", "nickname", "TEXT")
         assert {"last_expiry_check", "nickname"} <= await database._columns(db, "users")
+
+
+def _migration_backups(db_path) -> list:
+    """The backups taken before pending steps, oldest first."""
+    from pathlib import Path
+
+    return sorted(Path(db_path).parent.glob("app_before_migration_*.db"))
+
+
+# A pending step on a database with data leaves a backup of it as it was: old version, old schema, its rows
+async def test_pending_migration_leaves_a_backup(db_path):
+    _make(db_path, OLD_SCHEMA)
+    await database.init_db()
+
+    (backup,) = _migration_backups(db_path)
+    assert backup.name.endswith("_v0.db")
+    assert _query(backup, "PRAGMA user_version") == [(0,)]
+    assert _query(backup, "PRAGMA integrity_check") == [("ok",)]
+    assert "quantity" in _columns(backup)["ingredient_inventory"]
+    assert _query(backup, "SELECT meal_name FROM meal_history") == [("Egg sandwich",)]
+
+
+# A brand-new database and one already at the latest version get no backup
+async def test_no_backup_without_pending_steps(db_path):
+    await database.init_db()
+    await database.init_db()
+    assert _migration_backups(db_path) == []
+
+
+# A step that fails still leaves the backup taken before it
+async def test_failing_step_keeps_its_backup(db_path, monkeypatch):
+    await database.init_db()
+
+    async def broken(db):
+        raise ValueError("no such luck")
+
+    monkeypatch.setattr(database, "MIGRATIONS", [*database.MIGRATIONS, (LATEST + 1, "a broken step", broken)])
+    with pytest.raises(RuntimeError):
+        await database.init_db()
+    (backup,) = _migration_backups(db_path)
+    assert _query(backup, "PRAGMA user_version") == [(LATEST,)]
+
+
+# Only the newest few backups are kept
+async def test_old_migration_backups_are_removed(db_path):
+    from pathlib import Path
+
+    _make(db_path, OLD_SCHEMA)
+    old = [Path(db_path).with_name(f"app_before_migration_2020010{n}_000000_v0.db") for n in range(1, 5)]
+    for path in old:
+        path.write_bytes(b"")
+    await database.init_db()
+
+    kept = _migration_backups(db_path)
+    assert len(kept) == database.MIGRATION_BACKUPS_KEPT
+    assert kept[:-1] == old[-(database.MIGRATION_BACKUPS_KEPT - 1):]
+    assert kept[-1] not in old
+
+
+# A backup that fails its integrity check stops the start before any step runs, and isn't kept
+async def test_bad_backup_stops_migration(db_path, monkeypatch):
+    _make(db_path, OLD_SCHEMA)
+    before = _snapshot(db_path)
+
+    monkeypatch.setattr(database, "_BACKUP_CHECK", "SELECT 'row 3 missing from index'")
+    with pytest.raises(RuntimeError, match="integrity check"):
+        await database.init_db()
+    assert _snapshot(db_path) == before
+    assert _migration_backups(db_path) == []
