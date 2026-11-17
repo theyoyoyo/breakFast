@@ -407,7 +407,7 @@ export const getSchedule = (meal_name, steps, ingredients, meal_id = null, menu 
  * ("bearer", then the token), the one header a page can set on a WebSocket, so it stays
  * out of the URL. Without a stored token the socket sends "bearer" alone, which the
  * server refuses (an empty subprotocol would throw).
- * onDone gets the reply and its saved message id; onSessionUpdated gets the id of a
+ * onDone gets the reply and its saved message id (a refused message's text has none); onSessionUpdated gets the id of a
  * session another device (or a REST save) changed; onNotice gets any other notice
  * ({ type: 'supplements_updated' }, …) for the rest of the app.
  */
@@ -423,6 +423,8 @@ export function createChatSocket(onToken, onDone, onMealLogged, onError, onClose
       else if (msg.type === 'meal_logged') onMealLogged(msg.meal)
       else if (msg.type === 'progress') onProgress?.(msg.step)
       else if (msg.type === 'session_updated') onSessionUpdated?.(msg.session_id)
+      // The server refused the message (its chat is gone): shown as the reply, so the chat stops waiting
+      else if (msg.type === 'error') onDone(msg.message)
       else if (msg.type) onNotice?.(msg)
     } catch {
       // ignore unparseable frames

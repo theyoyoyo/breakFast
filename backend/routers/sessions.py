@@ -126,6 +126,11 @@ async def save_message(session_id: str, body: dict, user_id: int = Depends(requi
     role = body.get("role", "assistant")
     content = body.get("content", "")
     async with get_db() as db:
+        async with db.execute(
+            "SELECT 1 FROM chat_sessions WHERE id = ? AND user_id = ?", (session_id, user_id)
+        ) as owned:
+            if not await owned.fetchone():
+                raise HTTPException(status_code=404, detail="Session not found")
         cur = await db.execute(
             "INSERT INTO chat_messages (session_id, user_id, role, content) VALUES (?, ?, ?, ?)",
             (session_id, user_id, role, content),

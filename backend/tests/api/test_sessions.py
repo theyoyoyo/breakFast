@@ -145,14 +145,18 @@ async def _updated_at(db, session_id: str) -> str:
         return (await cur.fetchone())[0]
 
 
-# Saving a message touches the user's own session, but not another user's session with that id
+# Saving a message touches the user's own session, while another user's or a made-up session id gets 404 and saves nothing
 async def test_save_message_touches_only_own_session(client, db):
     await _add_session(db, "testuser", "own-session")
     await _add_session(db, "Bob", "bob-session")
 
-    for sid in ("own-session", "bob-session"):
+    r = await client.post("/sessions/own-session/messages", json={"role": "assistant", "content": "Menemen"})
+    assert r.status_code == 200
+    for sid in ("bob-session", "made-up-session"):
         r = await client.post(f"/sessions/{sid}/messages", json={"role": "assistant", "content": "Menemen"})
-        assert r.status_code == 200
+        assert r.status_code == 404
 
     assert await _updated_at(db, "own-session") != "2026-01-01 08:00:00"
     assert await _updated_at(db, "bob-session") == "2026-01-01 08:00:00"
+    async with db.execute("SELECT session_id FROM chat_messages") as cur:
+        assert [row[0] for row in await cur.fetchall()] == ["own-session"]

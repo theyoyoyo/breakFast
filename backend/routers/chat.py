@@ -31,6 +31,19 @@ SUGGEST_TEMPERATURES = {
 }
 
 
+# Shown when a message names a session that isn't the caller's (deleted on another device, or
+# never theirs): nothing is saved or sent to the model. App text, so English like the rest of the UI.
+SESSION_GONE_TEXT = "This chat is no longer available. Please start a new chat."
+
+
+async def owns_session(db, session_id: str, user_id: int) -> bool:
+    """True when the session exists and belongs to the user."""
+    async with db.execute(
+        "SELECT 1 FROM chat_sessions WHERE id = ? AND user_id = ?", (session_id, user_id)
+    ) as cur:
+        return await cur.fetchone() is not None
+
+
 async def _save_suggestion(db, user_id: int, session_id: str, meal_data: dict, language: str = "en") -> int:
     """Insert a suggested meal into suggested_meals. Returns the new suggestion's id."""
     # Support both old flat format and new menu format
@@ -143,10 +156,13 @@ async def chat_endpoint(websocket: WebSocket):
                 payload = {"message": raw}
 
             # Handle session management messages
-            # (a session id, mode or type that isn't a string is ignored: it would crash a lookup)
+            # (a session id, mode or type that isn't a string is ignored: it would crash a lookup,
+            # and so is one that isn't the caller's own session)
             if "session_id" in payload and "message" not in payload:
                 if isinstance(payload["session_id"], str):
-                    session_id = payload["session_id"]
+                    async with get_db() as db:
+                        if await owns_session(db, payload["session_id"], user_id):
+                            session_id = payload["session_id"]
                 continue
 
             message_text = payload.get("message", "")
@@ -162,9 +178,19 @@ async def chat_endpoint(websocket: WebSocket):
             if not isinstance(suggest_mode, str):
                 suggest_mode = None
 
-            # Use session_id from payload if provided, otherwise keep current
-            if isinstance(payload.get("session_id"), str):
-                session_id = payload["session_id"]
+            # Use session_id from payload if provided, otherwise keep current. The id comes from
+            # the client, so it's checked like the REST endpoints do: a message for a session
+            # that isn't the caller's is rejected, with nothing saved and no reply made
+            named = payload.get("session_id") if isinstance(payload.get("session_id"), str) else None
+            wanted = named or session_id
+            if wanted is not None:
+                async with get_db() as db:
+                    owned = await owns_session(db, wanted, user_id)
+                if named and not owned:
+                    await send_live({"type": "error", "code": "session_not_found", "message": SESSION_GONE_TEXT})
+                    continue
+                # A session this socket was on may be gone by now: fall back to the latest one
+                session_id = wanted if owned else None
 
             # Ensure we have a session
             if session_id is None:
@@ -262,6 +288,15 @@ async def chat_endpoint(websocket: WebSocket):
             # A Suggest reply's ```json meal block is saved as a suggestion and becomes a new meal card
             meal_data = extract_json_block(response_text) if prompt_type == "suggest" else None
             saved_text = response_text
+            async with get_db() as db:
+                still_owned = await owns_session(db, session_id, user_id)
+            if not still_owned:
+                # The session was deleted while the reply was made: nothing left to save it to
+                await send_live({"type": "error", "code": "session_not_found", "message": SESSION_GONE_TEXT})
+                session_id = None
+                if not client_live:
+                    break
+                continue
             if meal_data:
                 async with get_db() as db:
                     suggestion_id = await _save_suggestion(db, user_id, session_id, meal_data, cached_context.get("language", "en"))
