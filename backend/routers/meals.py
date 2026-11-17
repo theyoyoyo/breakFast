@@ -5,10 +5,11 @@ All queries are scoped to the authenticated user.
 
 import asyncio
 import json
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 from database import get_db
 from auth import require_user
+from models.limits import MEALS_LIMIT_DEFAULT, MEALS_LIMIT_MAX
 from models.meal import Meal, MealLog, MealRating
 from db_helpers import row_to_meal, serialize_json_field
 
@@ -16,7 +17,10 @@ router = APIRouter(prefix="/meals", tags=["meals"])
 
 
 @router.get("/", response_model=list[Meal])
-async def list_meals(limit: int = 50, user_id: int = Depends(require_user)):
+async def list_meals(
+    limit: int = Query(MEALS_LIMIT_DEFAULT, ge=1, le=MEALS_LIMIT_MAX),
+    user_id: int = Depends(require_user),
+):
     async with get_db() as db:
         async with db.execute(
             "SELECT * FROM meal_history WHERE user_id = ? ORDER BY logged_at DESC LIMIT ?",
@@ -257,8 +261,6 @@ async def delete_meal(meal_id: int, user_id: int = Depends(require_user)):
 @router.patch("/{meal_id}/rating", response_model=Meal)
 async def rate_meal(meal_id: int, body: MealRating, user_id: int = Depends(require_user)):
     """Rate a meal thumbs-up (5) or thumbs-down (1)."""
-    if body.rating not in (1, 5):
-        raise HTTPException(status_code=400, detail="Rating must be 1 (down) or 5 (up)")
     async with get_db() as db:
         cursor = await db.execute(
             "UPDATE meal_history SET rating = ? WHERE id = ? AND user_id = ?",

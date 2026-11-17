@@ -329,9 +329,9 @@ async def test_update_ingredient_group(client):
 
 
 async def test_invalid_group_rejected(client):
-    """Unknown group names return 400."""
+    """Unknown group names return 422."""
     r = await client.post("/ingredients/", json={"name": "water", "group_name": "InvalidGroup"})
-    assert r.status_code == 400
+    assert r.status_code == 422
 
 
 async def test_group_memory_on_readd(client):
