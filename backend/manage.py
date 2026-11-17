@@ -57,7 +57,7 @@ async def _check_schema() -> None:
         await check_schema()
     except MigrationsPending as pending:
         print(
-            f"Error: {pending}. Start the server once so it updates the database "
+            f"Error: {pending} ({DATABASE_PATH}). Start the server once so it updates the database "
             "(stop an older server first), then run this command again.",
             file=sys.stderr,
         )

@@ -576,6 +576,13 @@ async def check_schema() -> None:
             )
 
 
+async def describe_database() -> str:
+    """One line for the start's output: which file is open and its schema version."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        version = await _user_version(db)
+    return f"Database: {DATABASE_PATH} (schema version {version})"
+
+
 async def init_db() -> None:
     """Create or migrate the schema, then do the start-up housekeeping. Called once at the
     server's start, and only there (the admin CLI uses check_schema)."""

@@ -386,3 +386,45 @@ async def test_bad_backup_stops_migration(db_path, monkeypatch):
         await database.init_db()
     assert _snapshot(db_path) == before
     assert _migration_backups(db_path) == []
+
+
+# A relative DATABASE_PATH counts from the backend folder whatever folder the program starts in; a full path stays
+def test_relative_database_path_is_in_backend_folder(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    import config
+
+    backend = Path(config.__file__).resolve().parent
+    monkeypatch.chdir(tmp_path)
+    assert Path(config.resolve_database_path("./breakFAST.db")) == backend / "breakFAST.db"
+    assert Path(config.resolve_database_path("data/app.db")) == backend / "data" / "app.db"
+    assert Path(config.resolve_database_path(str(tmp_path / "x.db"))) == tmp_path / "x.db"
+
+
+# The configured database path is the same full path when the program is started from two different folders
+def test_database_path_is_the_same_from_any_folder(tmp_path):
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    backend = Path(database.__file__).resolve().parent
+    env = {**os.environ, "PYTHONPATH": str(backend), "DATABASE_PATH": "./breakFAST.db"}
+    paths = [
+        subprocess.run(
+            [sys.executable, "-c", "import config; print(config.DATABASE_PATH)"],
+            cwd=folder, env=env, capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        for folder in (tmp_path, backend)
+    ]
+    assert paths[0] == paths[1]
+    assert Path(paths[0]) == backend / "breakFAST.db"
+
+
+# The server's start prints the database's full path and schema version
+async def test_start_prints_database_path_and_version(db_path, capsys):
+    from main import app, lifespan
+
+    async with lifespan(app):
+        pass
+    assert f"Database: {db_path} (schema version {LATEST})" in capsys.readouterr().out

@@ -196,7 +196,7 @@ All backend settings are environment variables, documented in [`.env.example`](.
 |---|---|---|
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server |
 | `OLLAMA_MODEL` | `qwen2.5:7b` | Model used by every persona |
-| `DATABASE_PATH` | `./breakFAST.db` | SQLite file, relative to `backend/` |
+| `DATABASE_PATH` | `./breakFAST.db` | SQLite file, relative to `backend/` whatever folder the backend or the CLI starts from; the start prints its full path |
 | `CORS_ORIGINS` | `*` | Comma-separated allowed origins |
 | `SERVE_FRONTEND` | `false` | Serve `frontend/dist` from FastAPI |
 | `DEMO_USER` | `false` | Create a `demo` user with an empty PIN and a starter fridge |
