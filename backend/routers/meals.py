@@ -197,10 +197,12 @@ async def log_meal(body: MealLog, user_id: int = Depends(require_user)):
 
 @router.delete("/old", status_code=200)
 async def delete_old_meals(user_id: int = Depends(require_user)):
-    """Delete meal history entries older than 1 year for the current user."""
+    """Delete the current user's meal history entries older than 30 days.
+
+    Only this manual action removes old meals; nothing deletes them at start."""
     async with get_db() as db:
         cursor = await db.execute(
-            "DELETE FROM meal_history WHERE user_id = ? AND logged_at < datetime('now', '-1 year')",
+            "DELETE FROM meal_history WHERE user_id = ? AND logged_at < datetime('now', '-30 days')",
             (user_id,),
         )
         await db.commit()

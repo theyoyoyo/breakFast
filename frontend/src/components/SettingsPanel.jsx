@@ -986,7 +986,7 @@ export default function SettingsPanel({ visible }) {
               const result = await deleteOldMeals()
               const msg = result.deleted > 0
                 ? `${result.deleted} old meal(s) deleted`
-                : 'No meals older than 1 year'
+                : 'No meals older than 30 days'
               setError(msg)
               setTimeout(() => setError(prev => prev === msg ? null : prev), 3000)
             } catch {
@@ -994,7 +994,7 @@ export default function SettingsPanel({ visible }) {
             }
           }}
         >
-          🗑 Delete meals older than 1 year
+          🗑 Delete meals older than 30 days
         </button>
       </div>
     </div>

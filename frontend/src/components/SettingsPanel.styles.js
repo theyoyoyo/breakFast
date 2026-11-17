@@ -252,7 +252,7 @@ export const priorityBtn = (active, level) => {
   }
 }
 
-// Bulk delete ("Delete meals older than 1 year") — shared delete look, full width
+// Bulk delete ("Delete meals older than 30 days") — shared delete look, full width
 export const dangerBtn = {
   ...deleteBtn,
   width: '100%',

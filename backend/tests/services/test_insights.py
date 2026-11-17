@@ -1,12 +1,12 @@
 """
-Tests for the insights service — aggregate, infer habits, and prune old meals.
+Tests for the insights service — aggregate and infer habits; meal history is kept.
 """
 
 import json
 import aiosqlite
 import database
 from auth import hash_pin
-from services.insights import refresh_insights_for_user, _RETENTION_DAYS
+from services.insights import refresh_insights_for_user, _WINDOW_DAYS
 
 
 async def _create_test_user(db_path: str, name: str = "testuser") -> int:
@@ -140,8 +140,8 @@ async def test_stated_habits_not_deleted(tmp_path, monkeypatch):
     assert stated[0]["description"] == "I prefer quick breakfasts"
 
 
-async def test_old_meals_pruned(tmp_path, monkeypatch):
-    """Meals older than retention window are deleted after insights run."""
+async def test_old_meals_are_kept(tmp_path, monkeypatch):
+    """Meals older than the insights window stay in the history after insights run."""
     db_path = str(tmp_path / "test.db")
     monkeypatch.setattr(database, "DATABASE_PATH", db_path)
     await database.init_db()
@@ -151,8 +151,8 @@ async def test_old_meals_pruned(tmp_path, monkeypatch):
         await _seed_meal(db, user_id, "Recent 1", ["eggs"])
         await _seed_meal(db, user_id, "Recent 2", ["bread"])
         await _seed_meal(db, user_id, "Recent 3", ["yogurt"])
-        await _seed_meal(db, user_id, "Old 1", ["rice"], days_ago=_RETENTION_DAYS + 5)
-        await _seed_meal(db, user_id, "Old 2", ["pasta"], days_ago=_RETENTION_DAYS + 10)
+        await _seed_meal(db, user_id, "Old 1", ["rice"], days_ago=_WINDOW_DAYS + 5)
+        await _seed_meal(db, user_id, "Old 2", ["pasta"], days_ago=_WINDOW_DAYS + 10)
         await db.commit()
 
     await refresh_insights_for_user(user_id)
@@ -167,8 +167,8 @@ async def test_old_meals_pruned(tmp_path, monkeypatch):
     assert "Recent 1" in names
     assert "Recent 2" in names
     assert "Recent 3" in names
-    assert "Old 1" not in names
-    assert "Old 2" not in names
+    assert "Old 1" in names
+    assert "Old 2" in names
 
 
 async def test_structured_ingredients_handled(tmp_path, monkeypatch):
@@ -229,3 +229,24 @@ async def test_high_rated_patterns_extracted(tmp_path, monkeypatch):
     rated = next((d for d in descriptions if "High-rated" in d), None)
     assert rated is not None
     assert "avocado" in rated.lower()
+
+
+async def test_server_start_keeps_old_meals(tmp_path, monkeypatch):
+    """A server start (database set-up and insights) deletes no meal, however old."""
+    from main import app, lifespan
+
+    db_path = str(tmp_path / "test.db")
+    monkeypatch.setattr(database, "DATABASE_PATH", db_path)
+    await database.init_db()
+    user_id = await _create_test_user(db_path)
+    async with database.get_db() as db:
+        for days_ago in (0, 45, 400, 2000):
+            await _seed_meal(db, user_id, f"Meal {days_ago}", ["eggs"], days_ago=days_ago)
+        await db.commit()
+
+    async with lifespan(app):
+        pass
+
+    async with database.get_db() as db:
+        async with db.execute("SELECT COUNT(*) FROM meal_history") as cur:
+            assert (await cur.fetchone())[0] == 4
