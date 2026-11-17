@@ -1,12 +1,14 @@
 from pathlib import Path
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from contextlib import asynccontextmanager
 from config import CORS_ORIGINS, CORS_ALLOW_CREDENTIALS, SERVE_FRONTEND
 from database import init_db
+from models.limits import MAX_BODY_BYTES
 from auth import require_user
 from routers import analyst, auth, chat, favorites, favorite_ingredients, ingredients, kitchen, meals, preferences, profile, ratings, sessions, health_rules, shopping, scheduler
 from services.insights import refresh_insights
@@ -27,6 +29,33 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+
+class BodySizeLimit:
+    """Refuse a request whose declared body is over the size limit (413), before it is read."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            declared = dict(scope["headers"]).get(b"content-length", b"0")
+            if not declared.isdigit() or int(declared) > MAX_BODY_BYTES:
+                await JSONResponse({"detail": "Request too large"}, status_code=413)(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, exc: RequestValidationError):
+    """A refused request (422) is told where and why, without its own input sent back
+    or the validation library's details."""
+    detail = [{"loc": list(e.get("loc", ())), "msg": e.get("msg", "Invalid value")} for e in exc.errors()]
+    return JSONResponse({"detail": detail}, status_code=422)
+
+
+# Added before CORS, so CORS wraps it and a refused request still carries the CORS headers
+app.add_middleware(BodySizeLimit)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
