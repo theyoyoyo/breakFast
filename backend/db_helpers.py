@@ -52,6 +52,7 @@ def row_to_meal(row) -> dict:
 def row_to_favorite(row) -> dict:
     """Convert a favorite_meals DB row to a dict with JSON fields decoded."""
     d = dict(row)
+    d.pop("user_id", None)  # the account's id stays on the server
     for field in ("ingredients", "steps"):
         d[field] = parse_json_field(d.get(field), [])
     d["menu_items"] = parse_json_field(d.get("menu_items"), None)
