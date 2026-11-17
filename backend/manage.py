@@ -137,7 +137,19 @@ def backup_db() -> None:
         source.backup(backup)
         # One self-contained file, so the backup needs no -wal beside it
         backup.execute("PRAGMA journal_mode=DELETE")
+        problem = _integrity_problem(backup)
+    if problem:
+        # A backup that can't be read back is worse than none: say so and don't call it a backup
+        dst.unlink()
+        print(f"Error: the backup failed its integrity check ({problem}); no backup was kept.", file=sys.stderr)
+        sys.exit(1)
     print(f"Backup created: {dst}")
+
+
+def _integrity_problem(db: sqlite3.Connection) -> str | None:
+    """SQLite's own check of a database file: None when it's sound, else the first problem."""
+    (result,) = db.execute("PRAGMA integrity_check(1)").fetchone()
+    return None if result == "ok" else result
 
 
 def _safe_output() -> None:

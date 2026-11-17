@@ -177,3 +177,13 @@ def test_backup_missing_database(cli_db, capsys):
         manage.backup_db()
     assert "database not found" in capsys.readouterr().err
     assert not list(Path(cli_db).parent.glob("breakFAST_backup_*"))
+
+
+# A backup that fails SQLite's integrity check is reported as an error and not kept
+def test_backup_failing_integrity_check(cli_db, capsys, monkeypatch):
+    asyncio.run(database.init_db())
+    monkeypatch.setattr(manage, "_integrity_problem", lambda db: "row 3 missing from index")
+    with pytest.raises(SystemExit):
+        manage.backup_db()
+    assert "row 3 missing from index" in capsys.readouterr().err
+    assert not list(Path(cli_db).parent.glob("breakFAST_backup_*"))
