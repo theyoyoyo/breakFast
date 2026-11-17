@@ -229,6 +229,11 @@ async def toggle_supplement_today(
     """Toggle a supplement's taken status for today."""
     today = date_type.today().isoformat()
     async with get_db() as db:
+        async with db.execute(
+            "SELECT 1 FROM user_supplements WHERE id = ? AND user_id = ?", (supp_id, user_id)
+        ) as cur:
+            if not await cur.fetchone():
+                raise HTTPException(status_code=404, detail="Supplement not found")
         if body.taken:
             await db.execute(
                 """

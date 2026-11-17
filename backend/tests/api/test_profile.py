@@ -237,3 +237,19 @@ async def test_delete_supplement_also_deletes_log(client):
     # Today list should not include deleted supplement
     r2 = await client.get("/profile/supplements/today")
     assert all(s["name"] != "Probiotic" for s in r2.json())
+
+
+# Marking another user's or a made-up supplement as taken gets 404 and logs nothing
+async def test_toggle_refuses_a_supplement_not_the_callers(client, db):
+    await db.execute("INSERT INTO users (name, pin_hash) VALUES ('Bob', 'unused')")
+    cur = await db.execute(
+        "INSERT INTO user_supplements (user_id, name, frequency) "
+        "SELECT id, 'Iron', 'sometimes' FROM users WHERE name = 'Bob'"
+    )
+    await db.commit()
+
+    for supp_id in (cur.lastrowid, 9999):
+        r = await client.post(f"/profile/supplements/{supp_id}/toggle", json={"taken": True})
+        assert r.status_code == 404
+    async with db.execute("SELECT COUNT(*) FROM supplement_daily_log") as count:
+        assert (await count.fetchone())[0] == 0
