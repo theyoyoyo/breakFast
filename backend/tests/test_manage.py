@@ -187,3 +187,63 @@ def test_backup_failing_integrity_check(cli_db, capsys, monkeypatch):
         manage.backup_db()
     assert "row 3 missing from index" in capsys.readouterr().err
     assert not list(Path(cli_db).parent.glob("breakFAST_backup_*"))
+
+
+def _set_version(db_path: str, version: int) -> None:
+    with closing(sqlite3.connect(db_path)) as db:
+        db.execute(f"PRAGMA user_version = {version}")
+
+
+# With migration steps pending every command stops with a message and changes nothing: no step, no backup
+@pytest.mark.parametrize("command", [
+    lambda: manage.list_users(),
+    lambda: manage.add_user("alice", "135792"),
+    lambda: manage.set_pin("alice", "135792"),
+    lambda: manage.delete_user("alice"),
+])
+async def test_cli_refuses_with_steps_pending(cli_db, capsys, command):
+    await database.init_db()
+    _set_version(cli_db, 1)
+
+    with pytest.raises(SystemExit):
+        await command()
+    assert "Start the server once" in capsys.readouterr().err
+    with closing(sqlite3.connect(cli_db)) as db:
+        assert db.execute("PRAGMA user_version").fetchone() == (1,)
+        assert db.execute("SELECT COUNT(*) FROM users").fetchone() == (0,)
+    assert not list(Path(cli_db).parent.glob("*_before_migration_*"))
+
+
+# After a server start has run the pending steps, the same command works
+async def test_cli_works_after_server_start(cli_db, capsys):
+    await database.init_db()
+    _set_version(cli_db, 1)
+    await database.init_db()
+
+    await manage.add_user("alice", "135792")
+    assert "created" in capsys.readouterr().out
+
+
+# A command leaves the server's start-up work alone: old chats stay and no demo user is created
+async def test_cli_does_no_startup_housekeeping(cli_db, monkeypatch):
+    await database.init_db()
+    with closing(sqlite3.connect(cli_db)) as db:
+        db.execute("INSERT INTO users (id, name, pin_hash) VALUES (1, 'alice', 'x')")
+        db.execute(
+            "INSERT INTO chat_sessions (id, user_id, updated_at) VALUES ('old', 1, datetime('now', '-30 days'))"
+        )
+        db.commit()
+    monkeypatch.setattr(database, "DEMO_USER", True)
+
+    await manage.list_users()
+    with closing(sqlite3.connect(cli_db)) as db:
+        assert db.execute("SELECT id FROM chat_sessions").fetchall() == [("old",)]
+        assert db.execute("SELECT name FROM users").fetchall() == [("alice",)]
+
+
+# On a brand-new database a command still sets up the schema, so the first user can be created before the first start
+async def test_cli_sets_up_a_new_database(cli_db):
+    await manage.add_user("alice", "135792")
+    with closing(sqlite3.connect(cli_db)) as db:
+        assert db.execute("PRAGMA user_version").fetchone() == (database.MIGRATIONS[-1][0],)
+        assert db.execute("SELECT name FROM users").fetchall() == [("alice",)]

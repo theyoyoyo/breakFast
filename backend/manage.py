@@ -10,6 +10,8 @@ Usage:
 
 A PIN needs 6-10 digits. Without --pin the CLI asks for it twice without showing it, which keeps
 it out of the shell history.
+
+The CLI never migrates the database: after an update, start the server once first.
 """
 
 import argparse
@@ -25,7 +27,7 @@ from pathlib import Path
 import aiosqlite
 
 from config import DATABASE_PATH
-from database import init_db
+from database import MigrationsPending, check_schema
 from auth import hash_pin, pin_problem
 
 
@@ -47,6 +49,21 @@ def _check_pin(pin: str) -> None:
         sys.exit(1)
 
 
+async def _check_schema() -> None:
+    """Stop with a message when the database has migration steps pending: only a server
+    start runs them (after a backup), so a command never changes the schema under a
+    running server."""
+    try:
+        await check_schema()
+    except MigrationsPending as pending:
+        print(
+            f"Error: {pending}. Start the server once so it updates the database "
+            "(stop an older server first), then run this command again.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
 def _ask_pin() -> str:
     """Ask for a PIN twice without showing it."""
     pin = getpass.getpass("PIN (6-10 digits): ")
@@ -58,7 +75,7 @@ def _ask_pin() -> str:
 
 async def add_user(name: str, pin: str, is_admin: bool = False) -> None:
     _check_pin(pin)
-    await init_db()
+    await _check_schema()
     async with aiosqlite.connect(DATABASE_PATH) as db:
         try:
             await db.execute(
@@ -76,7 +93,7 @@ async def add_user(name: str, pin: str, is_admin: bool = False) -> None:
 async def set_pin(name: str, pin: str) -> None:
     """Give a user a new PIN (6-10 digits); their old PIN stops working."""
     _check_pin(pin)
-    await init_db()
+    await _check_schema()
     async with aiosqlite.connect(DATABASE_PATH) as db:
         cur = await db.execute("UPDATE users SET pin_hash = ? WHERE name = ?", (hash_pin(pin), name))
         await db.commit()
@@ -87,7 +104,7 @@ async def set_pin(name: str, pin: str) -> None:
 
 
 async def list_users() -> None:
-    await init_db()
+    await _check_schema()
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute("SELECT id, name, is_admin, created_at FROM users ORDER BY id") as cur:
@@ -105,7 +122,7 @@ async def list_users() -> None:
 
 
 async def delete_user(name: str) -> None:
-    await init_db()
+    await _check_schema()
     async with aiosqlite.connect(DATABASE_PATH) as db:
         # Delete all user data first
         async with db.execute("SELECT id FROM users WHERE name = ?", (name,)) as cur:

@@ -519,7 +519,7 @@ async def migrate(db) -> None:
             backed_up = True
 
         # The write lock comes first and the version is read again under it, so two
-        # processes that start together (the server and manage.py) never run a step twice.
+        # processes that start together never run a step, or set up a new database, twice.
         await db.execute("BEGIN IMMEDIATE")
         target, name = latest, "new database"
         try:
@@ -543,8 +543,42 @@ async def migrate(db) -> None:
             ) from exc
 
 
+class MigrationsPending(RuntimeError):
+    """The database is older than this code and only a server start brings it up to date."""
+
+    def __init__(self, version: int, latest: int):
+        super().__init__(f"the database is at schema version {version} and this version of the app needs {latest}")
+        self.version, self.latest = version, latest
+
+
+async def check_schema() -> None:
+    """For the admin CLI: make sure the database fits this code, without migrating it.
+
+    Migrations, the clean-up of old chats and the demo user belong to the server start
+    alone, so a command run from a newer checkout never changes the database under a
+    running older server. A database with steps pending raises MigrationsPending. Only a
+    brand-new database gets its schema here (no step runs on it), since the set-up guide
+    creates the first user before the first start.
+    """
+    latest = MIGRATIONS[-1][0]
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        if await _is_empty(db):
+            await db.execute("PRAGMA journal_mode=WAL")
+            await migrate(db)
+            return
+        version = await _user_version(db)
+        if version < latest:
+            raise MigrationsPending(version, latest)
+        if version > latest:
+            logger.warning(
+                "The database is at schema version %s and this code knows up to %s: "
+                "a newer version of the app has opened it.", version, latest,
+            )
+
+
 async def init_db() -> None:
-    """Create or migrate the schema, then do the start-up housekeeping. Called once at startup."""
+    """Create or migrate the schema, then do the start-up housekeeping. Called once at the
+    server's start, and only there (the admin CLI uses check_schema)."""
     from auth import hash_pin
 
     async with aiosqlite.connect(DATABASE_PATH) as db:

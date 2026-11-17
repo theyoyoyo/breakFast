@@ -166,7 +166,7 @@ python manage.py backup-db                             # timestamped copy next t
 
 To restore a backup, stop the backend, delete `breakFAST.db-wal` and `breakFAST.db-shm` if they're there, then copy the backup over `breakFAST.db`. A leftover `-wal` file would be read into the restored database.
 
-When an update changes the database, the backend backs it up by itself before the change, at its next start: `breakFAST_before_migration_<time>_v<version>.db` next to the database, the newest three kept. It is restored the same way.
+When an update changes the database, the backend backs it up by itself before the change, at its next start: `breakFAST_before_migration_<time>_v<version>.db` next to the database, the newest three kept. It is restored the same way. Only the backend's start updates the database: after an update the CLI commands above stop with a message until the backend has started once.
 
 ---
 
