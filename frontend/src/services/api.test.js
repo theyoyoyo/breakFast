@@ -287,7 +287,7 @@ describe('chat sync API', () => {
     vi.unstubAllGlobals()
   })
 
-  // A refused message's error text reaches onDone without a message id, so the chat stops waiting, and isn't a notice
+  // A refused reply's error text reaches onDone without a message id, so the chat stops waiting, and isn't a notice
   it('passes a socket error to onDone as the reply', () => {
     const sockets = []
     vi.stubGlobal('WebSocket', class { constructor() { sockets.push(this) } })

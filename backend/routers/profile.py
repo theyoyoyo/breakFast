@@ -226,7 +226,7 @@ async def toggle_supplement_today(
     body: SupplementToggle,
     user_id: int = Depends(require_user),
 ):
-    """Toggle a supplement's taken status for today."""
+    """Toggle a supplement's taken status for today. A supplement that isn't the user's own gets 404."""
     today = date_type.today().isoformat()
     async with get_db() as db:
         async with db.execute(

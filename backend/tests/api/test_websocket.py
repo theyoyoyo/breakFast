@@ -569,31 +569,6 @@ async def _saved_rows() -> dict:
     return {"messages": messages, "suggestions": suggestions}
 
 
-# A message naming another user's or a made-up session id is refused with an error, nothing is saved and the model isn't asked
-@pytest.mark.asyncio
-@pytest.mark.parametrize("session_id", ["bob-session", "made-up-session"])
-async def test_message_for_a_session_not_the_callers_is_refused(ws_setup, session_id):
-    app, token, user_id = ws_setup
-    from starlette.testclient import TestClient
-    from unittest.mock import patch, MagicMock
-    from routers.chat import SESSION_GONE_TEXT
-
-    await _two_users_sessions(user_id)
-    stream = MagicMock()
-    pipeline = MagicMock()
-    with patch("routers.chat.stream_response", stream), patch("routers.chat.run_suggestion_pipeline", pipeline):
-        with open_chat(TestClient(app), token) as ws:
-            for frame in ({"message": "Hello", "session_id": session_id},
-                          {"message": "Suggest Breakfast", "type": "suggest", "session_id": session_id}):
-                ws.send_text(json.dumps(frame))
-                event = ws.receive_json()
-                assert event == {"type": "error", "code": "session_not_found", "message": SESSION_GONE_TEXT}
-
-    stream.assert_not_called()
-    pipeline.assert_not_called()
-    assert await _saved_rows() == {"messages": [], "suggestions": []}
-
-
 # Switching the socket to a session that isn't the caller's is ignored, so the next message goes to the caller's own session
 @pytest.mark.asyncio
 async def test_switching_to_a_session_not_the_callers_is_ignored(ws_setup):

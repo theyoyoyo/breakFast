@@ -11,6 +11,7 @@ import logging
 import uuid
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from database import get_db
+from db_helpers import owns_session
 from auth import SOCKET_AUTH_PROTOCOL, get_user_id_from_token, socket_token
 from services.llm import LLMUnavailableError, lyric_cycler
 from services.suggestion import build_chat_prompt, stream_response
@@ -31,21 +32,14 @@ SUGGEST_TEMPERATURES = {
 }
 
 
-# Shown when a message names a session that isn't the caller's (deleted on another device, or
-# never theirs): nothing is saved or sent to the model. App text, so English like the rest of the UI.
+# Shown when the session is deleted (on another device) while its reply is made: nothing is
+# saved, since the session is gone. App text, so English like the rest of the UI.
 SESSION_GONE_TEXT = "This chat is no longer available. Please start a new chat."
 
 
-async def owns_session(db, session_id: str, user_id: int) -> bool:
-    """True when the session exists and belongs to the user."""
-    async with db.execute(
-        "SELECT 1 FROM chat_sessions WHERE id = ? AND user_id = ?", (session_id, user_id)
-    ) as cur:
-        return await cur.fetchone() is not None
-
-
 async def _save_suggestion(db, user_id: int, session_id: str, meal_data: dict, language: str = "en") -> int:
-    """Insert a suggested meal into suggested_meals. Returns the new suggestion's id."""
+    """Insert a suggested meal into suggested_meals. Returns the new suggestion's id.
+    `session_id` is the socket's checked session, one of the user's own (see chat_endpoint)."""
     # Support both old flat format and new menu format
     menu_items = meal_data.get("menu")
     meal_name = meal_data.get("menu_name") or meal_data.get("meal_name", "Unknown")
@@ -156,8 +150,8 @@ async def chat_endpoint(websocket: WebSocket):
                 payload = {"message": raw}
 
             # Handle session management messages
-            # (a session id, mode or type that isn't a string is ignored: it would crash a lookup,
-            # and so is one that isn't the caller's own session)
+            # (a session id, mode or type that isn't a string is ignored: it would crash a lookup;
+            # so is a session that isn't the user's own, and the current one stays)
             if "session_id" in payload and "message" not in payload:
                 if isinstance(payload["session_id"], str):
                     async with get_db() as db:
@@ -178,19 +172,15 @@ async def chat_endpoint(websocket: WebSocket):
             if not isinstance(suggest_mode, str):
                 suggest_mode = None
 
-            # Use session_id from payload if provided, otherwise keep current. The id comes from
-            # the client, so it's checked like the REST endpoints do: a message for a session
-            # that isn't the caller's is rejected, with nothing saved and no reply made
-            named = payload.get("session_id") if isinstance(payload.get("session_id"), str) else None
-            wanted = named or session_id
-            if wanted is not None:
-                async with get_db() as db:
-                    owned = await owns_session(db, wanted, user_id)
-                if named and not owned:
-                    await send_live({"type": "error", "code": "session_not_found", "message": SESSION_GONE_TEXT})
-                    continue
-                # A session this socket was on may be gone by now: fall back to the latest one
-                session_id = wanted if owned else None
+            # Use session_id from payload if provided, otherwise keep current. The message is saved only
+            # in one of the user's own sessions: one that isn't (another user's, or one deleted on another
+            # device) falls back to the current session, then to the latest, so the message still gets its
+            # reply. Everything below, the suggestion included, uses this checked id.
+            async with get_db() as db:
+                if isinstance(payload.get("session_id"), str) and await owns_session(db, payload["session_id"], user_id):
+                    session_id = payload["session_id"]
+                elif session_id is not None and not await owns_session(db, session_id, user_id):
+                    session_id = None
 
             # Ensure we have a session
             if session_id is None:

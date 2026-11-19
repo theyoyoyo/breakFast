@@ -1,12 +1,12 @@
 """
-Tests for the insights service — aggregate and infer habits; meal history is kept.
+Tests for the insights service — aggregate meal history into inferred habits.
 """
 
 import json
 import aiosqlite
 import database
 from auth import hash_pin
-from services.insights import refresh_insights_for_user, _WINDOW_DAYS
+from services.insights import refresh_insights_for_user, PATTERN_DAYS
 
 
 async def _create_test_user(db_path: str, name: str = "testuser") -> int:
@@ -21,16 +21,27 @@ async def _create_test_user(db_path: str, name: str = "testuser") -> int:
             return (await cur.fetchone())[0]
 
 
-async def _seed_meal(db, user_id: int, meal_name, ingredients, rating=None, days_ago=0):
-    """Insert a meal at a given age (days_ago=0 means now)."""
+async def _seed_meal(db, user_id: int, meal_name, ingredients, rating=None, days_ago=0, menu_items=None):
+    """Insert a meal at a given age (days_ago=0 means now), with an optional menu."""
     logged_at = f"datetime('now', '-{days_ago} days')" if days_ago else "datetime('now')"
     await db.execute(
         f"""
-        INSERT INTO meal_history (user_id, meal_name, ingredients, rating, logged_at)
-        VALUES (?, ?, ?, ?, {logged_at})
+        INSERT INTO meal_history (user_id, meal_name, ingredients, rating, menu_items, logged_at)
+        VALUES (?, ?, ?, ?, ?, {logged_at})
         """,
-        (user_id, meal_name, json.dumps(ingredients), rating),
+        (user_id, meal_name, json.dumps(ingredients), rating,
+         json.dumps(menu_items) if menu_items is not None else None),
     )
+
+
+async def _inferred(user_id: int) -> list[str]:
+    """The user's inferred habits."""
+    async with database.get_db() as db:
+        async with db.execute(
+            "SELECT description FROM user_habits WHERE user_id = ? AND source = 'inferred'",
+            (user_id,),
+        ) as cur:
+            return [r["description"] for r in await cur.fetchall()]
 
 
 async def test_no_insights_with_too_few_meals(tmp_path, monkeypatch):
@@ -140,8 +151,8 @@ async def test_stated_habits_not_deleted(tmp_path, monkeypatch):
     assert stated[0]["description"] == "I prefer quick breakfasts"
 
 
-async def test_old_meals_are_kept(tmp_path, monkeypatch):
-    """Meals older than the insights window stay in the history after insights run."""
+async def test_old_meals_kept_and_not_counted(tmp_path, monkeypatch):
+    """A meal from 45 days ago stays in the history after a refresh and isn't counted in the patterns."""
     db_path = str(tmp_path / "test.db")
     monkeypatch.setattr(database, "DATABASE_PATH", db_path)
     await database.init_db()
@@ -149,10 +160,9 @@ async def test_old_meals_are_kept(tmp_path, monkeypatch):
 
     async with database.get_db() as db:
         await _seed_meal(db, user_id, "Recent 1", ["eggs"])
-        await _seed_meal(db, user_id, "Recent 2", ["bread"])
-        await _seed_meal(db, user_id, "Recent 3", ["yogurt"])
-        await _seed_meal(db, user_id, "Old 1", ["rice"], days_ago=_WINDOW_DAYS + 5)
-        await _seed_meal(db, user_id, "Old 2", ["pasta"], days_ago=_WINDOW_DAYS + 10)
+        await _seed_meal(db, user_id, "Recent 2", ["eggs", "bread"])
+        await _seed_meal(db, user_id, "Recent 3", ["eggs", "yogurt"])
+        await _seed_meal(db, user_id, "Old 1", ["rice"], days_ago=45)
         await db.commit()
 
     await refresh_insights_for_user(user_id)
@@ -163,12 +173,17 @@ async def test_old_meals_are_kept(tmp_path, monkeypatch):
             (user_id,),
         ) as cur:
             names = [r["meal_name"] for r in await cur.fetchall()]
+        async with db.execute(
+            "SELECT description FROM user_habits WHERE user_id = ? AND source = 'inferred'",
+            (user_id,),
+        ) as cur:
+            descriptions = [r["description"] for r in await cur.fetchall()]
 
-    assert "Recent 1" in names
-    assert "Recent 2" in names
-    assert "Recent 3" in names
-    assert "Old 1" in names
-    assert "Old 2" in names
+    assert 45 > PATTERN_DAYS
+    assert {"Recent 1", "Recent 2", "Recent 3", "Old 1"} <= set(names)
+    frequent = next(d for d in descriptions if "Already eating enough" in d)
+    assert "eggs (3x)" in frequent
+    assert "rice" not in frequent
 
 
 async def test_structured_ingredients_handled(tmp_path, monkeypatch):
@@ -231,22 +246,71 @@ async def test_high_rated_patterns_extracted(tmp_path, monkeypatch):
     assert "avocado" in rated.lower()
 
 
-async def test_server_start_keeps_old_meals(tmp_path, monkeypatch):
-    """A server start (database set-up and insights) deletes no meal, however old."""
-    from main import app, lifespan
-
+# A menu card's flat list is the menu as first suggested; the menu as eaten is what counts
+async def test_menu_items_counted_over_flat_list(tmp_path, monkeypatch):
+    """A meal whose menu differs from its flat ingredients counts the menu's dish ingredients and simple items."""
     db_path = str(tmp_path / "test.db")
     monkeypatch.setattr(database, "DATABASE_PATH", db_path)
     await database.init_db()
     user_id = await _create_test_user(db_path)
+
+    menu = [
+        {"name": "Omelette", "ingredients": [{"name": "Eggs", "amount": 2, "unit": "pcs"}, {"name": "Spinach"}]},
+        {"name": "Feta", "amount": 50, "unit": "g", "ingredients": []},
+    ]
     async with database.get_db() as db:
-        for days_ago in (0, 45, 400, 2000):
-            await _seed_meal(db, user_id, f"Meal {days_ago}", ["eggs"], days_ago=days_ago)
+        for i in range(3):
+            await _seed_meal(db, user_id, f"Edited {i}", [{"name": "Salmon"}, {"name": "Bread"}], rating=5, menu_items=menu)
         await db.commit()
 
-    async with lifespan(app):
-        pass
+    await refresh_insights_for_user(user_id)
+    descriptions = await _inferred(user_id)
+
+    frequent = next(d for d in descriptions if "Already eating enough" in d)
+    assert "eggs (3x)" in frequent
+    assert "spinach (3x)" in frequent
+    assert "feta (3x)" in frequent
+    assert "salmon" not in frequent and "bread" not in frequent
+    rated = next(d for d in descriptions if "High-rated" in d)
+    assert "eggs" in rated and "salmon" not in rated
+
+
+# A dish is counted by what's in it, never by its own name
+async def test_dish_name_not_counted(tmp_path, monkeypatch):
+    """A dish's own name isn't counted as an ingredient."""
+    db_path = str(tmp_path / "test.db")
+    monkeypatch.setattr(database, "DATABASE_PATH", db_path)
+    await database.init_db()
+    user_id = await _create_test_user(db_path)
+
+    menu = [{"name": "Menemen", "ingredients": [{"name": "Eggs"}, {"name": "Tomatoes"}]}]
+    async with database.get_db() as db:
+        for i in range(3):
+            await _seed_meal(db, user_id, f"Meal {i}", [], menu_items=menu)
+        await db.commit()
+
+    await refresh_insights_for_user(user_id)
+    frequent = next(d for d in await _inferred(user_id) if "Already eating enough" in d)
+    assert "eggs (3x)" in frequent and "tomatoes (3x)" in frequent
+    assert "menemen" not in frequent
+
+
+# Meals from before the menu format have only the flat list, and still count
+async def test_old_flat_meal_still_counted(tmp_path, monkeypatch):
+    """A meal with no menu counts its flat ingredients, beside meals that have a menu."""
+    db_path = str(tmp_path / "test.db")
+    monkeypatch.setattr(database, "DATABASE_PATH", db_path)
+    await database.init_db()
+    user_id = await _create_test_user(db_path)
 
     async with database.get_db() as db:
-        async with db.execute("SELECT COUNT(*) FROM meal_history") as cur:
-            assert (await cur.fetchone())[0] == 4
+        await _seed_meal(db, user_id, "Old flat", [{"name": "Oats"}, "honey"])
+        await _seed_meal(db, user_id, "Empty menu", [{"name": "Oats"}], menu_items=[])
+        await _seed_meal(db, user_id, "Menu", [{"name": "Rice"}], menu_items=[{"name": "Oats", "amount": 40, "unit": "g", "ingredients": []}])
+        await db.commit()
+
+    await refresh_insights_for_user(user_id)
+    frequent = next(d for d in await _inferred(user_id) if "Already eating enough" in d)
+    assert "oats (3x)" in frequent
+    assert "honey (1x)" in frequent
+    assert "rice" not in frequent
