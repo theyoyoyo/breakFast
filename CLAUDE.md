@@ -178,12 +178,20 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 ```
 breakFAST/
 ├── CLAUDE.md
+├── README.md                        ← project overview and quick start
+├── .env.example                     ← settings template (copy to .env)
+├── .github/workflows/ci.yml         ← CI: backend and frontend tests on each PR
 ├── setup.bat                        ← Windows first-time setup (deps + model pull)
 ├── start.bat                        ← Windows launcher (opens backend + frontend)
 ├── start-server.bat                 ← Windows production launcher (FastAPI serves the build)
 ├── docs/                            ← full server setup guide
 ├── backend/
 │   ├── main.py                      ← FastAPI entry, lifespan init_db
+│   ├── config.py                    ← settings read from `.env` (Ollama, CORS, demo user…)
+│   ├── utils.py                     ← JSON block reader, static file paths
+│   ├── requirements.txt             ← backend dependencies
+│   ├── requirements-dev.txt         ← test dependencies
+│   ├── tests/                       ← pytest, Ollama faked
 │   ├── database.py                  ← SQLite schema + migrations
 │   ├── auth.py                      ← scrypt PIN hashing, login rate limit + in-memory bearer tokens
 │   ├── manage.py                    ← admin CLI (add/list/delete users, set-pin)
@@ -196,7 +204,7 @@ breakFAST/
 │   ├── routers/
 │   │   ├── chat.py                  ← WebSocket /chat
 │   │   ├── meals.py                 ← /meals history
-│   │   ├── ingredients.py           ← /ingredients CRUD + groups
+│   │   ├── ingredients.py           ← /ingredients CRUD + groups, fridge check, expiry endpoints, Shopping persona's call (`POST /ingredients/shopping-suggestions`)
 │   │   ├── favorites.py             ← /favorites (saved meals, unique names per user)
 │   │   ├── favorite_ingredients.py  ← /favorite-ingredients (staples)
 │   │   ├── shopping.py              ← /shopping list (DELETE / empties it) + /shopping/suggestions (Fridge tab list, per user; removed count, bring back)
@@ -223,23 +231,37 @@ breakFAST/
 │   │   ├── chat_block.py            ← the chat a Suggest press reads (typed messages + meal cards, latest marked); the chat persona's history, meal blocks dropped from its replies
 │   │   └── llm.py                   ← Ollama streaming + lyric fallback
 │   └── models/
+│       ├── user.py                  ← login and user models
+│       ├── preferences.py           ← preference and habit models
 │       ├── ingredient.py            ← INGREDIENT_GROUPS (source of truth)
 │       ├── kitchen.py               ← KITCHEN_APPLIANCES (source of truth; `hot`: its food cools while it waits)
 │       ├── units.py                 ← UNIT_PAIRS English ↔ Turkish (source of truth)
 │       └── meal.py                  ← MealLog, Meal (includes menu_items)
 └── frontend/src/
-    ├── App.jsx                      ← tab nav (Chat, Fridge, Preferences, Settings); the open tab is in the link (#fridge…, Chat has none, replaced so Back doesn't step through tabs), so a refresh reopens it, and a login starts on Chat
+    ├── ../vite.config.js            ← Vite build + the PWA manifest (one folder up)
+    ├── main.jsx                     ← React entry
+    ├── index.css                    ← theme variables (`:root[data-theme=…]`)
+    ├── App.jsx                      ← tab nav (Chat, Fridge, Preferences, Favorites, Settings); the open tab is in the link (#fridge…, Chat has none, replaced so Back doesn't step through tabs), so a refresh reopens it, and a login starts on Chat
     ├── utils/ingredients.js         ← ingredient helpers, units per language + unit memory
+    ├── utils/theme.js               ← theme store (cached per device, like the language)
+    ├── utils/emoji.js               ← breakfast emojis for meal icons
     ├── utils/language.js            ← AI language store (cached per device, like the theme)
     ├── utils/countries.js           ← Country list (name + ISO code) for Settings → Profile
     ├── utils/prepPlan.js            ← reads new-format prep plans: the dish and dish color of each line
-    ├── styles/common.js             ← shared styles
+    ├── styles/common.js             ← shared styles (each component's own sit beside it in `*.styles.js`)
+    ├── assets/u2.png                ← the Suggest button's picture
     ├── services/api.js              ← all REST + WebSocket calls
     ├── hooks/useVoice.js            ← Web Speech API
     ├── hooks/useLanguage.js         ← current AI language, re-renders on change
     ├── hooks/useMealReadiness.js    ← fridge readiness for a meal (card + favorites badge)
     ├── hooks/useSyncNotice.js       ← app-wide sync notices from the chat socket
-    └── components/
+    └── components/                  ← Vitest tests sit beside the files they test
+        ├── LoginScreen.jsx          ← name + PIN login
+        ├── MarkdownText.jsx         ← Markdown in chat replies
+        ├── ReadinessIcon.jsx        ← yellow/green fridge readiness badge on meal icons
+        ├── ShoppingListPanel.jsx    ← the shopping list (Fridge tab)
+        ├── FavoriteIngredientsPanel.jsx ← staples list
+        ├── StarRating.jsx           ← star rating input
         ├── ChatInterface.jsx        ← main chat UI
         ├── MealBlock.jsx            ← inline meal block in chat
         ├── MealEditor.jsx           ← shared meal editor (used everywhere)
