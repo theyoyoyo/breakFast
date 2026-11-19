@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS users (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT    NOT NULL UNIQUE,
     pin_hash    TEXT    NOT NULL,
+    -- Reserved for admin-only features: no endpoint checks it today.
     is_admin    INTEGER NOT NULL DEFAULT 0,
     created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
     last_expiry_check TEXT

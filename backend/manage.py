@@ -169,7 +169,8 @@ def main():
     add = sub.add_parser("add-user", help="Create a new user")
     add.add_argument("name", help="Username")
     add.add_argument("--pin", help="Login PIN, 6-10 digits (asked for when left out)")
-    add.add_argument("--admin", action="store_true", help="Make admin")
+    # No endpoint checks the admin flag today; it is reserved for admin-only features.
+    add.add_argument("--admin", action="store_true", help="Make admin (reserved for admin-only features; nothing checks it yet)")
 
     # set-pin
     set_pin_cmd = sub.add_parser("set-pin", help="Change a user's PIN")
