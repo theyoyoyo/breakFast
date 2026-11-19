@@ -93,7 +93,7 @@ The backend loads each user's context (inventory, recent meals, profile, supplem
 ### Prerequisites
 
 - Python 3.11+
-- Node.js 18+
+- Node.js 22.13+
 - [Ollama](https://ollama.com) (optional: everything except the AI features works without it)
 
 ### Windows quick start

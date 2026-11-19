@@ -21,7 +21,7 @@ Make sure these are installed before starting. If any are missing, install them 
 |---|---|---|
 | **Git** | https://git-scm.com/downloads/win | `git --version` |
 | **Python 3.11+** | https://www.python.org/downloads/ | `python --version` → 3.11 or newer |
-| **Node.js 18+** | https://nodejs.org/ (LTS is fine) | `node --version` |
+| **Node.js 22.13+** | https://nodejs.org/ (LTS is fine) | `node --version` |
 | **VS Code** | https://code.visualstudio.com/ | (optional but recommended) |
 
 > **Python installer tip:** Check **"Add Python to PATH"** during install. If you
