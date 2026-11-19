@@ -118,18 +118,6 @@ async def test_delete_unknown_meal_returns_404(client):
     assert r.status_code == 404
 
 
-async def test_rate_meal(client):
-    meal = (await client.post("/meals/", json=SAMPLE_MEAL)).json()
-    r = await client.patch(f"/meals/{meal['id']}/rating", json={"rating": 5})
-    assert r.status_code == 200
-    assert r.json()["rating"] == 5
-
-
-async def test_rate_unknown_meal_returns_404(client):
-    r = await client.patch("/meals/9999/rating", json={"rating": 5})
-    assert r.status_code == 404
-
-
 # Returns zero when no meals are older than 1 year
 async def test_delete_old_meals_none(client):
     await client.post("/meals/", json=SAMPLE_MEAL)

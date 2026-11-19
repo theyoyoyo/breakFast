@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from database import get_db
 from auth import require_user
-from models.meal import Meal, MealLog, MealRating
+from models.meal import Meal, MealLog
 from db_helpers import row_to_meal, serialize_json_field
 
 router = APIRouter(prefix="/meals", tags=["meals"])
@@ -253,22 +253,3 @@ async def delete_meal(meal_id: int, user_id: int = Depends(require_user)):
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Meal not found")
 
-
-@router.patch("/{meal_id}/rating", response_model=Meal)
-async def rate_meal(meal_id: int, body: MealRating, user_id: int = Depends(require_user)):
-    """Rate a meal thumbs-up (5) or thumbs-down (1)."""
-    if body.rating not in (1, 5):
-        raise HTTPException(status_code=400, detail="Rating must be 1 (down) or 5 (up)")
-    async with get_db() as db:
-        cursor = await db.execute(
-            "UPDATE meal_history SET rating = ? WHERE id = ? AND user_id = ?",
-            (body.rating, meal_id, user_id),
-        )
-        await db.commit()
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Meal not found")
-        async with db.execute(
-            "SELECT * FROM meal_history WHERE id = ? AND user_id = ?",
-            (meal_id, user_id),
-        ) as cur:
-            return row_to_meal(await cur.fetchone())
