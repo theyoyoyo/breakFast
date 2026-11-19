@@ -9,12 +9,11 @@ with that panel's Save button, and each session remembers its selected meal card
 import json
 import uuid
 from typing import Literal
-
 from fastapi import APIRouter, Depends, HTTPException, Path
 from fastapi.responses import Response
-from pydantic import BaseModel, StrictInt
+from pydantic import BaseModel, StrictBool, StrictInt
 from database import get_db
-from db_helpers import parse_json_field
+from db_helpers import owns_session, parse_json_field
 from auth import require_user
 from services import chat_sync
 from models.limits import SESSION_ID_MAX, MessageContent, SizedDict
@@ -23,19 +22,21 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
 class MessageIn(BaseModel):
+    """A message saved to a session: meals sent to chat, analysis and prep plan results."""
     role: Literal["user", "assistant"] = "assistant"
     content: MessageContent = ""
-    select: bool = False  # also make it the selected meal card
+    select: StrictBool = False  # also make it the selected meal card
 
 
 class MessageUpdate(BaseModel):
-    """Only the fields sent change."""
+    """A message change; only the fields sent are changed (null content saves empty text)."""
     content: MessageContent | None = None
     ate_draft: SizedDict | None = None  # a meal object, or null to clear it
 
 
 class SelectedIn(BaseModel):
-    message_id: StrictInt | None = None  # a number; null selects none
+    """The selected meal card's message id, or null for none (strict: "1" or true isn't an id)."""
+    message_id: StrictInt | None = None
 
 
 @router.post("/")
@@ -146,8 +147,11 @@ async def save_message(
     user_id: int = Depends(require_user),
 ):
     """Save a message to a session (meals sent to chat, analysis and prep plan results).
-    `select: true` also makes it the selected meal card (a meal sent to chat)."""
+    select: true also makes it the selected meal card (a meal sent to chat).
+    A session that isn't the user's own gets 404 and nothing is stored."""
     async with get_db() as db:
+        if not await owns_session(db, session_id, user_id):
+            raise HTTPException(status_code=404, detail="Session not found")
         cur = await db.execute(
             "INSERT INTO chat_messages (session_id, user_id, role, content) VALUES (?, ?, ?, ?)",
             (session_id, user_id, body.role, body.content),

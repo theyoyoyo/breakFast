@@ -11,6 +11,7 @@ import logging
 import uuid
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from database import get_db
+from db_helpers import owns_session
 from auth import SOCKET_AUTH_PROTOCOL, get_user_id_from_token, socket_token
 from services.llm import LLMUnavailableError, lyric_cycler
 from services.suggestion import build_chat_prompt, stream_response
@@ -44,7 +45,8 @@ def _session_id(value) -> str | None:
 
 
 async def _save_suggestion(db, user_id: int, session_id: str, meal_data: dict, language: str = "en") -> int:
-    """Insert a suggested meal into suggested_meals. Returns the new suggestion's id."""
+    """Insert a suggested meal into suggested_meals. Returns the new suggestion's id.
+    `session_id` is the socket's checked session, one of the user's own (see chat_endpoint)."""
     # Support both old flat format and new menu format
     menu_items = meal_data.get("menu")
     meal_name = meal_data.get("menu_name") or meal_data.get("meal_name", "Unknown")
@@ -155,9 +157,14 @@ async def chat_endpoint(websocket: WebSocket):
                 payload = {"message": raw}
 
             # Handle session management messages
-            # (a session id, mode or type that isn't a string is ignored: it would crash a lookup)
+            # (a session id, mode or type that isn't a string is ignored: it would crash a lookup;
+            # so is a session that isn't the user's own, and the current one stays)
             if "session_id" in payload and "message" not in payload:
-                session_id = _session_id(payload["session_id"]) or session_id
+                named = _session_id(payload["session_id"])
+                if named:
+                    async with get_db() as db:
+                        if await owns_session(db, named, user_id):
+                            session_id = named
                 continue
 
             message_text = payload.get("message", "")
@@ -173,8 +180,16 @@ async def chat_endpoint(websocket: WebSocket):
             if not isinstance(suggest_mode, str):
                 suggest_mode = None
 
-            # Use session_id from payload if provided, otherwise keep current
-            session_id = _session_id(payload.get("session_id")) or session_id
+            # Use session_id from payload if provided, otherwise keep current. The message is saved only
+            # in one of the user's own sessions: one that isn't (another user's, one deleted on another
+            # device, or an id over the length limit) falls back to the current session, then to the latest,
+            # so the message still gets its reply. Everything below, the suggestion included, uses this checked id.
+            named = _session_id(payload.get("session_id"))
+            async with get_db() as db:
+                if named and await owns_session(db, named, user_id):
+                    session_id = named
+                elif session_id is not None and not await owns_session(db, session_id, user_id):
+                    session_id = None
 
             # Ensure we have a session
             if session_id is None:

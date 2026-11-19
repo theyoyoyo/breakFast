@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, field_validator
-from typing import Literal, Optional, List, Union, Any
+from typing import Optional, List, Union, Any
 
 from models.limits import (
     INGREDIENTS_MAX, MENU_ITEMS_MAX, STEPS_MAX,
@@ -22,10 +22,6 @@ class MealLog(BaseModel):
     nutrition_note: Optional[Note] = None
     schedule: Optional[SizedDict] = None
     menu_items: Optional[SizedList] = Field(default=None, max_length=MENU_ITEMS_MAX)  # new multi-item menu format
-
-
-class MealRating(BaseModel):
-    rating: Literal[1, 5]  # 1 = thumbs down, 5 = thumbs up
 
 
 class FavoriteIn(BaseModel):
@@ -55,7 +51,6 @@ class FavoriteIn(BaseModel):
             except ValueError:
                 return None
         return None
-
 
 class Meal(BaseModel):
     id: int

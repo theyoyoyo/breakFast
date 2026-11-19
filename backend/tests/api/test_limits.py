@@ -91,14 +91,6 @@ async def test_logged_meal_oversized_json_refused(client):
 
 
 @pytest.mark.asyncio
-async def test_meal_rating_other_than_up_or_down_refused(client):
-    """A meal rating that isn't thumbs up or down gets 422."""
-    meal_id = (await client.post("/meals/", json={"meal_name": "Toast"})).json()["id"]
-    assert (await client.patch(f"/meals/{meal_id}/rating", json={"rating": 3})).status_code == 422
-    assert (await client.patch(f"/meals/{meal_id}/rating", json={"rating": 5})).status_code == 200
-
-
-@pytest.mark.asyncio
 async def test_favorite_body_is_typed(client):
     """A favorite whose fields have the wrong type gets 422 instead of being stored."""
     assert (await client.post("/favorites/", json={"meal_name": "Toast", "ingredients": "bread"})).status_code == 422
