@@ -118,7 +118,7 @@ async def test_delete_unknown_meal_returns_404(client):
     assert r.status_code == 404
 
 
-# Returns zero when no meals are older than 1 year
+# Returns zero when no meals are older than one month
 async def test_delete_old_meals_none(client):
     await client.post("/meals/", json=SAMPLE_MEAL)
     r = await client.delete("/meals/old")
@@ -129,16 +129,23 @@ async def test_delete_old_meals_none(client):
     assert len(meals) == 1
 
 
-# Deletes meals with logged_at artificially set to 2 years ago
+# Deletes the user's meals older than one month, keeps newer ones and never another user's
 async def test_delete_old_meals_removes_old(client, db):
-    meal = (await client.post("/meals/", json=SAMPLE_MEAL)).json()
+    old = (await client.post("/meals/", json=SAMPLE_MEAL)).json()
+    recent = (await client.post("/meals/", json=STRUCTURED_MEAL)).json()
+    await db.execute("UPDATE meal_history SET logged_at = datetime('now', '-45 days') WHERE id = ?", (old["id"],))
+    await db.execute("UPDATE meal_history SET logged_at = datetime('now', '-20 days') WHERE id = ?", (recent["id"],))
+    cur = await db.execute("INSERT INTO users (name, pin_hash) VALUES ('user2', 'x')")
+    other_id = cur.lastrowid
     await db.execute(
-        "UPDATE meal_history SET logged_at = datetime('now', '-2 years') WHERE id = ?",
-        (meal["id"],),
+        "INSERT INTO meal_history (user_id, meal_name, logged_at) VALUES (?, 'Other', datetime('now', '-45 days'))",
+        (other_id,),
     )
     await db.commit()
     r = await client.delete("/meals/old")
     assert r.status_code == 200
     assert r.json()["deleted"] == 1
     meals = (await client.get("/meals/")).json()
-    assert len(meals) == 0
+    assert [m["id"] for m in meals] == [recent["id"]]
+    async with db.execute("SELECT COUNT(*) AS c FROM meal_history WHERE user_id = ?", (other_id,)) as c:
+        assert (await c.fetchone())["c"] == 1
