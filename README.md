@@ -4,7 +4,6 @@
 
 break FAST knows what is in each person's fridge, which kitchen appliances they own, their health goals, supplements and eating habits, and turns that into a concrete breakfast menu every morning, plus a prep plan timed so everything is ready at the same moment. It is a FastAPI backend and a React PWA you open from your phone, backed by a local LLM through [Ollama](https://ollama.com). There is no cloud API, no subscription and no data leaving the house. Several people can share one instance, each with fully isolated data.
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688.svg)
 ![React 18](https://img.shields.io/badge/React-18-61dafb.svg)
@@ -251,4 +250,4 @@ breakFast/
 
 ## License
 
-[MIT](LICENSE)
+All rights reserved. The source is published for viewing only; see [LICENSE](LICENSE).
