@@ -8,14 +8,34 @@ with that panel's Save button, and each session remembers its selected meal card
 
 import json
 import uuid
+from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
+from pydantic import BaseModel, StrictBool, StrictInt
 from database import get_db
-from db_helpers import parse_json_field
+from db_helpers import owns_session, parse_json_field
 from auth import require_user
 from services import chat_sync
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
+
+
+class MessageIn(BaseModel):
+    """A message saved to a session: meals sent to chat, analysis and prep plan results."""
+    role: Literal["user", "assistant"] = "assistant"
+    content: str = ""
+    select: StrictBool = False
+
+
+class MessageUpdate(BaseModel):
+    """A message change; only the fields sent are changed (null content saves empty text)."""
+    content: str | None = None
+    ate_draft: dict | None = None
+
+
+class SelectedIn(BaseModel):
+    """The selected meal card's message id, or null for none (strict: "1" or true isn't an id)."""
+    message_id: StrictInt | None = None
 
 
 @router.post("/")
@@ -120,21 +140,22 @@ async def get_messages(session_id: str, user_id: int = Depends(require_user)):
 
 
 @router.post("/{session_id}/messages")
-async def save_message(session_id: str, body: dict, user_id: int = Depends(require_user)):
+async def save_message(session_id: str, body: MessageIn, user_id: int = Depends(require_user)):
     """Save a message to a session (meals sent to chat, analysis and prep plan results).
-    `select: true` also makes it the selected meal card (a meal sent to chat)."""
-    role = body.get("role", "assistant")
-    content = body.get("content", "")
+    `select: true` also makes it the selected meal card (a meal sent to chat).
+    A session that isn't the user's own gets 404 and nothing is stored."""
     async with get_db() as db:
+        if not await owns_session(db, session_id, user_id):
+            raise HTTPException(status_code=404, detail="Session not found")
         cur = await db.execute(
             "INSERT INTO chat_messages (session_id, user_id, role, content) VALUES (?, ?, ?, ?)",
-            (session_id, user_id, role, content),
+            (session_id, user_id, body.role, body.content),
         )
         await db.execute(
             "UPDATE chat_sessions SET updated_at = datetime('now') WHERE id = ? AND user_id = ?",
             (session_id, user_id),
         )
-        if body.get("select"):
+        if body.select:
             await db.execute(
                 "UPDATE chat_sessions SET selected_message_id = ? WHERE id = ? AND user_id = ?",
                 (cur.lastrowid, session_id, user_id),
@@ -145,17 +166,15 @@ async def save_message(session_id: str, body: dict, user_id: int = Depends(requi
 
 
 @router.put("/{session_id}/messages/{message_id}")
-async def update_message(session_id: str, message_id: int, body: dict, user_id: int = Depends(require_user)):
+async def update_message(session_id: str, message_id: int, body: MessageUpdate, user_id: int = Depends(require_user)):
     """Change a message: `content` replaces its text (a meal card edit rewrites the message's
     meal block), `ate_draft` stores the card's "Today I ate" version (null clears it).
     Only the fields sent change; the last save wins."""
     updates = {}
-    if "content" in body:
-        updates["content"] = body["content"] or ""
-    if "ate_draft" in body:
-        draft = body["ate_draft"]
-        if draft is not None and not isinstance(draft, dict):
-            raise HTTPException(status_code=422, detail="ate_draft must be a meal object or null")
+    if "content" in body.model_fields_set:
+        updates["content"] = body.content or ""
+    if "ate_draft" in body.model_fields_set:
+        draft = body.ate_draft
         updates["ate_draft"] = json.dumps(draft, ensure_ascii=False) if draft is not None else None
     if not updates:
         raise HTTPException(status_code=422, detail="Nothing to update")
@@ -173,11 +192,9 @@ async def update_message(session_id: str, message_id: int, body: dict, user_id: 
 
 
 @router.put("/{session_id}/selected")
-async def select_message(session_id: str, body: dict, user_id: int = Depends(require_user)):
+async def select_message(session_id: str, body: SelectedIn, user_id: int = Depends(require_user)):
     """Select a meal card for today (`message_id`), or none (null). The user's devices follow."""
-    message_id = body.get("message_id")
-    if message_id is not None and not isinstance(message_id, int):
-        raise HTTPException(status_code=422, detail="message_id must be a number or null")
+    message_id = body.message_id
     async with get_db() as db:
         if message_id is not None:
             async with db.execute(
