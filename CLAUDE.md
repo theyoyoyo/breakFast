@@ -22,7 +22,7 @@ Multiple users share one instance, each fully isolated. Auth is a name and a PIN
 
 **Local-first, free forever.** Primary LLM is Ollama on the user's own hardware. Song lyric fallback when unreachable.
 
-**The system learns.** Stated habits are a warm prior. Actual behavior updates what gets recommended.
+**The system learns.** Stated habits are a warm prior. Actual behavior updates what gets recommended. The patterns come from the last 30 days of logged meals (`PATTERN_DAYS` in `services/insights.py`), each counted from its menu as eaten; nothing is deleted automatically, and Settings can delete meals older than a month.
 
 ---
 
@@ -56,7 +56,7 @@ Multiple users share one instance, each fully isolated. Auth is a name and a PIN
 [SQLite — breakFAST.db]
 ```
 
-**Chat sync across devices:** `services/chat_sync.py` keeps each user's open chat sockets in memory (one server process, no polling) and drops a socket on disconnect. When a session's messages change (a chat reply is saved, or a message is saved or edited over REST: meals sent to chat, analysis and prep plan results, meal card edits, which rewrite the message's JSON meal block, a card's saved "Today I ate" version, and the selected meal card), the server sends `{type: 'session_updated', session_id}` to that user's sockets only. A reply skips the socket that asked, and tokens never go to other devices. `ChatInterface` reloads the chat on screen on that push, when the page becomes visible again, and when its socket opens. A reload waits for a streaming reply or a running analysis, and keeps the draft and unchanged cards. A reply whose device drops mid-stream still finishes and is saved. The selected meal card (today's meal) is the same on every device: `chat_sessions.selected_message_id`, set with `PUT /sessions/{id}/selected` (a tap on a selected card's box unselects it), by a new suggestion, by a meal sent to chat (`select: true` on its POST), and cleared when the meal is logged; GET messages marks it `selected`.
+**Chat sync across devices:** `services/chat_sync.py` keeps each user's open chat sockets in memory (one server process, no polling) and drops a socket on disconnect. When a session's messages change (a chat reply is saved, or a message is saved or edited over REST: meals sent to chat, analysis and prep plan results, meal card edits, which rewrite the message's JSON meal block, a card's saved "Today I ate" version, and the selected meal card), the server sends `{type: 'session_updated', session_id}` to that user's sockets only. A reply skips the socket that asked, and tokens never go to other devices. `ChatInterface` reloads the chat on screen on that push, when the page becomes visible again, and when its socket opens. A reload waits for a streaming reply or a running analysis, and keeps the draft and unchanged cards. A reply whose device drops mid-stream still finishes and is saved. Messages are saved only in the user's own sessions: the session endpoints take typed bodies (role `user` or `assistant`, text content; 422 otherwise) and a save to any other session gets 404, and the socket uses a frame's `session_id` only when it's one of the user's (a message frame falls back to the current session, then the latest, so it still gets its reply). The selected meal card (today's meal) is the same on every device: `chat_sessions.selected_message_id`, set with `PUT /sessions/{id}/selected` (a tap on a selected card's box unselects it), by a new suggestion, by a meal sent to chat (`select: true` on its POST), and cleared when the meal is logged; GET messages marks it `selected`.
 
 Other changes send a small notice through `notify_user`: a supplement change or a pill marked for today sends `{type: 'supplements_updated'}`, and a shopping suggestions list change (bringing back removed suggestions included) `{type: 'shopping_suggestions_updated'}`. All tabs stay mounted, so the chat socket is open while the app is: `ChatInterface` passes every notice that isn't about the chat to the rest of the app as one window event (`hooks/useSyncNotice.js`: `emitSyncNotice`, `useSyncNotice(types, handler)`), plus `{type: 'sync_connected'}` when its socket opens, so a panel can catch up on what it missed. The 💊 list reloads on a supplements notice, when the socket opens and when the page becomes visible; Settings reloads only its supplement list, so an unsaved profile edit stays. The Fridge tab reloads its suggestions list the same way, and Settings its count of removed suggestions. That list starts collapsed under a theme-colored bar as big as Suggest Shopping (title and count in the middle, ▲ while closed and ▼ while open at the right); while open, two helpers at the left check or uncheck every item and clear the list after an "Are you sure?" (cleared items aren't left out of later suggestions, unlike ×).
 
@@ -149,7 +149,7 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 - **Context length**: every Ollama call sends the same `num_ctx` (`OLLAMA_NUM_CTX`, 8192 by default, `_options` in `services/llm.py`). Chat history is about 6000 tokens and Ollama's own 4096 drops the oldest messages silently; one value for all calls keeps Ollama from reloading the model. The KV cache fits a 6 GB GPU (`docs/SETUPALL.md`, Step 1).
 - **CORS**: configurable via `CORS_ORIGINS` env var (comma-separated).
 - **API docs**: `/docs`, `/redoc` and `/openapi.json` are served only when `API_DOCS=true` (off by default, `config.py`; `docs_url`, `redoc_url` and `openapi_url` are `None` otherwise in `main.py`).
-- **Auth**: a name and a PIN, set with `manage.py add-user` or `set-pin` (both ask for the PIN, hidden, when `--pin` is left out); tokens live in memory, so a restart logs everyone out. An open app returns to the login screen with a note at its next refused request, or when its chat socket can't reopen. A token never goes in a URL, since URLs end up in logs: REST calls send it in `Authorization`, and the chat socket in its `Sec-WebSocket-Protocol` header as `bearer` then the token (`socket_token` in `auth.py`, the one header a browser lets a page set on a WebSocket); the server checks it before accepting, accepts with `bearer`, and refuses any other header, `?token=` included (4001). Each login is its own session: Logout ends this device's on the server too (`POST /auth/logout` through `revoke_token`, 204 also for an unknown or already ended one), so its token stops working on REST and on the chat socket, while the user's other devices stay logged in. The app clears its stored session before the call, so the device logs out even when the call fails; the chat socket checks the token when it opens, and the tab that logs out closes its own. PINs are stored as salted scrypt hashes (`scrypt$n$r$p$salt$hash`, OWASP-aligned cost in `SCRYPT_*` in `auth.py`), checked off the event loop and with `hmac.compare_digest`; an unknown name is checked against a dummy hash, so timing doesn't tell names apart. Plain SHA-256 hashes from before scrypt still log in, and that login re-hashes them, like any hash at an older cost. New or changed PINs take 6-10 digits, digits only since the login screen opens the number pad (`pin_problem`); PINs set before the rule still log in until `set-pin` replaces them, and login takes names up to 100 characters and PINs up to 64 (422 beyond). Failed logins are counted in memory per name on each client IP, one counter per pair, so typos on a shared device don't lock other users there and nobody can lock a user out of their own device: repeated failures get 429 with `Retry-After`, the wait growing with each further one (exponential backoff), and the PIN isn't checked while locked; each attempt counts before the check, so parallel requests can't slip past, a success clears the count, and a quiet spell forgets it (the `LOGIN_*` limits in `auth.py`). The login screen shows the wait (CORS exposes `Retry-After`). Tests hash at a tiny cost (`conftest.py`) unless marked `real_scrypt`.
+- **Auth**: a name and a PIN, set with `manage.py add-user` or `set-pin` (both ask for the PIN, hidden, when `--pin` is left out); `users.is_admin` (`add-user --admin`) is checked by no endpoint today and is reserved for admin-only features; tokens live in memory, so a restart logs everyone out. An open app returns to the login screen with a note at its next refused request, or when its chat socket can't reopen. A token never goes in a URL, since URLs end up in logs: REST calls send it in `Authorization`, and the chat socket in its `Sec-WebSocket-Protocol` header as `bearer` then the token (`socket_token` in `auth.py`, the one header a browser lets a page set on a WebSocket); the server checks it before accepting, accepts with `bearer`, and refuses any other header, `?token=` included (4001). Each login is its own session: Logout ends this device's on the server too (`POST /auth/logout` through `revoke_token`, 204 also for an unknown or already ended one), so its token stops working on REST and on the chat socket, while the user's other devices stay logged in. The app clears its stored session before the call, so the device logs out even when the call fails; the chat socket checks the token when it opens, and the tab that logs out closes its own. PINs are stored as salted scrypt hashes (`scrypt$n$r$p$salt$hash`, OWASP-aligned cost in `SCRYPT_*` in `auth.py`), checked off the event loop and with `hmac.compare_digest`; an unknown name is checked against a dummy hash, so timing doesn't tell names apart. Plain SHA-256 hashes from before scrypt still log in, and that login re-hashes them, like any hash at an older cost. New or changed PINs take 6-10 digits, digits only since the login screen opens the number pad (`pin_problem`); PINs set before the rule still log in until `set-pin` replaces them, and login takes names up to 100 characters and PINs up to 64 (422 beyond). Failed logins are counted in memory per name on each client IP, one counter per pair, so typos on a shared device don't lock other users there and nobody can lock a user out of their own device: repeated failures get 429 with `Retry-After`, the wait growing with each further one (exponential backoff), and the PIN isn't checked while locked; each attempt counts before the check, so parallel requests can't slip past, a success clears the count, and a quiet spell forgets it (the `LOGIN_*` limits in `auth.py`). The login screen shows the wait (CORS exposes `Retry-After`). Tests hash at a tiny cost (`conftest.py`) unless marked `real_scrypt`.
 - **Demo user**: only created when `DEMO_USER=true` (empty PIN), and the empty PIN logs in only while it's on, so a leftover demo account is locked once it's off. A newly created demo account gets a starter fridge (`DEMO_FRIDGE` in `models/ingredient.py`, basics included). Never enable it on a reachable instance.
 - **Language**: the UI is English only; the setting changes AI replies. User data is often Turkish and pulls a 7B model toward Turkish, so every user-facing prompt ends with a `FINAL REMINDER` restating the language directive. Code-built text in replies (e.g. prep plan labels) follows the same setting, and so do units.
 - **Theme**: Settings → Theme (orange default, then green, teal, blue, purple: hues spread around the wheel, each nudged warm, all WCAG AA) changes only `--accent`, `--accent2`, `--secondary` / `--secondary-soft`, the assistant bubble `--bubble` and the prep plan's dish colors `--dish-1` … `--dish-4` (`index.css`, `:root[data-theme=…]`). Use those variables or `secondaryColor`, never a hard-coded accent hex. `--dish-1` is the accent and the other three are hues spread around the wheel from it at the accent's lightness (the secondaries fail AA on the bubble and share the accent's hue), kept away from the delete red and the missing-item yellow, each AA on its bubble (a theme test checks the contrast). A plan in the new format (`⏱ Plan (` heading, `utils/prepPlan.js`) gets a thin bar per dish down the left of its lines, ↳ lines included, and the dish name on a time line in the same color; dishes take colors in order of first appearance and a fifth reuses the first. Older plans and lyric fallbacks render as plain Markdown, and nothing is added to the plan text. Semantic colors never follow the theme: red (`colors.danger*`) means delete/remove, health-rule priorities are a traffic light (red top priority, yellow care a lot, green don't really care), plus expiry warnings and stars. Saved as the `theme` preference and cached in `localStorage` (`utils/theme.js`).
@@ -179,12 +179,20 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 ```
 breakFAST/
 ├── CLAUDE.md
+├── README.md                        ← project overview and quick start
+├── .env.example                     ← settings template (copy to .env)
+├── .github/workflows/ci.yml         ← CI: backend and frontend tests on each PR
 ├── setup.bat                        ← Windows first-time setup (deps + model pull)
 ├── start.bat                        ← Windows launcher (opens backend + frontend)
 ├── start-server.bat                 ← Windows production launcher (FastAPI serves the build)
 ├── docs/                            ← full server setup guide
 ├── backend/
 │   ├── main.py                      ← FastAPI entry, lifespan init_db
+│   ├── config.py                    ← settings read from `.env` (Ollama, CORS, demo user…)
+│   ├── utils.py                     ← JSON block reader, static file paths
+│   ├── requirements.txt             ← backend dependencies
+│   ├── requirements-dev.txt         ← test dependencies
+│   ├── tests/                       ← pytest, Ollama faked
 │   ├── database.py                  ← SQLite schema + migrations
 │   ├── auth.py                      ← scrypt PIN hashing, login rate limit + in-memory bearer tokens
 │   ├── manage.py                    ← admin CLI (add/list/delete users, set-pin)
@@ -197,7 +205,7 @@ breakFAST/
 │   ├── routers/
 │   │   ├── chat.py                  ← WebSocket /chat
 │   │   ├── meals.py                 ← /meals history
-│   │   ├── ingredients.py           ← /ingredients CRUD + groups
+│   │   ├── ingredients.py           ← /ingredients CRUD + groups, fridge check, expiry endpoints, Shopping persona's call (`POST /ingredients/shopping-suggestions`)
 │   │   ├── favorites.py             ← /favorites (saved meals, unique names per user)
 │   │   ├── favorite_ingredients.py  ← /favorite-ingredients (staples)
 │   │   ├── shopping.py              ← /shopping list (DELETE / empties it) + /shopping/suggestions (Fridge tab list, per user; removed count, bring back)
@@ -224,23 +232,37 @@ breakFAST/
 │   │   ├── chat_block.py            ← the chat a Suggest press reads (typed messages + meal cards, latest marked); the chat persona's history, meal blocks dropped from its replies
 │   │   └── llm.py                   ← Ollama streaming + lyric fallback
 │   └── models/
+│       ├── user.py                  ← login and user models
+│       ├── preferences.py           ← preference and habit models
 │       ├── ingredient.py            ← INGREDIENT_GROUPS (source of truth)
 │       ├── kitchen.py               ← KITCHEN_APPLIANCES (source of truth; `hot`: its food cools while it waits)
 │       ├── units.py                 ← UNIT_PAIRS English ↔ Turkish (source of truth)
 │       └── meal.py                  ← MealLog, Meal (includes menu_items)
 └── frontend/src/
-    ├── App.jsx                      ← tab nav (Chat, Fridge, Preferences, Settings); the open tab is in the link (#fridge…, Chat has none, replaced so Back doesn't step through tabs), so a refresh reopens it, and a login starts on Chat
+    ├── ../vite.config.js            ← Vite build + the PWA manifest (one folder up)
+    ├── main.jsx                     ← React entry
+    ├── index.css                    ← theme variables (`:root[data-theme=…]`)
+    ├── App.jsx                      ← tab nav (Chat, Fridge, Preferences, Favorites, Settings); the open tab is in the link (#fridge…, Chat has none, replaced so Back doesn't step through tabs), so a refresh reopens it, and a login starts on Chat
     ├── utils/ingredients.js         ← ingredient helpers, units per language + unit memory
+    ├── utils/theme.js               ← theme store (cached per device, like the language)
+    ├── utils/emoji.js               ← breakfast emojis for meal icons
     ├── utils/language.js            ← AI language store (cached per device, like the theme)
     ├── utils/countries.js           ← Country list (name + ISO code) for Settings → Profile
     ├── utils/prepPlan.js            ← reads new-format prep plans: the dish and dish color of each line
-    ├── styles/common.js             ← shared styles
+    ├── styles/common.js             ← shared styles (each component's own sit beside it in `*.styles.js`)
+    ├── assets/u2.png                ← the Suggest button's picture
     ├── services/api.js              ← all REST + WebSocket calls
     ├── hooks/useVoice.js            ← Web Speech API
     ├── hooks/useLanguage.js         ← current AI language, re-renders on change
     ├── hooks/useMealReadiness.js    ← fridge readiness for a meal (card + favorites badge)
     ├── hooks/useSyncNotice.js       ← app-wide sync notices from the chat socket
-    └── components/
+    └── components/                  ← Vitest tests sit beside the files they test
+        ├── LoginScreen.jsx          ← name + PIN login
+        ├── MarkdownText.jsx         ← Markdown in chat replies
+        ├── ReadinessIcon.jsx        ← yellow/green fridge readiness badge on meal icons
+        ├── ShoppingListPanel.jsx    ← the shopping list (Fridge tab)
+        ├── FavoriteIngredientsPanel.jsx ← staples list
+        ├── StarRating.jsx           ← star rating input
         ├── ChatInterface.jsx        ← main chat UI
         ├── MealBlock.jsx            ← inline meal block in chat
         ├── MealEditor.jsx           ← shared meal editor (used everywhere)

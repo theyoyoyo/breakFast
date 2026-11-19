@@ -183,7 +183,7 @@ def format_ingredient_item(item) -> str:
     return str(item)
 
 
-def _json_list(value) -> list:
+def json_list(value) -> list:
     """A JSON list field, whether still the DB's string or already parsed."""
     if isinstance(value, str):
         try:
@@ -196,15 +196,15 @@ def _json_list(value) -> list:
 def format_meal_items(meal: dict) -> str:
     """What a meal had: its menu, each dish with its ingredients ("Menemen (Eggs, Tomatoes)"),
     or an old flat meal's ingredients."""
-    menu = _json_list(meal.get("menu_items"))
+    menu = json_list(meal.get("menu_items"))
     if menu:
         parts = []
         for item in menu:
-            sub = _json_list(item.get("ingredients")) if isinstance(item, dict) else []
+            sub = json_list(item.get("ingredients")) if isinstance(item, dict) else []
             name = format_ingredient_item(item)
             parts.append(f"{name} ({', '.join(format_ingredient_item(s) for s in sub)})" if sub else name)
         return ", ".join(parts)
-    ingredients = _json_list(meal.get("ingredients"))
+    ingredients = json_list(meal.get("ingredients"))
     return ", ".join(format_ingredient_item(i) for i in ingredients) if ingredients else "no items listed"
 
 
@@ -223,7 +223,7 @@ def format_favorite_meals(meals: list[dict] | None) -> str:
 
 def format_favorite_meal(meal: dict) -> str:
     """One saved favorite meal as its name and the items it uses, each once ("Cheddar toast: Bread, Cheddar")."""
-    parsed = {"menu": _json_list(meal.get("menu_items")), "ingredients": _json_list(meal.get("ingredients"))}
+    parsed = {"menu": json_list(meal.get("menu_items")), "ingredients": json_list(meal.get("ingredients"))}
     items = list(dict.fromkeys(meal_ingredient_names(parsed)))
     return f"{meal.get('meal_name', 'Unknown')}: {', '.join(items) or 'no items listed'}"
 
