@@ -19,10 +19,6 @@ class MealLog(BaseModel):
     menu_items: Optional[List[Any]] = None  # new multi-item menu format
 
 
-class MealRating(BaseModel):
-    rating: int  # 1 = thumbs down, 5 = thumbs up
-
-
 class Meal(BaseModel):
     id: int
     meal_name: str

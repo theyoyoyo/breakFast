@@ -1,5 +1,6 @@
 """Integration tests for the /profile endpoints (profile + supplements + daily toggle)."""
 
+import pytest
 
 
 # ---------------------------------------------------------------------------
@@ -237,3 +238,21 @@ async def test_delete_supplement_also_deletes_log(client):
     # Today list should not include deleted supplement
     r2 = await client.get("/profile/supplements/today")
     assert all(s["name"] != "Probiotic" for s in r2.json())
+
+
+# A toggle for another user's supplement or one that doesn't exist gets 404 and logs nothing
+@pytest.mark.parametrize("whose", ["bob", "made-up"])
+async def test_toggle_supplement_not_own_gets_404(client, db, whose):
+    await db.execute("INSERT INTO users (name, pin_hash) VALUES ('Bob', 'unused')")
+    cur = await db.execute(
+        "INSERT INTO user_supplements (user_id, name) SELECT id, 'Iron' FROM users WHERE name = 'Bob'"
+    )
+    await db.commit()
+    supp_id = cur.lastrowid if whose == "bob" else 9999
+
+    for taken in (True, False):
+        r = await client.post(f"/profile/supplements/{supp_id}/toggle", json={"taken": taken})
+        assert r.status_code == 404
+
+    async with db.execute("SELECT COUNT(*) FROM supplement_daily_log") as cur:
+        assert (await cur.fetchone())[0] == 0
