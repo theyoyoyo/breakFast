@@ -522,7 +522,8 @@ async def _backup_before_migration(db, version: int) -> Path | None:
             f"The backup before the database migration failed its integrity check ({result}); "
             "nothing was migrated."
         )
-    logger.info("Database backed up to %s before migrating from version %s", dst, version)
+    # Printed, not logged, like the start's "Database:" line, so the way back is seen at once
+    print(f"Database backed up to {dst} before migrating from schema version {version}", flush=True)
 
     # Keep the newest few (the time in the name sorts them)
     backups = sorted(src.parent.glob(f"{src.stem}{_MIGRATION_BACKUP_MARK}*.db"))

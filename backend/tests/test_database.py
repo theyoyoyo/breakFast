@@ -327,11 +327,12 @@ def _migration_backups(db_path) -> list:
 
 
 # A pending step on a database with data leaves a backup of it as it was: old version, old schema, its rows
-async def test_pending_migration_leaves_a_backup(db_path):
+async def test_pending_migration_leaves_a_backup(db_path, capsys):
     _make(db_path, OLD_SCHEMA)
     await database.init_db()
 
     (backup,) = _migration_backups(db_path)
+    assert f"Database backed up to {backup} before migrating from schema version 0" in capsys.readouterr().out
     assert backup.name.endswith("_v0.db")
     assert _query(backup, "PRAGMA user_version") == [(0,)]
     assert _query(backup, "PRAGMA integrity_check") == [("ok",)]
