@@ -9,6 +9,8 @@ Usage in routers:
 
 import logging
 import sqlite3
+from datetime import datetime
+from pathlib import Path
 
 import aiosqlite
 from contextlib import asynccontextmanager
@@ -259,10 +261,12 @@ CREATE INDEX IF NOT EXISTS idx_weekly_summaries_user_week ON weekly_summaries(us
 
 @asynccontextmanager
 async def get_db():
-    """Async context manager that yields an open, row-factory-enabled connection."""
+    """Async context manager that yields an open, row-factory-enabled connection with
+    foreign keys enforced (SQLite leaves them off unless each connection asks)."""
     db = await aiosqlite.connect(DATABASE_PATH)
     db.row_factory = aiosqlite.Row
     try:
+        await db.execute("PRAGMA foreign_keys = ON")
         yield db
     finally:
         await db.close()
@@ -422,10 +426,41 @@ async def _regroup(db) -> None:
     await regroup_once(db)
 
 
+# Child rows that must belong to the same user as their parent row: (child, column, parent)
+_SAME_USER_CHILDREN = [
+    ("chat_messages", "session_id", "chat_sessions"),
+    ("suggested_meals", "session_id", "chat_sessions"),
+    ("supplement_daily_log", "supplement_id", "user_supplements"),
+]
+
+
+async def _drop_orphans(db) -> None:
+    """Step 3 (#216): remove rows whose parent row is gone, before foreign keys are enforced.
+
+    Foreign keys used to be off, so a deleted user, a deleted chat or an unchecked id could
+    leave rows nothing points to; nobody can see them. A child row under another user's
+    parent row goes too, since it would block that user's deletes. Removing a row can orphan
+    its own children, so the check runs until it finds nothing.
+    """
+    for child, column, parent in _SAME_USER_CHILDREN:
+        await db.execute(
+            f"DELETE FROM {child} WHERE EXISTS (SELECT 1 FROM {parent} p "
+            f"WHERE p.id = {child}.{column} AND p.user_id != {child}.user_id)"
+        )
+    while True:
+        async with db.execute("PRAGMA foreign_key_check") as cur:
+            orphans = [(row[0], row[1]) for row in await cur.fetchall()]
+        if not orphans:
+            return
+        for table, rowid in orphans:
+            await db.execute(f"DELETE FROM {table} WHERE rowid = ?", (rowid,))
+
+
 # (number, what it does, step). The number is the PRAGMA user_version once the step has run.
 MIGRATIONS = [
     (1, "group picks and the built-in food list", _regroup),
     (2, "tables and columns added before the numbered steps", _legacy_schema),
+    (3, "rows left without their parent row", _drop_orphans),
 ]
 
 
@@ -444,9 +479,66 @@ async def _is_empty(db) -> bool:
     return tables == 0
 
 
+# Backups taken before pending steps: "<database name>_before_migration_<time>_v<version>.db"
+# beside the database, the newest few kept
+_MIGRATION_BACKUP_MARK = "_before_migration_"
+MIGRATION_BACKUPS_KEPT = 3
+# SQLite's own check of the backup file: "ok" when it's sound, else the first problem
+_BACKUP_CHECK = "PRAGMA integrity_check(1)"
+
+
+async def _database_file(db) -> Path | None:
+    """The file behind a connection (None for a database in memory)."""
+    async with db.execute("PRAGMA database_list") as cur:
+        for _, name, file in await cur.fetchall():
+            if name == "main" and file:
+                return Path(file)
+    return None
+
+
+async def _backup_before_migration(db, version: int) -> Path | None:
+    """Copy the database as it is now, before a pending step changes it.
+
+    A step that runs cleanly can still be wrong, and its transaction is gone by then, so
+    this copy is the way back. SQLite's backup API takes a consistent snapshot, writes
+    still in the WAL included. A backup that can't be made or read back stops the start:
+    migrating without one is the risk this is here for.
+    """
+    src = await _database_file(db)
+    if src is None:
+        return None
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    dst = src.with_name(f"{src.stem}{_MIGRATION_BACKUP_MARK}{stamp}_v{version}.db")
+    dst.unlink(missing_ok=True)
+    async with aiosqlite.connect(dst) as backup:
+        await db.backup(backup)
+        # One self-contained file, so the backup needs no -wal beside it
+        await backup.execute("PRAGMA journal_mode=DELETE")
+        async with backup.execute(_BACKUP_CHECK) as cur:
+            (result,) = await cur.fetchone()
+    if result != "ok":
+        dst.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"The backup before the database migration failed its integrity check ({result}); "
+            "nothing was migrated."
+        )
+    # Printed, not logged, like the start's "Database:" line, so the way back is seen at once
+    print(f"Database backed up to {dst} before migrating from schema version {version}", flush=True)
+
+    # Keep the newest few (the time in the name sorts them)
+    backups = sorted(src.parent.glob(f"{src.stem}{_MIGRATION_BACKUP_MARK}*.db"))
+    for old in backups[:-MIGRATION_BACKUPS_KEPT]:
+        old.unlink(missing_ok=True)
+    return dst
+
+
 async def migrate(db) -> None:
-    """Bring the database to the latest schema. One that is already there is not written to."""
+    """Bring the database to the latest schema. One that is already there is not written to.
+
+    A database with data is backed up once before its first pending step.
+    """
     latest = MIGRATIONS[-1][0]
+    backed_up = False
     while True:
         version = await _user_version(db)
         if version > latest:
@@ -457,8 +549,12 @@ async def migrate(db) -> None:
         if version >= latest:
             return
 
+        if not backed_up and not await _is_empty(db):
+            await _backup_before_migration(db, version)
+            backed_up = True
+
         # The write lock comes first and the version is read again under it, so two
-        # processes that start together (the server and manage.py) never run a step twice.
+        # processes that start together never run a step, or set up a new database, twice.
         await db.execute("BEGIN IMMEDIATE")
         target, name = latest, "new database"
         try:
@@ -482,8 +578,49 @@ async def migrate(db) -> None:
             ) from exc
 
 
+class MigrationsPending(RuntimeError):
+    """The database is older than this code and only a server start brings it up to date."""
+
+    def __init__(self, version: int, latest: int):
+        super().__init__(f"the database is at schema version {version} and this version of the app needs {latest}")
+        self.version, self.latest = version, latest
+
+
+async def check_schema() -> None:
+    """For the admin CLI: make sure the database fits this code, without migrating it.
+
+    Migrations, the clean-up of old chats and the demo user belong to the server start
+    alone, so a command run from a newer checkout never changes the database under a
+    running older server. A database with steps pending raises MigrationsPending. Only a
+    brand-new database gets its schema here (no step runs on it), since the set-up guide
+    creates the first user before the first start.
+    """
+    latest = MIGRATIONS[-1][0]
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        if await _is_empty(db):
+            await db.execute("PRAGMA journal_mode=WAL")
+            await migrate(db)
+            return
+        version = await _user_version(db)
+        if version < latest:
+            raise MigrationsPending(version, latest)
+        if version > latest:
+            logger.warning(
+                "The database is at schema version %s and this code knows up to %s: "
+                "a newer version of the app has opened it.", version, latest,
+            )
+
+
+async def describe_database() -> str:
+    """One line for the start's output: which file is open and its schema version."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        version = await _user_version(db)
+    return f"Database: {DATABASE_PATH} (schema version {version})"
+
+
 async def init_db() -> None:
-    """Create or migrate the schema, then do the start-up housekeeping. Called once at startup."""
+    """Create or migrate the schema, then do the start-up housekeeping. Called once at the
+    server's start, and only there (the admin CLI uses check_schema)."""
     from auth import hash_pin
 
     async with aiosqlite.connect(DATABASE_PATH) as db:

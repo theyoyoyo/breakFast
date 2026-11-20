@@ -547,6 +547,80 @@ async def test_chat_frame_with_a_value_of_the_wrong_type_is_ignored(ws_setup, fr
             assert event["content"] == "Reply."
 
 
+async def _two_users_sessions(user_id: int) -> None:
+    """The caller's session 'own' and another user's session 'bob-session'."""
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        await db.execute("INSERT INTO users (name, pin_hash) VALUES ('Bob', 'unused')")
+        await db.execute(
+            "INSERT INTO chat_sessions (id, user_id) VALUES "
+            "('own', ?), ('bob-session', (SELECT id FROM users WHERE name = 'Bob'))",
+            (user_id,),
+        )
+        await db.commit()
+
+
+async def _saved_rows() -> dict:
+    """Session id of every saved chat message and suggestion."""
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        async with db.execute("SELECT session_id FROM chat_messages ORDER BY id") as cur:
+            messages = [r[0] for r in await cur.fetchall()]
+        async with db.execute("SELECT session_id FROM suggested_meals ORDER BY id") as cur:
+            suggestions = [r[0] for r in await cur.fetchall()]
+    return {"messages": messages, "suggestions": suggestions}
+
+
+# Switching the socket to a session that isn't the caller's is ignored, so the next message goes to the caller's own session
+@pytest.mark.asyncio
+async def test_switching_to_a_session_not_the_callers_is_ignored(ws_setup):
+    app, token, user_id = ws_setup
+    from starlette.testclient import TestClient
+    from unittest.mock import patch
+
+    await _two_users_sessions(user_id)
+
+    async def mock_stream(system_prompt, history, message, temperature=None):
+        yield "Reply."
+
+    with patch("routers.chat.build_chat_prompt", return_value="test prompt"), \
+         patch("routers.chat.stream_response", mock_stream):
+        with open_chat(TestClient(app), token) as ws:
+            ws.send_text(json.dumps({"session_id": "own"}))
+            ws.send_text(json.dumps({"session_id": "bob-session"}))
+            ws.send_text(json.dumps({"message": "Hello"}))
+            while (event := ws.receive_json())["type"] != "done":
+                pass
+
+    assert event["content"] == "Reply."
+    assert (await _saved_rows())["messages"] == ["own", "own"]
+
+
+# A session deleted while its Suggest reply is made gets the error, and neither the messages nor the suggestion are saved
+@pytest.mark.asyncio
+async def test_session_deleted_during_a_reply_saves_nothing(ws_setup):
+    app, token, user_id = ws_setup
+    from starlette.testclient import TestClient
+    from unittest.mock import patch
+    from routers.chat import SESSION_GONE_TEXT
+
+    await _two_users_sessions(user_id)
+    meal = {"menu_name": "Plate", "menu": [{"name": "Egg", "amount": 2, "unit": "pcs", "ingredients": []}]}
+
+    async def mock_pipeline(context, user_message, mode=None, temperature=None, chat_block=None):
+        # Another device deletes the chat while the menu is drafted
+        async with aiosqlite.connect(database.DATABASE_PATH) as db:
+            await db.execute("DELETE FROM chat_sessions WHERE id = 'own'")
+            await db.commit()
+        yield {"type": "done", "content": "Enjoy!\n\n```json\n" + json.dumps(meal) + "\n```"}
+
+    with patch("routers.chat.run_suggestion_pipeline", mock_pipeline):
+        with open_chat(TestClient(app), token) as ws:
+            ws.send_text(json.dumps({"message": "Suggest Breakfast", "type": "suggest", "session_id": "own"}))
+            event = ws.receive_json()
+
+    assert event == {"type": "error", "code": "session_not_found", "message": SESSION_GONE_TEXT}
+    assert await _saved_rows() == {"messages": [], "suggestions": []}
+
+
 @pytest.mark.asyncio
 async def test_websocket_too_long_message_gets_a_note_and_is_not_saved(ws_setup):
     """A typed message over the length limit gets a short note, never reaches the model and isn't saved, and a long one within it is answered."""

@@ -317,3 +317,156 @@ async def test_add_column_skips_existing(db_path):
         await database._add_column(db, "users", "last_expiry_check", "TEXT")
         await database._add_column(db, "users", "nickname", "TEXT")
         assert {"last_expiry_check", "nickname"} <= await database._columns(db, "users")
+
+
+def _migration_backups(db_path) -> list:
+    """The backups taken before pending steps, oldest first."""
+    from pathlib import Path
+
+    return sorted(Path(db_path).parent.glob("app_before_migration_*.db"))
+
+
+# A pending step on a database with data leaves a backup of it as it was: old version, old schema, its rows
+async def test_pending_migration_leaves_a_backup(db_path, capsys):
+    _make(db_path, OLD_SCHEMA)
+    await database.init_db()
+
+    (backup,) = _migration_backups(db_path)
+    assert f"Database backed up to {backup} before migrating from schema version 0" in capsys.readouterr().out
+    assert backup.name.endswith("_v0.db")
+    assert _query(backup, "PRAGMA user_version") == [(0,)]
+    assert _query(backup, "PRAGMA integrity_check") == [("ok",)]
+    assert "quantity" in _columns(backup)["ingredient_inventory"]
+    assert _query(backup, "SELECT meal_name FROM meal_history") == [("Egg sandwich",)]
+
+
+# A brand-new database and one already at the latest version get no backup
+async def test_no_backup_without_pending_steps(db_path):
+    await database.init_db()
+    await database.init_db()
+    assert _migration_backups(db_path) == []
+
+
+# A step that fails still leaves the backup taken before it
+async def test_failing_step_keeps_its_backup(db_path, monkeypatch):
+    await database.init_db()
+
+    async def broken(db):
+        raise ValueError("no such luck")
+
+    monkeypatch.setattr(database, "MIGRATIONS", [*database.MIGRATIONS, (LATEST + 1, "a broken step", broken)])
+    with pytest.raises(RuntimeError):
+        await database.init_db()
+    (backup,) = _migration_backups(db_path)
+    assert _query(backup, "PRAGMA user_version") == [(LATEST,)]
+
+
+# Only the newest few backups are kept
+async def test_old_migration_backups_are_removed(db_path):
+    from pathlib import Path
+
+    _make(db_path, OLD_SCHEMA)
+    old = [Path(db_path).with_name(f"app_before_migration_2020010{n}_000000_v0.db") for n in range(1, 5)]
+    for path in old:
+        path.write_bytes(b"")
+    await database.init_db()
+
+    kept = _migration_backups(db_path)
+    assert len(kept) == database.MIGRATION_BACKUPS_KEPT
+    assert kept[:-1] == old[-(database.MIGRATION_BACKUPS_KEPT - 1):]
+    assert kept[-1] not in old
+
+
+# A backup that fails its integrity check stops the start before any step runs, and isn't kept
+async def test_bad_backup_stops_migration(db_path, monkeypatch):
+    _make(db_path, OLD_SCHEMA)
+    before = _snapshot(db_path)
+
+    monkeypatch.setattr(database, "_BACKUP_CHECK", "SELECT 'row 3 missing from index'")
+    with pytest.raises(RuntimeError, match="integrity check"):
+        await database.init_db()
+    assert _snapshot(db_path) == before
+    assert _migration_backups(db_path) == []
+
+
+# A relative DATABASE_PATH counts from the backend folder whatever folder the program starts in; a full path stays
+def test_relative_database_path_is_in_backend_folder(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    import config
+
+    backend = Path(config.__file__).resolve().parent
+    monkeypatch.chdir(tmp_path)
+    assert Path(config.resolve_database_path("./breakFAST.db")) == backend / "breakFAST.db"
+    assert Path(config.resolve_database_path("data/app.db")) == backend / "data" / "app.db"
+    assert Path(config.resolve_database_path(str(tmp_path / "x.db"))) == tmp_path / "x.db"
+
+
+# The configured database path is the same full path when the program is started from two different folders
+def test_database_path_is_the_same_from_any_folder(tmp_path):
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    backend = Path(database.__file__).resolve().parent
+    env = {**os.environ, "PYTHONPATH": str(backend), "DATABASE_PATH": "./breakFAST.db"}
+    paths = [
+        subprocess.run(
+            [sys.executable, "-c", "import config; print(config.DATABASE_PATH)"],
+            cwd=folder, env=env, capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        for folder in (tmp_path, backend)
+    ]
+    assert paths[0] == paths[1]
+    assert Path(paths[0]) == backend / "breakFAST.db"
+
+
+# The server's start prints the database's full path and schema version
+async def test_start_prints_database_path_and_version(db_path, capsys):
+    from main import app, lifespan
+
+    async with lifespan(app):
+        pass
+    assert f"Database: {db_path} (schema version {LATEST})" in capsys.readouterr().out
+
+
+# A database at version 2 loses its rows without a parent (chained ones too) and rows under another user's parent, and keeps the rest
+async def test_orphan_rows_are_cleaned(db_path):
+    await database.init_db()
+    with closing(sqlite3.connect(db_path)) as db:
+        db.executescript("""
+            INSERT INTO users (id, name, pin_hash) VALUES (1, 'Alice', 'x'), (2, 'Bob', 'x');
+            INSERT INTO chat_sessions (id, user_id) VALUES ('alice-chat', 1), ('gone-user-chat', 99);
+            INSERT INTO chat_messages (session_id, user_id, role, content) VALUES
+                ('alice-chat', 1, 'user', 'Kept'),
+                ('alice-chat', 2, 'user', 'Bob in Alice''s chat'),
+                ('gone-chat', 1, 'user', 'No chat'),
+                ('gone-user-chat', 99, 'user', 'No user');
+            INSERT INTO suggested_meals (user_id, session_id, meal_name) VALUES (1, 'alice-chat', 'Kept'), (1, 'gone-chat', 'No chat');
+            INSERT INTO user_supplements (id, user_id, name, frequency) VALUES (1, 1, 'Iron', 'sometimes');
+            INSERT INTO supplement_daily_log (user_id, supplement_id, date, taken) VALUES
+                (1, 1, '2026-11-01', 1), (1, 7, '2026-11-01', 1), (2, 1, '2026-11-01', 1);
+            INSERT INTO shopping_list (user_id, item_name) VALUES (1, 'Milk'), (99, 'Ghost milk');
+            PRAGMA user_version = 2;
+        """)
+
+    await database.init_db()
+    assert _query(db_path, "PRAGMA foreign_key_check") == []
+    assert _query(db_path, "SELECT id FROM chat_sessions") == [("alice-chat",)]
+    assert _query(db_path, "SELECT content FROM chat_messages") == [("Kept",)]
+    assert _query(db_path, "SELECT meal_name FROM suggested_meals") == [("Kept",)]
+    assert _query(db_path, "SELECT user_id, supplement_id FROM supplement_daily_log") == [(1, 1)]
+    assert _query(db_path, "SELECT item_name FROM shopping_list") == [("Milk",)]
+    assert _query(db_path, "PRAGMA user_version") == [(LATEST,)]
+
+
+# The app's connections enforce foreign keys, so a row can't point to a chat that doesn't exist
+async def test_app_connections_enforce_foreign_keys(db_path):
+    await database.init_db()
+    async with database.get_db() as db:
+        await db.execute("INSERT INTO users (id, name, pin_hash) VALUES (1, 'Alice', 'x')")
+        with pytest.raises(sqlite3.IntegrityError):
+            await db.execute(
+                "INSERT INTO chat_messages (session_id, user_id, role, content) VALUES ('made-up', 1, 'user', 'Hi')"
+            )
