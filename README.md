@@ -93,7 +93,7 @@ The backend loads each user's context (inventory, recent meals, profile, supplem
 ### Prerequisites
 
 - Python 3.11+
-- Node.js 18+
+- Node.js 22.13+
 - [Ollama](https://ollama.com) (optional: everything except the AI features works without it)
 
 ### Windows quick start
@@ -199,6 +199,7 @@ All backend settings are environment variables, documented in [`.env.example`](.
 | `DATABASE_PATH` | `./breakFAST.db` | SQLite file, relative to `backend/` whatever folder the backend or the CLI starts from; the start prints its full path |
 | `CORS_ORIGINS` | `*` | Comma-separated allowed origins |
 | `SERVE_FRONTEND` | `false` | Serve `frontend/dist` from FastAPI |
+| `API_DOCS` | `false` | Serve `/docs`, `/redoc` and `/openapi.json` |
 | `DEMO_USER` | `false` | Create a `demo` user with an empty PIN and a starter fridge |
 
 ---

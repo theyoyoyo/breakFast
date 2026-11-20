@@ -6,7 +6,7 @@ the same one. Items removed from it with × can be brought back from Settings
 All queries are scoped to the authenticated user.
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel, Field
 from typing import Optional
 from database import get_db
@@ -14,6 +14,7 @@ from auth import require_user
 from services import chat_sync
 from services.ingredient_groups import remember, resolve_groups
 from services.shopping import REMOVED_DAYS, recently_removed
+from models.limits import BULK_ITEMS_MAX, Name, Note, ShortText
 
 router = APIRouter(prefix="/shopping", tags=["shopping"])
 
@@ -25,23 +26,23 @@ class ShoppingItem(BaseModel):
 
 
 class ShoppingItemCreate(BaseModel):
-    item_name: str
+    item_name: Name
 
 
 class BoughtRequest(BaseModel):
-    ids: list[int]
-    expiry_dates: Optional[dict[str, str]] = None  # {item_name: expiry_date}
+    ids: list[int] = Field(max_length=BULK_ITEMS_MAX)
+    expiry_dates: Optional[dict[Name, ShortText]] = Field(default=None, max_length=BULK_ITEMS_MAX)  # {item_name: expiry_date}
 
 
 class SuggestionItem(BaseModel):
-    name: str = Field(min_length=1, max_length=200)
-    reason: str = ""
+    name: Name = Field(min_length=1)
+    reason: Note = ""
     checked: bool = True
 
 
 class SuggestionsState(BaseModel):
-    items: list[SuggestionItem] = []   # the whole list, in order
-    removed: list[str] = []            # names just removed with ×
+    items: list[SuggestionItem] = Field(default=[], max_length=BULK_ITEMS_MAX)   # the whole list, in order
+    removed: list[Name] = Field(default=[], max_length=BULK_ITEMS_MAX)            # names just removed with ×
 
 
 @router.get("/", response_model=list[ShoppingItem])
@@ -72,7 +73,10 @@ async def add_shopping_item(body: ShoppingItemCreate, user_id: int = Depends(req
 
 
 @router.post("/bulk", status_code=201)
-async def bulk_add_shopping(items: list[ShoppingItemCreate], user_id: int = Depends(require_user)):
+async def bulk_add_shopping(
+    items: list[ShoppingItemCreate] = Body(max_length=BULK_ITEMS_MAX),
+    user_id: int = Depends(require_user),
+):
     """Add multiple items to the shopping list. Skips duplicates."""
     async with get_db() as db:
         await db.executemany(

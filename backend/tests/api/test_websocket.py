@@ -619,3 +619,37 @@ async def test_session_deleted_during_a_reply_saves_nothing(ws_setup):
 
     assert event == {"type": "error", "code": "session_not_found", "message": SESSION_GONE_TEXT}
     assert await _saved_rows() == {"messages": [], "suggestions": []}
+
+
+@pytest.mark.asyncio
+async def test_websocket_too_long_message_gets_a_note_and_is_not_saved(ws_setup):
+    """A typed message over the length limit gets a short note, never reaches the model and isn't saved, and a long one within it is answered."""
+    app, token, user_id = ws_setup
+    from starlette.testclient import TestClient
+    from unittest.mock import patch
+    from models.limits import CHAT_MESSAGE_MAX
+    from routers.chat import TOO_LONG_TEXTS
+
+    seen = []
+
+    async def mock_stream(system_prompt, history, message, **kwargs):
+        seen.append(message)
+        yield "Sure."
+
+    long_message = "I would like something warm today. " * 100
+    with patch("routers.chat.stream_response", mock_stream):
+        with open_chat(TestClient(app), token) as ws:
+            ws.send_text(json.dumps({"message": "x" * (CHAT_MESSAGE_MAX + 1), "session_id": "s1"}))
+            msg = ws.receive_json()
+            assert msg == {"type": "done", "content": TOO_LONG_TEXTS["en"]}
+            assert seen == []
+
+            ws.send_text(json.dumps({"message": long_message, "session_id": "s1"}))
+            assert ws.receive_json() == {"type": "token", "content": "Sure."}
+            assert ws.receive_json()["type"] == "done"
+    assert len(seen) == 1 and long_message.strip() in seen[0]
+
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        async with db.execute("SELECT content FROM chat_messages WHERE user_id = ? ORDER BY id", (user_id,)) as cur:
+            saved = [r[0] for r in await cur.fetchall()]
+    assert saved == [long_message.strip(), "Sure."]

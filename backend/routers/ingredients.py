@@ -6,11 +6,12 @@ All queries are scoped to the authenticated user.
 from datetime import date
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from database import get_db
 from auth import require_user
 from fastapi import HTTPException
 from models.ingredient import Ingredient, IngredientCreate, IngredientUpdate, INGREDIENT_GROUPS
+from models.limits import BULK_ITEMS_MAX, Name, SizedDict
 from services.fridge import find_missing_ingredients
 from services.ingredient_groups import remember, resolve_groups
 
@@ -20,7 +21,7 @@ router = APIRouter(prefix="/ingredients", tags=["ingredients"])
 def _validate_group(group_name: str | None) -> str | None:
     """Reject unknown group names."""
     if group_name is not None and group_name not in INGREDIENT_GROUPS:
-        raise HTTPException(status_code=400, detail=f"Invalid group: {group_name}")
+        raise HTTPException(status_code=422, detail="Invalid group")
     return group_name
 
 
@@ -136,7 +137,7 @@ async def delete_ingredient(ingredient_id: int, user_id: int = Depends(require_u
 
 
 class MissingCheck(BaseModel):
-    meal: dict
+    meal: SizedDict
 
 
 @router.post("/check")
@@ -186,9 +187,9 @@ async def get_expired_ingredients(user_id: int = Depends(require_user)):
 
 
 class ExpiredActionRequest(BaseModel):
-    delete_ids: list[int] = []
-    keep_ids: list[int] = []
-    shopping_ids: list[int] = []
+    delete_ids: list[int] = Field(default=[], max_length=BULK_ITEMS_MAX)
+    keep_ids: list[int] = Field(default=[], max_length=BULK_ITEMS_MAX)
+    shopping_ids: list[int] = Field(default=[], max_length=BULK_ITEMS_MAX)
 
 
 @router.post("/expired/action", status_code=200)
@@ -242,7 +243,11 @@ async def handle_expired_action(body: ExpiredActionRequest, user_id: int = Depen
 
 
 class ShoppingSuggestionsRequest(BaseModel):
-    exclude: list[str] = []
+    exclude: list[Name] = Field(default=[], max_length=BULK_ITEMS_MAX)
+
+
+# What the app shows when suggestions fail; the cause goes to the server log only
+SUGGESTIONS_FAILED = "Could not get suggestions. Please try again."
 
 
 @router.post("/shopping-suggestions")
@@ -272,9 +277,9 @@ async def get_shopping_suggestions(
         async with get_db() as db:
             ctx = await load_shopping_context(db, user_id)
             removed = await recently_removed(db, user_id)
-    except Exception as e:
+    except Exception:
         logging.exception("Shopping context load failed")
-        return {"suggestions": [], "lyric": lyric_cycler.next(), "error": str(e)}
+        return {"suggestions": [], "lyric": lyric_cycler.next(), "error": SUGGESTIONS_FAILED}
 
     # The avoid list is a hard ban, so code enforces it beside the prompt rule.
     # Items removed with × are left out by code only, so the prompt stays the same.
@@ -304,9 +309,9 @@ async def get_shopping_suggestions(
             )
         except LLMUnavailableError:
             return {"suggestions": [], "lyric": lyric_cycler.next()}
-        except Exception as e:
+        except Exception:
             logging.exception("Shopping LLM call failed")
-            return {"suggestions": [], "lyric": lyric_cycler.next(), "error": str(e)}
+            return {"suggestions": [], "lyric": lyric_cycler.next(), "error": SUGGESTIONS_FAILED}
 
         items = parse_suggestions(reply)
         if items is None:
