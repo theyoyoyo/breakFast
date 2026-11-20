@@ -10,6 +10,8 @@ Usage:
 
 A PIN needs 6-10 digits. Without --pin the CLI asks for it twice without showing it, which keeps
 it out of the shell history.
+
+The CLI never migrates the database: after an update, start the server once first.
 """
 
 import argparse
@@ -18,14 +20,14 @@ import getpass
 import io
 import sqlite3
 import sys
-from contextlib import closing
+from contextlib import asynccontextmanager, closing
 from datetime import datetime
 from pathlib import Path
 
 import aiosqlite
 
 from config import DATABASE_PATH
-from database import init_db
+from database import MigrationsPending, check_schema
 from auth import hash_pin, pin_problem
 
 
@@ -47,6 +49,29 @@ def _check_pin(pin: str) -> None:
         sys.exit(1)
 
 
+async def _check_schema() -> None:
+    """Stop with a message when the database has migration steps pending: only a server
+    start runs them (after a backup), so a command never changes the schema under a
+    running server."""
+    try:
+        await check_schema()
+    except MigrationsPending as pending:
+        print(
+            f"Error: {pending} ({DATABASE_PATH}). Start the server once so it updates the database "
+            "(stop an older server first), then run this command again.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
+@asynccontextmanager
+async def _connect():
+    """A connection to the database with foreign keys enforced, like the server's."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("PRAGMA foreign_keys = ON")
+        yield db
+
+
 def _ask_pin() -> str:
     """Ask for a PIN twice without showing it."""
     pin = getpass.getpass("PIN (6-10 digits): ")
@@ -58,8 +83,8 @@ def _ask_pin() -> str:
 
 async def add_user(name: str, pin: str, is_admin: bool = False) -> None:
     _check_pin(pin)
-    await init_db()
-    async with aiosqlite.connect(DATABASE_PATH) as db:
+    await _check_schema()
+    async with _connect() as db:
         try:
             await db.execute(
                 "INSERT INTO users (name, pin_hash, is_admin) VALUES (?, ?, ?)",
@@ -76,8 +101,8 @@ async def add_user(name: str, pin: str, is_admin: bool = False) -> None:
 async def set_pin(name: str, pin: str) -> None:
     """Give a user a new PIN (6-10 digits); their old PIN stops working."""
     _check_pin(pin)
-    await init_db()
-    async with aiosqlite.connect(DATABASE_PATH) as db:
+    await _check_schema()
+    async with _connect() as db:
         cur = await db.execute("UPDATE users SET pin_hash = ? WHERE name = ?", (hash_pin(pin), name))
         await db.commit()
     if not cur.rowcount:
@@ -87,8 +112,8 @@ async def set_pin(name: str, pin: str) -> None:
 
 
 async def list_users() -> None:
-    await init_db()
-    async with aiosqlite.connect(DATABASE_PATH) as db:
+    await _check_schema()
+    async with _connect() as db:
         db.row_factory = aiosqlite.Row
         async with db.execute("SELECT id, name, is_admin, created_at FROM users ORDER BY id") as cur:
             rows = await cur.fetchall()
@@ -105,8 +130,8 @@ async def list_users() -> None:
 
 
 async def delete_user(name: str) -> None:
-    await init_db()
-    async with aiosqlite.connect(DATABASE_PATH) as db:
+    await _check_schema()
+    async with _connect() as db:
         # Delete all user data first
         async with db.execute("SELECT id FROM users WHERE name = ?", (name,)) as cur:
             row = await cur.fetchone()
@@ -137,7 +162,19 @@ def backup_db() -> None:
         source.backup(backup)
         # One self-contained file, so the backup needs no -wal beside it
         backup.execute("PRAGMA journal_mode=DELETE")
+        problem = _integrity_problem(backup)
+    if problem:
+        # A backup that can't be read back is worse than none: say so and don't call it a backup
+        dst.unlink()
+        print(f"Error: the backup failed its integrity check ({problem}); no backup was kept.", file=sys.stderr)
+        sys.exit(1)
     print(f"Backup created: {dst}")
+
+
+def _integrity_problem(db: sqlite3.Connection) -> str | None:
+    """SQLite's own check of a database file: None when it's sound, else the first problem."""
+    (result,) = db.execute("PRAGMA integrity_check(1)").fetchone()
+    return None if result == "ok" else result
 
 
 def _safe_output() -> None:

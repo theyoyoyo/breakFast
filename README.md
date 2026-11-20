@@ -166,6 +166,8 @@ python manage.py backup-db                             # timestamped copy next t
 
 To restore a backup, stop the backend, delete `breakFAST.db-wal` and `breakFAST.db-shm` if they're there, then copy the backup over `breakFAST.db`. A leftover `-wal` file would be read into the restored database.
 
+When an update changes the database, the backend backs it up by itself before the change, at its next start: `breakFAST_before_migration_<time>_v<version>.db` next to the database, the newest three kept. It is restored the same way. Only the backend's start updates the database: after an update the CLI commands above stop with a message until the backend has started once.
+
 ---
 
 ## Running tests
@@ -194,7 +196,7 @@ All backend settings are environment variables, documented in [`.env.example`](.
 |---|---|---|
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server |
 | `OLLAMA_MODEL` | `qwen2.5:7b` | Model used by every persona |
-| `DATABASE_PATH` | `./breakFAST.db` | SQLite file, relative to `backend/` |
+| `DATABASE_PATH` | `./breakFAST.db` | SQLite file, relative to `backend/` whatever folder the backend or the CLI starts from; the start prints its full path |
 | `CORS_ORIGINS` | `*` | Comma-separated allowed origins |
 | `SERVE_FRONTEND` | `false` | Serve `frontend/dist` from FastAPI |
 | `API_DOCS` | `false` | Serve `/docs`, `/redoc` and `/openapi.json` |

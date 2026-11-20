@@ -1,4 +1,6 @@
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -9,7 +11,18 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
 # Ollama's own 4096 would drop the oldest messages without saying so.
 OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "8192"))
 
-DATABASE_PATH = os.getenv("DATABASE_PATH", "./breakFAST.db")
+
+def resolve_database_path(value: str) -> str:
+    """The database file's full path. A relative one counts from this folder (backend/),
+    not from the folder the program was started in: started elsewhere, the server or the
+    admin CLI would otherwise open a new, empty database there."""
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = Path(__file__).resolve().parent / path
+    return os.path.abspath(path)
+
+
+DATABASE_PATH = resolve_database_path(os.getenv("DATABASE_PATH") or "./breakFAST.db")
 
 _cors_raw = os.getenv("CORS_ORIGINS", "*")
 CORS_ORIGINS = [o.strip() for o in _cors_raw.split(",") if o.strip()]

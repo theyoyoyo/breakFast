@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from contextlib import asynccontextmanager
 from config import CORS_ORIGINS, CORS_ALLOW_CREDENTIALS, SERVE_FRONTEND, API_DOCS
-from database import init_db
+from database import describe_database, init_db
 from models.limits import MAX_BODY_BYTES
 from auth import require_user
 from routers import analyst, auth, chat, favorites, favorite_ingredients, ingredients, kitchen, meals, preferences, profile, ratings, sessions, health_rules, shopping, scheduler
@@ -18,6 +18,9 @@ from utils import resolve_static_file
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    # Printed, not logged, so it shows at uvicorn's default log level: the wrong file
+    # (an empty database somewhere else) is then seen at once
+    print(await describe_database(), flush=True)
     await refresh_insights()
     yield
 

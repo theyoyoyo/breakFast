@@ -45,6 +45,11 @@ def _session_id(value) -> str | None:
     return value if isinstance(value, str) and len(value) <= SESSION_ID_MAX else None
 
 
+# Shown when the session is deleted (on another device) while its reply is made: nothing is
+# saved, since the session is gone. App text, so English like the rest of the UI.
+SESSION_GONE_TEXT = "This chat is no longer available. Please start a new chat."
+
+
 async def _save_suggestion(db, user_id: int, session_id: str, meal_data: dict, language: str = "en") -> int:
     """Insert a suggested meal into suggested_meals. Returns the new suggestion's id.
     `session_id` is the socket's checked session, one of the user's own (see chat_endpoint)."""
@@ -294,6 +299,15 @@ async def chat_endpoint(websocket: WebSocket):
             # A Suggest reply's ```json meal block is saved as a suggestion and becomes a new meal card
             meal_data = extract_json_block(response_text) if prompt_type == "suggest" else None
             saved_text = response_text
+            async with get_db() as db:
+                still_owned = await owns_session(db, session_id, user_id)
+            if not still_owned:
+                # The session was deleted while the reply was made: nothing left to save it to
+                await send_live({"type": "error", "code": "session_not_found", "message": SESSION_GONE_TEXT})
+                session_id = None
+                if not client_live:
+                    break
+                continue
             if meal_data:
                 async with get_db() as db:
                     suggestion_id = await _save_suggestion(db, user_id, session_id, meal_data, cached_context.get("language", "en"))

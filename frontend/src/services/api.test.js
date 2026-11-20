@@ -286,6 +286,19 @@ describe('chat sync API', () => {
     expect(onSessionUpdated).toHaveBeenCalledWith('s1')
     vi.unstubAllGlobals()
   })
+
+  // A refused reply's error text reaches onDone without a message id, so the chat stops waiting, and isn't a notice
+  it('passes a socket error to onDone as the reply', () => {
+    const sockets = []
+    vi.stubGlobal('WebSocket', class { constructor() { sockets.push(this) } })
+    const onDone = vi.fn()
+    const onNotice = vi.fn()
+    createChatSocket(vi.fn(), onDone, vi.fn(), null, null, null, null, onNotice)
+    sockets[0].onmessage({ data: JSON.stringify({ type: 'error', code: 'session_not_found', message: 'Gone' }) })
+    expect(onDone).toHaveBeenCalledWith('Gone')
+    expect(onNotice).not.toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
 })
 
 
