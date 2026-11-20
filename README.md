@@ -177,6 +177,7 @@ When an update changes the database, the backend backs it up by itself before th
 cd backend
 pip install -r requirements-dev.txt
 python -m pytest
+python -m ruff check .          # lint rules in ruff.toml
 
 # Frontend
 cd frontend

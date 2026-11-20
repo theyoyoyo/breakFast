@@ -37,8 +37,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
           cache-dependency-path: backend/requirements*.txt
-      # requirements-dev.txt includes requirements.txt and adds pytest.
+      # requirements-dev.txt includes requirements.txt and adds pytest and ruff.
       - run: pip install -r requirements-dev.txt
+      # Lint rules only (ruff.toml), no formatting; GitHub output marks findings on the PR's lines.
+      - run: python -m ruff check --output-format=github .
       # The tests fake Ollama and use a temporary database per test.
       - run: python -m pytest
 
