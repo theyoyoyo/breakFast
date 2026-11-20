@@ -197,6 +197,7 @@ All backend settings are environment variables, documented in [`.env.example`](.
 | `DATABASE_PATH` | `./breakFAST.db` | SQLite file, relative to `backend/` |
 | `CORS_ORIGINS` | `*` | Comma-separated allowed origins |
 | `SERVE_FRONTEND` | `false` | Serve `frontend/dist` from FastAPI |
+| `API_DOCS` | `false` | Serve `/docs`, `/redoc` and `/openapi.json` |
 | `DEMO_USER` | `false` | Create a `demo` user with an empty PIN and a starter fridge |
 
 ---

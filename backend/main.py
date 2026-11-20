@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from contextlib import asynccontextmanager
-from config import CORS_ORIGINS, CORS_ALLOW_CREDENTIALS, SERVE_FRONTEND
+from config import CORS_ORIGINS, CORS_ALLOW_CREDENTIALS, SERVE_FRONTEND, API_DOCS
 from database import init_db
 from models.limits import MAX_BODY_BYTES
 from auth import require_user
@@ -27,6 +27,10 @@ app = FastAPI(
     description="Personal AI-powered breakfast planner backend.",
     version="0.1.0",
     lifespan=lifespan,
+    # The interactive docs and the schema list every route, so they are off unless API_DOCS=true
+    docs_url="/docs" if API_DOCS else None,
+    redoc_url="/redoc" if API_DOCS else None,
+    openapi_url="/openapi.json" if API_DOCS else None,
 )
 
 

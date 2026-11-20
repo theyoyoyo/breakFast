@@ -168,6 +168,9 @@ containing `backend/`, `frontend/`, `CLAUDE.md`, etc.).
 
    # Serve built frontend from FastAPI (single-server production mode)
    SERVE_FRONTEND=true
+
+   # FastAPI's /docs, /redoc and /openapi.json are off unless this is true
+   API_DOCS=false
    ```
 
    **The key difference from dev:** Set `SERVE_FRONTEND=true`. This tells the backend
