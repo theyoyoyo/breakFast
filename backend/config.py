@@ -19,5 +19,8 @@ CORS_ALLOW_CREDENTIALS = "*" not in CORS_ORIGINS
 
 SERVE_FRONTEND = os.getenv("SERVE_FRONTEND", "").lower() in ("1", "true", "yes")
 
+# Serve FastAPI's /docs, /redoc and /openapi.json (off by default)
+API_DOCS = os.getenv("API_DOCS", "").lower() in ("1", "true", "yes")
+
 # Create a "demo" user with an empty PIN on startup (for trying the app locally)
 DEMO_USER = os.getenv("DEMO_USER", "").lower() in ("1", "true", "yes")
