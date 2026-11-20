@@ -21,6 +21,8 @@ export default [
       globals: { ...globals.browser },
     },
     settings: { react: { version: 'detect' } },
+    // The app doesn't use PropTypes (no types on props anywhere), so the rule would only add noise.
+    rules: { 'react/prop-types': 'off' },
   },
   {
     // Vitest runs with globals: true (vite.config.js), and the setup file runs in Node too.
