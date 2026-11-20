@@ -14,7 +14,7 @@ Run from backend/, with the server's Ollama reachable (docs/SETUPALL.md, BONUS C
     python -m tools.prompt_check --history
 
 Personas, each run for a sample user (tools/prompt_samples.py):
-- suggest (default): one Suggest press through the real draft → review → refine
+- suggest (default): one Suggest press through the real draft → revise → present
   pipeline, in the mode the sample's user usually presses unless --mode is given.
   The draft and the final reply are both scored; --draft stops after the draft (one
   model call instead of three). --scenario says what the press comes after: a fresh

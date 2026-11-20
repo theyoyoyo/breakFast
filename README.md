@@ -227,7 +227,7 @@ breakFast/
 │   ├── routers/           one module per API area (chat WebSocket, meals, fridge, ...)
 │   ├── services/
 │   │   ├── personas/      one file per LLM persona
-│   │   ├── pipeline.py    draft → review → refine suggestion pipeline
+│   │   ├── pipeline.py    draft → revise → present suggestion pipeline
 │   │   ├── context.py     per-user context loaders for prompts
 │   │   ├── insights.py    behavioural pattern extraction
 │   │   └── llm.py         Ollama streaming and lyric fallback
