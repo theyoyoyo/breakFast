@@ -183,6 +183,7 @@ python -m ruff check .          # lint rules in ruff.toml
 cd frontend
 npm test
 npm run build
+npm run lint                    # ESLint; CI lints only a pull request's changed files
 ```
 
 Prompt quality is measured against a real model: `python -m tools.prompt_check` (from `backend/`) runs the suggestion pipeline for sample users and scores every reply in code: JSON, fridge-only, prepared items, units. See [BONUS C in the setup guide](docs/SETUPALL.md#bonus-c--test-prompts-from-another-pc-optional-for-development).
