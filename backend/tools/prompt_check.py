@@ -63,14 +63,14 @@ from pathlib import Path
 from models.units import UNIT_ALIASES, UNIT_PAIRS, unknown_units
 from routers.chat import SUGGEST_TEMPERATURES
 from services.prep_plan import _build_plan, served_items
-from services import llm, pipeline, suggestion
+from services import llm, pipeline
 from services.chat_block import SUGGEST_MESSAGES, chat_history, format_chat_block
 # The fridge check's own word handling, to tell renamed items from missing ones
 from services.fridge import (
     _FOLD, _tokens, _words, find_avoided, find_missing_ingredients, meal_ingredient_names, name_tokens, same_name,
     same_tokens,
 )
-from services.personas import build_scheduler_prompt, build_scheduler_user_message
+from services.personas import build_chat_prompt, build_scheduler_prompt, build_scheduler_user_message
 from services.personas.chat import build_chat_message
 from services.personas.shopping import build_shopping_prompt
 from services.shopping import (
@@ -771,7 +771,7 @@ async def plan_once(case: dict, sent: dict) -> dict:
     prompt = build_scheduler_prompt(name, [], "", kitchen_appliances=case["kitchen_appliances"], language=language)
     message = build_scheduler_user_message(name, [], "", menu=case["menu"], language=language)
     sent.setdefault(prompt, None)
-    chunks = [c async for c in suggestion.stream_response(prompt, [], message, temperature=PLAN_TEMPERATURE)]
+    chunks = [c async for c in llm.stream_response(prompt, [], message, temperature=PLAN_TEMPERATURE)]
     return {"request": message, "plan": "".join(chunks)}
 
 
@@ -791,7 +791,7 @@ async def review_once(case: dict, mode: str | None) -> dict:
 
 def chat_prompt(sample: dict) -> str:
     """The chat persona's system prompt, built the way routers/chat.py builds it."""
-    return suggestion.build_chat_prompt(
+    return build_chat_prompt(
         ingredient_inventory=sample["ingredients"],
         recent_meal_history=sample["history"],
         user_preferences=sample["preferences"],
@@ -818,7 +818,7 @@ async def chat_once(sample: dict, mode: str | None, scenario: dict, sent: dict) 
             history += chat_history(chat_rows([entry], mode))
             continue
         message = build_chat_message(entry["content"], sample["language"])
-        reply = "".join([c async for c in suggestion.stream_response(prompt, history, message)])
+        reply = "".join([c async for c in llm.stream_response(prompt, history, message)])
         replies[next(kinds)] = reply
         history += [entry, {"role": "assistant", "content": reply}]
     return replies

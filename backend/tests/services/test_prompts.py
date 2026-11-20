@@ -12,11 +12,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from services.personas.chat import build_chat_message
-from services.suggestion import (
-    build_chat_prompt,
-    build_suggestion_prompt,
-    build_analyst_prompt,
-)
 from services.knowledge import (
     format_ingredients,
     format_history,
@@ -29,11 +24,14 @@ from services.knowledge import (
     format_avoid_list,
 )
 from services.personas import (
+    build_analyst_prompt,
+    build_chat_prompt,
     build_pipeline_analyst_prompt,
     build_present_prompt,
     build_scheduler_prompt,
     build_scheduler_user_message,
     build_shopping_prompt,
+    build_suggestion_prompt,
     build_weekly_analyst_prompt_with_meals,
 )
 

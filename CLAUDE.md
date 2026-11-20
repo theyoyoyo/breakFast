@@ -229,7 +229,6 @@ breakFAST/
 │   │   ├── fridge.py                ← exact name matching (same_name): fridge check, avoid hits
 │   │   ├── ingredient_groups.py     ← a new item's group: the user's pick, then the food list, then Other
 │   │   ├── shopping.py              ← shopping reply schema, parser + dedupe (+ items removed in the last 7 days)
-│   │   ├── suggestion.py            ← stream_response + persona re-exports
 │   │   ├── chat_sync.py             ← open chat sockets per user: session_updated + small notices
 │   │   ├── chat_block.py            ← the chat a Suggest press reads (typed messages + meal cards, latest marked); the chat persona's history, meal blocks dropped from its replies
 │   │   └── llm.py                   ← Ollama streaming + lyric fallback

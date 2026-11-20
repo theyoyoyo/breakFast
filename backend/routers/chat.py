@@ -14,7 +14,8 @@ from database import get_db
 from db_helpers import owns_session
 from auth import SOCKET_AUTH_PROTOCOL, get_user_id_from_token, socket_token
 from services.llm import LLMUnavailableError, lyric_cycler
-from services.suggestion import build_chat_prompt, stream_response
+from services.llm import stream_response
+from services.personas import build_chat_prompt
 from services.personas.chat import build_chat_message
 from services.pipeline import RETRY_TEXTS, in_language, run_suggestion_pipeline
 from services.context import load_chat_context

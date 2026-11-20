@@ -78,8 +78,7 @@ async def generate_weekly_review(user_id: int = Depends(require_user)):
     from services.personas.weekly_analyst import build_weekly_analyst_prompt_with_meals
     from services.knowledge import format_history_for_weekly_review
     from services.context import fetch_profile, fetch_supplements, fetch_health_rules, fetch_preferences
-    from services.suggestion import stream_response
-    from services.llm import LLMUnavailableError, lyric_cycler
+    from services.llm import LLMUnavailableError, lyric_cycler, stream_response
     from utils import extract_json_block
 
     week_key = dt_date.today().strftime("%G-W%V")

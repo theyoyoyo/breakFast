@@ -35,12 +35,11 @@ from typing import AsyncGenerator
 
 from models.units import unknown_units, units_for
 from services.fridge import find_avoided, find_missing_ingredients, in_fridge, meal_ingredient_names, same_name
-from services.llm import chat_json
-from services.suggestion import (
+from services.llm import chat_json, stream_response
+from services.personas import (
     build_suggestion_prompt,
     build_pipeline_analyst_prompt,
     build_present_prompt,
-    stream_response,
 )
 
 # The reviser applies its changes and checks the result, so it runs cool like the old analyst
