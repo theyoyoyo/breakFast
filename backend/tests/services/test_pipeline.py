@@ -296,7 +296,8 @@ class TestPipelineOrchestrator:
     async def test_only_true_swaps_keep_their_mark(self):
         context = {**SAMPLE_CONTEXT, "ingredients": [{"name": "eggs"}, {"name": "Feta"}, {"name": "Milk"}]}
         draft = _meal(EGGS, {"name": "Salmon", "amount": 50, "unit": "g"}, {"name": "Chives", "amount": 1, "unit": "tbsp"})
-        g = lambda name, **extra: {"name": name, "amount": 50, "unit": "g", **extra}
+        def g(name, **extra):
+            return {"name": name, "amount": 50, "unit": "g", **extra}
         revised = _meal(
             g("eggs", replaces=" "), g("Feta", replaces="salmon"), g("Milk", replaces="eggs"),
             g("Quark", replaces="Salmon"), g("Chives"), g("Feta", replaces="Chives"),

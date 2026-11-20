@@ -96,7 +96,8 @@ def test_prep_words_are_noted():
 # A final notes the review's swaps (#148): a dish ingredient marked as standing in for a missing item, and a draft's
 # missing item gone with no mark; a rename to the fridge name and a missing item the review kept aren't gone
 def test_review_swaps_are_noted():
-    ing = lambda name, **extra: {"name": name, "amount": 50, "unit": "g", **extra}
+    def ing(name, **extra):
+        return {"name": name, "amount": 50, "unit": "g", **extra}
     draft = _reply({"name": "Salmon omelette", "ingredients": [
         ing("Eggs"), ing("Salmon"), ing("Quinoa"), ing("Sliced tomatoes"), ing("Chives"),
     ]})
@@ -617,8 +618,10 @@ def test_plan_heating_without_an_appliance_is_noted():
     bare = check_plan(_plan(Boiled_eggs=["Hard-boil the eggs"]), PLAN_CASES["omelette"])
     assert is_clean(bare), describe(bare)
     assert bare["note"].endswith("; no appliance: Hard-boil the eggs (Boiled eggs)")
-    steps = lambda appliance: _plan(Avocado_toast=["Mash the avocado", ("Toast the bread", appliance), "Spread it on the toast"])
-    noted = lambda appliance, case: check_plan(steps(appliance), PLAN_CASES[case])["note"].partition("; no appliance: ")[2]
+    def steps(appliance):
+        return _plan(Avocado_toast=["Mash the avocado", ("Toast the bread", appliance), "Spread it on the toast"])
+    def noted(appliance, case):
+        return check_plan(steps(appliance), PLAN_CASES[case])["note"].partition("; no appliance: ")[2]
     assert noted("Oven", "avocado_oven") == ""
     assert noted("Toaster", "avocado_oven") == "Toast the bread (Avocado toast)"
     assert noted("", "avocado") == "Toast the bread (Avocado toast)"
@@ -689,13 +692,15 @@ def test_review_scores_swaps_and_outside_names():
 def test_review_case_may_keep_a_part():
     case = REVIEW_CASES["omelette"]
     draft = pipeline._meal_reply("", case["draft"])
-    ing = lambda name, **extra: {"name": name, "amount": 1, "unit": "pcs", **extra}
+    def ing(name, **extra):
+        return {"name": name, "amount": 1, "unit": "pcs", **extra}
     stocked = [ing("Sweet potatoes"), ing("Cheddar", prep="grated"), ing("Spinach")]
     toast = {"name": "Jam toast", "method": "Toast the bread, spread the jam", "ingredients": [
         ing("Whole wheat bread"), ing("Strawberry jam"),
     ]}
     coffee = {"name": "Coffee", "amount": 1, "unit": "glass", "ingredients": []}
-    omelette = lambda *items: {"name": "Sweet potato omelette", "method": "Cook", "ingredients": [*items, *stocked]}
+    def omelette(*items):
+        return {"name": "Sweet potato omelette", "method": "Cook", "ingredients": [*items, *stocked]}
     kept = check_review(_reply(omelette(ing("Egg whites"), ing("Onion", prep="diced")), toast, coffee), case, draft)
     assert is_clean(kept), describe(kept)
     assert kept["note"].endswith("still missing: Egg whites")

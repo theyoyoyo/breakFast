@@ -111,7 +111,7 @@ async def test_refresh_replaces_old_inferred_habits(tmp_path, monkeypatch):
             await _seed_meal(db, user_id, f"Meal {i}", ["eggs", "bread"])
         await db.commit()
 
-    first_count = await refresh_insights_for_user(user_id)
+    await refresh_insights_for_user(user_id)
     second_count = await refresh_insights_for_user(user_id)
 
     async with database.get_db() as db:

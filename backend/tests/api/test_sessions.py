@@ -28,8 +28,7 @@ async def test_get_active_session_creates_if_none(client):
 @pytest.mark.asyncio
 async def test_get_active_session_returns_latest(client):
     """Should return the most recently updated session."""
-    r1 = await client.post("/sessions/")
-    sid1 = r1.json()["session_id"]
+    await client.post("/sessions/")
 
     r2 = await client.post("/sessions/")
     sid2 = r2.json()["session_id"]
