@@ -29,7 +29,7 @@ echo Installing frontend dependencies...
 cd frontend
 npm install
 if errorlevel 1 (
-    echo ERROR: npm install failed. Make sure Node.js 18+ is on PATH.
+    echo ERROR: npm install failed. Make sure Node.js 22.13+ is on PATH.
     pause
     exit /b 1
 )
