@@ -18,6 +18,7 @@ from services.personas import build_scheduler_prompt, build_scheduler_user_messa
 from services.personas.scheduler import DEFAULT_APPLIANCES
 from services.llm import LLMUnavailableError, lyric_cycler, stream_response
 from models.limits import INGREDIENTS_MAX, MENU_ITEMS_MAX, STEPS_MAX, MealName, Note, SizedItem
+from services.context import fetch_kitchen_appliances, fetch_preferences
 from services.knowledge import format_ingredient_item
 from services.prep_plan import _build_plan, _labels, served_items
 from utils import extract_json_block
@@ -72,7 +73,6 @@ async def get_schedule(body: ScheduleRequest, user_id: int = Depends(require_use
         ingredients_str = "ingredient list unavailable"
 
     # Fetch user's kitchen appliances and language preference for the prompt
-    from services.context import fetch_kitchen_appliances, fetch_preferences
     async with get_db() as db:
         kitchen_appliances = await fetch_kitchen_appliances(db, user_id)
         prefs = await fetch_preferences(db, user_id)

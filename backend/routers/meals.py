@@ -5,6 +5,7 @@ All queries are scoped to the authenticated user.
 
 import asyncio
 import json
+from datetime import date as dt_date, timedelta
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 from database import get_db
@@ -12,7 +13,12 @@ from auth import require_user
 from models.limits import MEALS_LIMIT_DEFAULT, MEALS_LIMIT_MAX
 from models.meal import Meal, MealLog
 from db_helpers import row_to_meal, serialize_json_field
+from services.context import fetch_profile, fetch_supplements, fetch_health_rules, fetch_preferences
 from services.insights import PATTERN_DAYS
+from services.knowledge import format_history_for_weekly_review
+from services.llm import LLMUnavailableError, lyric_cycler, stream_response
+from services.personas.weekly_analyst import build_weekly_analyst_prompt_with_meals
+from utils import extract_json_block
 
 router = APIRouter(prefix="/meals", tags=["meals"])
 
@@ -43,8 +49,6 @@ async def get_weekly_review(user_id: int = Depends(require_user)):
 
     Returns 404 if no analysis has been run yet this week.
     """
-    from datetime import date as dt_date
-
     week_key = dt_date.today().strftime("%G-W%V")
     async with get_db() as db:
         async with db.execute(
@@ -74,13 +78,6 @@ async def generate_weekly_review(user_id: int = Depends(require_user)):
 
     Always generates a fresh analysis — existing entries are kept (not overwritten).
     """
-    from datetime import date as dt_date, timedelta
-    from services.personas.weekly_analyst import build_weekly_analyst_prompt_with_meals
-    from services.knowledge import format_history_for_weekly_review
-    from services.context import fetch_profile, fetch_supplements, fetch_health_rules, fetch_preferences
-    from services.llm import LLMUnavailableError, lyric_cycler, stream_response
-    from utils import extract_json_block
-
     week_key = dt_date.today().strftime("%G-W%V")
 
     # Fetch meals from the last 7 calendar days
