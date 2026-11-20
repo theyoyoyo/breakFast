@@ -10,6 +10,7 @@ import asyncio
 from datetime import date as date_type
 
 from db_helpers import parse_json_field
+from models.kitchen import KITCHEN_APPLIANCES, DEFAULT_ENABLED_KEYS
 from services.shopping import dish_names
 
 # App settings stored as preferences; they're not food preferences, so prompts never see them
@@ -22,8 +23,6 @@ def _food_preferences(prefs: dict) -> dict:
 
 async def fetch_kitchen_appliances(db, user_id: int) -> list[str]:
     """Return display names of enabled kitchen appliances for prompt injection."""
-    from models.kitchen import KITCHEN_APPLIANCES, DEFAULT_ENABLED_KEYS
-
     async with db.execute(
         "SELECT appliance_key, enabled FROM user_kitchen_appliances WHERE user_id = ?",
         (user_id,),
@@ -259,7 +258,6 @@ async def load_shopping_context(db, user_id: int) -> dict:
 
 async def fetch_weekly_summary(db, user_id: int) -> dict | None:
     """Fetch the cached weekly summary for the current ISO week, or None."""
-    from datetime import date as date_type
     week_key = date_type.today().strftime("%G-W%V")
     async with db.execute(
         "SELECT narrative, scores FROM weekly_summaries WHERE user_id = ? AND week_key = ?",

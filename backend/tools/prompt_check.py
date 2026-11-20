@@ -14,7 +14,7 @@ Run from backend/, with the server's Ollama reachable (docs/SETUPALL.md, BONUS C
     python -m tools.prompt_check --history
 
 Personas, each run for a sample user (tools/prompt_samples.py):
-- suggest (default): one Suggest press through the real draft → review → refine
+- suggest (default): one Suggest press through the real draft → revise → present
   pipeline, in the mode the sample's user usually presses unless --mode is given.
   The draft and the final reply are both scored; --draft stops after the draft (one
   model call instead of three). --scenario says what the press comes after: a fresh
@@ -62,15 +62,15 @@ from pathlib import Path
 
 from models.units import UNIT_ALIASES, UNIT_PAIRS, unknown_units
 from routers.chat import SUGGEST_TEMPERATURES
-from routers.scheduler import _build_plan, served_items
-from services import llm, pipeline, suggestion
+from services.prep_plan import _build_plan, served_items
+from services import llm, pipeline
 from services.chat_block import SUGGEST_MESSAGES, chat_history, format_chat_block
 # The fridge check's own word handling, to tell renamed items from missing ones
 from services.fridge import (
     _FOLD, _tokens, _words, find_avoided, find_missing_ingredients, meal_ingredient_names, name_tokens, same_name,
     same_tokens,
 )
-from services.personas import build_scheduler_prompt, build_scheduler_user_message
+from services.personas import build_chat_prompt, build_scheduler_prompt, build_scheduler_user_message
 from services.personas.chat import build_chat_message
 from services.personas.shopping import build_shopping_prompt
 from services.shopping import (
@@ -107,7 +107,7 @@ def chat_rows(chat: list[dict], mode: str | None) -> list[dict]:
     return rows
 
 
-# Suggest Shopping's temperature (routers/ingredients.py, get_shopping_suggestions)
+# Suggest Shopping's temperature (routers/shopping.py, get_shopping_suggestions)
 SHOPPING_TEMPERATURE = 0.6
 # Seeds the share of fridge items and taste hints each press shows, so tests compare
 SHOPPING_SEED = 130
@@ -727,7 +727,7 @@ async def suggest_once(sample: dict, mode: str | None, draft_only: bool, scenari
 
 
 def shopping_prompt(sample: dict, hints: list[str]) -> str:
-    """The shopping system prompt with this press's taste hints, built the way routers/ingredients.py builds it."""
+    """The shopping system prompt with this press's taste hints, built the way routers/shopping.py builds it."""
     return build_shopping_prompt(
         taste_hints=hints,
         user_preferences=sample["preferences"],
@@ -771,7 +771,7 @@ async def plan_once(case: dict, sent: dict) -> dict:
     prompt = build_scheduler_prompt(name, [], "", kitchen_appliances=case["kitchen_appliances"], language=language)
     message = build_scheduler_user_message(name, [], "", menu=case["menu"], language=language)
     sent.setdefault(prompt, None)
-    chunks = [c async for c in suggestion.stream_response(prompt, [], message, temperature=PLAN_TEMPERATURE)]
+    chunks = [c async for c in llm.stream_response(prompt, [], message, temperature=PLAN_TEMPERATURE)]
     return {"request": message, "plan": "".join(chunks)}
 
 
@@ -791,7 +791,7 @@ async def review_once(case: dict, mode: str | None) -> dict:
 
 def chat_prompt(sample: dict) -> str:
     """The chat persona's system prompt, built the way routers/chat.py builds it."""
-    return suggestion.build_chat_prompt(
+    return build_chat_prompt(
         ingredient_inventory=sample["ingredients"],
         recent_meal_history=sample["history"],
         user_preferences=sample["preferences"],
@@ -818,7 +818,7 @@ async def chat_once(sample: dict, mode: str | None, scenario: dict, sent: dict) 
             history += chat_history(chat_rows([entry], mode))
             continue
         message = build_chat_message(entry["content"], sample["language"])
-        reply = "".join([c async for c in suggestion.stream_response(prompt, history, message)])
+        reply = "".join([c async for c in llm.stream_response(prompt, history, message)])
         replies[next(kinds)] = reply
         history += [entry, {"role": "assistant", "content": reply}]
     return replies

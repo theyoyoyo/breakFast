@@ -156,7 +156,7 @@ export const handleExpiredAction = (delete_ids, keep_ids, shopping_ids) =>
   apiFetch(`${BASE_URL}/ingredients/expired/action`, json('POST', { delete_ids, keep_ids, shopping_ids }))
 
 export const getShoppingSuggestions = (exclude = []) =>
-  apiFetch(`${BASE_URL}/ingredients/shopping-suggestions`, json('POST', { exclude }))
+  apiFetch(`${BASE_URL}/shopping/suggestions/generate`, json('POST', { exclude }))
 
 // The Fridge tab's suggestions list, kept on the server → { items: [{ name, reason, checked }] }
 export const getSuggestionList = () =>

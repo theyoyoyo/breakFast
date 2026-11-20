@@ -620,7 +620,7 @@ async def test_plan_once_sends_the_menu_with_its_methods():
         yield "ok"
 
     requests = {}
-    with patch("services.suggestion.stream_response", fake_stream):
+    with patch("services.llm.stream_response", fake_stream):
         for key, case in PLAN_CASES.items():
             sent = {}
             replies = await plan_once(case, sent)
@@ -783,7 +783,7 @@ async def test_chat_once_sends_the_typed_messages_in_turn():
     scenario = chat_scenario("en", "pressed")
     typed = [e["content"] for e in scenario["chat"] if "press" not in e]
     sent = {}
-    with patch("services.suggestion.stream_response", fake_stream):
+    with patch("services.llm.stream_response", fake_stream):
         replies = await chat_once(EN, None, scenario, sent)
     assert list(replies) == ["chat", *CHAT_MESSAGES]
     assert replies["chat"] == "\n".join(typed) and replies["allowed"] == "reply 4"
@@ -806,7 +806,7 @@ async def test_chat_persona_run():
     async def fake_stream(system_prompt, history, message, temperature=None):
         yield "Sounds good! Press Suggest when you're ready."
 
-    with patch("services.suggestion.stream_response", fake_stream):
+    with patch("services.llm.stream_response", fake_stream):
         records, _ = await run(["en"], 1, None, False, persona="chat", scenarios=["chat"])
     assert [r["sample"] for r in records] == ["en:chat"]
     assert list(records[0]["scores"]) == list(CHAT_MESSAGES)

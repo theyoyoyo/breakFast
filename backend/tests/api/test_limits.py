@@ -197,8 +197,8 @@ async def test_request_body_over_limit_refused(client):
 async def test_shopping_suggestions_error_holds_no_exception_text(client, caplog):
     """When shopping suggestions fail, the reply carries a fixed message and the cause goes to the log only."""
     cause = "Traceback: C:\\server\\secret\\path.py connection refused at 10.0.0.5"
-    with patch("services.llm.chat_json", AsyncMock(side_effect=RuntimeError(cause))):
-        r = await client.post("/ingredients/shopping-suggestions", json={"exclude": []})
+    with patch("routers.shopping.chat_json", AsyncMock(side_effect=RuntimeError(cause))):
+        r = await client.post("/shopping/suggestions/generate", json={"exclude": []})
     assert r.status_code == 200
     assert r.json()["suggestions"] == []
     assert "secret" not in r.text and "10.0.0.5" not in r.text and "RuntimeError" not in r.text
@@ -210,8 +210,8 @@ async def test_shopping_suggestions_error_holds_no_exception_text(client, caplog
 async def test_shopping_context_error_holds_no_exception_text(client):
     """When loading the shopping context fails, the reply carries the same fixed message."""
     cause = "no such table: secret_table"
-    with patch("services.context.load_shopping_context", AsyncMock(side_effect=RuntimeError(cause))):
-        r = await client.post("/ingredients/shopping-suggestions", json={"exclude": []})
+    with patch("routers.shopping.load_shopping_context", AsyncMock(side_effect=RuntimeError(cause))):
+        r = await client.post("/shopping/suggestions/generate", json={"exclude": []})
     assert r.status_code == 200
     assert "secret_table" not in r.text
     assert r.json()["error"] == "Could not get suggestions. Please try again."

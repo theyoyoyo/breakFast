@@ -17,7 +17,8 @@ from pydantic import BaseModel, Field
 from auth import require_user
 from database import get_db
 from models.limits import INGREDIENTS_MAX, MealName, SizedItem
-from services.suggestion import build_analyst_prompt, stream_response
+from services.llm import stream_response
+from services.personas import build_analyst_prompt
 from services.llm import LLMUnavailableError, lyric_cycler
 from services.knowledge import format_ingredient_item
 from services.context import load_analyst_context

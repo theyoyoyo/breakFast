@@ -1,7 +1,7 @@
 """
 /chat WebSocket endpoint.
 Handles streaming conversation with context loading from DB.
-Parses JSON meal blocks from LLM responses and auto-logs meals.
+A Suggest press runs the suggestion pipeline and saves its meal to suggested_meals.
 Messages are persisted to chat_messages table for session continuity.
 Each open socket is registered in services/chat_sync, so a saved reply reaches the user's other devices.
 """
@@ -14,7 +14,8 @@ from database import get_db
 from db_helpers import owns_session
 from auth import SOCKET_AUTH_PROTOCOL, get_user_id_from_token, socket_token
 from services.llm import LLMUnavailableError, lyric_cycler
-from services.suggestion import build_chat_prompt, stream_response
+from services.llm import stream_response
+from services.personas import build_chat_prompt
 from services.personas.chat import build_chat_message
 from services.pipeline import RETRY_TEXTS, in_language, run_suggestion_pipeline
 from services.context import load_chat_context
@@ -233,7 +234,7 @@ async def chat_endpoint(websocket: WebSocket):
                     cached_context = await load_chat_context(db, user_id)
                     chat_block = await load_chat_block(db, session_id, user_id)
 
-                # Run 3-step pipeline: draft → analyst review → refine
+                # Run the 3-step pipeline: draft → revise → present
                 response_text = ""
                 try:
                     async for event in run_suggestion_pipeline(
