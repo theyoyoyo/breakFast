@@ -9,13 +9,14 @@ with that panel's Save button, and each session remembers its selected meal card
 import json
 import uuid
 from typing import Literal
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Path
 from fastapi.responses import Response
 from pydantic import BaseModel, StrictBool, StrictInt
 from database import get_db
 from db_helpers import owns_session, parse_json_field
 from auth import require_user
 from services import chat_sync
+from models.limits import SESSION_ID_MAX, MessageContent, SizedDict
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -23,14 +24,14 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 class MessageIn(BaseModel):
     """A message saved to a session: meals sent to chat, analysis and prep plan results."""
     role: Literal["user", "assistant"] = "assistant"
-    content: str = ""
-    select: StrictBool = False
+    content: MessageContent = ""
+    select: StrictBool = False  # also make it the selected meal card
 
 
 class MessageUpdate(BaseModel):
     """A message change; only the fields sent are changed (null content saves empty text)."""
-    content: str | None = None
-    ate_draft: dict | None = None
+    content: MessageContent | None = None
+    ate_draft: SizedDict | None = None  # a meal object, or null to clear it
 
 
 class SelectedIn(BaseModel):
@@ -140,9 +141,13 @@ async def get_messages(session_id: str, user_id: int = Depends(require_user)):
 
 
 @router.post("/{session_id}/messages")
-async def save_message(session_id: str, body: MessageIn, user_id: int = Depends(require_user)):
+async def save_message(
+    body: MessageIn,
+    session_id: str = Path(max_length=SESSION_ID_MAX),
+    user_id: int = Depends(require_user),
+):
     """Save a message to a session (meals sent to chat, analysis and prep plan results).
-    `select: true` also makes it the selected meal card (a meal sent to chat).
+    select: true also makes it the selected meal card (a meal sent to chat).
     A session that isn't the user's own gets 404 and nothing is stored."""
     async with get_db() as db:
         if not await owns_session(db, session_id, user_id):

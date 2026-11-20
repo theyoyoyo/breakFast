@@ -5,10 +5,11 @@ All queries are scoped to the authenticated user.
 
 import asyncio
 import json
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 from database import get_db
 from auth import require_user
+from models.limits import MEALS_LIMIT_DEFAULT, MEALS_LIMIT_MAX
 from models.meal import Meal, MealLog
 from db_helpers import row_to_meal, serialize_json_field
 from services.insights import PATTERN_DAYS
@@ -17,7 +18,10 @@ router = APIRouter(prefix="/meals", tags=["meals"])
 
 
 @router.get("/", response_model=list[Meal])
-async def list_meals(limit: int = 50, user_id: int = Depends(require_user)):
+async def list_meals(
+    limit: int = Query(MEALS_LIMIT_DEFAULT, ge=1, le=MEALS_LIMIT_MAX),
+    user_id: int = Depends(require_user),
+):
     async with get_db() as db:
         async with db.execute(
             "SELECT * FROM meal_history WHERE user_id = ? ORDER BY logged_at DESC LIMIT ?",
