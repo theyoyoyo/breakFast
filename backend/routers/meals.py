@@ -5,15 +5,18 @@ All queries are scoped to the authenticated user.
 
 import asyncio
 import json
-from datetime import date as dt_date, timedelta
-from fastapi import APIRouter, HTTPException, Depends, Query
+from datetime import date as dt_date
+from datetime import timedelta
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from database import get_db
+
 from auth import require_user
+from database import get_db
+from db_helpers import row_to_meal, serialize_json_field
 from models.limits import MEALS_LIMIT_DEFAULT, MEALS_LIMIT_MAX
 from models.meal import Meal, MealLog
-from db_helpers import row_to_meal, serialize_json_field
-from services.context import fetch_profile, fetch_supplements, fetch_health_rules, fetch_preferences
+from services.context import fetch_health_rules, fetch_preferences, fetch_profile, fetch_supplements
 from services.insights import PATTERN_DAYS
 from services.knowledge import format_history_for_weekly_review
 from services.llm import LLMUnavailableError, lyric_cycler, stream_response

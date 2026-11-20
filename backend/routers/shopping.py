@@ -9,21 +9,28 @@ All queries are scoped to the authenticated user.
 
 import logging
 import random
+from typing import Optional
 
 from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel, Field
-from typing import Optional
-from database import get_db
+
 from auth import require_user
+from database import get_db
+from models.limits import BULK_ITEMS_MAX, Name, Note, ShortText
 from services import chat_sync
 from services.context import load_shopping_context
 from services.ingredient_groups import remember, resolve_groups
-from services.llm import chat_json, LLMUnavailableError, lyric_cycler
+from services.llm import LLMUnavailableError, chat_json, lyric_cycler
 from services.personas import build_shopping_prompt
 from services.shopping import (
-    REMOVED_DAYS, SUGGESTIONS_SCHEMA, new_suggestions, parse_suggestions, pick_input, recently_removed, shopping_request,
+    REMOVED_DAYS,
+    SUGGESTIONS_SCHEMA,
+    new_suggestions,
+    parse_suggestions,
+    pick_input,
+    recently_removed,
+    shopping_request,
 )
-from models.limits import BULK_ITEMS_MAX, Name, Note, ShortText
 
 router = APIRouter(prefix="/shopping", tags=["shopping"])
 

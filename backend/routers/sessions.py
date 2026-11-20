@@ -9,14 +9,16 @@ with that panel's Save button, and each session remembers its selected meal card
 import json
 import uuid
 from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Path
 from fastapi.responses import Response
 from pydantic import BaseModel, StrictBool, StrictInt
+
+from auth import require_user
 from database import get_db
 from db_helpers import owns_session, parse_json_field
-from auth import require_user
-from services import chat_sync
 from models.limits import SESSION_ID_MAX, MessageContent, SizedDict
+from services import chat_sync
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 

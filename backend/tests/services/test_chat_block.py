@@ -4,7 +4,13 @@ view of the same session (#168)."""
 import json
 
 from services.chat_block import (
-    CHAT_BLOCK_CHARS, CHAT_HEADER, SUGGEST_MESSAGES, chat_entries, chat_history, drop_meal_block, format_chat_block,
+    CHAT_BLOCK_CHARS,
+    CHAT_HEADER,
+    SUGGEST_MESSAGES,
+    chat_entries,
+    chat_history,
+    drop_meal_block,
+    format_chat_block,
     load_chat_block,
 )
 

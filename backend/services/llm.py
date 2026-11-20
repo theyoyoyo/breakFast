@@ -4,16 +4,12 @@ Tries Ollama; if unavailable, raises LLMUnavailableError and callers fall
 back to the next line of FALLBACK_LYRICS.
 """
 
-import httpx
 import json
 from typing import AsyncGenerator
 
-from config import (
-    OLLAMA_BASE_URL,
-    OLLAMA_MODEL,
-    OLLAMA_NUM_CTX,
-)
+import httpx
 
+from config import OLLAMA_BASE_URL, OLLAMA_MODEL, OLLAMA_NUM_CTX
 
 FALLBACK_LYRICS = [
     "Benim aklım ocakta kaldı~",

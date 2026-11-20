@@ -12,7 +12,6 @@ from datetime import date
 
 from services.fridge import meal_ingredient_names
 
-
 # ---------------------------------------------------------------------------
 # Context formatters
 # ---------------------------------------------------------------------------

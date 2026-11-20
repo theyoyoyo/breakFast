@@ -14,12 +14,12 @@ from pydantic import BaseModel, Field
 
 from auth import require_user
 from database import get_db
-from services.personas import build_scheduler_prompt, build_scheduler_user_message
-from services.personas.scheduler import DEFAULT_APPLIANCES
-from services.llm import LLMUnavailableError, lyric_cycler, stream_response
 from models.limits import INGREDIENTS_MAX, MENU_ITEMS_MAX, STEPS_MAX, MealName, Note, SizedItem
 from services.context import fetch_kitchen_appliances, fetch_preferences
 from services.knowledge import format_ingredient_item
+from services.llm import LLMUnavailableError, lyric_cycler, stream_response
+from services.personas import build_scheduler_prompt, build_scheduler_user_message
+from services.personas.scheduler import DEFAULT_APPLIANCES
 from services.prep_plan import _build_plan, _labels, served_items
 from utils import extract_json_block
 

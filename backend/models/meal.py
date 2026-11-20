@@ -1,9 +1,17 @@
+from typing import Any, List, Optional, Union
+
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List, Union, Any
 
 from models.limits import (
-    INGREDIENTS_MAX, MENU_ITEMS_MAX, STEPS_MAX,
-    MealName, Name, Note, SizedDict, SizedItem, SizedList,
+    INGREDIENTS_MAX,
+    MENU_ITEMS_MAX,
+    STEPS_MAX,
+    MealName,
+    Name,
+    Note,
+    SizedDict,
+    SizedItem,
+    SizedList,
 )
 
 

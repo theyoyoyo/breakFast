@@ -95,9 +95,11 @@ async def test_delete_session_goes_back_to_previous(client):
 async def test_messages_persist_via_websocket(client, tmp_path, monkeypatch):
     """Messages sent via WebSocket should be persisted and retrievable."""
     import json
-    from starlette.testclient import TestClient
     from unittest.mock import patch
-    from services.llm import LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE
+
+    from starlette.testclient import TestClient
+
+    from services.llm import LLM_UNAVAILABLE_MESSAGE, LLMUnavailableError
 
     # Create a session first
     r = await client.post("/sessions/")
@@ -253,8 +255,10 @@ async def test_select_message_with_bad_id_gets_422(client, db, message_id):
 def _socket_chat(token: str, frames: list[dict]) -> None:
     """Send chat frames over a socket, each message frame waiting for its reply, with the LLM faked."""
     import json
-    from starlette.testclient import TestClient
     from unittest.mock import patch
+
+    from starlette.testclient import TestClient
+
     from main import app
 
     async def mock_stream(*args, **kwargs):
@@ -288,8 +292,10 @@ async def test_socket_message_for_session_not_own_is_saved_in_own_session(client
 # A Suggest press naming another user's session saves its suggestion and meal card in the user's own session
 async def test_socket_suggestion_for_session_not_own_is_saved_in_own_session(client, db):
     import json
-    from starlette.testclient import TestClient
     from unittest.mock import patch
+
+    from starlette.testclient import TestClient
+
     from main import app
 
     await _add_session(db, "testuser", "own-session")

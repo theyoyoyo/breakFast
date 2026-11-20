@@ -3,10 +3,12 @@ Tests for the insights service — aggregate meal history into inferred habits.
 """
 
 import json
+
 import aiosqlite
+
 import database
 from auth import hash_pin
-from services.insights import refresh_insights_for_user, PATTERN_DAYS
+from services.insights import PATTERN_DAYS, refresh_insights_for_user
 
 
 async def _create_test_user(db_path: str, name: str = "testuser") -> int:

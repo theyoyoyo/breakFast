@@ -7,15 +7,41 @@ import pytest
 
 from services import pipeline
 from services.chat_block import chat_history, format_chat_block
-from services.personas.chat import build_chat_message
 from services.fridge import find_missing_ingredients, same_name
+from services.personas.chat import build_chat_message
 from tools.prompt_check import (
-    CHECKS, PERSONAS, chat_once, chat_rows, check_chat, check_plan, check_reply, check_review, compare, describe,
-    is_clean, parse_args, plan_once, recording_prompts, review_once, run, save_log, score_shopping, shop_once,
-    suggest_once, summarize,
+    CHECKS,
+    PERSONAS,
+    chat_once,
+    chat_rows,
+    check_chat,
+    check_plan,
+    check_reply,
+    check_review,
+    compare,
+    describe,
+    is_clean,
+    parse_args,
+    plan_once,
+    recording_prompts,
+    review_once,
+    run,
+    save_log,
+    score_shopping,
+    shop_once,
+    suggest_once,
+    summarize,
 )
 from tools.prompt_samples import (
-    CHAT_MESSAGES, CHAT_MINUTES, PLAN_CASES, REVIEW_CASES, SAMPLE_MODES, SAMPLES, SCENARIOS, chat_picks, chat_scenario,
+    CHAT_MESSAGES,
+    CHAT_MINUTES,
+    PLAN_CASES,
+    REVIEW_CASES,
+    SAMPLE_MODES,
+    SAMPLES,
+    SCENARIOS,
+    chat_picks,
+    chat_scenario,
 )
 
 EN, TR = SAMPLES["en"], SAMPLES["tr"]

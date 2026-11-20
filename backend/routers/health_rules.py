@@ -3,13 +3,14 @@
 All queries are scoped to the authenticated user.
 """
 
-from database import get_db
-from fastapi import APIRouter, Depends, HTTPException
-from auth import require_user
-from models.limits import Text
-from pydantic import BaseModel
 from typing import Literal
 
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+
+from auth import require_user
+from database import get_db
+from models.limits import Text
 
 router = APIRouter(prefix="/health-rules", tags=["health-rules"])
 

@@ -7,9 +7,20 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock
-from services.llm import check_llm_availability, chat_stream, LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE, FallbackLyricCycler, FALLBACK_LYRICS, OLLAMA_NUM_CTX, lyric_cycler
+
+from services.llm import (
+    FALLBACK_LYRICS,
+    LLM_UNAVAILABLE_MESSAGE,
+    OLLAMA_NUM_CTX,
+    FallbackLyricCycler,
+    LLMUnavailableError,
+    chat_stream,
+    check_llm_availability,
+    lyric_cycler,
+)
 
 
 @pytest.mark.asyncio
@@ -93,6 +104,7 @@ def test_fallback_lyrics_has_12_lines():
 async def test_chat_json_sends_schema_as_format():
     """chat_json asks Ollama for one non-streamed reply shaped by the schema and returns its text."""
     from unittest.mock import MagicMock
+
     from services.llm import chat_json
 
     response = MagicMock()

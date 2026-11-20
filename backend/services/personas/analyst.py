@@ -5,12 +5,8 @@ Precise, scientific analysis engine. Responds in English by default (Turkish if 
 Zero creativity, maximum precision. No suggestions, only factual analysis.
 """
 
-from services.knowledge import (
-    format_health_rules,
-    format_user_profile,
-    format_supplements,
-    format_history_detailed,
-)
+from services.knowledge import format_health_rules, format_history_detailed, format_supplements, format_user_profile
+
 
 def _lang(language: str) -> str:
     return "Always respond in Turkish." if language != "en" else "Always respond in English."

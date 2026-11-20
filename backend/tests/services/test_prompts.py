@@ -11,17 +11,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from services.personas.chat import build_chat_message
 from services.knowledge import (
-    format_ingredients,
-    format_history,
-    format_preferences,
+    format_avoid_list,
+    format_behavioral,
     format_habits,
     format_health_rules,
-    format_behavioral,
-    format_user_profile,
+    format_history,
+    format_ingredients,
+    format_preferences,
     format_supplements,
-    format_avoid_list,
+    format_user_profile,
 )
 from services.personas import (
     build_analyst_prompt,
@@ -34,7 +33,7 @@ from services.personas import (
     build_suggestion_prompt,
     build_weekly_analyst_prompt_with_meals,
 )
-
+from services.personas.chat import build_chat_message
 
 # ---------------------------------------------------------------------------
 # Shared formatters

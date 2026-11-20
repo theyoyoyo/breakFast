@@ -7,7 +7,6 @@ multiple routers (meals, favorites, suggestions), and the chat session ownership
 
 import json
 
-
 _SENTINEL = object()
 
 
