@@ -62,7 +62,7 @@ from pathlib import Path
 
 from models.units import UNIT_ALIASES, UNIT_PAIRS, unknown_units
 from routers.chat import SUGGEST_TEMPERATURES
-from routers.scheduler import _build_plan, served_items
+from services.prep_plan import _build_plan, served_items
 from services import llm, pipeline, suggestion
 from services.chat_block import SUGGEST_MESSAGES, chat_history, format_chat_block
 # The fridge check's own word handling, to tell renamed items from missing ones

@@ -2,7 +2,7 @@
 
 import random
 
-from routers.scheduler import _build_plan, served_items
+from services.prep_plan import _build_plan, served_items
 
 
 def _step(action, minutes, hands_on=True, appliance=""):
@@ -156,7 +156,7 @@ def test_the_search_finds_a_shorter_plan_than_the_first_order(monkeypatch):
         _dish("Fruit salad", _step("Slice the fruit", 3), _step("Mix with 100 g yogurt", 2)),
         _dish("Boiled egg", _step("Boil 1 egg", 4, False, "Stove"), _step("Peel it", 1)),
     ]}
-    monkeypatch.setattr("routers.scheduler._SEARCH_NODES", 1)  # only the first order
+    monkeypatch.setattr("services.prep_plan._SEARCH_NODES", 1)  # only the first order
     assert _build_plan(raw)["makespan_min"] == 10
     monkeypatch.undo()
     assert _build_plan(raw)["formatted"] == "\n".join([
