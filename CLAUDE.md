@@ -207,10 +207,10 @@ breakFAST/
 │   ├── routers/
 │   │   ├── chat.py                  ← WebSocket /chat
 │   │   ├── meals.py                 ← /meals history
-│   │   ├── ingredients.py           ← /ingredients CRUD + groups, fridge check, expiry endpoints, Shopping persona's call (`POST /ingredients/shopping-suggestions`)
+│   │   ├── ingredients.py           ← /ingredients CRUD + groups, fridge check, expiry endpoints
 │   │   ├── favorites.py             ← /favorites (saved meals, unique names per user)
 │   │   ├── favorite_ingredients.py  ← /favorite-ingredients (staples)
-│   │   ├── shopping.py              ← /shopping list (DELETE / empties it) + /shopping/suggestions (Fridge tab list, per user; removed count, bring back)
+│   │   ├── shopping.py              ← /shopping list (DELETE / empties it) + /shopping/suggestions (Fridge tab list, per user; removed count, bring back; `POST /shopping/suggestions/generate`, the Shopping persona's call)
 │   │   ├── analyst.py               ← /analyst/analyze
 │   │   ├── scheduler.py             ← /scheduler/plan (steps per dish, hands-on blocks kept whole, finishing together)
 │   │   ├── kitchen.py               ← /kitchen appliance config

@@ -107,7 +107,7 @@ def chat_rows(chat: list[dict], mode: str | None) -> list[dict]:
     return rows
 
 
-# Suggest Shopping's temperature (routers/ingredients.py, get_shopping_suggestions)
+# Suggest Shopping's temperature (routers/shopping.py, get_shopping_suggestions)
 SHOPPING_TEMPERATURE = 0.6
 # Seeds the share of fridge items and taste hints each press shows, so tests compare
 SHOPPING_SEED = 130
@@ -727,7 +727,7 @@ async def suggest_once(sample: dict, mode: str | None, draft_only: bool, scenari
 
 
 def shopping_prompt(sample: dict, hints: list[str]) -> str:
-    """The shopping system prompt with this press's taste hints, built the way routers/ingredients.py builds it."""
+    """The shopping system prompt with this press's taste hints, built the way routers/shopping.py builds it."""
     return build_shopping_prompt(
         taste_hints=hints,
         user_preferences=sample["preferences"],
