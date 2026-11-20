@@ -575,6 +575,24 @@ devices. No port forwarding, no dynamic DNS.
 2. Open `http://100.x.x.x:8000` in your phone browser.
 3. Log in and test — chat, suggestions, everything should work.
 
+### B.4a — What needs HTTPS (and what doesn't)
+
+Plain `http://` over the Tailscale or LAN IP is enough for the app itself: chat,
+suggestions, fridge, everything the server does. Browsers only treat `localhost` and
+`https://` addresses as **secure**, and some features are switched off elsewhere:
+
+| Feature | Needs a secure address |
+|---|---|
+| Service worker (app shell cached, updates itself) | yes |
+| Install to the home screen (PWA) | yes |
+| Voice input (microphone, Web Speech) | yes |
+| Everything else | no |
+
+To get them on the phone, let Tailscale serve the app over HTTPS: turn on HTTPS for the
+tailnet in the admin console (DNS page), run `tailscale serve --bg 8000` on the server,
+and open the machine's `https://<machine>.<tailnet>.ts.net` name instead of the IP. Add
+that address to `CORS_ORIGINS` too. Opening `localhost` on the server itself always works.
+
 ### B.5 — Configure Ollama for Tailscale (important!)
 
 By default, Ollama only listens on `localhost`. If the backend and Ollama are on the

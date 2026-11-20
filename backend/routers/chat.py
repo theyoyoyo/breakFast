@@ -20,6 +20,7 @@ from services.pipeline import RETRY_TEXTS, in_language, run_suggestion_pipeline
 from services.context import load_chat_context
 from services.chat_block import CHAT_SUGGEST_TEXTS, chat_history, drop_meal_block, load_chat_block
 from services import chat_sync
+from models.limits import CHAT_MESSAGE_MAX, SESSION_ID_MAX
 from models.units import count_unit
 from utils import extract_json_block
 
@@ -30,6 +31,17 @@ SUGGEST_TEMPERATURES = {
     "favorites": 0.6,
     "explore": 0.9,
 }
+
+# The reply to a typed message over the length limit; nothing is saved or sent to the model
+TOO_LONG_TEXTS = {
+    "en": "That message is too long for me to read. Could you send a shorter one?",
+    "tr": "Bu mesaj okuyamayacağım kadar uzun. Daha kısa bir mesaj gönderebilir misin?",
+}
+
+
+def _session_id(value) -> str | None:
+    """A session id a client sent, or None when it isn't a string of a sane length."""
+    return value if isinstance(value, str) and len(value) <= SESSION_ID_MAX else None
 
 
 async def _save_suggestion(db, user_id: int, session_id: str, meal_data: dict, language: str = "en") -> int:
@@ -148,10 +160,11 @@ async def chat_endpoint(websocket: WebSocket):
             # (a session id, mode or type that isn't a string is ignored: it would crash a lookup;
             # so is a session that isn't the user's own, and the current one stays)
             if "session_id" in payload and "message" not in payload:
-                if isinstance(payload["session_id"], str):
+                named = _session_id(payload["session_id"])
+                if named:
                     async with get_db() as db:
-                        if await owns_session(db, payload["session_id"], user_id):
-                            session_id = payload["session_id"]
+                        if await owns_session(db, named, user_id):
+                            session_id = named
                 continue
 
             message_text = payload.get("message", "")
@@ -168,12 +181,13 @@ async def chat_endpoint(websocket: WebSocket):
                 suggest_mode = None
 
             # Use session_id from payload if provided, otherwise keep current. The message is saved only
-            # in one of the user's own sessions: one that isn't (another user's, or one deleted on another
-            # device) falls back to the current session, then to the latest, so the message still gets its
-            # reply. Everything below, the suggestion included, uses this checked id.
+            # in one of the user's own sessions: one that isn't (another user's, one deleted on another
+            # device, or an id over the length limit) falls back to the current session, then to the latest,
+            # so the message still gets its reply. Everything below, the suggestion included, uses this checked id.
+            named = _session_id(payload.get("session_id"))
             async with get_db() as db:
-                if isinstance(payload.get("session_id"), str) and await owns_session(db, payload["session_id"], user_id):
-                    session_id = payload["session_id"]
+                if named and await owns_session(db, named, user_id):
+                    session_id = named
                 elif session_id is not None and not await owns_session(db, session_id, user_id):
                     session_id = None
 
@@ -198,6 +212,12 @@ async def chat_endpoint(websocket: WebSocket):
             if cached_context is None:
                 async with get_db() as db:
                     cached_context = await load_chat_context(db, user_id)
+
+            if len(user_message) > CHAT_MESSAGE_MAX:
+                await send_live({"type": "done", "content": in_language(TOO_LONG_TEXTS, cached_context.get("language", "en"))})
+                if not client_live:
+                    break
+                continue
 
             temperature = SUGGEST_TEMPERATURES.get(suggest_mode) if prompt_type == "suggest" else None
 

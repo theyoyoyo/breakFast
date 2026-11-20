@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from auth import require_user
 from pydantic import BaseModel, Field, field_validator
 from services import chat_sync
+from models.limits import Name, Note, ShortText
 
 
 router = APIRouter(prefix="/profile", tags=["profile"])
@@ -25,11 +26,11 @@ SUPPLEMENTS_UPDATED = {"type": "supplements_updated"}
 
 class ProfileIn(BaseModel):
     age: int | None = None
-    gender: str | None = None
+    gender: ShortText | None = None
     height_cm: int | None = None
     weight_kg: float | None = None
-    activity_level: str | None = None
-    country: str | None = Field(default=None, max_length=60)  # only shapes "in season" in prompts
+    activity_level: ShortText | None = None
+    country: ShortText | None = None  # only shapes "in season" in prompts
 
     @field_validator("country")
     @classmethod
@@ -60,19 +61,17 @@ class ProfileIn(BaseModel):
 
 class ProfileOut(ProfileIn):
     id: int
-    user_id: int
     updated_at: str
 
 
 class SupplementIn(BaseModel):
-    name: str
-    contents: str = ""
+    name: Name
+    contents: Note = ""
     frequency: str = Field(default="daily", pattern="^(daily|sometimes)$")
 
 
 class SupplementOut(BaseModel):
     id: int
-    user_id: int
     name: str
     contents: str
     frequency: str
@@ -217,7 +216,7 @@ async def get_today_supplements(user_id: int = Depends(require_user)):
             """,
             (today, user_id),
         ) as cur:
-            return [dict(r) for r in await cur.fetchall()]
+            return [{k: r[k] for k in r.keys() if k != "user_id"} for r in await cur.fetchall()]
 
 
 @router.post("/supplements/{supp_id}/toggle")
