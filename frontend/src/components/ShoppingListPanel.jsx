@@ -34,7 +34,7 @@ export default function ShoppingListPanel({ open, onClose, onBought }) {
       setAskClearAll(false)
       load()
     }
-  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open])
 
   const handleAdd = async () => {
     const name = newItem.trim()
