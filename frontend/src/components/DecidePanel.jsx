@@ -240,11 +240,11 @@ export default function DecidePanel({ meal, saved, onSave, onClose, onConfirm })
           )}
         />
         {saveState === 'error' && (
-          <div style={s.saveNote}>Couldn't save. Check the connection and try again.</div>
+          <div style={s.saveNote}>Couldn&apos;t save. Check the connection and try again.</div>
         )}
         {missing?.length > 0 && (
           <div style={s.missingNote}>
-            Not in your fridge: {missing.join(', ')}. Tap an item, or a dish's name, once you have it, or remove it.
+            Not in your fridge: {missing.join(', ')}. Tap an item, or a dish&apos;s name, once you have it, or remove it.
           </div>
         )}
       </div>
