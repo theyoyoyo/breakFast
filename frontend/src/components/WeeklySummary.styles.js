@@ -1,4 +1,4 @@
-import { panelContainer, panelBody, secondaryColor, subPageHeader, subPageBackBtn } from '../styles/common'
+import { panelContainer, panelBody, subPageHeader, subPageBackBtn } from '../styles/common'
 
 export const container = panelContainer
 
@@ -96,7 +96,7 @@ export const scoreGrid = {
   gap: 8,
 }
 
-export const scoreCard = (score) => ({
+export const scoreCard = () => ({
   background: 'var(--surface2)',
   borderRadius: 10,
   padding: '12px 12px 10px',

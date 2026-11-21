@@ -133,7 +133,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
       setError(null)
       const data = await getIngredients()
       setIngredients(data)
-    } catch (e) {
+    } catch {
       setError('Failed to load ingredients')
     } finally {
       setLoading(false)
@@ -276,7 +276,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
       setAddPanelOpen(false)
       load()
       refreshExpiredCount()
-    } catch (e) {
+    } catch {
       setError('Failed to add ingredient')
     }
   }
@@ -287,7 +287,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
       setDeletePopup(null)
       load()
       refreshExpiredCount()
-    } catch (err) {
+    } catch {
       setError('Failed to delete ingredient')
     }
   }
@@ -300,7 +300,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
       setDeletePopup(null)
       load()
       refreshExpiredCount()
-    } catch (err) {
+    } catch {
       setError('Failed to delete ingredient')
     }
   }
