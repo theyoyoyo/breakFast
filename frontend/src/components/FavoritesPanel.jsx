@@ -83,7 +83,7 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
     return (
       <div style={s.container}>
         <Header />
-        <div style={s.empty}>No favorites yet. Use the ☆ beside a meal's name to save it here.</div>
+        <div style={s.empty}>No favorites yet. Use the ☆ beside a meal&apos;s name to save it here.</div>
       </div>
     )
   }

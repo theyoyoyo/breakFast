@@ -9,7 +9,6 @@ import {
   addIngredient,
   deleteIngredient,
   setPreference,
-  getMeals,
   updateSessionMessage,
   createChatSocket,
   login,
