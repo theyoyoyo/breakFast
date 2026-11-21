@@ -6,14 +6,15 @@ Keeps answers short and natural. Gently steers non-breakfast topics back.
 """
 
 from services.knowledge import (
-    format_ingredients,
-    format_history,
-    format_preferences,
-    format_habits,
-    format_health_rules,
     format_avoid_list,
     format_behavioral,
+    format_habits,
+    format_health_rules,
+    format_history,
+    format_ingredients,
+    format_preferences,
 )
+
 
 def _lang(language: str) -> str:
     return "Always respond in Turkish." if language != "en" else "Always respond in English."

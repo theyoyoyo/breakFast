@@ -3,10 +3,12 @@ Tests for the insights service — aggregate meal history into inferred habits.
 """
 
 import json
+
 import aiosqlite
+
 import database
 from auth import hash_pin
-from services.insights import refresh_insights_for_user, PATTERN_DAYS
+from services.insights import PATTERN_DAYS, refresh_insights_for_user
 
 
 async def _create_test_user(db_path: str, name: str = "testuser") -> int:
@@ -109,7 +111,7 @@ async def test_refresh_replaces_old_inferred_habits(tmp_path, monkeypatch):
             await _seed_meal(db, user_id, f"Meal {i}", ["eggs", "bread"])
         await db.commit()
 
-    first_count = await refresh_insights_for_user(user_id)
+    await refresh_insights_for_user(user_id)
     second_count = await refresh_insights_for_user(user_id)
 
     async with database.get_db() as db:

@@ -48,9 +48,8 @@ async def test_kitchen_invalid_key(client):
 # Two users have independent kitchen configs
 async def test_kitchen_per_user_isolation(client, db):
     # Create a second user
-    from auth import hash_pin, create_token
-
     import database
+    from auth import create_token, hash_pin
     async with aiosqlite.connect(database.DATABASE_PATH) as conn:
         await conn.execute(
             "INSERT INTO users (name, pin_hash, is_admin) VALUES (?, ?, ?)",

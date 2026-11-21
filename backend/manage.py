@@ -26,10 +26,9 @@ from pathlib import Path
 
 import aiosqlite
 
+from auth import hash_pin, pin_problem
 from config import DATABASE_PATH
 from database import MigrationsPending, check_schema
-from auth import hash_pin, pin_problem
-
 
 # Every table holding per-user rows, children before parents
 USER_TABLES = [

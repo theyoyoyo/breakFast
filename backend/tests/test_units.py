@@ -1,8 +1,6 @@
 """Unit tests for the per-language unit lists and the 1-1 mapping between them."""
 
-from models.units import (
-    UNIT_ML, UNIT_PAIRS, UNITS, count_unit, localize_unit, unit_sizes, units_for, unknown_units,
-)
+from models.units import UNIT_ML, UNIT_PAIRS, UNITS, count_unit, localize_unit, unit_sizes, units_for, unknown_units
 
 
 # Every unit has exactly one match in the other language, so both lists line up

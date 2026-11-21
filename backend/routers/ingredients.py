@@ -5,12 +5,12 @@ All queries are scoped to the authenticated user.
 
 from datetime import date
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from database import get_db
+
 from auth import require_user
-from fastapi import HTTPException
-from models.ingredient import Ingredient, IngredientCreate, IngredientUpdate, INGREDIENT_GROUPS
+from database import get_db
+from models.ingredient import INGREDIENT_GROUPS, Ingredient, IngredientCreate, IngredientUpdate
 from models.limits import BULK_ITEMS_MAX, SizedDict
 from services.fridge import find_missing_ingredients
 from services.ingredient_groups import remember, resolve_groups

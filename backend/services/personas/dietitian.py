@@ -13,23 +13,24 @@ text from the final meal alone. The draft replies through structured outputs
 
 from datetime import date
 
+from models.units import count_unit, localize_unit, unit_sizes, units_for
 from services.knowledge import (
-    format_ingredients,
-    format_history,
-    format_favorite_meals,
-    format_favorites,
-    format_ratings,
-    format_preferences,
-    format_habits,
-    format_health_rules,
     format_avoid_list,
     format_behavioral,
-    format_user_profile,
+    format_favorite_meals,
+    format_favorites,
+    format_habits,
+    format_health_rules,
+    format_history,
+    format_ingredients,
+    format_preferences,
+    format_ratings,
     format_supplements_taken,
-    format_weekly_summary,
     format_today,
+    format_user_profile,
+    format_weekly_summary,
 )
-from models.units import count_unit, localize_unit, unit_sizes, units_for
+
 
 def _lang(language: str) -> str:
     return "Always respond in Turkish." if language != "en" else "Always respond in English."

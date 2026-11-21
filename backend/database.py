@@ -9,11 +9,11 @@ Usage in routers:
 
 import logging
 import sqlite3
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 
 import aiosqlite
-from contextlib import asynccontextmanager
 
 from config import DATABASE_PATH, DEMO_USER
 from models.ingredient import DEMO_FRIDGE
