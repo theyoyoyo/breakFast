@@ -4,6 +4,7 @@ import {
   getHabits, addHabit, deleteHabit,
 } from '../services/api'
 import * as s from './PreferencesPanel.styles'
+import Logo from './Logo'
 
 function TagList({ items, onDelete, keyField = 'id', labelField = 'value' }) {
   if (!items.length) return <span style={s.empty}>None yet</span>
@@ -94,7 +95,7 @@ export default function PreferencesPanel() {
   return (
     <div style={s.container}>
       <div style={s.brandHeaderRow}>
-        <span>break FAST</span>
+        <Logo withName height={26} />
         <span style={s.tabName}>Preferences</span>
       </div>
 

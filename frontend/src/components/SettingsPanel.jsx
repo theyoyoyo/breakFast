@@ -21,6 +21,7 @@ import { COUNTRIES, countryCode } from '../utils/countries'
 import { useLanguage } from '../hooks/useLanguage'
 import { useSyncNotice } from '../hooks/useSyncNotice'
 import * as s from './SettingsPanel.styles'
+import Logo from './Logo'
 
 // Display names for the stored supplement frequency values
 const FREQUENCY_LABELS = { daily: 'Daily', sometimes: 'Occasional' }
@@ -676,7 +677,7 @@ export default function SettingsPanel({ visible }) {
   return (
     <div style={s.container}>
       <div style={s.brandHeaderRow}>
-        <span>break FAST</span>
+        <Logo withName height={26} />
         <span style={s.tabName}>Settings</span>
       </div>
 

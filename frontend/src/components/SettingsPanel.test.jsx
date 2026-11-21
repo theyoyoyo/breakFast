@@ -74,10 +74,10 @@ describe('SettingsPanel', () => {
     await waitFor(() => expect(screen.queryByLabelText('Contents')).toBeNull())
   })
 
-  // The header shows the app name, like Chat, and the tab's name at the right
+  // The header shows the logo, like Chat, and the tab's name at the right
   it('titles the tab with the app name and the tab name', async () => {
     render(<SettingsPanel visible />)
-    const title = await screen.findByText('break FAST')
+    const title = await screen.findByRole('img', { name: 'break FAST' })
     expect(title.nextSibling).toHaveTextContent('Settings')
   })
 

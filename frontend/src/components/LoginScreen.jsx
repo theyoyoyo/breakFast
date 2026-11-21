@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { login, NetworkError, LoginLimitError } from '../services/api'
 import * as s from './LoginScreen.styles'
+import Logo from './Logo'
 
 /** The message for a rate-limited login: the wait in seconds or minutes, or "later" when unknown. */
 export function retryMessage(seconds) {
@@ -44,7 +45,7 @@ export default function LoginScreen({ onLogin, note = '' }) {
 
   return (
     <div style={s.container}>
-      <div style={s.title}>break FAST</div>
+      <Logo withName height={56} />
       <form style={s.form} onSubmit={handleSubmit}>
         {note && <div style={s.note}>{note}</div>}
         <input

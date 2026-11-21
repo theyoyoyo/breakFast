@@ -1,4 +1,4 @@
-import { panelContainer, secondaryColor, colors, brandTitle, deleteBtn } from '../styles/common'
+import { panelContainer, secondaryColor, colors, deleteBtn } from '../styles/common'
 
 export const container = panelContainer
 
@@ -13,8 +13,6 @@ export const headerRow = {
   padding: '14px 16px',
   borderBottom: '1px solid var(--border)',
 }
-
-export const headerText = brandTitle
 
 export const headerBtns = {
   display: 'flex',
