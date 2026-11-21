@@ -10,6 +10,7 @@ import PrepPlanText from './PrepPlanText'
 import { normalizeMeal } from '../utils/ingredients'
 import { isPrepPlan } from '../utils/prepPlan'
 import * as s from './ChatInterface.styles'
+import Logo from './Logo'
 
 const WELCOME_MSG = { role: 'assistant', content: "Good morning! Tell me what's in your fridge and I'll plan your breakfast." }
 
@@ -727,7 +728,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
   return (
     <div style={s.container}>
       <div style={{ ...s.header, display: 'flex', alignItems: 'center' }}>
-        <span>break FAST</span>
+        <Logo withName height={26} />
         {!connected && hasConnectedRef.current && (
           <span style={s.connStatus}> — reconnecting…</span>
         )}

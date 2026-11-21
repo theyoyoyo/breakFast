@@ -7,6 +7,7 @@ import { useLanguage } from '../hooks/useLanguage'
 import MealEditor from './MealEditor'
 import ReadinessIcon from './ReadinessIcon'
 import * as s from './FavoritesPanel.styles'
+import Logo from './Logo'
 
 // A favorite's icon with the same fridge-readiness badge as chat cards
 function FavoriteIcon({ fav, checkKey }) {
@@ -17,7 +18,7 @@ function FavoriteIcon({ fav, checkKey }) {
 function Header() {
   return (
     <div style={s.header}>
-      <span>break FAST</span>
+      <Logo withName height={26} />
       <span style={s.tabName}>Favorites</span>
     </div>
   )

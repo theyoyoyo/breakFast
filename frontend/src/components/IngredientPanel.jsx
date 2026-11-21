@@ -11,6 +11,7 @@ import ShoppingListPanel from './ShoppingListPanel'
 import FavoriteIngredientsPanel from './FavoriteIngredientsPanel'
 import ConfirmPrompt from './ConfirmPrompt'
 import * as s from './IngredientPanel.styles'
+import Logo from './Logo'
 
 // ---------------------------------------------------------------------------
 // Fixed ingredient groups (mirrors backend INGREDIENT_GROUPS)
@@ -496,7 +497,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
     <div style={s.container}>
       {/* Header with expired + add buttons */}
       <div style={s.headerRow}>
-        <span style={s.headerText}>break FAST</span>
+        <Logo withName height={26} />
         <div style={s.headerBtns}>
           <button
             style={expiredCount > 0 ? s.headerExpiredBtn : s.headerExpiredBtnSafe}

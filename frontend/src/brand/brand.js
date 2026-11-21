@@ -3,6 +3,8 @@
 // so a color or shape change here reaches the app and, after `npm run icons`, every icon file.
 // A version under another name and colors only needs its own copy of this file (see brand/README.md).
 
+import { WORDMARK } from './wordmark.js'
+
 export const BRAND_NAME = 'break FAST'
 
 // The mark: a cloche with three speed lines, drawn in a 1024 x 605 box.
@@ -27,9 +29,9 @@ export const CLOCHE_BOUNDS = { x: 100, y: 14, width: 865, height: 561 }
 // Palettes. Brand colors are fixed: they don't follow the app's accent theme.
 export const PALETTES = {
   // On light backgrounds: a dark green outline
-  light: { outline: '#15241B', dome: '#FBA35E', lines: '#FF6A13', hl: '#FFF3E6' },
+  light: { outline: '#15241B', dome: '#FBA35E', lines: '#FF6A13', hl: '#FFF3E6', name: '#15241B', nameAccent: '#E2560A' },
   // On dark backgrounds (and the app icon): a cream outline
-  dark: { outline: '#F4F1EA', dome: '#FBA35E', lines: '#FF6A13', hl: '#FFF3E6' },
+  dark: { outline: '#F4F1EA', dome: '#FBA35E', lines: '#FF6A13', hl: '#FFF3E6', name: '#F4F1EA', nameAccent: '#FF8A3D' },
 }
 
 // The app icon's background, also the PWA splash and browser bar color (vite.config.js, index.html).
@@ -56,4 +58,32 @@ export function markSvgInner({ palette = PALETTES.dark, lines = true, mono = fal
     + `<rect width="1024" height="605" fill="#fff"/><path d="${dome.d}" fill="#000"/></mask></defs>`
     + `<g mask="url(#domeCut)">${parts.filter((p, i) => shapes[i].role !== 'hl').join('')}</g>`
     + `<path d="${hl.d}" fill="none" stroke="${color}" stroke-width="${hl.width}" stroke-linecap="round"/>`
+}
+
+// The lockup: the mark, then the wordmark ("break" in the name color, "FAST" in the accent).
+// The wordmark is 46% of the mark's height and sits on the line of the cloche's rim.
+// Both the Logo component and the icon script place the parts with these numbers.
+export { WORDMARK }
+const NAME_SCALE = (0.46 * MARK_BOUNDS.height) / WORDMARK.height
+const NAME_GAP = 110
+const RIM_BOTTOM = 490 // y of the rim's lower edge in the mark's box
+export const LOCKUP = {
+  width: MARK_BOUNDS.width + NAME_GAP + WORDMARK.width * NAME_SCALE,
+  height: MARK_BOUNDS.height,
+  // translate for the mark (its drawing box starts at MARK_BOUNDS.x, y)
+  mark: { x: -MARK_BOUNDS.x, y: -MARK_BOUNDS.y },
+  name: {
+    x: MARK_BOUNDS.width + NAME_GAP,
+    y: RIM_BOTTOM - MARK_BOUNDS.y - WORDMARK.height * NAME_SCALE,
+    scale: NAME_SCALE,
+  },
+}
+
+// Plain SVG text of the lockup for the icon script (the wordmark is already outlined, so no font is needed)
+export function lockupSvg(palette) {
+  const { mark, name } = LOCKUP
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${LOCKUP.width.toFixed(1)} ${LOCKUP.height}">`
+    + `<g transform="translate(${mark.x} ${mark.y})">${markSvgInner({ palette })}</g>`
+    + `<g transform="translate(${name.x} ${name.y.toFixed(2)}) scale(${name.scale.toFixed(5)})">`
+    + `<path d="${WORDMARK.first}" fill="${palette.name}"/><path d="${WORDMARK.second}" fill="${palette.nameAccent}"/></g></svg>\n`
 }

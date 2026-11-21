@@ -1,12 +1,17 @@
 // Renders every icon file from src/brand/brand.js: run `npm run icons` after changing the brand.
-// Writes the PNG and SVG icons into public/ and the master SVGs into brand/. Nothing runs at build time.
+// Writes the outlined wordmark (src/brand/wordmark.js), the PNG and SVG icons into public/
+// and the master SVGs into brand/. Nothing runs at build time.
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Resvg } from '@resvg/resvg-js'
-import {
-  CLOCHE_BOUNDS, ICON_BACKGROUND, MARK_BOUNDS, MARK_VIEWBOX, PALETTES, markSvgInner,
-} from '../src/brand/brand.js'
+import { writeWordmark } from './outline-wordmark.mjs'
+
+// The wordmark first: brand.js reads the file it writes
+writeWordmark()
+const {
+  CLOCHE_BOUNDS, ICON_BACKGROUND, MARK_BOUNDS, MARK_VIEWBOX, PALETTES, lockupSvg, markSvgInner,
+} = await import('../src/brand/brand.js')
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const publicDir = join(root, 'public')
@@ -52,8 +57,10 @@ const favicon = iconSvg({ size: 64, fill: 0.84, bounds: CLOCHE_BOUNDS, backgroun
 writeSvg(publicDir, 'favicon.svg', favicon)
 writePng('favicon-32.png', iconSvg({ size: 32, fill: 0.84, bounds: CLOCHE_BOUNDS, background: ICON_BACKGROUND, radius: 7, mark: clocheMark }))
 
-// Master SVGs to open or hand on: the mark for light and dark backgrounds, and the app icon
+// Master SVGs to open or hand on: the mark and the lockup (mark + name) for light and dark backgrounds, and the app icon
 const markFile = (palette) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${MARK_VIEWBOX}">${markSvgInner({ palette })}</svg>\n`
 writeSvg(brandDir, 'mark-light.svg', markFile(PALETTES.light))
 writeSvg(brandDir, 'mark-dark.svg', markFile(PALETTES.dark))
 writeSvg(brandDir, 'app-icon.svg', iconSvg({ size: 512, fill: 0.8, background: ICON_BACKGROUND, mark: colorMark }))
+writeSvg(brandDir, 'lockup-light.svg', lockupSvg(PALETTES.light))
+writeSvg(brandDir, 'lockup-dark.svg', lockupSvg(PALETTES.dark))
