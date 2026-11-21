@@ -11,14 +11,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 import aiosqlite
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 import auth
 import config
 import database
-from auth import hash_pin, verify_pin, needs_rehash
+from auth import hash_pin, needs_rehash, verify_pin
 from models.ingredient import DEMO_FRIDGE
 from tests.chat_socket import open_chat
 

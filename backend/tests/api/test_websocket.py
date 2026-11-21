@@ -8,12 +8,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import json
+
 import aiosqlite
 import pytest
 import pytest_asyncio
 
 import database
-from auth import hash_pin, create_token
+from auth import create_token, hash_pin
 from tests.chat_socket import open_chat
 
 
@@ -98,9 +99,11 @@ async def test_websocket_rejects_other_header_shapes(ws_setup, protocols):
 async def test_websocket_accepts_valid_token(ws_setup):
     """WebSocket with valid token should connect and accept messages."""
     app, token, _ = ws_setup
-    from starlette.testclient import TestClient
     from unittest.mock import patch
-    from services.llm import LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE, FALLBACK_LYRICS
+
+    from starlette.testclient import TestClient
+
+    from services.llm import FALLBACK_LYRICS, LLM_UNAVAILABLE_MESSAGE, LLMUnavailableError
 
     client = TestClient(app)
 
@@ -125,8 +128,10 @@ async def test_websocket_accepts_valid_token(ws_setup):
 async def test_websocket_handles_generic_exception(ws_setup):
     """WebSocket should return fallback message on unexpected exceptions (not crash)."""
     app, token, _ = ws_setup
-    from starlette.testclient import TestClient
     from unittest.mock import patch
+
+    from starlette.testclient import TestClient
+
     from services.llm import FALLBACK_LYRICS
 
     client = TestClient(app)
@@ -149,9 +154,11 @@ async def test_websocket_handles_generic_exception(ws_setup):
 async def test_websocket_build_chat_prompt_no_mock(ws_setup):
     """WebSocket should work with the real build_chat_prompt."""
     app, token, _ = ws_setup
-    from starlette.testclient import TestClient
     from unittest.mock import patch
-    from services.llm import LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE, FALLBACK_LYRICS
+
+    from starlette.testclient import TestClient
+
+    from services.llm import FALLBACK_LYRICS, LLM_UNAVAILABLE_MESSAGE, LLMUnavailableError
 
     client = TestClient(app)
 
@@ -174,8 +181,9 @@ async def test_websocket_build_chat_prompt_no_mock(ws_setup):
 async def test_websocket_suggest_type_uses_pipeline(ws_setup):
     """WebSocket with type=suggest should route through the suggestion pipeline."""
     app, token, _ = ws_setup
+    from unittest.mock import MagicMock, patch
+
     from starlette.testclient import TestClient
-    from unittest.mock import patch, MagicMock
 
     client = TestClient(app)
 
@@ -206,8 +214,9 @@ async def test_websocket_suggest_type_uses_pipeline(ws_setup):
 async def test_websocket_suggest_with_mode_passes_mode(ws_setup):
     """WebSocket with type=suggest and mode=favorites should pass mode to pipeline."""
     app, token, _ = ws_setup
+    from unittest.mock import MagicMock, patch
+
     from starlette.testclient import TestClient
-    from unittest.mock import patch, MagicMock
 
     client = TestClient(app)
 
@@ -277,8 +286,10 @@ async def test_save_message_touches_only_own_session(ws_setup):
 @pytest.mark.asyncio
 async def test_websocket_logs_chat_reply_crash(ws_setup, caplog):
     app, token, _ = ws_setup
-    from starlette.testclient import TestClient
     from unittest.mock import patch
+
+    from starlette.testclient import TestClient
+
     from services.llm import FALLBACK_LYRICS
 
     async def mock_stream_crash(*args, **kwargs):
@@ -299,8 +310,10 @@ async def test_websocket_logs_chat_reply_crash(ws_setup, caplog):
 @pytest.mark.asyncio
 async def test_websocket_logs_suggestion_crash(ws_setup, caplog):
     app, token, _ = ws_setup
-    from starlette.testclient import TestClient
     from unittest.mock import patch
+
+    from starlette.testclient import TestClient
+
     from services.pipeline import RETRY_TEXTS
 
     async def mock_pipeline_crash(*args, **kwargs):
@@ -321,8 +334,10 @@ async def test_websocket_logs_suggestion_crash(ws_setup, caplog):
 @pytest.mark.asyncio
 async def test_websocket_suggest_empty_or_unreachable(ws_setup):
     app, token, _ = ws_setup
-    from starlette.testclient import TestClient
     from unittest.mock import patch
+
+    from starlette.testclient import TestClient
+
     from services.llm import FALLBACK_LYRICS, LLM_UNAVAILABLE_MESSAGE, LLMUnavailableError
     from services.pipeline import RETRY_TEXTS
 
@@ -351,8 +366,9 @@ async def test_websocket_suggest_empty_or_unreachable(ws_setup):
 async def test_websocket_suggest_reads_the_chat_from_the_session(ws_setup):
     """A Suggest press gives the pipeline the chat block the server builds from the session, not what the client sends."""
     app, token, user_id = ws_setup
+    from unittest.mock import MagicMock, patch
+
     from starlette.testclient import TestClient
-    from unittest.mock import patch, MagicMock
 
     async with aiosqlite.connect(database.DATABASE_PATH) as db:
         await db.execute("INSERT INTO chat_sessions (id, user_id) VALUES ('s1', ?)", (user_id,))
@@ -384,8 +400,10 @@ async def test_websocket_suggest_reads_the_chat_from_the_session(ws_setup):
 @pytest.mark.asyncio
 async def test_chat_reply_never_becomes_a_meal_card(ws_setup):
     app, token, user_id = ws_setup
-    from starlette.testclient import TestClient
     from unittest.mock import patch
+
+    from starlette.testclient import TestClient
+
     from services.chat_block import CHAT_SUGGEST_TEXTS
 
     card = {"menu_name": "Breakfast plate", "menu": [{"name": "Eggs", "amount": 2, "unit": "pcs", "ingredients": []}]}
@@ -442,8 +460,9 @@ async def test_chat_reply_never_becomes_a_meal_card(ws_setup):
 @pytest.mark.asyncio
 async def test_chat_history_keeps_each_message_before_its_reply(ws_setup):
     app, token, user_id = ws_setup
-    from starlette.testclient import TestClient
     from unittest.mock import patch
+
+    from starlette.testclient import TestClient
 
     chat = [("user", "Any eggs left?"), ("assistant", "Yes, six."), ("user", "And bread?"), ("assistant", "Half a loaf.")]
     async with aiosqlite.connect(database.DATABASE_PATH) as db:
@@ -499,8 +518,9 @@ async def test_chat_history_is_the_newest_20_messages(ws_setup):
 @pytest.mark.parametrize("frame", ["123", '"hi"', "[1]"])
 async def test_chat_frame_that_is_not_an_object_is_plain_text(ws_setup, frame):
     app, token, _ = ws_setup
-    from starlette.testclient import TestClient
     from unittest.mock import patch
+
+    from starlette.testclient import TestClient
 
     seen = []
 
@@ -529,8 +549,9 @@ async def test_chat_frame_that_is_not_an_object_is_plain_text(ws_setup, frame):
 ])
 async def test_chat_frame_with_a_value_of_the_wrong_type_is_ignored(ws_setup, frame):
     app, token, _ = ws_setup
-    from starlette.testclient import TestClient
     from unittest.mock import patch
+
+    from starlette.testclient import TestClient
 
     async def mock_stream(system_prompt, history, message, temperature=None):
         yield "Reply."
@@ -573,8 +594,9 @@ async def _saved_rows() -> dict:
 @pytest.mark.asyncio
 async def test_switching_to_a_session_not_the_callers_is_ignored(ws_setup):
     app, token, user_id = ws_setup
-    from starlette.testclient import TestClient
     from unittest.mock import patch
+
+    from starlette.testclient import TestClient
 
     await _two_users_sessions(user_id)
 
@@ -598,8 +620,10 @@ async def test_switching_to_a_session_not_the_callers_is_ignored(ws_setup):
 @pytest.mark.asyncio
 async def test_session_deleted_during_a_reply_saves_nothing(ws_setup):
     app, token, user_id = ws_setup
-    from starlette.testclient import TestClient
     from unittest.mock import patch
+
+    from starlette.testclient import TestClient
+
     from routers.chat import SESSION_GONE_TEXT
 
     await _two_users_sessions(user_id)
@@ -625,8 +649,10 @@ async def test_session_deleted_during_a_reply_saves_nothing(ws_setup):
 async def test_websocket_too_long_message_gets_a_note_and_is_not_saved(ws_setup):
     """A typed message over the length limit gets a short note, never reaches the model and isn't saved, and a long one within it is answered."""
     app, token, user_id = ws_setup
-    from starlette.testclient import TestClient
     from unittest.mock import patch
+
+    from starlette.testclient import TestClient
+
     from models.limits import CHAT_MESSAGE_MAX
     from routers.chat import TOO_LONG_TEXTS
 

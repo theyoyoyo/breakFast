@@ -163,8 +163,9 @@ KIWI = {"name": "Kiwi", "reason": "In season", "checked": False}
 async def _second_user_auth():
     """Auth header for a second user in the same test database."""
     import aiosqlite
+
     import database
-    from auth import hash_pin, create_token
+    from auth import create_token, hash_pin
 
     async with aiosqlite.connect(database.DATABASE_PATH) as conn:
         cur = await conn.execute(

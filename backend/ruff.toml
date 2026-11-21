@@ -1,0 +1,15 @@
+﻿# Lint rules for the backend (#220): errors, unused imports and names, import order.
+# Run from backend/: python -m ruff check .
+# Formatting isn't enforced, so long lines (E501) are left alone.
+target-version = "py311"
+# The code's own width: the import sorter joins an import that fits on one line.
+line-length = 120
+
+[lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]
+
+[lint.isort]
+# The backend runs from backend/, so these are its own top-level packages and modules.
+known-first-party = ["auth", "config", "database", "db_helpers", "main", "manage", "models", "routers", "services", "tools", "utils"]
+split-on-trailing-comma = false

@@ -13,7 +13,6 @@ from collections import Counter
 from models.kitchen import HOT_APPLIANCES
 from services.fridge import same_name
 
-
 # Fixed labels in the formatted plan, per response language. The app colors plans whose
 # heading is "⏱ Plan (" by dish (#145), so older plans keep their look.
 _PLAN_LABELS = {

@@ -11,13 +11,14 @@ drops items the user already has, has listed, has seen or avoids.
 from datetime import date
 
 from services.knowledge import (
-    format_today,
-    format_health_rules,
     format_avoid_list,
-    format_user_profile,
+    format_health_rules,
     format_supplements,
+    format_today,
+    format_user_profile,
 )
 from services.shopping import LOW_RATING
+
 
 def _lang(language: str) -> str:
     return "Always respond in Turkish." if language != "en" else "Always respond in English."

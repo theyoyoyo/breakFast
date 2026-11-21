@@ -48,6 +48,7 @@ async def test_country_in_contexts(client, db):
 # The favorite meals loader returns this user's newest ten saved meals with their menus, newest first
 async def test_favorite_meals_newest_ten_for_this_user(client, db):
     import json
+
     from services.context import fetch_favorite_meals
     from services.knowledge import format_meal_items
 

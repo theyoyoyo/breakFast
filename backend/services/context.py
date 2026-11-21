@@ -10,7 +10,7 @@ import asyncio
 from datetime import date as date_type
 
 from db_helpers import parse_json_field
-from models.kitchen import KITCHEN_APPLIANCES, DEFAULT_ENABLED_KEYS
+from models.kitchen import DEFAULT_ENABLED_KEYS, KITCHEN_APPLIANCES
 from services.shopping import dish_names
 
 # App settings stored as preferences; they're not food preferences, so prompts never see them

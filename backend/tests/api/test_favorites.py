@@ -2,7 +2,6 @@
 
 import pytest
 
-
 SAMPLE_MEAL = {
     "meal_name": "Serpme Kahvaltı",
     "description": "Klasik Türk kahvaltısı",
@@ -87,8 +86,9 @@ async def test_update_not_found(client):
 async def _second_user_auth():
     """Auth header for a second user in the same test database."""
     import aiosqlite
+
     import database
-    from auth import hash_pin, create_token
+    from auth import create_token, hash_pin
 
     async with aiosqlite.connect(database.DATABASE_PATH) as conn:
         cur = await conn.execute(

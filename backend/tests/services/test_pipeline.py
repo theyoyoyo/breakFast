@@ -11,11 +11,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import pytest
 
-from services.personas.pipeline_analyst import CHAT_STEP
 from services.personas import build_pipeline_analyst_prompt
-from services.pipeline import LOW_INGREDIENT_TEXTS, RETRY_TEXTS, revision_schema, reviser_names, run_suggestion_pipeline
+from services.personas.pipeline_analyst import CHAT_STEP
+from services.pipeline import LOW_INGREDIENT_TEXTS, RETRY_TEXTS, reviser_names, revision_schema, run_suggestion_pipeline
 from utils import extract_json_block
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -297,7 +296,8 @@ class TestPipelineOrchestrator:
     async def test_only_true_swaps_keep_their_mark(self):
         context = {**SAMPLE_CONTEXT, "ingredients": [{"name": "eggs"}, {"name": "Feta"}, {"name": "Milk"}]}
         draft = _meal(EGGS, {"name": "Salmon", "amount": 50, "unit": "g"}, {"name": "Chives", "amount": 1, "unit": "tbsp"})
-        g = lambda name, **extra: {"name": name, "amount": 50, "unit": "g", **extra}
+        def g(name, **extra):
+            return {"name": name, "amount": 50, "unit": "g", **extra}
         revised = _meal(
             g("eggs", replaces=" "), g("Feta", replaces="salmon"), g("Milk", replaces="eggs"),
             g("Quark", replaces="Salmon"), g("Chives"), g("Feta", replaces="Chives"),

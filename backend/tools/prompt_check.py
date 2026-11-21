@@ -62,21 +62,42 @@ from pathlib import Path
 
 from models.units import UNIT_ALIASES, UNIT_PAIRS, unknown_units
 from routers.chat import SUGGEST_TEMPERATURES
-from services.prep_plan import _build_plan, served_items
 from services import llm, pipeline
 from services.chat_block import SUGGEST_MESSAGES, chat_history, format_chat_block
+
 # The fridge check's own word handling, to tell renamed items from missing ones
 from services.fridge import (
-    _FOLD, _tokens, _words, find_avoided, find_missing_ingredients, meal_ingredient_names, name_tokens, same_name,
+    _FOLD,
+    _tokens,
+    _words,
+    find_avoided,
+    find_missing_ingredients,
+    meal_ingredient_names,
+    name_tokens,
+    same_name,
     same_tokens,
 )
 from services.personas import build_chat_prompt, build_scheduler_prompt, build_scheduler_user_message
 from services.personas.chat import build_chat_message
 from services.personas.shopping import build_shopping_prompt
+from services.prep_plan import _build_plan, served_items
 from services.shopping import (
-    SUGGESTIONS_SCHEMA, dish_names, new_suggestions, parse_suggestions, pick_input, shopping_request,
+    SUGGESTIONS_SCHEMA,
+    dish_names,
+    new_suggestions,
+    parse_suggestions,
+    pick_input,
+    shopping_request,
 )
-from tools.prompt_samples import CHAT_MESSAGES, PLAN_CASES, REVIEW_CASES, SAMPLE_MODES, SAMPLES, SCENARIOS, chat_scenario
+from tools.prompt_samples import (
+    CHAT_MESSAGES,
+    PLAN_CASES,
+    REVIEW_CASES,
+    SAMPLE_MODES,
+    SAMPLES,
+    SCENARIOS,
+    chat_scenario,
+)
 from utils import extract_json_block
 
 BACKEND = Path(__file__).resolve().parent.parent

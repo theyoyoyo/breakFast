@@ -1,8 +1,8 @@
-from pydantic import BaseModel, field_validator
 from typing import Optional
 
-from models.limits import Name, ShortText
+from pydantic import BaseModel, field_validator
 
+from models.limits import Name, ShortText
 
 # ---------------------------------------------------------------------------
 # Fixed ingredient groups — single source of truth.

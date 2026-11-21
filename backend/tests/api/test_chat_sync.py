@@ -21,7 +21,7 @@ from fastapi import WebSocketDisconnect
 from starlette.testclient import TestClient
 
 import database
-from auth import hash_pin, create_token
+from auth import create_token, hash_pin
 from services import chat_sync
 from tests.chat_socket import open_chat
 

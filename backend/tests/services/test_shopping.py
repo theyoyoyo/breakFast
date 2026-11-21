@@ -3,7 +3,13 @@
 import random
 
 from services.shopping import (
-    dish_names, new_suggestions, parse_suggestions, pick_input, random_share, shopping_request, taste_hints,
+    dish_names,
+    new_suggestions,
+    parse_suggestions,
+    pick_input,
+    random_share,
+    shopping_request,
+    taste_hints,
 )
 
 

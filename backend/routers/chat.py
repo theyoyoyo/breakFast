@@ -9,20 +9,21 @@ Each open socket is registered in services/chat_sync, so a saved reply reaches t
 import json
 import logging
 import uuid
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
+from auth import SOCKET_AUTH_PROTOCOL, get_user_id_from_token, socket_token
 from database import get_db
 from db_helpers import owns_session
-from auth import SOCKET_AUTH_PROTOCOL, get_user_id_from_token, socket_token
-from services.llm import LLMUnavailableError, lyric_cycler
-from services.llm import stream_response
+from models.limits import CHAT_MESSAGE_MAX, SESSION_ID_MAX
+from models.units import count_unit
+from services import chat_sync
+from services.chat_block import CHAT_SUGGEST_TEXTS, chat_history, drop_meal_block, load_chat_block
+from services.context import load_chat_context
+from services.llm import LLMUnavailableError, lyric_cycler, stream_response
 from services.personas import build_chat_prompt
 from services.personas.chat import build_chat_message
 from services.pipeline import RETRY_TEXTS, in_language, run_suggestion_pipeline
-from services.context import load_chat_context
-from services.chat_block import CHAT_SUGGEST_TEXTS, chat_history, drop_meal_block, load_chat_block
-from services import chat_sync
-from models.limits import CHAT_MESSAGE_MAX, SESSION_ID_MAX
-from models.units import count_unit
 from utils import extract_json_block
 
 router = APIRouter()

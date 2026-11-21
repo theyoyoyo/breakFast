@@ -1,16 +1,33 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
-from contextlib import asynccontextmanager
-from config import CORS_ORIGINS, CORS_ALLOW_CREDENTIALS, SERVE_FRONTEND, API_DOCS
+from fastapi.staticfiles import StaticFiles
+
+from auth import require_user
+from config import API_DOCS, CORS_ALLOW_CREDENTIALS, CORS_ORIGINS, SERVE_FRONTEND
 from database import describe_database, init_db
 from models.limits import MAX_BODY_BYTES
-from auth import require_user
-from routers import analyst, auth, chat, favorites, favorite_ingredients, ingredients, kitchen, meals, preferences, profile, ratings, sessions, health_rules, shopping, scheduler
+from routers import (
+    analyst,
+    auth,
+    chat,
+    favorite_ingredients,
+    favorites,
+    health_rules,
+    ingredients,
+    kitchen,
+    meals,
+    preferences,
+    profile,
+    ratings,
+    scheduler,
+    sessions,
+    shopping,
+)
 from services.insights import refresh_insights
 from utils import resolve_static_file
 

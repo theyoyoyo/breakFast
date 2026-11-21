@@ -3,9 +3,10 @@
 All queries are scoped to the authenticated user.
 """
 
-from database import get_db
 from fastapi import APIRouter, Depends, HTTPException, Path
+
 from auth import require_user
+from database import get_db
 from models.limits import PREFERENCE_KEY_MAX
 from models.preferences import Habit, HabitCreate, Preference, PreferenceSet
 
