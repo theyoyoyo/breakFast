@@ -22,7 +22,13 @@ export default [
     },
     settings: { react: { version: 'detect' } },
     // The app doesn't use PropTypes (no types on props anywhere), so the rule would only add noise.
-    rules: { 'react/prop-types': 'off' },
+    rules: {
+      'react/prop-types': 'off',
+      // Panels load their data with setState inside an effect. Rewriting that changes when and how
+      // often they load, so it waits for the UI redesign: a warning until the full lint pass (#220),
+      // then back to an error.
+      'react-hooks/set-state-in-effect': 'warn',
+    },
   },
   {
     // Vitest runs with globals: true (vite.config.js), and the setup file runs in Node too.
