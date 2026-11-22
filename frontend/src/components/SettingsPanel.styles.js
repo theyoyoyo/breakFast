@@ -512,3 +512,10 @@ export const oldMealsNote = {
   color: 'var(--text-muted)',
   textAlign: 'center',
 }
+
+// Language: the chosen of two equal options is bold in the accent, the other muted
+export const choiceLabel = (chosen) => ({
+  fontSize: 13,
+  fontWeight: chosen ? 700 : 400,
+  color: chosen ? 'var(--accent)' : 'var(--text-muted)',
+})

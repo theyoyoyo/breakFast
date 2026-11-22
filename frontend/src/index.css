@@ -76,6 +76,7 @@
   --c-edit-border: #3d5060;
   --c-edit-text: #c0d0e0;
   --c-on-status: #1a1a2e;          /* text on a filled green or yellow chip */
+  --knob-off: #ffffff;             /* an off toggle's knob, visible on --surface2 */
 }
 
 /* Theme setting (Settings → Theme). Only the accent colors change; orange is the default above.
@@ -134,19 +135,19 @@
 
 /* Light mode (Settings → Appearance: Light, or Auto on a light device). data-mode on <html> is set before
    the first paint (main.jsx, utils/appearance.js); without it the page is dark as above.
-   Neutrals are warm, text passes WCAG AA on every surface. Each theme keeps its hues: the accent is
+   Neutrals are warm and soft (a morning app: oat page, cream panels, no stark white), text passes WCAG AA on every surface. Each theme keeps its hues: the accent is
    darkened in OKLCH until it passes AA on the page, the panels and the bubble; the bubble is a pale tint
    of the accent; dish colors are the dark mode's hues darkened to AA on the bubble. --secondary is the
    same in both modes (white text on it passes AA). */
 :root[data-mode="light"] {
   color-scheme: light;
   --scheme: light;
-  --bg: #f3f1eb;
-  --surface: #ffffff;
-  --surface2: #efece5;
-  --text: #1f2328;
-  --text-muted: #5b6070;
-  --border: #d9d4c9;
+  --bg: #f5ede0;          /* warm oat page */
+  --surface: #fdf8f0;     /* soft cream panels, never stark white */
+  --surface2: #f2e9db;
+  --text: #2a2420;        /* warm near-black */
+  --text-muted: #665c52;
+  --border: #e2d6c3;
   --accent: #9d5300;
   --accent2: #fec0af;
   --bubble: #fce4d3;
@@ -179,6 +180,7 @@
   --c-edit-border: #9fb4c8;
   --c-edit-text: #3c6d9a;
   --c-on-status: #ffffff;
+  --knob-off: #9c9184;
 }
 
 :root[data-mode="light"][data-theme="green"] {
@@ -192,10 +194,10 @@
 }
 
 :root[data-mode="light"][data-theme="teal"] {
-  --accent: #127663;
+  --accent: #0f7462;
   --accent2: #98e3ce;
   --bubble: #d2f2e8;
-  --dish-1: #127663;
+  --dish-1: #0f7462;
   --dish-2: #51679d;
   --dish-3: #975274;
   --dish-4: #975a2d;

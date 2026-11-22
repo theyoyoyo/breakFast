@@ -5,7 +5,7 @@
 export const THEMES = [
   { key: 'orange', label: 'Orange', swatch: '#f4a261', lightSwatch: '#9d5300' },
   { key: 'green', label: 'Green', swatch: '#c3c96b', lightSwatch: '#696c02' },
-  { key: 'teal', label: 'Teal', swatch: '#8fd3c1', lightSwatch: '#127663' },
+  { key: 'teal', label: 'Teal', swatch: '#8fd3c1', lightSwatch: '#0f7462' },
   { key: 'blue', label: 'Blue', swatch: '#a7b6f2', lightSwatch: '#57649c' },
   { key: 'purple', label: 'Purple', swatch: '#e0a3d6', lightSwatch: '#8b5483' },
 ]

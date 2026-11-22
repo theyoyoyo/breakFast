@@ -904,23 +904,25 @@ export default function SettingsPanel({ visible }) {
         <div style={s.section}>
           <div style={s.sectionLabel}>AI settings</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
-            <span style={{ fontSize: 13, color: language === 'en' ? 'var(--accent)' : 'var(--text-muted)' }}>English</span>
+            {/* Two equal choices, not on/off: the track never fills, the knob sits by the chosen one,
+                which is bold in the accent */}
+            <span style={s.choiceLabel(language === 'en')}>English</span>
             <button
               style={{
                 width: 44, height: 24, borderRadius: 12, border: '1px solid var(--border)',
-                background: language === 'tr' ? 'var(--accent)' : 'var(--surface2)',
-                cursor: 'pointer', position: 'relative', transition: 'background 0.2s',
+                background: 'var(--surface2)',
+                cursor: 'pointer', position: 'relative',
               }}
               onClick={handleLanguageToggle}
               title={`Switch to ${language === 'en' ? 'Turkish' : 'English'}`}
             >
               <span style={{
                 position: 'absolute', top: 3, width: 16, height: 16, borderRadius: 8,
-                background: '#fff', transition: 'left 0.2s',
+                background: 'var(--accent)', transition: 'left 0.2s',
                 left: language === 'tr' ? 24 : 4,
               }} />
             </button>
-            <span style={{ fontSize: 13, color: language === 'tr' ? 'var(--accent)' : 'var(--text-muted)' }}>Turkish</span>
+            <span style={s.choiceLabel(language === 'tr')}>Turkish</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
             <span style={{ fontSize: 13, color: 'var(--text-muted)', flex: 1 }}>Weekly review in suggestions</span>
@@ -935,7 +937,7 @@ export default function SettingsPanel({ visible }) {
             >
               <span style={{
                 position: 'absolute', top: 3, width: 16, height: 16, borderRadius: 8,
-                background: '#fff', transition: 'left 0.2s',
+                background: weeklySummaryInSuggestions ? '#fff' : 'var(--knob-off)', transition: 'left 0.2s',
                 left: weeklySummaryInSuggestions ? 24 : 4,
               }} />
             </button>
