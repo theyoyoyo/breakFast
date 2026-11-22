@@ -28,9 +28,6 @@ export default [
       // often they load, so it waits for the UI redesign: a warning until the full lint pass (#220),
       // then back to an error.
       'react-hooks/set-state-in-effect': 'warn',
-      // IngredientPanel keeps the latest suggestions in a ref assigned during render, so handlers that
-      // finish after a request read the current list. The same pass as the rule above.
-      'react-hooks/refs': 'warn',
     },
   },
   {
