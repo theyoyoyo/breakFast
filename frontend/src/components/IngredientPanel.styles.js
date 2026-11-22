@@ -35,7 +35,7 @@ export const headerExpiredBtn = {
   ..._headerExpiredBase,
   background: 'rgba(230, 126, 34, 0.15)',
   border: '1px solid rgba(230, 126, 34, 0.3)',
-  color: '#e67e22',
+  color: 'var(--c-warn)',
   cursor: 'pointer',
 }
 
@@ -43,7 +43,7 @@ export const headerExpiredBtnSafe = {
   ..._headerExpiredBase,
   background: 'rgba(46, 204, 113, 0.1)',
   border: '1px solid rgba(46, 204, 113, 0.25)',
-  color: '#2ecc71',
+  color: 'var(--c-green)',
   cursor: 'default',
 }
 
@@ -262,14 +262,14 @@ export const deleteConfirmTrash = {
   ..._deleteConfirmBase,
   background: 'rgba(231, 76, 60, 0.2)',
   border: '1px solid rgba(231, 76, 60, 0.45)',
-  color: '#e74c3c',
+  color: 'var(--c-red)',
 }
 
 export const deleteConfirmShop = {
   ..._deleteConfirmBase,
   background: 'rgba(142, 68, 173, 0.2)',
   border: '1px solid rgba(142, 68, 173, 0.45)',
-  color: '#a970c9',
+  color: 'var(--c-purple)',
 }
 
 // ---------------------------------------------------------------------------
@@ -461,7 +461,7 @@ export const expiryActionDeleteActive = {
   ..._expiryActionBase,
   background: 'rgba(231, 76, 60, 0.2)',
   border: '1px solid rgba(231, 76, 60, 0.5)',
-  color: '#e74c3c',
+  color: 'var(--c-red)',
   opacity: 1,
 }
 
@@ -469,7 +469,7 @@ export const expiryActionKeepActive = {
   ..._expiryActionBase,
   background: 'rgba(46, 204, 113, 0.15)',
   border: '1px solid rgba(46, 204, 113, 0.4)',
-  color: '#2ecc71',
+  color: 'var(--c-green)',
   opacity: 1,
 }
 
@@ -477,7 +477,7 @@ export const expiryActionShoppingActive = {
   ..._expiryActionBase,
   background: 'rgba(142, 68, 173, 0.2)',
   border: '1px solid rgba(142, 68, 173, 0.5)',
-  color: '#a970c9',
+  color: 'var(--c-purple)',
   opacity: 1,
 }
 
@@ -507,7 +507,7 @@ export const headerFavBtn = {
   justifyContent: 'center',
   background: 'rgba(231, 76, 60, 0.12)',
   border: '1px solid rgba(231, 76, 60, 0.25)',
-  color: '#e74c3c',
+  color: 'var(--c-red)',
   cursor: 'pointer',
 }
 
@@ -524,7 +524,7 @@ export const headerShoppingBtn = {
   justifyContent: 'center',
   background: 'rgba(142, 68, 173, 0.15)',
   border: '1px solid rgba(142, 68, 173, 0.3)',
-  color: '#a970c9',
+  color: 'var(--c-purple)',
   cursor: 'pointer',
 }
 
@@ -561,7 +561,7 @@ export const lyricBanner = {
   border: '1px solid rgba(155, 89, 182, 0.2)',
   borderRadius: 6,
   fontSize: 12,
-  color: '#b07cc8',
+  color: 'var(--c-purple-soft)',
   textAlign: 'center',
   fontStyle: 'italic',
 }

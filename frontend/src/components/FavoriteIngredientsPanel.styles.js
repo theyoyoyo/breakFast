@@ -44,7 +44,7 @@ export const title = {
 export const addAllBtn = {
   background: 'rgba(142, 68, 173, 0.15)',
   border: '1px solid rgba(142, 68, 173, 0.3)',
-  color: '#a970c9',
+  color: 'var(--c-purple)',
   borderRadius: 6,
   padding: '4px 10px',
   fontSize: 11,
@@ -98,7 +98,7 @@ export const shopBtn = {
 export const shopBtnDone = {
   background: 'none',
   border: 'none',
-  color: '#27ae60',
+  color: 'var(--c-green)',
   padding: '3px',
   borderRadius: 4,
   display: 'flex',

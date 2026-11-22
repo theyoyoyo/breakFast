@@ -116,7 +116,7 @@ export const scoreLabel = {
 export const scoreValue = (score) => ({
   fontSize: 28,
   fontWeight: 800,
-  color: score >= 80 ? 'var(--accent)' : score >= 60 ? '#f0a500' : '#e74c3c',
+  color: score >= 80 ? 'var(--accent)' : score >= 60 ? 'var(--c-score-mid)' : 'var(--c-red)',
   lineHeight: 1,
 })
 
