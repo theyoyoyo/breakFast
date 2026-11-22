@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useImperativeHandle, forwardRef } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Trash2, Pencil, Plus, X, AlertTriangle, ShoppingCart, Sparkles, Loader, ChevronRight, Heart, CheckSquare, Square } from 'lucide-react'
 import {
   getIngredients, addIngredient, updateIngredient, deleteIngredient,
@@ -54,7 +54,7 @@ function appendNew(list, items) {
   return [...list, ...added]
 }
 
-const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, visible }, ref) {
+function IngredientPanel({ refreshTrigger, visible }) {
   const [ingredients, setIngredients] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -235,27 +235,6 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
   useEffect(() => {
     if (deletePopup) deleteConfirmRef.current?.scrollIntoView?.({ block: 'nearest' })
   }, [deletePopup])
-
-  // Expose demo hooks
-  useImperativeHandle(ref, () => ({
-    injectDemoShopping: () => {
-      const demoSuggestions = [
-        { name: 'Walnuts', reason: 'Omega-3 source — supports brain function at breakfast' },
-        { name: 'Strawberries', reason: 'In season, rich in antioxidants' },
-        { name: 'Avocado', reason: 'Healthy fat source, perfect on toast' },
-        { name: 'Chia seeds', reason: 'Fiber and omega-3 — great with yogurt' },
-        { name: 'Whole-wheat bread', reason: 'Complex carbs, keeps you full longer' },
-        { name: 'Cottage cheese', reason: 'High protein, low fat' },
-        { name: 'Honey', reason: 'Natural sweetener, quick energy' },
-        { name: 'Tomato', reason: 'Lycopene source, classic breakfast staple' },
-        { name: 'Cucumber', reason: 'Hydrating and fresh' },
-        { name: 'Olives', reason: 'Healthy fats, foundation of the Mediterranean diet' },
-        { name: 'Tahini', reason: 'Calcium and iron source, classic with molasses' },
-        { name: 'Rolled oats', reason: 'Beta-glucan helps lower cholesterol' },
-      ]
-      saveSuggestions(appendNew([], demoSuggestions))
-    },
-  }))
 
   const toggleCollapse = (groupName) => {
     setCollapsed(prev => {
@@ -911,6 +890,6 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
       />
     </div>
   )
-})
+}
 
 export default IngredientPanel

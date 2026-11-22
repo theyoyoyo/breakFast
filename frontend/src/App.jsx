@@ -130,7 +130,6 @@ export default function App() {
     return () => clearInterval(id)
   }, [offline, auth])
   const chatRef = useRef(null)
-  const ingredientRef = useRef(null)
   const [ingredientRefresh, setIngredientRefresh] = useState(0)
 
   if (!authChecked) return null // wait for token validation
@@ -142,9 +141,6 @@ export default function App() {
       />
     )
   }
-
-  // Demo triggers (name click, re-clicking Chat/Fridge) are for the demo account only
-  const isDemo = auth.user.name === 'demo'
 
   const handleMealLogged = () => {
     setIngredientRefresh((n) => n + 1)
@@ -163,15 +159,7 @@ export default function App() {
           <button
             key={key}
             style={s.tab(activeTab === key, narrow)}
-            onClick={() => {
-              if (key === activeTab && isDemo) {
-                if (key === 'Chat') chatRef.current?.injectDemoSchedule()
-                else if (key === 'Ingredients') ingredientRef.current?.injectDemoShopping()
-                else setActiveTab(key)
-              } else {
-                setActiveTab(key)
-              }
-            }}
+            onClick={() => setActiveTab(key)}
             title={label}
           >
             <Icon size={narrow ? 18 : 14} style={narrow ? { verticalAlign: -3 } : { marginRight: 4, verticalAlign: -2 }} />
@@ -180,9 +168,8 @@ export default function App() {
         ))}
         <div style={s.userInfo}>
           <span
-            style={{ ...s.userChip(narrow), ...(isDemo ? { cursor: 'pointer' } : {}) }}
-            onClick={isDemo ? () => chatRef.current?.injectDemoMeal() : undefined}
-            title={isDemo ? 'Demo action' : auth.user.name}
+            style={s.userChip(narrow)}
+            title={auth.user.name}
           >
             <span style={s.userAvatar}>{(auth.user.name || '?').charAt(0).toUpperCase()}</span>
             {!narrow && <span style={s.userName}>{auth.user.name}</span>}
@@ -198,7 +185,7 @@ export default function App() {
         <ChatInterface ref={chatRef} onMealLogged={handleMealLogged} visible={activeTab === 'Chat'} />
       </div>
       <div style={{ ...s.mainFull, display: activeTab === 'Ingredients' ? undefined : 'none' }}>
-        <IngredientPanel ref={ingredientRef} refreshTrigger={ingredientRefresh} visible={activeTab === 'Ingredients'} />
+        <IngredientPanel refreshTrigger={ingredientRefresh} visible={activeTab === 'Ingredients'} />
       </div>
       <div style={{ ...s.mainFull, display: activeTab === 'Preferences' ? undefined : 'none' }}>
         <PreferencesPanel />
