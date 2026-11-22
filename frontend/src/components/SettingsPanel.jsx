@@ -24,7 +24,7 @@ import { useSyncNotice } from '../hooks/useSyncNotice'
 import { useMode } from '../hooks/useMode'
 import * as s from './SettingsPanel.styles'
 import Logo from './Logo'
-import { Monitor, Sun, Moon } from 'lucide-react'
+import { Monitor, Sun, Moon, Plus } from 'lucide-react'
 
 // Appearance buttons: Auto shows a screen (it follows the device)
 const APPEARANCE_ICONS = { auto: Monitor, light: Sun, dark: Moon }
@@ -642,7 +642,7 @@ export default function SettingsPanel({ visible }) {
               onKeyDown={(e) => e.key === 'Enter' && handleAddRule()}
               placeholder="e.g. Avoid refined sugars, Favor omega-3 sources…"
             />
-            <button style={s.addBtn} onClick={handleAddRule}>+</button>
+            <button style={s.addBtn} onClick={handleAddRule} aria-label="Add"><Plus size={16} strokeWidth={3} aria-hidden="true" /></button>
           </div>
           {pendingRuleDeletes.size > 0 && (
             <button style={s.saveBtn} onClick={handleSaveRules}>
@@ -687,7 +687,7 @@ export default function SettingsPanel({ visible }) {
               onKeyDown={(e) => e.key === 'Enter' && handleAddRating()}
               placeholder="Add product…"
             />
-            <button style={s.addBtn} onClick={handleAddRating}>+</button>
+            <button style={s.addBtn} onClick={handleAddRating} aria-label="Add"><Plus size={16} strokeWidth={3} aria-hidden="true" /></button>
           </div>
         </div>
       </div>
@@ -895,7 +895,7 @@ export default function SettingsPanel({ visible }) {
                 onKeyDown={(e) => e.key === 'Enter' && handleAddSupplement()}
                 placeholder="e.g. Vitamin D3 1000IU, K2 100mcg, Zinc 15mg"
               />
-              <button style={s.addBtn} onClick={handleAddSupplement}>+</button>
+              <button style={s.addBtn} onClick={handleAddSupplement} aria-label="Add"><Plus size={16} strokeWidth={3} aria-hidden="true" /></button>
             </div>
           </div>
         </div>

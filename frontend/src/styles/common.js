@@ -163,6 +163,8 @@ export const addBtn = {
   fontSize: 16,
   width: 28,
   height: 28,
+  flexShrink: 0,
+  padding: 0,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',

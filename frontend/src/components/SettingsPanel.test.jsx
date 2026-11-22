@@ -46,7 +46,7 @@ describe('SettingsPanel', () => {
     const name = await screen.findByPlaceholderText('Supplement name…')
     expect(screen.queryByRole('option', { name: /sometimes/i })).toBeNull()
     fireEvent.change(name, { target: { value: 'Vitamin D' } })
-    fireEvent.click(screen.getAllByRole('button', { name: '+' }).at(-1))
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add' }).at(-1))
     await waitFor(() => expect(api.createSupplement).toHaveBeenCalledWith('Vitamin D', '', 'daily'))
   })
 
