@@ -95,6 +95,8 @@ The backend loads each user's context (inventory, recent meals, profile, supplem
 - Node.js 22.13+
 - [Ollama](https://ollama.com) (optional: everything except the AI features works without it)
 
+> The setup steps below document the owner's own deployment. They don't grant any right to use the software (see [LICENSE](LICENSE)).
+
 ### Windows quick start
 
 Run `setup.bat` once (installs dependencies, creates `.env`, pulls the model), then `start.bat` (opens the backend and the frontend in two terminals). Then create a user (see [Admin CLI](#admin-cli)) and open <http://localhost:5173>.
