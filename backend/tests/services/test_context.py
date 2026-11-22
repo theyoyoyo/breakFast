@@ -10,6 +10,7 @@ def test_food_preferences_drop_settings_and_avoid_entries():
         "avoid:1": "peanuts",
         "response_language": "tr",
         "theme": "purple",
+        "appearance": "light",
         "weekly_summary_in_suggestions": "true",
     }
     assert _food_preferences(prefs) == {"fav:1": "olives"}

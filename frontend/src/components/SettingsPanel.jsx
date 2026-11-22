@@ -16,12 +16,18 @@ import ConfirmPrompt from './ConfirmPrompt'
 import MealEditor from './MealEditor'
 import StarRating from './StarRating'
 import { THEMES, applyTheme, storedTheme } from '../utils/theme'
+import { APPEARANCES, applyAppearance, storedAppearance } from '../utils/appearance'
 import { applyLanguage } from '../utils/language'
 import { COUNTRIES, countryCode } from '../utils/countries'
 import { useLanguage } from '../hooks/useLanguage'
 import { useSyncNotice } from '../hooks/useSyncNotice'
+import { useMode } from '../hooks/useMode'
 import * as s from './SettingsPanel.styles'
 import Logo from './Logo'
+import { Monitor, Sun, Moon } from 'lucide-react'
+
+// Appearance buttons: Auto shows a screen (it follows the device)
+const APPEARANCE_ICONS = { auto: Monitor, light: Sun, dark: Moon }
 
 // Display names for the stored supplement frequency values
 const FREQUENCY_LABELS = { daily: 'Daily', sometimes: 'Occasional' }
@@ -77,6 +83,9 @@ export default function SettingsPanel({ visible }) {
   const language = useLanguage()
   // Theme (orange / purple / green) — saved per user, cached per device
   const [theme, setTheme] = useState(storedTheme)
+  // Appearance (Auto / Light / Dark) — saved per user, cached per device, like the theme
+  const [appearance, setAppearance] = useState(storedAppearance)
+  const mode = useMode()
 
   // Weekly summary in suggestions toggle (default off)
   const [weeklySummaryInSuggestions, setWeeklySummaryInSuggestions] = useState(false)
@@ -126,6 +135,8 @@ export default function SettingsPanel({ visible }) {
       setWeeklySummaryInSuggestions(weeklySummaryPref?.value === 'true')
       const themePref = prefs.find(p => p.key === 'theme')
       if (themePref) setTheme(applyTheme(themePref.value))
+      const appearancePref = prefs.find(p => p.key === 'appearance')
+      if (appearancePref) setAppearance(applyAppearance(appearancePref.value))
     } catch {
       setError('Failed to load settings')
     }
@@ -148,6 +159,16 @@ export default function SettingsPanel({ visible }) {
       await setPreference('theme', key)
     } catch {
       setTheme(applyTheme(previous))
+    }
+  }
+
+  const handleAppearanceChange = async (key) => {
+    const previous = appearance
+    setAppearance(applyAppearance(key))
+    try {
+      await setPreference('appearance', key)
+    } catch {
+      setAppearance(applyAppearance(previous))
     }
   }
 
@@ -457,7 +478,7 @@ export default function SettingsPanel({ visible }) {
     !profile.age || !profile.gender || !profile.height_cm || !profile.weight_kg || !profile.activity_level
   )
   const missingField = (val) => profileIncomplete && !val
-    ? { borderColor: '#e74c3c' } : {}
+    ? { borderColor: 'var(--c-red)' } : {}
 
   // --- Weekly Summary sub-page ---
   if (view === 'weekly') {
@@ -688,7 +709,7 @@ export default function SettingsPanel({ visible }) {
         <div style={s.section}>
           <div style={s.sectionLabel}>
             Profile
-            {profileIncomplete && <span style={{ color: '#e74c3c', marginLeft: 6, fontSize: 10 }}>●</span>}
+            {profileIncomplete && <span style={{ color: 'var(--c-red)', marginLeft: 6, fontSize: 10 }}>●</span>}
           </div>
           {/* Age + Gender and Height + Weight: four in a row where they fit, two by two on a phone */}
           <div style={s.profileRow}>
@@ -943,6 +964,27 @@ export default function SettingsPanel({ visible }) {
           )}
         </div>
 
+        {/* Appearance — light or dark; Auto follows the device */}
+        <div style={s.section}>
+          <div style={s.sectionLabel}>Appearance</div>
+          <div style={s.themeRow}>
+            {APPEARANCES.map(a => {
+              const Icon = APPEARANCE_ICONS[a.key]
+              return (
+                <button
+                  key={a.key}
+                  style={s.themeBtn(appearance === a.key)}
+                  onClick={() => handleAppearanceChange(a.key)}
+                  aria-pressed={appearance === a.key}
+                >
+                  <Icon size={14} aria-hidden="true" />
+                  {a.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
         {/* Theme — only the accent colors change */}
         <div style={s.section}>
           <div style={s.sectionLabel}>Theme</div>
@@ -954,7 +996,7 @@ export default function SettingsPanel({ visible }) {
                 onClick={() => handleThemeChange(t.key)}
                 aria-pressed={theme === t.key}
               >
-                <span style={s.themeSwatch(t.swatch)} />
+                <span style={s.themeSwatch(mode === 'light' ? t.lightSwatch : t.swatch)} />
                 {t.label}
               </button>
             ))}

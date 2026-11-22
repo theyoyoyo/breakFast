@@ -1,4 +1,5 @@
 import { BRAND_NAME, LOCKUP, MARK_SHAPES, MARK_VIEWBOX, PALETTES, WORDMARK } from '../brand/brand'
+import { useMode } from '../hooks/useMode'
 
 function MarkShapes({ palette }) {
   return MARK_SHAPES.map((s, i) => {
@@ -11,10 +12,11 @@ function MarkShapes({ palette }) {
 }
 
 // The app's logo, drawn from src/brand/brand.js: the mark alone, or with `withName` the mark and the
-// wordmark (outlined, so no font loads). `mode` picks the palette for the background it sits on
-// (the app is dark today); the brand colors never follow the accent theme.
-export default function Logo({ height = 32, mode = 'dark', withName = false, title = BRAND_NAME, style }) {
-  const palette = PALETTES[mode] || PALETTES.dark
+// wordmark (outlined, so no font loads). Its palette follows the page's light or dark mode (Appearance),
+// or `mode` when given; the brand colors never follow the accent theme.
+export default function Logo({ height = 32, mode, withName = false, title = BRAND_NAME, style }) {
+  const pageMode = useMode()
+  const palette = PALETTES[mode || pageMode] || PALETTES.dark
   const svgProps = {
     height,
     role: 'img',
