@@ -2,18 +2,35 @@
 /shopping — CRUD endpoints for the persistent shopping list, and the Fridge tab's
 shopping suggestions list (/shopping/suggestions), kept per user so every device shows
 the same one. Items removed from it with × can be brought back from Settings
-(/shopping/suggestions/removed). A suggestions change tells the user's open chats (services/chat_sync).
+(/shopping/suggestions/removed). Suggest Shopping asks the Shopping persona for new items
+(/shopping/suggestions/generate). A suggestions change tells the user's open chats (services/chat_sync).
 All queries are scoped to the authenticated user.
 """
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+import logging
+import random
 from typing import Optional
-from database import get_db
+
+from fastapi import APIRouter, Body, Depends
+from pydantic import BaseModel, Field
+
 from auth import require_user
+from database import get_db
+from models.limits import BULK_ITEMS_MAX, Name, Note, ShortText
 from services import chat_sync
+from services.context import load_shopping_context
 from services.ingredient_groups import remember, resolve_groups
-from services.shopping import REMOVED_DAYS, recently_removed
+from services.llm import LLMUnavailableError, chat_json, lyric_cycler
+from services.personas import build_shopping_prompt
+from services.shopping import (
+    REMOVED_DAYS,
+    SUGGESTIONS_SCHEMA,
+    new_suggestions,
+    parse_suggestions,
+    pick_input,
+    recently_removed,
+    shopping_request,
+)
 
 router = APIRouter(prefix="/shopping", tags=["shopping"])
 
@@ -25,23 +42,23 @@ class ShoppingItem(BaseModel):
 
 
 class ShoppingItemCreate(BaseModel):
-    item_name: str
+    item_name: Name
 
 
 class BoughtRequest(BaseModel):
-    ids: list[int]
-    expiry_dates: Optional[dict[str, str]] = None  # {item_name: expiry_date}
+    ids: list[int] = Field(max_length=BULK_ITEMS_MAX)
+    expiry_dates: Optional[dict[Name, ShortText]] = Field(default=None, max_length=BULK_ITEMS_MAX)  # {item_name: expiry_date}
 
 
 class SuggestionItem(BaseModel):
-    name: str = Field(min_length=1, max_length=200)
-    reason: str = ""
+    name: Name = Field(min_length=1)
+    reason: Note = ""
     checked: bool = True
 
 
 class SuggestionsState(BaseModel):
-    items: list[SuggestionItem] = []   # the whole list, in order
-    removed: list[str] = []            # names just removed with ×
+    items: list[SuggestionItem] = Field(default=[], max_length=BULK_ITEMS_MAX)   # the whole list, in order
+    removed: list[Name] = Field(default=[], max_length=BULK_ITEMS_MAX)            # names just removed with ×
 
 
 @router.get("/", response_model=list[ShoppingItem])
@@ -72,7 +89,10 @@ async def add_shopping_item(body: ShoppingItemCreate, user_id: int = Depends(req
 
 
 @router.post("/bulk", status_code=201)
-async def bulk_add_shopping(items: list[ShoppingItemCreate], user_id: int = Depends(require_user)):
+async def bulk_add_shopping(
+    items: list[ShoppingItemCreate] = Body(max_length=BULK_ITEMS_MAX),
+    user_id: int = Depends(require_user),
+):
     """Add multiple items to the shopping list. Skips duplicates."""
     async with get_db() as db:
         await db.executemany(
@@ -217,3 +237,83 @@ async def bring_back_removed(user_id: int = Depends(require_user)):
         )
         await db.commit()
     await chat_sync.notify_user(user_id, {"type": "shopping_suggestions_updated"})
+
+
+# ---------------------------------------------------------------------------
+# Shopping suggestions (LLM-powered): new items for the list above
+# ---------------------------------------------------------------------------
+
+
+class ShoppingSuggestionsRequest(BaseModel):
+    exclude: list[Name] = Field(default=[], max_length=BULK_ITEMS_MAX)
+
+
+# What the app shows when suggestions fail; the cause goes to the server log only
+SUGGESTIONS_FAILED = "Could not get suggestions. Please try again."
+
+
+@router.post("/suggestions/generate")
+async def get_shopping_suggestions(
+    body: ShoppingSuggestionsRequest | None = None,
+    user_id: int = Depends(require_user),
+):
+    """Generate AI-powered shopping suggestions based on full user context.
+
+    Code keeps only new items: anything in the fridge, on the shopping list,
+    already shown (`exclude`), on the avoid list or removed from the suggestions
+    list in the last 7 days is dropped by exact name.
+    When a whole reply is repeats, the model is asked once more.
+    """
+    shown = list(body.exclude) if body else []
+
+    try:
+        async with get_db() as db:
+            ctx = await load_shopping_context(db, user_id)
+            removed = await recently_removed(db, user_id)
+    except Exception:
+        logging.exception("Shopping context load failed")
+        return {"suggestions": [], "lyric": lyric_cycler.next(), "error": SUGGESTIONS_FAILED}
+
+    # The avoid list is a hard ban, so code enforces it beside the prompt rule.
+    # Items removed with × are left out by code only, so the prompt stays the same.
+    known = [i["name"] for i in ctx["ingredients"]] + ctx["shopping_list"] + ctx["avoid_list"] + removed
+    # This press shows a random share of the fridge and of the taste hints, so it starts somewhere new
+    fridge, hints = pick_input(ctx, random.Random())
+
+    for _ in range(2):
+        try:
+            prompt = build_shopping_prompt(
+                taste_hints=hints,
+                user_preferences=ctx["preferences"],
+                health_rules=ctx["health_rules"],
+                user_profile=ctx["user_profile"],
+                supplements=ctx["supplements"],
+                avoid_list=ctx["avoid_list"],
+                shopping_list=ctx["shopping_list"],
+                ratings=ctx["ratings"],
+                language=ctx["language"],
+                country=ctx["country"],
+            )
+            reply = await chat_json(
+                system_prompt=prompt,
+                messages=[{"role": "user", "content": shopping_request(ctx["language"], shown, fridge)}],
+                schema=SUGGESTIONS_SCHEMA,
+                temperature=0.6,
+            )
+        except LLMUnavailableError:
+            return {"suggestions": [], "lyric": lyric_cycler.next()}
+        except Exception:
+            logging.exception("Shopping LLM call failed")
+            return {"suggestions": [], "lyric": lyric_cycler.next(), "error": SUGGESTIONS_FAILED}
+
+        items = parse_suggestions(reply)
+        if items is None:
+            logging.warning("Shopping suggestions: could not parse the reply: %r", reply)
+            return {"suggestions": [], "lyric": None, "error": "Could not read the AI reply. Please try again."}
+
+        fresh = new_suggestions(items, known + shown, ctx["dishes"])
+        if fresh:
+            return {"suggestions": fresh, "lyric": None}
+        shown += [i["name"] for i in items]
+
+    return {"suggestions": [], "lyric": None}

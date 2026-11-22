@@ -11,6 +11,7 @@ import ShoppingListPanel from './ShoppingListPanel'
 import FavoriteIngredientsPanel from './FavoriteIngredientsPanel'
 import ConfirmPrompt from './ConfirmPrompt'
 import * as s from './IngredientPanel.styles'
+import Logo from './Logo'
 
 // ---------------------------------------------------------------------------
 // Fixed ingredient groups (mirrors backend INGREDIENT_GROUPS)
@@ -133,7 +134,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
       setError(null)
       const data = await getIngredients()
       setIngredients(data)
-    } catch (e) {
+    } catch {
       setError('Failed to load ingredients')
     } finally {
       setLoading(false)
@@ -276,7 +277,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
       setAddPanelOpen(false)
       load()
       refreshExpiredCount()
-    } catch (e) {
+    } catch {
       setError('Failed to add ingredient')
     }
   }
@@ -287,7 +288,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
       setDeletePopup(null)
       load()
       refreshExpiredCount()
-    } catch (err) {
+    } catch {
       setError('Failed to delete ingredient')
     }
   }
@@ -300,7 +301,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
       setDeletePopup(null)
       load()
       refreshExpiredCount()
-    } catch (err) {
+    } catch {
       setError('Failed to delete ingredient')
     }
   }
@@ -320,11 +321,12 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
   }
 
   const handleEdit = async () => {
-    if (!editName.trim()) return
+    const name = editName.trim()
+    if (!name) return
     try {
       setError(null)
       await updateIngredient(editingId, {
-        name: editName.trim(),
+        name,
         expiry_date: editExpiry || '',
         group_name: editGroup,
       })
@@ -332,7 +334,8 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
       load()
       refreshExpiredCount()
     } catch (e) {
-      setError('Failed to update ingredient')
+      // 409: another item has the name; the edit stays open so the user can pick another
+      setError(e.status === 409 ? `${name} is already in your fridge` : 'Failed to update ingredient')
     }
   }
 
@@ -494,7 +497,7 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
     <div style={s.container}>
       {/* Header with expired + add buttons */}
       <div style={s.headerRow}>
-        <span style={s.headerText}>break FAST</span>
+        <Logo withName height={26} />
         <div style={s.headerBtns}>
           <button
             style={expiredCount > 0 ? s.headerExpiredBtn : s.headerExpiredBtnSafe}
@@ -629,12 +632,12 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
                     <div style={{ ...s.row, padding: '7px 16px' }}>
                       <span style={{
                         ...s.name,
-                        color: isExpired(ing.expiry_date) ? 'var(--error, #e74c3c)' : 'var(--text)',
+                        color: isExpired(ing.expiry_date) ? 'var(--c-red)' : 'var(--text)',
                       }}>{ing.name}</span>
                       {ing.expiry_date && (
                         <span style={{
                           ...s.expiryBadge,
-                          color: isExpired(ing.expiry_date) ? 'var(--error, #e74c3c)' : 'var(--text-muted)',
+                          color: isExpired(ing.expiry_date) ? 'var(--c-red)' : 'var(--text-muted)',
                           fontWeight: isExpired(ing.expiry_date) ? 600 : 400,
                         }}>
                           {formatExpiry(ing.expiry_date)}
@@ -650,8 +653,8 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
                       >
                         <Heart
                           size={12}
-                          fill={favoriteNames.has(ing.name.toLowerCase()) ? '#e74c3c' : 'none'}
-                          color={favoriteNames.has(ing.name.toLowerCase()) ? '#e74c3c' : 'var(--text-muted)'}
+                          fill={favoriteNames.has(ing.name.toLowerCase()) ? 'var(--c-red)' : 'none'}
+                          color={favoriteNames.has(ing.name.toLowerCase()) ? 'var(--c-red)' : 'var(--text-muted)'}
                         />
                       </button>
                       <button

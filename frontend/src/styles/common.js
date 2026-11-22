@@ -4,31 +4,43 @@
 // theme setting can change it (index.css); use --secondary-soft for a tinted background.
 export const secondaryColor = 'var(--secondary)'
 
-// Semantic color palette — use these instead of hardcoded hex values
+// Semantic color palette — use these instead of hardcoded hex values. Each is a CSS variable
+// (index.css, --c-*) with a value for dark and one for light; none follows the accent theme.
 export const colors = {
   // Status
-  success: '#2d4a35',
-  successBorder: '#4a7c59',
-  successText: '#8bc59a',
-  gold: '#4a3a10',
-  goldBorder: '#b8922a',
-  goldText: '#e8c84a',
-  goldStar: '#f5a623',
-  error: '#e76f51',
+  success: 'var(--c-success)',
+  successBorder: 'var(--c-success-border)',
+  successText: 'var(--c-success-text)',
+  gold: 'var(--c-gold)',
+  goldBorder: 'var(--c-gold-border)',
+  goldText: 'var(--c-gold-text)',
+  goldStar: 'var(--c-star)',
+  error: 'var(--c-error)',
   // Danger (delete / remove / top priority) — semantic, never themed
-  danger: '#ec7063',
+  danger: 'var(--c-danger)',
   dangerSoft: 'rgba(231, 76, 60, 0.15)',
   dangerBorder: 'rgba(231, 76, 60, 0.45)',
-  dangerStrong: '#b83b30',
+  dangerStrong: 'var(--c-danger-strong)',
+  // Expired / required (red), expiring soon (orange), fresh (green), staples (purple)
+  red: 'var(--c-red)',
+  warn: 'var(--c-warn)',
+  green: 'var(--c-green)',
+  greenStrong: 'var(--c-green-strong)',
+  purple: 'var(--c-purple)',
+  purpleSoft: 'var(--c-purple-soft)',
+  scoreMid: 'var(--c-score-mid)',
+  priorityTop: 'var(--c-priority-top)',
+  // Text on a filled green or yellow chip
+  onStatus: 'var(--c-on-status)',
   // Supplements
-  daily: '#2d4a35',
-  dailyText: '#8bc59a',
-  sometimes: '#4a3d20',
-  sometimesText: '#d4a94a',
+  daily: 'var(--c-success)',
+  dailyText: 'var(--c-success-text)',
+  sometimes: 'var(--c-sometimes)',
+  sometimesText: 'var(--c-sometimes-text)',
   // Edit button (muted blue-gray)
-  editBg: '#2a3a4a',
-  editBorder: '#3d5060',
-  editText: '#c0d0e0',
+  editBg: 'var(--c-edit-bg)',
+  editBorder: 'var(--c-edit-border)',
+  editText: 'var(--c-edit-text)',
 }
 
 export const panelContainer = {
@@ -151,6 +163,8 @@ export const addBtn = {
   fontSize: 16,
   width: 28,
   height: 28,
+  flexShrink: 0,
+  padding: 0,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',

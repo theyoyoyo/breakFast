@@ -3,7 +3,15 @@
 import json
 from unittest.mock import patch
 
-from tools.compare_runs import build_page, build_pairs, output_view, overview, pair_name, selected_folder, selected_outputs
+from tools.compare_runs import (
+    build_page,
+    build_pairs,
+    output_view,
+    overview,
+    pair_name,
+    selected_folder,
+    selected_outputs,
+)
 from tools.prompt_samples import PLAN_CASES
 
 CLEAN = {"json": True, "issues": {"missing": []}}

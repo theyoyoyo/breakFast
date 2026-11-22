@@ -5,63 +5,38 @@ All queries are scoped to the authenticated user.
 
 import asyncio
 import json
-from fastapi import APIRouter, HTTPException, Depends
+from datetime import date as dt_date
+from datetime import timedelta
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from database import get_db
+
 from auth import require_user
-from models.meal import Meal, MealLog, MealRating
+from database import get_db
 from db_helpers import row_to_meal, serialize_json_field
+from models.limits import MEALS_LIMIT_DEFAULT, MEALS_LIMIT_MAX
+from models.meal import Meal, MealLog
+from services.context import fetch_health_rules, fetch_preferences, fetch_profile, fetch_supplements
+from services.insights import PATTERN_DAYS
+from services.knowledge import format_history_for_weekly_review
+from services.llm import LLMUnavailableError, lyric_cycler, stream_response
+from services.personas.weekly_analyst import build_weekly_analyst_prompt_with_meals
+from utils import extract_json_block
 
 router = APIRouter(prefix="/meals", tags=["meals"])
 
 
 @router.get("/", response_model=list[Meal])
-async def list_meals(limit: int = 50, user_id: int = Depends(require_user)):
+async def list_meals(
+    limit: int = Query(MEALS_LIMIT_DEFAULT, ge=1, le=MEALS_LIMIT_MAX),
+    user_id: int = Depends(require_user),
+):
     async with get_db() as db:
         async with db.execute(
             "SELECT * FROM meal_history WHERE user_id = ? ORDER BY logged_at DESC LIMIT ?",
             (user_id, limit),
         ) as cur:
             return [row_to_meal(r) for r in await cur.fetchall()]
-
-
-@router.get("/weekly", response_model=list[Meal])
-async def weekly_meals(user_id: int = Depends(require_user)):
-    """Return last 7 meals with no date gaps — stops at the first missing day.
-
-    Walks backward from the most recent meal's date. If a calendar day has no
-    meal, that's the boundary. Returns up to 7 meals within the consecutive
-    streak, most recent first.
-    """
-    from datetime import date as dt_date, timedelta
-
-    async with get_db() as db:
-        async with db.execute(
-            "SELECT * FROM meal_history WHERE user_id = ? ORDER BY logged_at DESC LIMIT 50",
-            (user_id,),
-        ) as cur:
-            rows = [row_to_meal(r) for r in await cur.fetchall()]
-    if not rows:
-        return []
-
-    result = []
-    prev_date = None
-    for meal in rows:
-        meal_date = meal["logged_at"][:10]  # "YYYY-MM-DD"
-        try:
-            d = dt_date.fromisoformat(meal_date)
-        except ValueError:
-            continue
-        if prev_date is None:
-            prev_date = d
-        elif d < prev_date:
-            if prev_date - d > timedelta(days=1):
-                break  # gap detected
-            prev_date = d
-        result.append(meal)
-        if len(result) >= 7:
-            break
-    return result
 
 
 class WeeklyReviewResponse(BaseModel):
@@ -77,8 +52,6 @@ async def get_weekly_review(user_id: int = Depends(require_user)):
 
     Returns 404 if no analysis has been run yet this week.
     """
-    from datetime import date as dt_date
-
     week_key = dt_date.today().strftime("%G-W%V")
     async with get_db() as db:
         async with db.execute(
@@ -108,14 +81,6 @@ async def generate_weekly_review(user_id: int = Depends(require_user)):
 
     Always generates a fresh analysis — existing entries are kept (not overwritten).
     """
-    from datetime import date as dt_date, timedelta
-    from services.personas.weekly_analyst import build_weekly_analyst_prompt_with_meals
-    from services.knowledge import format_history_for_weekly_review
-    from services.context import fetch_profile, fetch_supplements, fetch_health_rules, fetch_preferences
-    from services.suggestion import stream_response
-    from services.llm import LLMUnavailableError, lyric_cycler
-    from utils import extract_json_block
-
     week_key = dt_date.today().strftime("%G-W%V")
 
     # Fetch meals from the last 7 calendar days
@@ -236,11 +201,11 @@ async def log_meal(body: MealLog, user_id: int = Depends(require_user)):
 
 @router.delete("/old", status_code=200)
 async def delete_old_meals(user_id: int = Depends(require_user)):
-    """Delete meal history entries older than 1 year for the current user."""
+    """Delete the current user's meals older than one month (the window the patterns look at)."""
     async with get_db() as db:
         cursor = await db.execute(
-            "DELETE FROM meal_history WHERE user_id = ? AND logged_at < datetime('now', '-1 year')",
-            (user_id,),
+            "DELETE FROM meal_history WHERE user_id = ? AND logged_at < datetime('now', ?)",
+            (user_id, f"-{PATTERN_DAYS} days"),
         )
         await db.commit()
         return {"deleted": cursor.rowcount}
@@ -292,22 +257,3 @@ async def delete_meal(meal_id: int, user_id: int = Depends(require_user)):
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Meal not found")
 
-
-@router.patch("/{meal_id}/rating", response_model=Meal)
-async def rate_meal(meal_id: int, body: MealRating, user_id: int = Depends(require_user)):
-    """Rate a meal thumbs-up (5) or thumbs-down (1)."""
-    if body.rating not in (1, 5):
-        raise HTTPException(status_code=400, detail="Rating must be 1 (down) or 5 (up)")
-    async with get_db() as db:
-        cursor = await db.execute(
-            "UPDATE meal_history SET rating = ? WHERE id = ? AND user_id = ?",
-            (body.rating, meal_id, user_id),
-        )
-        await db.commit()
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Meal not found")
-        async with db.execute(
-            "SELECT * FROM meal_history WHERE id = ? AND user_id = ?",
-            (meal_id, user_id),
-        ) as cur:
-            return row_to_meal(await cur.fetchone())

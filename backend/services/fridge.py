@@ -2,7 +2,7 @@
 Fridge check — which ingredients of a suggested meal are not in the user's fridge.
 
 Plain code, not the LLM: the suggestion pipeline runs this on the draft and
-hands the result to the refine step as a hard rule. Names are compared
+hands the result to the reviser (the revise step) as a hard rule. Names are compared
 exactly (same_name: case, Turkish letters and simple plurals aside), because
 an extra or missing word can name another product: "Cheese" isn't "White
 cheese" and "Olives" isn't "Olive oil". A prepared item is a dish: "Poached

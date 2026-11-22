@@ -41,7 +41,7 @@ describe('FavoritesPanel readiness', () => {
     render(<FavoritesPanel visible />)
     expect((await screen.findByText('Menemen Plate')).nextSibling).toHaveTextContent('#1')
     expect(screen.getByText('Avocado Toast').nextSibling).toHaveTextContent('#2')
-    expect(screen.getByText('break FAST').nextSibling).toHaveTextContent('Favorites')
+    expect(screen.getByRole('img', { name: 'break FAST' }).nextSibling).toHaveTextContent('Favorites')
   })
 
   // A rename to another favorite's name is refused by the server: the editor stays open with the

@@ -32,10 +32,6 @@ export const panelHeader = {
   flexShrink: 0,
 }
 
-export const prepTimeLabel = {
-  fontSize: 14,
-}
-
 export const prepTimeInput = {
   width: 40,
   background: 'var(--surface2)',

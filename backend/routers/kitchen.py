@@ -7,12 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from auth import require_user
 from database import get_db
-from models.kitchen import (
-    KITCHEN_APPLIANCES,
-    DEFAULT_ENABLED_KEYS,
-    VALID_APPLIANCE_KEYS,
-    KitchenToggle,
-)
+from models.kitchen import DEFAULT_ENABLED_KEYS, KITCHEN_APPLIANCES, VALID_APPLIANCE_KEYS, KitchenToggle
 
 router = APIRouter(prefix="/kitchen", tags=["kitchen"])
 

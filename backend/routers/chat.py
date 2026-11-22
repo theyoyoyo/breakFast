@@ -1,7 +1,7 @@
 """
 /chat WebSocket endpoint.
 Handles streaming conversation with context loading from DB.
-Parses JSON meal blocks from LLM responses and auto-logs meals.
+A Suggest press runs the suggestion pipeline and saves its meal to suggested_meals.
 Messages are persisted to chat_messages table for session continuity.
 Each open socket is registered in services/chat_sync, so a saved reply reaches the user's other devices.
 """
@@ -9,17 +9,21 @@ Each open socket is registered in services/chat_sync, so a saved reply reaches t
 import json
 import logging
 import uuid
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
+from auth import SOCKET_AUTH_PROTOCOL, get_user_id_from_token, socket_token
 from database import get_db
-from auth import get_user_id_from_token
-from services.llm import LLMUnavailableError, lyric_cycler
-from services.suggestion import build_chat_prompt, stream_response
+from db_helpers import owns_session
+from models.limits import CHAT_MESSAGE_MAX, SESSION_ID_MAX
+from models.units import count_unit
+from services import chat_sync
+from services.chat_block import CHAT_SUGGEST_TEXTS, chat_history, drop_meal_block, load_chat_block
+from services.context import load_chat_context
+from services.llm import LLMUnavailableError, lyric_cycler, stream_response
+from services.personas import build_chat_prompt
 from services.personas.chat import build_chat_message
 from services.pipeline import RETRY_TEXTS, in_language, run_suggestion_pipeline
-from services.context import load_chat_context
-from services.chat_block import CHAT_SUGGEST_TEXTS, chat_history, drop_meal_block, load_chat_block
-from services import chat_sync
-from models.units import count_unit
 from utils import extract_json_block
 
 router = APIRouter()
@@ -30,9 +34,26 @@ SUGGEST_TEMPERATURES = {
     "explore": 0.9,
 }
 
+# The reply to a typed message over the length limit; nothing is saved or sent to the model
+TOO_LONG_TEXTS = {
+    "en": "That message is too long for me to read. Could you send a shorter one?",
+    "tr": "Bu mesaj okuyamayacağım kadar uzun. Daha kısa bir mesaj gönderebilir misin?",
+}
+
+
+def _session_id(value) -> str | None:
+    """A session id a client sent, or None when it isn't a string of a sane length."""
+    return value if isinstance(value, str) and len(value) <= SESSION_ID_MAX else None
+
+
+# Shown when the session is deleted (on another device) while its reply is made: nothing is
+# saved, since the session is gone. App text, so English like the rest of the UI.
+SESSION_GONE_TEXT = "This chat is no longer available. Please start a new chat."
+
 
 async def _save_suggestion(db, user_id: int, session_id: str, meal_data: dict, language: str = "en") -> int:
-    """Insert a suggested meal into suggested_meals. Returns the new suggestion's id."""
+    """Insert a suggested meal into suggested_meals. Returns the new suggestion's id.
+    `session_id` is the socket's checked session, one of the user's own (see chat_endpoint)."""
     # Support both old flat format and new menu format
     menu_items = meal_data.get("menu")
     meal_name = meal_data.get("menu_name") or meal_data.get("meal_name", "Unknown")
@@ -88,29 +109,32 @@ async def _save_message(db, session_id: str, user_id: int, role: str, content: s
 
 
 async def _load_session_history(db, session_id: str, user_id: int) -> list[dict]:
-    """Load persisted messages for a session (last 20 for LLM context)."""
+    """Load persisted messages for a session (last 20 for LLM context), oldest first.
+    Sorted by id, the order they were saved in, not by created_at: it counts whole seconds, and
+    a message and its reply are saved in the same second, so by time a reply came before its message."""
     async with db.execute(
         """
         SELECT role, content FROM chat_messages
         WHERE session_id = ? AND user_id = ?
-        ORDER BY created_at DESC LIMIT 20
+        ORDER BY id DESC LIMIT 20
         """,
         (session_id, user_id),
     ) as cur:
         rows = await cur.fetchall()
-    # Reverse to chronological order
+    # Reverse to chat order
     return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
 
 
 @router.websocket("/chat")
-async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
-    # Authenticate via query param: ws://host/chat?token=xxx
-    user_id = get_user_id_from_token(token)
+async def chat_endpoint(websocket: WebSocket):
+    # The token comes in the Sec-WebSocket-Protocol header, never the URL, so it stays out of logs
+    token = socket_token(websocket.scope.get("subprotocols", []))
+    user_id = get_user_id_from_token(token) if token else None
     if user_id is None:
         await websocket.close(code=4001, reason="Invalid or expired token")
         return
 
-    await websocket.accept()
+    await websocket.accept(subprotocol=SOCKET_AUTH_PROTOCOL)
     chat_sync.register(user_id, websocket)
     cached_context: dict | None = None
     session_id: str | None = None
@@ -135,23 +159,44 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                 payload = json.loads(raw)
             except json.JSONDecodeError:
                 payload = {"message": raw}
+            # Valid JSON that isn't an object (123, "hi", [1]) is plain text too
+            if not isinstance(payload, dict):
+                payload = {"message": raw}
 
             # Handle session management messages
+            # (a session id, mode or type that isn't a string is ignored: it would crash a lookup;
+            # so is a session that isn't the user's own, and the current one stays)
             if "session_id" in payload and "message" not in payload:
-                session_id = payload["session_id"]
+                named = _session_id(payload["session_id"])
+                if named:
+                    async with get_db() as db:
+                        if await owns_session(db, named, user_id):
+                            session_id = named
                 continue
 
-            user_message = payload.get("message", "").strip()
+            message_text = payload.get("message", "")
+            user_message = message_text.strip() if isinstance(message_text, str) else ""
             if not user_message:
                 continue
 
             # Determine prompt type: "suggest" uses suggestion persona, default uses chat
             prompt_type = payload.get("type", "chat")
             suggest_mode = payload.get("mode")  # "favorites" or "explore"
+            if not isinstance(prompt_type, str):
+                prompt_type = "chat"
+            if not isinstance(suggest_mode, str):
+                suggest_mode = None
 
-            # Use session_id from payload if provided, otherwise keep current
-            if "session_id" in payload:
-                session_id = payload["session_id"]
+            # Use session_id from payload if provided, otherwise keep current. The message is saved only
+            # in one of the user's own sessions: one that isn't (another user's, one deleted on another
+            # device, or an id over the length limit) falls back to the current session, then to the latest,
+            # so the message still gets its reply. Everything below, the suggestion included, uses this checked id.
+            named = _session_id(payload.get("session_id"))
+            async with get_db() as db:
+                if named and await owns_session(db, named, user_id):
+                    session_id = named
+                elif session_id is not None and not await owns_session(db, session_id, user_id):
+                    session_id = None
 
             # Ensure we have a session
             if session_id is None:
@@ -175,6 +220,12 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                 async with get_db() as db:
                     cached_context = await load_chat_context(db, user_id)
 
+            if len(user_message) > CHAT_MESSAGE_MAX:
+                await send_live({"type": "done", "content": in_language(TOO_LONG_TEXTS, cached_context.get("language", "en"))})
+                if not client_live:
+                    break
+                continue
+
             temperature = SUGGEST_TEMPERATURES.get(suggest_mode) if prompt_type == "suggest" else None
 
             if prompt_type == "suggest":
@@ -184,7 +235,7 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
                     cached_context = await load_chat_context(db, user_id)
                     chat_block = await load_chat_block(db, session_id, user_id)
 
-                # Run 3-step pipeline: draft → analyst review → refine
+                # Run the 3-step pipeline: draft → revise → present
                 response_text = ""
                 try:
                     async for event in run_suggestion_pipeline(
@@ -249,6 +300,15 @@ async def chat_endpoint(websocket: WebSocket, token: str = Query(...)):
             # A Suggest reply's ```json meal block is saved as a suggestion and becomes a new meal card
             meal_data = extract_json_block(response_text) if prompt_type == "suggest" else None
             saved_text = response_text
+            async with get_db() as db:
+                still_owned = await owns_session(db, session_id, user_id)
+            if not still_owned:
+                # The session was deleted while the reply was made: nothing left to save it to
+                await send_live({"type": "error", "code": "session_not_found", "message": SESSION_GONE_TEXT})
+                session_id = None
+                if not client_live:
+                    break
+                continue
             if meal_data:
                 async with get_db() as db:
                     suggestion_id = await _save_suggestion(db, user_id, session_id, meal_data, cached_context.get("language", "en"))

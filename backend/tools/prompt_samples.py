@@ -46,7 +46,6 @@ from models.kitchen import KITCHEN_APPLIANCES
 from models.units import count_unit
 from services.fridge import same_name
 
-
 # A usual home kitchen (#188)
 _HOME = {"Stove", "Oven", "Toaster", "Kettle", "Blender", "Sandwich Press"}
 

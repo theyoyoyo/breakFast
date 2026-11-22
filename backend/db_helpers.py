@@ -2,11 +2,10 @@
 Shared database helper functions.
 
 Provides reusable JSON field parsing and serialization used across
-multiple routers (meals, favorites, suggestions).
+multiple routers (meals, favorites, suggestions), and the chat session ownership check.
 """
 
 import json
-
 
 _SENTINEL = object()
 
@@ -38,6 +37,14 @@ def serialize_json_field(value) -> str:
     return json.dumps(serialized, ensure_ascii=False)
 
 
+async def owns_session(db, session_id: str, user_id: int) -> bool:
+    """True when the chat session exists and belongs to the user (session ids come from the client)."""
+    async with db.execute(
+        "SELECT 1 FROM chat_sessions WHERE id = ? AND user_id = ?", (session_id, user_id)
+    ) as cur:
+        return await cur.fetchone() is not None
+
+
 def row_to_meal(row) -> dict:
     """Convert a raw DB row to a dict with JSON list fields decoded."""
     d = dict(row)
@@ -52,6 +59,7 @@ def row_to_meal(row) -> dict:
 def row_to_favorite(row) -> dict:
     """Convert a favorite_meals DB row to a dict with JSON fields decoded."""
     d = dict(row)
+    d.pop("user_id", None)  # the account's id stays on the server
     for field in ("ingredients", "steps"):
         d[field] = parse_json_field(d.get(field), [])
     d["menu_items"] = parse_json_field(d.get("menu_items"), None)

@@ -1,4 +1,4 @@
-import { panelContainer, panelBody, secondaryColor, subPageHeader, subPageBackBtn } from '../styles/common'
+import { panelContainer, panelBody, subPageHeader, subPageBackBtn } from '../styles/common'
 
 export const container = panelContainer
 
@@ -96,7 +96,7 @@ export const scoreGrid = {
   gap: 8,
 }
 
-export const scoreCard = (score) => ({
+export const scoreCard = () => ({
   background: 'var(--surface2)',
   borderRadius: 10,
   padding: '12px 12px 10px',
@@ -116,7 +116,7 @@ export const scoreLabel = {
 export const scoreValue = (score) => ({
   fontSize: 28,
   fontWeight: 800,
-  color: score >= 80 ? 'var(--accent)' : score >= 60 ? '#f0a500' : '#e74c3c',
+  color: score >= 80 ? 'var(--accent)' : score >= 60 ? 'var(--c-score-mid)' : 'var(--c-red)',
   lineHeight: 1,
 })
 

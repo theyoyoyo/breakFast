@@ -1,4 +1,6 @@
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -16,7 +18,18 @@ OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "150"))
 # (Ollama refuses the field for a model that can't think).
 OLLAMA_THINK = {"true": True, "false": False}.get(os.getenv("OLLAMA_THINK", "").strip().lower())
 
-DATABASE_PATH = os.getenv("DATABASE_PATH", "./breakFAST.db")
+
+def resolve_database_path(value: str) -> str:
+    """The database file's full path. A relative one counts from this folder (backend/),
+    not from the folder the program was started in: started elsewhere, the server or the
+    admin CLI would otherwise open a new, empty database there."""
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = Path(__file__).resolve().parent / path
+    return os.path.abspath(path)
+
+
+DATABASE_PATH = resolve_database_path(os.getenv("DATABASE_PATH") or "./breakFAST.db")
 
 _cors_raw = os.getenv("CORS_ORIGINS", "*")
 CORS_ORIGINS = [o.strip() for o in _cors_raw.split(",") if o.strip()]
@@ -25,6 +38,9 @@ CORS_ORIGINS = [o.strip() for o in _cors_raw.split(",") if o.strip()]
 CORS_ALLOW_CREDENTIALS = "*" not in CORS_ORIGINS
 
 SERVE_FRONTEND = os.getenv("SERVE_FRONTEND", "").lower() in ("1", "true", "yes")
+
+# Serve FastAPI's /docs, /redoc and /openapi.json (off by default)
+API_DOCS = os.getenv("API_DOCS", "").lower() in ("1", "true", "yes")
 
 # Create a "demo" user with an empty PIN on startup (for trying the app locally)
 DEMO_USER = os.getenv("DEMO_USER", "").lower() in ("1", "true", "yes")

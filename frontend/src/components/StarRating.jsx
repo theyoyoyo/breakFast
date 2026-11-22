@@ -7,7 +7,7 @@
  *   onChange  — (newValue) => void
  *   size      — star font size (default 22)
  *   numSize   — number label font size (default 10)
- *   activeColor — color for lit stars (default '#f5a623')
+ *   activeColor — color for lit stars (default 'var(--c-star)')
  *   style     — optional container style override
  */
 export default function StarRating({
@@ -16,7 +16,7 @@ export default function StarRating({
   onChange,
   size = 22,
   numSize = 10,
-  activeColor = '#f5a623',
+  activeColor = 'var(--c-star)',
   style,
 }) {
   return (

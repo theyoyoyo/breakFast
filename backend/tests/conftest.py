@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import aiosqlite
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 
 @pytest.fixture(autouse=True)
@@ -52,7 +52,7 @@ async def client(tmp_path, monkeypatch):
     await database.init_db()
 
     # Create a test user
-    from auth import hash_pin, create_token
+    from auth import create_token, hash_pin
 
     async with aiosqlite.connect(db_path) as db:
         await db.execute(

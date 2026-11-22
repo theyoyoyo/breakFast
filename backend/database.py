@@ -7,16 +7,23 @@ Usage in routers:
         await db.commit()
 """
 
-import aiosqlite
+import logging
+import sqlite3
 from contextlib import asynccontextmanager
+from datetime import datetime
+from pathlib import Path
+
+import aiosqlite
 
 from config import DATABASE_PATH, DEMO_USER
 from models.ingredient import DEMO_FRIDGE
 from services.ingredient_groups import regroup_once
 
+logger = logging.getLogger(__name__)
+
 
 # ---------------------------------------------------------------------------
-# Schema — all tables in one executescript call
+# Schema — what a brand-new database gets (older ones reach it through MIGRATIONS)
 # ---------------------------------------------------------------------------
 
 _SCHEMA = """
@@ -24,8 +31,10 @@ CREATE TABLE IF NOT EXISTS users (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT    NOT NULL UNIQUE,
     pin_hash    TEXT    NOT NULL,
+    -- Reserved for admin-only features: no endpoint checks it today.
     is_admin    INTEGER NOT NULL DEFAULT 0,
-    created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    last_expiry_check TEXT
 );
 
 CREATE TABLE IF NOT EXISTS ingredient_inventory (
@@ -252,207 +261,371 @@ CREATE INDEX IF NOT EXISTS idx_weekly_summaries_user_week ON weekly_summaries(us
 
 @asynccontextmanager
 async def get_db():
-    """Async context manager that yields an open, row-factory-enabled connection."""
+    """Async context manager that yields an open, row-factory-enabled connection with
+    foreign keys enforced (SQLite leaves them off unless each connection asks)."""
     db = await aiosqlite.connect(DATABASE_PATH)
     db.row_factory = aiosqlite.Row
     try:
+        await db.execute("PRAGMA foreign_keys = ON")
         yield db
     finally:
         await db.close()
 
 
+# ---------------------------------------------------------------------------
+# Migrations
+# ---------------------------------------------------------------------------
+# Numbered steps, run in order, each in one transaction together with its
+# PRAGMA user_version, so a step is applied whole or not at all. A step that fails
+# stops the start with its message. A brand-new database gets _SCHEMA and the latest
+# number at once and runs no step.
+#
+# To change the schema: update _SCHEMA and add a step at the end of MIGRATIONS.
+# Never edit or renumber a step that has shipped. Add columns with _add_column:
+# step 2 creates missing tables from today's _SCHEMA, so on an old database a later
+# step can find its column already there.
+
+# Group names from before the English ones
+_GROUP_RENAMES = {
+    # Historical renames (pre-English migration)
+    "🧀 Şarküteri": "🐄 Animal Products",
+    "🥬 Sebze/Meyve": "🥬 Produce",
+    "🌿 Baharatlar": "🧂 Spices",
+    "📦 Diğer": "🍽️ Other",
+    # Turkish → English
+    "🐄 Hayvansal": "🐄 Animal Products",
+    "🥬 Sebze Meyve": "🥬 Produce",
+    "🍞 Ekmekler": "🍞 Breads",
+    "🍯 Tatlılar": "🍯 Sweets",
+    "🫒 Kahvaltılık": "🫒 Breakfast Staples",
+    "🥜 Kuruyemişler": "🥜 Nuts & Seeds",
+    "🌱 Bitkisel": "🌱 Plant-Based",
+    "☕ İçecekler": "☕ Beverages",
+    "🧂 Baharatlar": "🧂 Spices",
+    "🍽️ Diğer": "🍽️ Other",
+}
+
+# Columns added after their table, in the order they arrived: (table, column, definition)
+_LEGACY_COLUMNS = [
+    ("health_rules", "priority",
+     "TEXT NOT NULL DEFAULT 'high' CHECK (priority IN ('low', 'high', 'critical'))"),
+    ("meal_history", "cached_nutrition", "TEXT"),
+    ("ingredient_inventory", "expiry_date", "TEXT"),
+    ("ingredient_inventory", "expiry_acknowledged", "INTEGER NOT NULL DEFAULT 0"),
+    ("ingredient_inventory", "group_name", "TEXT NOT NULL DEFAULT '🍽️ Other'"),
+    ("ingredient_group_memory", "picked", "INTEGER NOT NULL DEFAULT 0"),
+    ("users", "last_expiry_check", "TEXT"),
+    ("meal_history", "menu_items", "TEXT"),
+    ("suggested_meals", "menu_items", "TEXT"),
+    ("favorite_meals", "menu_items", "TEXT"),
+    ("user_profiles", "country", "TEXT"),
+    ("chat_sessions", "selected_message_id", "INTEGER"),
+    ("chat_messages", "ate_draft", "TEXT"),
+]
+
+
+async def _columns(db, table: str) -> set[str]:
+    """The names of a table's columns (empty when the table doesn't exist)."""
+    async with db.execute(f"PRAGMA table_info({table})") as cur:
+        return {row[1] for row in await cur.fetchall()}
+
+
+async def _add_column(db, table: str, column: str, definition: str) -> None:
+    """Add a column unless the table already has it."""
+    if column not in await _columns(db, table):
+        await db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
+async def _run_script(db, script: str) -> None:
+    """Run a script one statement at a time, inside the open transaction.
+
+    executescript would commit first, which would split a migration step in two.
+    """
+    statement = ""
+    for line in script.splitlines(keepends=True):
+        statement += line
+        if sqlite3.complete_statement(statement):
+            await db.execute(statement)
+            statement = ""
+
+
+async def _legacy_schema(db) -> None:
+    """Bring a database from before the numbered steps up to the schema of step 2.
+
+    These changes used to run on every start, each ALTER in a try that ignored any
+    error. Every change here looks first, so it runs cleanly on a database that has
+    some, all or none of them.
+    """
+    # Tables that arrived later came through CREATE TABLE IF NOT EXISTS
+    await _run_script(db, _SCHEMA)
+
+    # ingredient_inventory once had quantity and unit columns
+    if "quantity" in await _columns(db, "ingredient_inventory"):
+        await db.execute("""
+            CREATE TABLE _ingredient_inventory_new (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     INTEGER NOT NULL REFERENCES users(id),
+                name        TEXT    NOT NULL,
+                added_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+                updated_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(user_id, name)
+            )
+        """)
+        await db.execute("""
+            INSERT OR IGNORE INTO _ingredient_inventory_new (id, user_id, name, added_at, updated_at)
+            SELECT id, user_id, name, added_at, updated_at FROM ingredient_inventory
+        """)
+        await db.execute("DROP TABLE ingredient_inventory")
+        await db.execute("ALTER TABLE _ingredient_inventory_new RENAME TO ingredient_inventory")
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ingredient_inventory_user ON ingredient_inventory(user_id)"
+        )
+
+    for table, column, definition in _LEGACY_COLUMNS:
+        await _add_column(db, table, column, definition)
+
+    for old, new in _GROUP_RENAMES.items():
+        for table in ("ingredient_inventory", "ingredient_group_memory"):
+            await db.execute(f"UPDATE {table} SET group_name = ? WHERE group_name = ?", (new, old))
+
+    # weekly_summaries once allowed one review per week: rebuilt without the UNIQUE, rows kept
+    async with db.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='weekly_summaries'"
+    ) as cur:
+        (table_sql,) = await cur.fetchone()
+    if "UNIQUE" in (table_sql or ""):
+        await db.execute("ALTER TABLE weekly_summaries RENAME TO _weekly_summaries_old")
+        await db.execute("""
+            CREATE TABLE weekly_summaries (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id    INTEGER NOT NULL REFERENCES users(id),
+                week_key   TEXT NOT NULL,
+                narrative  TEXT NOT NULL,
+                scores     TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        await db.execute("""
+            INSERT INTO weekly_summaries (id, user_id, week_key, narrative, scores, created_at)
+            SELECT id, user_id, week_key, narrative, scores, created_at FROM _weekly_summaries_old
+        """)
+        await db.execute("DROP TABLE _weekly_summaries_old")
+        await db.execute(
+            "CREATE INDEX idx_weekly_summaries_user_week ON weekly_summaries(user_id, week_key)"
+        )
+
+
+async def _regroup(db) -> None:
+    """Step 1 (#162): old group memory rows become picks unless they say Other, and Fridge
+    items in Other get the built-in food list's group. Once only: a later Other pick stays.
+
+    This step is older than the numbered list and the columns it reads were added outside
+    it, so a database that never ran it is first brought up to date.
+    """
+    await _legacy_schema(db)
+    await regroup_once(db)
+
+
+# Child rows that must belong to the same user as their parent row: (child, column, parent)
+_SAME_USER_CHILDREN = [
+    ("chat_messages", "session_id", "chat_sessions"),
+    ("suggested_meals", "session_id", "chat_sessions"),
+    ("supplement_daily_log", "supplement_id", "user_supplements"),
+]
+
+
+async def _drop_orphans(db) -> None:
+    """Step 3 (#216): remove rows whose parent row is gone, before foreign keys are enforced.
+
+    Foreign keys used to be off, so a deleted user, a deleted chat or an unchecked id could
+    leave rows nothing points to; nobody can see them. A child row under another user's
+    parent row goes too, since it would block that user's deletes. Removing a row can orphan
+    its own children, so the check runs until it finds nothing.
+    """
+    for child, column, parent in _SAME_USER_CHILDREN:
+        await db.execute(
+            f"DELETE FROM {child} WHERE EXISTS (SELECT 1 FROM {parent} p "
+            f"WHERE p.id = {child}.{column} AND p.user_id != {child}.user_id)"
+        )
+    while True:
+        async with db.execute("PRAGMA foreign_key_check") as cur:
+            orphans = [(row[0], row[1]) for row in await cur.fetchall()]
+        if not orphans:
+            return
+        for table, rowid in orphans:
+            await db.execute(f"DELETE FROM {table} WHERE rowid = ?", (rowid,))
+
+
+# (number, what it does, step). The number is the PRAGMA user_version once the step has run.
+MIGRATIONS = [
+    (1, "group picks and the built-in food list", _regroup),
+    (2, "tables and columns added before the numbered steps", _legacy_schema),
+    (3, "rows left without their parent row", _drop_orphans),
+]
+
+
+async def _user_version(db) -> int:
+    async with db.execute("PRAGMA user_version") as cur:
+        (version,) = await cur.fetchone()
+    return version
+
+
+async def _is_empty(db) -> bool:
+    """True for a brand-new database: it has no tables yet."""
+    async with db.execute(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+    ) as cur:
+        (tables,) = await cur.fetchone()
+    return tables == 0
+
+
+# Backups taken before pending steps: "<database name>_before_migration_<time>_v<version>.db"
+# beside the database, the newest few kept
+_MIGRATION_BACKUP_MARK = "_before_migration_"
+MIGRATION_BACKUPS_KEPT = 3
+# SQLite's own check of the backup file: "ok" when it's sound, else the first problem
+_BACKUP_CHECK = "PRAGMA integrity_check(1)"
+
+
+async def _database_file(db) -> Path | None:
+    """The file behind a connection (None for a database in memory)."""
+    async with db.execute("PRAGMA database_list") as cur:
+        for _, name, file in await cur.fetchall():
+            if name == "main" and file:
+                return Path(file)
+    return None
+
+
+async def _backup_before_migration(db, version: int) -> Path | None:
+    """Copy the database as it is now, before a pending step changes it.
+
+    A step that runs cleanly can still be wrong, and its transaction is gone by then, so
+    this copy is the way back. SQLite's backup API takes a consistent snapshot, writes
+    still in the WAL included. A backup that can't be made or read back stops the start:
+    migrating without one is the risk this is here for.
+    """
+    src = await _database_file(db)
+    if src is None:
+        return None
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    dst = src.with_name(f"{src.stem}{_MIGRATION_BACKUP_MARK}{stamp}_v{version}.db")
+    dst.unlink(missing_ok=True)
+    async with aiosqlite.connect(dst) as backup:
+        await db.backup(backup)
+        # One self-contained file, so the backup needs no -wal beside it
+        await backup.execute("PRAGMA journal_mode=DELETE")
+        async with backup.execute(_BACKUP_CHECK) as cur:
+            (result,) = await cur.fetchone()
+    if result != "ok":
+        dst.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"The backup before the database migration failed its integrity check ({result}); "
+            "nothing was migrated."
+        )
+    # Printed, not logged, like the start's "Database:" line, so the way back is seen at once
+    print(f"Database backed up to {dst} before migrating from schema version {version}", flush=True)
+
+    # Keep the newest few (the time in the name sorts them)
+    backups = sorted(src.parent.glob(f"{src.stem}{_MIGRATION_BACKUP_MARK}*.db"))
+    for old in backups[:-MIGRATION_BACKUPS_KEPT]:
+        old.unlink(missing_ok=True)
+    return dst
+
+
+async def migrate(db) -> None:
+    """Bring the database to the latest schema. One that is already there is not written to.
+
+    A database with data is backed up once before its first pending step.
+    """
+    latest = MIGRATIONS[-1][0]
+    backed_up = False
+    while True:
+        version = await _user_version(db)
+        if version > latest:
+            logger.warning(
+                "The database is at schema version %s and this code knows up to %s: "
+                "a newer version of the app has opened it.", version, latest,
+            )
+        if version >= latest:
+            return
+
+        if not backed_up and not await _is_empty(db):
+            await _backup_before_migration(db, version)
+            backed_up = True
+
+        # The write lock comes first and the version is read again under it, so two
+        # processes that start together never run a step, or set up a new database, twice.
+        await db.execute("BEGIN IMMEDIATE")
+        target, name = latest, "new database"
+        try:
+            version = await _user_version(db)
+            if await _is_empty(db):
+                await _run_script(db, _SCHEMA)
+            else:
+                pending = [m for m in MIGRATIONS if m[0] > version]
+                if not pending:
+                    await db.rollback()
+                    return
+                target, name, step = pending[0]
+                await step(db)
+            await db.execute(f"PRAGMA user_version = {int(target)}")
+            await db.commit()
+        except Exception as exc:
+            await db.rollback()
+            raise RuntimeError(
+                f"Database migration failed at step {target} ({name}): {exc}. "
+                f"The step was rolled back and the database is still at version {version}."
+            ) from exc
+
+
+class MigrationsPending(RuntimeError):
+    """The database is older than this code and only a server start brings it up to date."""
+
+    def __init__(self, version: int, latest: int):
+        super().__init__(f"the database is at schema version {version} and this version of the app needs {latest}")
+        self.version, self.latest = version, latest
+
+
+async def check_schema() -> None:
+    """For the admin CLI: make sure the database fits this code, without migrating it.
+
+    Migrations, the clean-up of old chats and the demo user belong to the server start
+    alone, so a command run from a newer checkout never changes the database under a
+    running older server. A database with steps pending raises MigrationsPending. Only a
+    brand-new database gets its schema here (no step runs on it), since the set-up guide
+    creates the first user before the first start.
+    """
+    latest = MIGRATIONS[-1][0]
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        if await _is_empty(db):
+            await db.execute("PRAGMA journal_mode=WAL")
+            await migrate(db)
+            return
+        version = await _user_version(db)
+        if version < latest:
+            raise MigrationsPending(version, latest)
+        if version > latest:
+            logger.warning(
+                "The database is at schema version %s and this code knows up to %s: "
+                "a newer version of the app has opened it.", version, latest,
+            )
+
+
+async def describe_database() -> str:
+    """One line for the start's output: which file is open and its schema version."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        version = await _user_version(db)
+    return f"Database: {DATABASE_PATH} (schema version {version})"
+
+
 async def init_db() -> None:
-    """Create all tables if they don't exist. Called once at startup."""
+    """Create or migrate the schema, then do the start-up housekeeping. Called once at the
+    server's start, and only there (the admin CLI uses check_schema)."""
     from auth import hash_pin
 
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("PRAGMA journal_mode=WAL")
-        await db.executescript(_SCHEMA)
-
-        # Migrate: add priority column to health_rules if missing
-        try:
-            await db.execute(
-                "ALTER TABLE health_rules ADD COLUMN priority TEXT NOT NULL DEFAULT 'high' "
-                "CHECK (priority IN ('low', 'high', 'critical'))"
-            )
-        except Exception:
-            pass  # Column already exists
-
-        # Migrate: add cached_nutrition column to meal_history if missing
-        try:
-            await db.execute(
-                "ALTER TABLE meal_history ADD COLUMN cached_nutrition TEXT"
-            )
-        except Exception:
-            pass  # Column already exists
-
-        # Migrate: drop quantity/unit columns from ingredient_inventory
-        async with db.execute("PRAGMA table_info(ingredient_inventory)") as cur:
-            cols = {r[1] for r in await cur.fetchall()}
-        if "quantity" in cols:
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS _ingredient_inventory_new (
-                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id     INTEGER NOT NULL REFERENCES users(id),
-                    name        TEXT    NOT NULL,
-                    added_at    TEXT    NOT NULL DEFAULT (datetime('now')),
-                    updated_at  TEXT    NOT NULL DEFAULT (datetime('now')),
-                    UNIQUE(user_id, name)
-                )
-            """)
-            await db.execute("""
-                INSERT OR IGNORE INTO _ingredient_inventory_new (id, user_id, name, added_at, updated_at)
-                SELECT id, user_id, name, added_at, updated_at FROM ingredient_inventory
-            """)
-            await db.execute("DROP TABLE ingredient_inventory")
-            await db.execute("ALTER TABLE _ingredient_inventory_new RENAME TO ingredient_inventory")
-            await db.execute("CREATE INDEX IF NOT EXISTS idx_ingredient_inventory_user ON ingredient_inventory(user_id)")
-
-        # Migrate: add expiry_date column to ingredient_inventory if missing
-        try:
-            await db.execute(
-                "ALTER TABLE ingredient_inventory ADD COLUMN expiry_date TEXT"
-            )
-        except Exception:
-            pass  # Column already exists
-
-        # Migrate: add expiry_acknowledged column to ingredient_inventory if missing
-        try:
-            await db.execute(
-                "ALTER TABLE ingredient_inventory ADD COLUMN expiry_acknowledged INTEGER NOT NULL DEFAULT 0"
-            )
-        except Exception:
-            pass  # Column already exists
-
-        # Migrate: add group_name column to ingredient_inventory if missing
-        try:
-            await db.execute(
-                "ALTER TABLE ingredient_inventory ADD COLUMN group_name TEXT NOT NULL DEFAULT '🍽️ Diğer'"
-            )
-        except Exception:
-            pass  # Column already exists
-
-        # Migrate: rename old group names to new ones (historical + Turkish → English)
-        _GROUP_RENAMES = {
-            # Historical renames (pre-English migration)
-            "🧀 Şarküteri": "🐄 Animal Products",
-            "🥬 Sebze/Meyve": "🥬 Produce",
-            "🌿 Baharatlar": "🧂 Spices",
-            "📦 Diğer": "🍽️ Other",
-            # Turkish → English
-            "🐄 Hayvansal": "🐄 Animal Products",
-            "🥬 Sebze Meyve": "🥬 Produce",
-            "🍞 Ekmekler": "🍞 Breads",
-            "🍯 Tatlılar": "🍯 Sweets",
-            "🫒 Kahvaltılık": "🫒 Breakfast Staples",
-            "🥜 Kuruyemişler": "🥜 Nuts & Seeds",
-            "🌱 Bitkisel": "🌱 Plant-Based",
-            "☕ İçecekler": "☕ Beverages",
-            "🧂 Baharatlar": "🧂 Spices",
-            "🍽️ Diğer": "🍽️ Other",
-        }
-        for old, new in _GROUP_RENAMES.items():
-            await db.execute(
-                "UPDATE ingredient_inventory SET group_name = ? WHERE group_name = ?",
-                (new, old),
-            )
-            await db.execute(
-                "UPDATE ingredient_group_memory SET group_name = ? WHERE group_name = ?",
-                (new, old),
-            )
-
-        # Migrate: add picked column to ingredient_group_memory if missing
-        try:
-            await db.execute(
-                "ALTER TABLE ingredient_group_memory ADD COLUMN picked INTEGER NOT NULL DEFAULT 0"
-            )
-        except Exception:
-            pass  # Column already exists
-
-        # Migrate once (user_version 1): old group memory rows are marked as picks unless
-        # they say Other, and Fridge items in Other get the built-in food list's group
-        # (#162). It runs once because a later Other pick must stay.
-        async with db.execute("PRAGMA user_version") as cur:
-            (version,) = await cur.fetchone()
-        if version < 1:
-            await regroup_once(db)
-            await db.execute("PRAGMA user_version = 1")
-
-        # Migrate: add last_expiry_check column to users if missing
-        try:
-            await db.execute(
-                "ALTER TABLE users ADD COLUMN last_expiry_check TEXT"
-            )
-        except Exception:
-            pass  # Column already exists
-
-        # Migrate: add menu_items column to meal_history if missing
-        try:
-            await db.execute(
-                "ALTER TABLE meal_history ADD COLUMN menu_items TEXT"
-            )
-        except Exception:
-            pass  # Column already exists
-
-        # Migrate: add menu_items column to suggested_meals if missing
-        try:
-            await db.execute(
-                "ALTER TABLE suggested_meals ADD COLUMN menu_items TEXT"
-            )
-        except Exception:
-            pass  # Column already exists
-
-        # Migrate: add menu_items column to favorite_meals if missing
-        try:
-            await db.execute(
-                "ALTER TABLE favorite_meals ADD COLUMN menu_items TEXT"
-            )
-        except Exception:
-            pass  # Column already exists
-
-        # Migrate: add country column to user_profiles if missing
-        try:
-            await db.execute(
-                "ALTER TABLE user_profiles ADD COLUMN country TEXT"
-            )
-        except Exception:
-            pass  # Column already exists
-
-        # Migrate: add selected_message_id column to chat_sessions if missing
-        try:
-            await db.execute(
-                "ALTER TABLE chat_sessions ADD COLUMN selected_message_id INTEGER"
-            )
-        except Exception:
-            pass  # Column already exists
-
-        # Migrate: add ate_draft column to chat_messages if missing
-        try:
-            await db.execute(
-                "ALTER TABLE chat_messages ADD COLUMN ate_draft TEXT"
-            )
-        except Exception:
-            pass  # Column already exists
-
-        # Migrate: recreate weekly_summaries without UNIQUE constraint (allow multiple per week)
-        async with db.execute(
-            "SELECT sql FROM sqlite_master WHERE type='table' AND name='weekly_summaries'"
-        ) as cur:
-            ws_row = await cur.fetchone()
-        if ws_row and "UNIQUE" in (ws_row[0] or ""):
-            await db.execute("DROP TABLE IF EXISTS weekly_summaries")
-            await db.executescript("""
-                CREATE TABLE IF NOT EXISTS weekly_summaries (
-                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id    INTEGER NOT NULL REFERENCES users(id),
-                    week_key   TEXT NOT NULL,
-                    narrative  TEXT NOT NULL,
-                    scores     TEXT NOT NULL,
-                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-                );
-                CREATE INDEX IF NOT EXISTS idx_weekly_summaries_user_week
-                    ON weekly_summaries(user_id, week_key);
-            """)
+        await migrate(db)
 
         # Clean up chat sessions older than 8 days
         await db.execute(

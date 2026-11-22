@@ -1,7 +1,31 @@
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+/* Tailwind CSS v4 without its base reset (preflight), so today's inline-styled buttons, headings and
+   lists look as they did; the reset comes in with the shared ui/ components. Utilities read the tokens
+   below through @theme (bg-surface, text-fg-muted, border-line, text-accent …), and `dark:` follows the
+   Appearance setting (data-mode on <html>), not only the device. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@custom-variant dark (&:where([data-mode="dark"], [data-mode="dark"] *));
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface2);
+  --color-fg: var(--text);
+  --color-fg-muted: var(--text-muted);
+  --color-line: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent2);
+  --color-secondary: var(--secondary);
+  --color-secondary-soft: var(--secondary-soft);
+  --color-bubble: var(--bubble);
+  --color-danger: var(--c-danger);
+  --color-danger-strong: var(--c-danger-strong);
+  --color-success: var(--c-success-text);
+  --color-warning: var(--c-gold-text);
+  --radius-app: var(--radius);
+  --font-app: var(--font);
 }
 
 :root {
@@ -22,6 +46,37 @@
   --border: #2a2a4a;
   --radius: 12px;
   --font: 'Inter', system-ui, sans-serif;
+  /* Date inputs draw their picker in this scheme (colorScheme in the style files); the page itself sets
+     none in dark, as before, so selects and scrollbars keep their look */
+  --scheme: dark;
+
+  /* Semantic colors (styles/common.js `colors`): they follow light and dark, never the accent theme.
+     Red deletes or warns, yellow is missing or expiring, green is ready or done. */
+  --c-success: #2d4a35;            /* soft green fill */
+  --c-success-border: #4a7c59;
+  --c-success-text: #8bc59a;
+  --c-gold: #4a3a10;               /* soft yellow fill */
+  --c-gold-border: #b8922a;
+  --c-gold-text: #e8c84a;
+  --c-star: #f5a623;
+  --c-error: #e76f51;
+  --c-danger: #ec7063;             /* red text and icons */
+  --c-danger-strong: #b83b30;      /* red fill under white text */
+  --c-red: #e74c3c;                /* expired, required, a staple's heart */
+  --c-warn: #e67e22;               /* expiring soon */
+  --c-green: #2ecc71;
+  --c-green-strong: #27ae60;       /* green fill under white text */
+  --c-purple: #a970c9;             /* staples */
+  --c-purple-soft: #b07cc8;
+  --c-sometimes: #4a3d20;
+  --c-sometimes-text: #d4a94a;
+  --c-score-mid: #f0a500;
+  --c-priority-top: #f1948a;
+  --c-edit-bg: #2a3a4a;
+  --c-edit-border: #3d5060;
+  --c-edit-text: #c0d0e0;
+  --c-on-status: #1a1a2e;          /* text on a filled green or yellow chip */
+  --knob-off: #ffffff;             /* an off toggle's knob, visible on --surface2 */
 }
 
 /* Theme setting (Settings → Theme). Only the accent colors change; orange is the default above.
@@ -78,46 +133,146 @@
   --dish-4: #72c3fe;
 }
 
-html, body, #root {
-  height: 100%;
-  height: 100dvh;
-  overflow-x: hidden;
-  overflow-y: hidden;
+/* Light mode (Settings → Appearance: Light, or Auto on a light device). data-mode on <html> is set before
+   the first paint (main.jsx, utils/appearance.js); without it the page is dark as above.
+   Neutrals are warm and soft (a morning app: oat page, cream panels, no stark white), text passes WCAG AA on every surface. Each theme keeps its hues: the accent is
+   darkened in OKLCH until it passes AA on the page, the panels and the bubble; the bubble is a pale tint
+   of the accent; dish colors are the dark mode's hues darkened to AA on the bubble. --secondary is the
+   same in both modes (white text on it passes AA). */
+:root[data-mode="light"] {
+  color-scheme: light;
+  --scheme: light;
+  --bg: #f5ede0;          /* warm oat page */
+  --surface: #fdf8f0;     /* soft cream panels, never stark white */
+  --surface2: #f2e9db;
+  --text: #2a2420;        /* warm near-black */
+  --text-muted: #665c52;
+  --border: #e2d6c3;
+  --accent: #9d5300;
+  --accent2: #fec0af;
+  --bubble: #fce4d3;
+  --dish-1: #9d5300;
+  --dish-2: #1d7634;
+  --dish-3: #046e9e;
+  --dish-4: #934d92;
+
+  --c-success: #dcefe1;
+  --c-success-border: #7fb08e;
+  --c-success-text: #3a754c;
+  --c-gold: #f6ecc4;
+  --c-gold-border: #b8922a;
+  --c-gold-text: #7e6800;
+  --c-star: #b87a05;
+  --c-error: #b64326;
+  --c-danger: #b84137;
+  --c-danger-strong: #b83b30;
+  --c-red: #c92c20;
+  --c-warn: #a35402;
+  --c-green: #03793d;
+  --c-green-strong: #1e8449;
+  --c-purple: #8a52a9;
+  --c-purple-soft: #88559e;
+  --c-sometimes: #f3e7c9;
+  --c-sometimes-text: #876404;
+  --c-score-mid: #8e6000;
+  --c-priority-top: #a55048;
+  --c-edit-bg: #e1eaf3;
+  --c-edit-border: #9fb4c8;
+  --c-edit-text: #3c6d9a;
+  --c-on-status: #ffffff;
+  --knob-off: #9c9184;
 }
 
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font);
-  font-size: 15px;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
+:root[data-mode="light"][data-theme="green"] {
+  --accent: #696c02;
+  --accent2: #cad99e;
+  --bubble: #eaecd2;
+  --dish-1: #696c02;
+  --dish-2: #00737a;
+  --dish-3: #6c5ea0;
+  --dish-4: #a04a77;
 }
 
-button {
-  cursor: pointer;
-  font-family: inherit;
+:root[data-mode="light"][data-theme="teal"] {
+  --accent: #0f7462;
+  --accent2: #98e3ce;
+  --bubble: #d2f2e8;
+  --dish-1: #0f7462;
+  --dish-2: #51679d;
+  --dish-3: #975274;
+  --dish-4: #975a2d;
 }
 
-input, textarea {
-  font-family: inherit;
+:root[data-mode="light"][data-theme="blue"] {
+  --accent: #57649c;
+  --accent2: #c1cfff;
+  --bubble: #e2e9ff;
+  --dish-1: #57649c;
+  --dish-2: #984f73;
+  --dish-3: #985724;
+  --dish-4: #067560;
 }
 
-a {
-  color: var(--accent);
+:root[data-mode="light"][data-theme="purple"] {
+  --accent: #8b5483;
+  --accent2: #fabcd8;
+  --bubble: #f8e1f4;
+  --dish-1: #8b5483;
+  --dish-2: #9b5316;
+  --dish-3: #1d7540;
+  --dish-4: #0d6ca2;
 }
 
-::-webkit-scrollbar {
-  width: 6px;
-}
+/* Page-wide base rules sit in Tailwind's base layer, so a utility class (p-4, m-2, text-…) wins over
+   them; unlayered CSS would beat every utility. Inline styles still win over both. */
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+  html, body, #root {
+    height: 100%;
+    height: 100dvh;
+    overflow-x: hidden;
+    overflow-y: hidden;
+  }
 
-::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 3px;
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button {
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  input, textarea {
+    font-family: inherit;
+  }
+
+  a {
+    color: var(--accent);
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+  }
 }
 
 @keyframes spin {
@@ -130,5 +285,5 @@ a {
 .logout-btn:hover {
   background: rgba(231, 76, 60, 0.15) !important;
   border-color: rgba(231, 76, 60, 0.45) !important;
-  color: #ec7063 !important;
+  color: var(--c-danger) !important;
 }
