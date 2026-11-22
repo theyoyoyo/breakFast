@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react'
 import { Trash2, Pencil, Plus, X, AlertTriangle, ShoppingCart, Sparkles, Loader, ChevronRight, Heart, CheckSquare, Square } from 'lucide-react'
 import {
   getIngredients, addIngredient, updateIngredient, deleteIngredient,
@@ -149,8 +149,9 @@ function IngredientPanel({ refreshTrigger, visible }) {
   }, [])
 
   // Latest suggestions list, for handlers that finish after a request
+  // (set right after each render commits, before any tap or reply can read it)
   const suggestionsRef = useRef(suggestions)
-  suggestionsRef.current = suggestions
+  useLayoutEffect(() => { suggestionsRef.current = suggestions }, [suggestions])
   // Saves in flight; a reload asked for meanwhile waits for them, so it can't show an older list
   const savingRef = useRef(0)
   const reloadPendingRef = useRef(false)
