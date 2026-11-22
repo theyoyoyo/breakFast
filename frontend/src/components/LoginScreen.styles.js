@@ -10,13 +10,6 @@ export const container = {
   gap: 24,
 }
 
-export const title = {
-  fontSize: 32,
-  fontWeight: 700,
-  color: 'var(--accent)',
-  letterSpacing: '0.02em',
-}
-
 export const form = {
   display: 'flex',
   flexDirection: 'column',

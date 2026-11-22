@@ -5,12 +5,17 @@ Each persona lives in its own file for easier editing and better token usage.
 The suggestion.py module re-exports everything for backward compatibility.
 """
 
-from services.personas.chat import CHAT_TEMPLATE, build_chat_prompt
-from services.personas.dietitian import SUGGESTION_TEMPLATE, MODE_INSTRUCTIONS, build_present_prompt, build_suggestion_prompt
 from services.personas.analyst import ANALYST_TEMPLATE, build_analyst_prompt
+from services.personas.chat import CHAT_TEMPLATE, build_chat_prompt
+from services.personas.dietitian import (
+    MODE_INSTRUCTIONS,
+    SUGGESTION_TEMPLATE,
+    build_present_prompt,
+    build_suggestion_prompt,
+)
 from services.personas.pipeline_analyst import PIPELINE_ANALYST_TEMPLATE, build_pipeline_analyst_prompt
-from services.personas.shopping import SHOPPING_TEMPLATE, build_shopping_prompt
 from services.personas.scheduler import SCHEDULER_TEMPLATE, build_scheduler_prompt, build_scheduler_user_message
+from services.personas.shopping import SHOPPING_TEMPLATE, build_shopping_prompt
 from services.personas.weekly_analyst import WEEKLY_ANALYST_TEMPLATE, build_weekly_analyst_prompt_with_meals
 
 __all__ = [

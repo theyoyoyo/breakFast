@@ -3,14 +3,24 @@
 """
 
 import asyncio
+
 from fastapi import APIRouter, Header, HTTPException, Request, Response
+
 import config
-from database import get_db
 from auth import (
-    hash_pin, verify_pin, needs_rehash, unknown_user_hash, create_token, revoke_token,
-    bearer_token, login_wait, record_login_failure, clear_login_failures,
+    bearer_token,
+    clear_login_failures,
+    create_token,
+    hash_pin,
+    login_wait,
+    needs_rehash,
+    record_login_failure,
+    revoke_token,
+    unknown_user_hash,
+    verify_pin,
 )
-from models.user import UserLogin, TokenOut
+from database import get_db
+from models.user import TokenOut, UserLogin
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

@@ -37,8 +37,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
           cache-dependency-path: backend/requirements*.txt
-      # requirements-dev.txt includes requirements.txt and adds pytest.
+      # requirements-dev.txt includes requirements.txt and adds pytest and ruff.
       - run: pip install -r requirements-dev.txt
+      # Lint rules only (ruff.toml), no formatting; GitHub output marks findings on the PR's lines.
+      - run: python -m ruff check --output-format=github .
       # The tests fake Ollama and use a temporary database per test.
       - run: python -m pytest
 
@@ -53,6 +55,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          # Full history, so a pull request's changed files can be diffed against its base.
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           # The oldest Node LTS still maintained.
@@ -60,5 +64,18 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      # ESLint on the src/ .js and .jsx files this pull request adds or changes only, until
+      # a full pass over the existing files (#220); skipped when there are none.
+      - name: Lint changed files
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git diff -z --name-only --relative --diff-filter=ACMR "origin/$BASE_REF...HEAD" -- 'src/*.js' 'src/*.jsx' > "$RUNNER_TEMP/changed"
+          if [ ! -s "$RUNNER_TEMP/changed" ]; then
+            echo "No changed frontend files to lint."
+            exit 0
+          fi
+          xargs -0 npx eslint < "$RUNNER_TEMP/changed"
       - run: npm test
       - run: npm run build

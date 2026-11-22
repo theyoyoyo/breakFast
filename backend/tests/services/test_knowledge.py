@@ -10,19 +10,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from services.knowledge import (
-    format_ingredients,
     format_history,
-    format_preferences,
-    format_habits,
-    format_health_rules,
-    format_avoid_list,
-    format_behavioral,
-    format_user_profile,
-    format_supplements,
-    format_ingredient_item,
-    format_meal_detail,
     format_history_detailed,
     format_history_for_weekly_review,
+    format_ingredient_item,
+    format_ingredients,
+    format_meal_detail,
 )
 
 
@@ -160,6 +153,7 @@ class TestMealDetailStructured:
 # Today's date reads as an English sentence part, with the country when set
 def test_format_today():
     from datetime import date
+
     from services.knowledge import format_today
     day = date(2026, 10, 27)
     assert format_today(day) == "Tuesday, 27 October 2026"

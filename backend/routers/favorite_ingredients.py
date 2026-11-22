@@ -8,12 +8,20 @@ from pydantic import BaseModel
 
 from auth import require_user
 from database import get_db
+from models.limits import Name
 
 router = APIRouter(prefix="/favorite-ingredients", tags=["favorite-ingredients"])
 
 
+def _public(row) -> dict:
+    """A staple as the app gets it: without the account's id."""
+    d = dict(row)
+    d.pop("user_id", None)
+    return d
+
+
 class FavoriteIngredientCreate(BaseModel):
-    ingredient_name: str
+    ingredient_name: Name
 
 
 @router.get("/")
@@ -23,7 +31,7 @@ async def list_favorite_ingredients(user_id: int = Depends(require_user)):
             "SELECT * FROM favorite_ingredients WHERE user_id = ? ORDER BY ingredient_name",
             (user_id,),
         )
-        return [dict(r) for r in rows]
+        return [_public(r) for r in rows]
 
 
 @router.post("/", status_code=201)
@@ -33,7 +41,7 @@ async def add_favorite_ingredient(
 ):
     name = body.ingredient_name.strip()
     if not name:
-        raise HTTPException(400, "ingredient_name is required")
+        raise HTTPException(422, "ingredient_name is required")
     async with get_db() as db:
         try:
             cur = await db.execute(
@@ -46,7 +54,7 @@ async def add_favorite_ingredient(
         row = await db.execute_fetchall(
             "SELECT * FROM favorite_ingredients WHERE id = ?", (cur.lastrowid,)
         )
-        return dict(row[0])
+        return _public(row[0])
 
 
 @router.delete("/{ingredient_name}")

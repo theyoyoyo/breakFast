@@ -1,6 +1,5 @@
 from pydantic import BaseModel
 
-
 # ---------------------------------------------------------------------------
 # Fixed kitchen appliances — single source of truth.
 # To add a new appliance, append to KITCHEN_APPLIANCES and mirror in frontend.

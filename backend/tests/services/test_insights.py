@@ -3,10 +3,12 @@ Tests for the insights service — aggregate meal history into inferred habits.
 """
 
 import json
+
 import aiosqlite
+
 import database
 from auth import hash_pin
-from services.insights import refresh_insights_for_user, PATTERN_DAYS
+from services.insights import PATTERN_DAYS, refresh_insights_for_user
 
 
 async def _create_test_user(db_path: str, name: str = "testuser") -> int:
@@ -81,7 +83,7 @@ async def test_insights_from_sufficient_history(tmp_path, monkeypatch):
         await db.commit()
 
     count = await refresh_insights_for_user(user_id)
-    assert count >= 2  # at least "already eating enough" + "rarely eaten"
+    assert count >= 1
 
     async with database.get_db() as db:
         async with db.execute(
@@ -92,9 +94,6 @@ async def test_insights_from_sufficient_history(tmp_path, monkeypatch):
 
     frequent = next(d for d in descriptions if "Already eating enough" in d)
     assert "eggs" in frequent.lower()
-
-    gaps = next(d for d in descriptions if "Rarely eaten" in d)
-    assert len(gaps) > 0
 
 
 async def test_refresh_replaces_old_inferred_habits(tmp_path, monkeypatch):
@@ -109,7 +108,7 @@ async def test_refresh_replaces_old_inferred_habits(tmp_path, monkeypatch):
             await _seed_meal(db, user_id, f"Meal {i}", ["eggs", "bread"])
         await db.commit()
 
-    first_count = await refresh_insights_for_user(user_id)
+    await refresh_insights_for_user(user_id)
     second_count = await refresh_insights_for_user(user_id)
 
     async with database.get_db() as db:
@@ -218,32 +217,23 @@ async def test_structured_ingredients_handled(tmp_path, monkeypatch):
     assert "bread" in frequent.lower()
 
 
-async def test_high_rated_patterns_extracted(tmp_path, monkeypatch):
-    """Ingredients from 5-star meals appear in high-rated insight."""
+async def test_no_rarely_eaten_or_high_rated_lines(tmp_path, monkeypatch):
+    """A user with enough meals, some rated 5, gets no "Rarely eaten" and no "High-rated" line."""
     db_path = str(tmp_path / "test.db")
     monkeypatch.setattr(database, "DATABASE_PATH", db_path)
     await database.init_db()
     user_id = await _create_test_user(db_path)
 
     async with database.get_db() as db:
-        await _seed_meal(db, user_id, "Fav 1", ["avocado", "eggs"], rating=5)
-        await _seed_meal(db, user_id, "Fav 2", ["avocado", "tomato"], rating=5)
-        await _seed_meal(db, user_id, "Meh", ["bread", "butter"], rating=1)
-        await _seed_meal(db, user_id, "OK", ["oats", "milk"])
+        for i in range(5):
+            await _seed_meal(db, user_id, f"Meal {i}", ["egg", "salmon", "lentils"], rating=5)
         await db.commit()
 
     await refresh_insights_for_user(user_id)
+    descriptions = await _inferred(user_id)
 
-    async with database.get_db() as db:
-        async with db.execute(
-            "SELECT description FROM user_habits WHERE user_id = ? AND source = 'inferred'",
-            (user_id,),
-        ) as cur:
-            descriptions = [r["description"] for r in await cur.fetchall()]
-
-    rated = next((d for d in descriptions if "High-rated" in d), None)
-    assert rated is not None
-    assert "avocado" in rated.lower()
+    assert any("Already eating enough" in d for d in descriptions)
+    assert not any("Rarely eaten" in d or "High-rated" in d for d in descriptions)
 
 
 # A menu card's flat list is the menu as first suggested; the menu as eaten is what counts
@@ -271,8 +261,6 @@ async def test_menu_items_counted_over_flat_list(tmp_path, monkeypatch):
     assert "spinach (3x)" in frequent
     assert "feta (3x)" in frequent
     assert "salmon" not in frequent and "bread" not in frequent
-    rated = next(d for d in descriptions if "High-rated" in d)
-    assert "eggs" in rated and "salmon" not in rated
 
 
 # A dish is counted by what's in it, never by its own name

@@ -11,11 +11,12 @@ from models.units import unit_sizes, units_for
 from services.knowledge import (
     format_avoid_list,
     format_health_rules,
-    format_user_profile,
-    format_supplements,
     format_history_detailed,
     format_ingredients,
+    format_supplements,
+    format_user_profile,
 )
+
 
 def _lang(language: str) -> str:
     return "Always respond in Turkish." if language != "en" else "Always respond in English."

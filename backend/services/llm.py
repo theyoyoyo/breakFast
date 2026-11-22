@@ -4,16 +4,12 @@ Tries Ollama; if unavailable, raises LLMUnavailableError and callers fall
 back to the next line of FALLBACK_LYRICS.
 """
 
-import httpx
 import json
 from typing import AsyncGenerator
 
-from config import (
-    OLLAMA_BASE_URL,
-    OLLAMA_MODEL,
-    OLLAMA_NUM_CTX,
-)
+import httpx
 
+from config import OLLAMA_BASE_URL, OLLAMA_MODEL, OLLAMA_NUM_CTX
 
 FALLBACK_LYRICS = [
     "Benim aklım ocakta kaldı~",
@@ -79,6 +75,18 @@ async def chat_stream(
         raise LLMUnavailableError(LLM_UNAVAILABLE_MESSAGE)
 
     async for chunk in _ollama_stream(system_prompt, messages, temperature=temperature):
+        yield chunk
+
+
+async def stream_response(
+    system_prompt: str,
+    conversation_history: list[dict],
+    user_message: str,
+    temperature: float | None = None,
+) -> AsyncGenerator[str, None]:
+    """Stream a reply to one user message after the conversation so far."""
+    messages = conversation_history + [{"role": "user", "content": user_message}]
+    async for chunk in chat_stream(system_prompt, messages, temperature=temperature):
         yield chunk
 
 

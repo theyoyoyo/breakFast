@@ -416,7 +416,7 @@ export default function MealEditor({
 
       {showTakenNote && (
         <div style={s.favNote} role="status">
-          "{mealName.trim()}" is already in Favorites. Rename this meal to save it, or edit that favorite in Favorites.
+          &quot;{mealName.trim()}&quot; is already in Favorites. Rename this meal to save it, or edit that favorite in Favorites.
         </div>
       )}
 

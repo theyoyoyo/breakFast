@@ -3,9 +3,11 @@
 All queries are scoped to the authenticated user.
 """
 
-from database import get_db
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Path
+
 from auth import require_user
+from database import get_db
+from models.limits import PREFERENCE_KEY_MAX
 from models.preferences import Habit, HabitCreate, Preference, PreferenceSet
 
 router = APIRouter(prefix="/preferences", tags=["preferences"])
@@ -26,7 +28,11 @@ async def list_preferences(user_id: int = Depends(require_user)):
 
 
 @router.put("/{key}", response_model=Preference)
-async def set_preference(key: str, body: PreferenceSet, user_id: int = Depends(require_user)):
+async def set_preference(
+    body: PreferenceSet,
+    key: str = Path(max_length=PREFERENCE_KEY_MAX),
+    user_id: int = Depends(require_user),
+):
     """Upsert a preference. The key comes from the URL; body only carries the value."""
     async with get_db() as db:
         await db.execute(

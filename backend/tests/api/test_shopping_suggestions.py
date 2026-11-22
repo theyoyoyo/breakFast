@@ -1,4 +1,4 @@
-"""Integration tests for POST /ingredients/shopping-suggestions with the LLM call mocked."""
+"""Integration tests for POST /shopping/suggestions/generate with the LLM call mocked."""
 
 import json
 import logging
@@ -13,11 +13,11 @@ def _reply(*names):
 
 
 def _llm(*replies):
-    return patch("services.llm.chat_json", AsyncMock(side_effect=list(replies)))
+    return patch("routers.shopping.chat_json", AsyncMock(side_effect=list(replies)))
 
 
 async def _suggest(client, exclude=None):
-    r = await client.post("/ingredients/shopping-suggestions", json={"exclude": exclude or []})
+    r = await client.post("/shopping/suggestions/generate", json={"exclude": exclude or []})
     assert r.status_code == 200
     return r.json()
 

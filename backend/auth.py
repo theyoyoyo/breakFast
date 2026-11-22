@@ -14,8 +14,8 @@ import math
 import secrets
 import time
 from dataclasses import dataclass
-from fastapi import Header, HTTPException
 
+from fastapi import Header, HTTPException
 
 # In-memory token store: {token_string: user_id}
 _active_tokens: dict[str, int] = {}

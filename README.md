@@ -36,7 +36,7 @@ break FAST knows what is in each person's fridge, which kitchen appliances they 
 - **Weekly nutrition review.** A holistic seven-day review with four scores and a short narrative.
 - **Fridge management.** Ingredient groups (including a pantry for basics and long-life items), expiry tracking, a staples list, a shopping list and AI shopping suggestions.
 - **Health-aware, silently.** Per-user health rules with priorities, a hard *avoid* list, physical profile and supplements taken today all shape suggestions without being lectured back at you.
-- **Learns from behaviour.** Meal history is distilled into inferred habits that push suggestions toward variety, not repetition.
+- **Learns from behaviour.** The last 30 days of meals are distilled into inferred habits: what the user already eats often and their average prep time.
 - **Breakfast chat.** A friendly assistant with persistent chat sessions and voice input (Web Speech API).
 - **Logging and history.** "Today I ate", saved favorite meals, ratings and meal history.
 - **English by default, Turkish optional.** The AI answers in the language you choose; the interface is in English.
@@ -92,7 +92,7 @@ The backend loads each user's context (inventory, recent meals, profile, supplem
 ### Prerequisites
 
 - Python 3.11+
-- Node.js 18+
+- Node.js 22.13+
 - [Ollama](https://ollama.com) (optional: everything except the AI features works without it)
 
 ### Windows quick start
@@ -165,6 +165,8 @@ python manage.py backup-db                             # timestamped copy next t
 
 To restore a backup, stop the backend, delete `breakFAST.db-wal` and `breakFAST.db-shm` if they're there, then copy the backup over `breakFAST.db`. A leftover `-wal` file would be read into the restored database.
 
+When an update changes the database, the backend backs it up by itself before the change, at its next start: `breakFAST_before_migration_<time>_v<version>.db` next to the database, the newest three kept. It is restored the same way. Only the backend's start updates the database: after an update the CLI commands above stop with a message until the backend has started once.
+
 ---
 
 ## Running tests
@@ -174,11 +176,13 @@ To restore a backup, stop the backend, delete `breakFAST.db-wal` and `breakFAST.
 cd backend
 pip install -r requirements-dev.txt
 python -m pytest
+python -m ruff check .          # lint rules in ruff.toml
 
 # Frontend
 cd frontend
 npm test
 npm run build
+npm run lint                    # ESLint; CI lints only a pull request's changed files
 ```
 
 Prompt quality is measured against a real model: `python -m tools.prompt_check` (from `backend/`) runs the suggestion pipeline for sample users and scores every reply in code: JSON, fridge-only, prepared items, units. See [BONUS C in the setup guide](docs/SETUPALL.md#bonus-c--test-prompts-from-another-pc-optional-for-development).
@@ -193,9 +197,10 @@ All backend settings are environment variables, documented in [`.env.example`](.
 |---|---|---|
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server |
 | `OLLAMA_MODEL` | `qwen2.5:7b` | Model used by every persona |
-| `DATABASE_PATH` | `./breakFAST.db` | SQLite file, relative to `backend/` |
+| `DATABASE_PATH` | `./breakFAST.db` | SQLite file, relative to `backend/` whatever folder the backend or the CLI starts from; the start prints its full path |
 | `CORS_ORIGINS` | `*` | Comma-separated allowed origins |
 | `SERVE_FRONTEND` | `false` | Serve `frontend/dist` from FastAPI |
+| `API_DOCS` | `false` | Serve `/docs`, `/redoc` and `/openapi.json` |
 | `DEMO_USER` | `false` | Create a `demo` user with an empty PIN and a starter fridge |
 
 ---
@@ -225,7 +230,7 @@ breakFast/
 │   ├── routers/           one module per API area (chat WebSocket, meals, fridge, ...)
 │   ├── services/
 │   │   ├── personas/      one file per LLM persona
-│   │   ├── pipeline.py    draft → review → refine suggestion pipeline
+│   │   ├── pipeline.py    draft → revise → present suggestion pipeline
 │   │   ├── context.py     per-user context loaders for prompts
 │   │   ├── insights.py    behavioural pattern extraction
 │   │   └── llm.py         Ollama streaming and lyric fallback

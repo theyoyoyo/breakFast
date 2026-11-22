@@ -7,7 +7,6 @@ import re
 from pathlib import Path
 from typing import Optional
 
-
 # Matches a fenced ```json ... ``` block in LLM output.
 # Captures everything between the fences (not just first {...}) so nested
 # objects/arrays are included.

@@ -1,6 +1,8 @@
-from pydantic import BaseModel, field_validator
 from typing import Optional
 
+from pydantic import BaseModel, field_validator
+
+from models.limits import Name, ShortText
 
 # ---------------------------------------------------------------------------
 # Fixed ingredient groups — single source of truth.
@@ -53,17 +55,17 @@ def _clean_name(name: str | None) -> str | None:
 
 
 class IngredientCreate(BaseModel):
-    name: str
-    expiry_date: Optional[str] = None
-    group_name: Optional[str] = None
+    name: Name
+    expiry_date: Optional[ShortText] = None
+    group_name: Optional[ShortText] = None
 
     _trim_name = field_validator("name")(_clean_name)
 
 
 class IngredientUpdate(BaseModel):
-    name: Optional[str] = None  # None leaves the name as it is
-    expiry_date: Optional[str] = None
-    group_name: Optional[str] = None
+    name: Optional[Name] = None  # None leaves the name as it is
+    expiry_date: Optional[ShortText] = None
+    group_name: Optional[ShortText] = None
 
     _trim_name = field_validator("name")(_clean_name)
 
