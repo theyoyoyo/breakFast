@@ -161,7 +161,7 @@ export const addBtn = {
 export const doneBtn = {
   margin: '8px 16px 12px',
   padding: '10px 16px',
-  background: '#27ae60',
+  background: 'var(--c-green-strong)',
   color: '#fff',
   border: 'none',
   borderRadius: 8,
@@ -199,7 +199,7 @@ export const bbdInput = {
   color: 'var(--text)',
   fontSize: 11,
   outline: 'none',
-  colorScheme: 'dark',
+  colorScheme: 'var(--scheme)',
 }
 
 export const error = {

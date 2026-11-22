@@ -46,7 +46,7 @@ describe('SettingsPanel', () => {
     const name = await screen.findByPlaceholderText('Supplement name…')
     expect(screen.queryByRole('option', { name: /sometimes/i })).toBeNull()
     fireEvent.change(name, { target: { value: 'Vitamin D' } })
-    fireEvent.click(screen.getAllByRole('button', { name: '+' }).at(-1))
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add' }).at(-1))
     await waitFor(() => expect(api.createSupplement).toHaveBeenCalledWith('Vitamin D', '', 'daily'))
   })
 
@@ -162,6 +162,20 @@ describe('SettingsPanel', () => {
     for (const label of ['Orange', 'Green', 'Teal', 'Blue', 'Purple']) {
       expect(await screen.findByRole('button', { name: label })).toBeInTheDocument()
     }
+  })
+
+  // Appearance (#235): Light paints the page light at once and is saved as the user's preference
+  it('switches the appearance and saves it', async () => {
+    render(<SettingsPanel visible />)
+    const light = await screen.findByRole('button', { name: 'Light' })
+    expect(screen.getByRole('button', { name: 'Auto' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(light)
+    expect(document.documentElement.dataset.mode).toBe('light')
+    expect(light).toHaveAttribute('aria-pressed', 'true')
+    await waitFor(() => expect(api.setPreference).toHaveBeenCalledWith('appearance', 'light'))
+    fireEvent.click(screen.getByRole('button', { name: 'Dark' }))
+    expect(document.documentElement.dataset.mode).toBe('dark')
+    localStorage.clear()
   })
 
   // With nothing removed in the last 7 days the button shows 0 and can't be pressed

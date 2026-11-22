@@ -5,6 +5,7 @@ import {
 } from '../services/api'
 import * as s from './PreferencesPanel.styles'
 import Logo from './Logo'
+import { Plus } from 'lucide-react'
 
 function TagList({ items, onDelete, keyField = 'id', labelField = 'value' }) {
   if (!items.length) return <span style={s.empty}>None yet</span>
@@ -119,7 +120,7 @@ export default function PreferencesPanel() {
               onKeyDown={(e) => e.key === 'Enter' && handleAddPref('fav', newFav, setNewFav)}
               placeholder="Add favorite…"
             />
-            <button style={s.addBtn} onClick={() => handleAddPref('fav', newFav, setNewFav)}>+</button>
+            <button style={s.addBtn} onClick={() => handleAddPref('fav', newFav, setNewFav)} aria-label="Add"><Plus size={16} strokeWidth={3} aria-hidden="true" /></button>
           </div>
         </div>
 
@@ -140,7 +141,7 @@ export default function PreferencesPanel() {
               onKeyDown={(e) => e.key === 'Enter' && handleAddPref('dislike', newDislike, setNewDislike)}
               placeholder="Add dislike…"
             />
-            <button style={s.addBtn} onClick={() => handleAddPref('dislike', newDislike, setNewDislike)}>+</button>
+            <button style={s.addBtn} onClick={() => handleAddPref('dislike', newDislike, setNewDislike)} aria-label="Add"><Plus size={16} strokeWidth={3} aria-hidden="true" /></button>
           </div>
         </div>
 
@@ -161,7 +162,7 @@ export default function PreferencesPanel() {
               onKeyDown={(e) => e.key === 'Enter' && handleAddPref('avoid', newAvoid, setNewAvoid)}
               placeholder="Add avoided ingredient…"
             />
-            <button style={s.addBtn} onClick={() => handleAddPref('avoid', newAvoid, setNewAvoid)}>+</button>
+            <button style={s.addBtn} onClick={() => handleAddPref('avoid', newAvoid, setNewAvoid)} aria-label="Add"><Plus size={16} strokeWidth={3} aria-hidden="true" /></button>
           </div>
         </div>
 
@@ -182,7 +183,7 @@ export default function PreferencesPanel() {
               onKeyDown={(e) => e.key === 'Enter' && handleAddHabit()}
               placeholder="Add habit…"
             />
-            <button style={s.addBtn} onClick={handleAddHabit}>+</button>
+            <button style={s.addBtn} onClick={handleAddHabit} aria-label="Add"><Plus size={16} strokeWidth={3} aria-hidden="true" /></button>
           </div>
         </div>
       </div>

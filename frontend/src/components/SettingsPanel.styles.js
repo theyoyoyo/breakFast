@@ -231,9 +231,9 @@ export const priorityRow = {
 
 // Traffic-light priorities: green = don't really care, yellow = care a lot, red = top priority
 const priorityColors = {
-  low: { bg: 'var(--surface)', color: colors.successText, activeBg: colors.successText, activeColor: '#1a1a2e' },
-  high: { bg: 'var(--surface)', color: colors.goldText, activeBg: colors.goldText, activeColor: '#1a1a2e' },
-  critical: { bg: 'var(--surface)', color: '#f1948a', activeBg: colors.dangerStrong, activeColor: '#fff' },
+  low: { bg: 'var(--surface)', color: colors.successText, activeBg: colors.successText, activeColor: colors.onStatus },
+  high: { bg: 'var(--surface)', color: colors.goldText, activeBg: colors.goldText, activeColor: colors.onStatus },
+  critical: { bg: 'var(--surface)', color: colors.priorityTop, activeBg: colors.dangerStrong, activeColor: '#fff' },
 }
 
 export const priorityBtn = (active, level) => {
@@ -512,3 +512,10 @@ export const oldMealsNote = {
   color: 'var(--text-muted)',
   textAlign: 'center',
 }
+
+// Language: the chosen of two equal options is bold in the accent, the other muted
+export const choiceLabel = (chosen) => ({
+  fontSize: 13,
+  fontWeight: chosen ? 700 : 400,
+  color: chosen ? 'var(--accent)' : 'var(--text-muted)',
+})

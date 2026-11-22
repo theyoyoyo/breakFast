@@ -26,6 +26,6 @@ A version of the app under another name only needs its own `brand.js` (and the n
 
 - The mark is drawn for the project, so its license is the repo's.
 - The lockup's "light" version (dark green name) is for light backgrounds, the "dark" version (cream name) for dark ones; the app uses the dark one until it gets a light mode.
-- Brand colors are fixed: they don't follow the accent theme (Settings → Theme).
+- Brand colors are fixed: they don't follow the accent theme (Settings → Theme), except "FAST" in the app's wordmark, which takes the theme's accent (`var(--accent)` in `Logo.jsx`). The master files keep the brand orange.
 - The favicon leaves out the speed lines, which vanish at 16 px.
 - The monochrome icon (Android themed icons) draws one color with the dome cut out, since only its shape is used.

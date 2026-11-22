@@ -1,4 +1,5 @@
 import { BRAND_NAME, LOCKUP, MARK_SHAPES, MARK_VIEWBOX, PALETTES, WORDMARK } from '../brand/brand'
+import { useMode } from '../hooks/useMode'
 
 function MarkShapes({ palette }) {
   return MARK_SHAPES.map((s, i) => {
@@ -11,10 +12,12 @@ function MarkShapes({ palette }) {
 }
 
 // The app's logo, drawn from src/brand/brand.js: the mark alone, or with `withName` the mark and the
-// wordmark (outlined, so no font loads). `mode` picks the palette for the background it sits on
-// (the app is dark today); the brand colors never follow the accent theme.
-export default function Logo({ height = 32, mode = 'dark', withName = false, title = BRAND_NAME, style }) {
-  const palette = PALETTES[mode] || PALETTES.dark
+// wordmark (outlined, so no font loads). Its palette follows the page's light or dark mode (Appearance),
+// or `mode` when given. In the app "FAST" takes the theme's accent; the mark and "break" keep the brand
+// colors, and the master files (brand/) keep the brand orange.
+export default function Logo({ height = 32, mode, withName = false, title = BRAND_NAME, style }) {
+  const pageMode = useMode()
+  const palette = PALETTES[mode || pageMode] || PALETTES.dark
   const svgProps = {
     height,
     role: 'img',
@@ -30,7 +33,7 @@ export default function Logo({ height = 32, mode = 'dark', withName = false, tit
       <g transform={`translate(${mark.x} ${mark.y})`}><MarkShapes palette={palette} /></g>
       <g transform={`translate(${name.x} ${name.y.toFixed(2)}) scale(${name.scale.toFixed(5)})`}>
         <path d={WORDMARK.first} fill={palette.name} />
-        <path d={WORDMARK.second} fill={palette.nameAccent} />
+        <path d={WORDMARK.second} fill="var(--accent)" />
       </g>
     </svg>
   )

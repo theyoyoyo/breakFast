@@ -14,7 +14,7 @@ from models.kitchen import DEFAULT_ENABLED_KEYS, KITCHEN_APPLIANCES
 from services.shopping import dish_names
 
 # App settings stored as preferences; they're not food preferences, so prompts never see them
-SETTING_KEYS = {"response_language", "theme", "weekly_summary_in_suggestions"}
+SETTING_KEYS = {"response_language", "theme", "appearance", "weekly_summary_in_suggestions"}
 
 
 def _food_preferences(prefs: dict) -> dict:

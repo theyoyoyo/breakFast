@@ -47,7 +47,7 @@ export const note = {
 }
 
 export const error = {
-  color: '#e74c3c',
+  color: 'var(--c-red)',
   fontSize: 14,
   textAlign: 'center',
 }

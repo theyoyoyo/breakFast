@@ -632,12 +632,12 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
                     <div style={{ ...s.row, padding: '7px 16px' }}>
                       <span style={{
                         ...s.name,
-                        color: isExpired(ing.expiry_date) ? 'var(--error, #e74c3c)' : 'var(--text)',
+                        color: isExpired(ing.expiry_date) ? 'var(--c-red)' : 'var(--text)',
                       }}>{ing.name}</span>
                       {ing.expiry_date && (
                         <span style={{
                           ...s.expiryBadge,
-                          color: isExpired(ing.expiry_date) ? 'var(--error, #e74c3c)' : 'var(--text-muted)',
+                          color: isExpired(ing.expiry_date) ? 'var(--c-red)' : 'var(--text-muted)',
                           fontWeight: isExpired(ing.expiry_date) ? 600 : 400,
                         }}>
                           {formatExpiry(ing.expiry_date)}
@@ -653,8 +653,8 @@ const IngredientPanel = forwardRef(function IngredientPanel({ refreshTrigger, vi
                       >
                         <Heart
                           size={12}
-                          fill={favoriteNames.has(ing.name.toLowerCase()) ? '#e74c3c' : 'none'}
-                          color={favoriteNames.has(ing.name.toLowerCase()) ? '#e74c3c' : 'var(--text-muted)'}
+                          fill={favoriteNames.has(ing.name.toLowerCase()) ? 'var(--c-red)' : 'none'}
+                          color={favoriteNames.has(ing.name.toLowerCase()) ? 'var(--c-red)' : 'var(--text-muted)'}
                         />
                       </button>
                       <button

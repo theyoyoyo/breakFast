@@ -46,12 +46,12 @@ test('mark variants for icons', () => {
   expect(markSvgInner({ lines: false })).not.toContain(PALETTES.dark.lines)
 })
 
-// With the name, the Logo adds the outlined wordmark: "break" in the name color, "FAST" in the accent
+// With the name, the Logo adds the outlined wordmark: "break" in the mode's name color, "FAST" in the theme's accent
 test('Logo with the name draws the wordmark in both palettes', () => {
   for (const mode of ['light', 'dark']) {
     const { container, unmount } = render(<Logo withName mode={mode} />)
     const fills = [...container.querySelectorAll('path[fill]')].map((el) => el.getAttribute('fill'))
-    expect(fills).toEqual(expect.arrayContaining([PALETTES[mode].name, PALETTES[mode].nameAccent]))
+    expect(fills).toEqual(expect.arrayContaining([PALETTES[mode].name, 'var(--accent)']))
     unmount()
   }
 })
