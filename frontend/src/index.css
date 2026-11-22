@@ -46,7 +46,9 @@
   --border: #2a2a4a;
   --radius: 12px;
   --font: 'Inter', system-ui, sans-serif;
-  color-scheme: dark;
+  /* Date inputs draw their picker in this scheme (colorScheme in the style files); the page itself sets
+     none in dark, as before, so selects and scrollbars keep their look */
+  --scheme: dark;
 
   /* Semantic colors (styles/common.js `colors`): they follow light and dark, never the accent theme.
      Red deletes or warns, yellow is missing or expiring, green is ready or done. */
@@ -138,6 +140,7 @@
    same in both modes (white text on it passes AA). */
 :root[data-mode="light"] {
   color-scheme: light;
+  --scheme: light;
   --bg: #f3f1eb;
   --surface: #ffffff;
   --surface2: #efece5;

@@ -102,7 +102,7 @@ export const addDateInput = {
   color: 'var(--text)',
   fontSize: 12,
   outline: 'none',
-  colorScheme: 'dark',
+  colorScheme: 'var(--scheme)',
 }
 
 export const addPanelBtn = {
@@ -305,7 +305,7 @@ export const editDateInput = {
   color: 'var(--text)',
   fontSize: 11,
   outline: 'none',
-  colorScheme: 'dark',
+  colorScheme: 'var(--scheme)',
 }
 
 export const editSaveBtn = {
@@ -328,7 +328,7 @@ export const editGroupSelect = {
   color: 'var(--text)',
   fontSize: 11,
   outline: 'none',
-  colorScheme: 'dark',
+  colorScheme: 'var(--scheme)',
   maxWidth: 100,
 }
 
@@ -341,7 +341,7 @@ export const addGroupSelect = {
   color: 'var(--text)',
   fontSize: 12,
   outline: 'none',
-  colorScheme: 'dark',
+  colorScheme: 'var(--scheme)',
 }
 
 export const editCancelBtn = {

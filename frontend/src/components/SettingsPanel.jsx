@@ -135,8 +135,8 @@ export default function SettingsPanel({ visible }) {
       setWeeklySummaryInSuggestions(weeklySummaryPref?.value === 'true')
       const themePref = prefs.find(p => p.key === 'theme')
       if (themePref) setTheme(applyTheme(themePref.value))
-      const appearancePref = prefs.find(p => p.key === 'appearance')
-      if (appearancePref) setAppearance(applyAppearance(appearancePref.value))
+      // Always, like App's login: a user with nothing saved gets Auto, not the last user's choice on this device
+      setAppearance(applyAppearance(prefs.find(p => p.key === 'appearance')?.value))
     } catch {
       setError('Failed to load settings')
     }

@@ -98,7 +98,7 @@ export const shopBtn = {
 export const shopBtnDone = {
   background: 'none',
   border: 'none',
-  color: 'var(--c-green)',
+  color: 'var(--c-green-strong)',
   padding: '3px',
   borderRadius: 4,
   display: 'flex',

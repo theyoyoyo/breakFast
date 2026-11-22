@@ -199,7 +199,7 @@ export const bbdInput = {
   color: 'var(--text)',
   fontSize: 11,
   outline: 'none',
-  colorScheme: 'dark',
+  colorScheme: 'var(--scheme)',
 }
 
 export const error = {
