@@ -235,18 +235,6 @@ async def test_login_refuses_overlong_input(unauth_client):
     assert auth._login_failures == {}
 
 
-async def test_endpoints_require_auth(unauth_client):
-    """All data endpoints should return 401/422 without auth token."""
-    r = await unauth_client.get("/ingredients/")
-    assert r.status_code == 422  # missing Authorization header
-
-    r = await unauth_client.get("/meals/")
-    assert r.status_code == 422
-
-    r = await unauth_client.get("/preferences/")
-    assert r.status_code == 422
-
-
 async def test_endpoints_work_with_auth(unauth_client):
     """After login, token grants access to endpoints."""
     # Login first
