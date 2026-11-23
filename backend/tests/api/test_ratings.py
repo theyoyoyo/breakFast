@@ -23,10 +23,12 @@ async def test_create_rating_default_10(client):
     assert r.json()["rating"] == 10
 
 
+# A second rating for the same product is refused with 409, and the first keeps its score
 async def test_duplicate_product_returns_409(client):
-    await client.post("/ratings/", json={"product_name": "cheese"})
-    r = await client.post("/ratings/", json={"product_name": "cheese"})
+    await client.post("/ratings/", json={"product_name": "cheese", "rating": 4})
+    r = await client.post("/ratings/", json={"product_name": "cheese", "rating": 9})
     assert r.status_code == 409
+    assert [(x["product_name"], x["rating"]) for x in (await client.get("/ratings/")).json()] == [("cheese", 4)]
 
 
 async def test_update_rating(client):
@@ -37,9 +39,13 @@ async def test_update_rating(client):
     assert r2.json()["rating"] == 9
 
 
+# Updating a rating that doesn't exist is refused with 404 and creates or changes nothing
 async def test_update_nonexistent_returns_404(client):
+    await client.post("/ratings/", json={"product_name": "honey", "rating": 7})
+    before = (await client.get("/ratings/")).json()
     r = await client.put("/ratings/9999", json={"rating": 5})
     assert r.status_code == 404
+    assert (await client.get("/ratings/")).json() == before
 
 
 async def test_delete_rating(client):
@@ -52,12 +58,13 @@ async def test_delete_rating(client):
     assert all(item["product_name"] != "bread" for item in listed.json())
 
 
+# A score below 1 or above 10 is refused with 422, on create and on update, and nothing is saved
 async def test_rating_validation_min_max(client):
-    r = await client.post("/ratings/", json={"product_name": "x", "rating": 0})
-    assert r.status_code == 422
-
-    r = await client.post("/ratings/", json={"product_name": "y", "rating": 11})
-    assert r.status_code == 422
+    rid = (await client.post("/ratings/", json={"product_name": "honey", "rating": 7})).json()["id"]
+    for score in (0, 11):
+        assert (await client.post("/ratings/", json={"product_name": "jam", "rating": score})).status_code == 422
+        assert (await client.put(f"/ratings/{rid}", json={"rating": score})).status_code == 422
+    assert [(x["product_name"], x["rating"]) for x in (await client.get("/ratings/")).json()] == [("honey", 7)]
 
 
 async def test_list_returns_all_ratings(client):

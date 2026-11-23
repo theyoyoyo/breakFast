@@ -55,9 +55,12 @@ async def test_delete(client):
 
 @pytest.mark.asyncio
 async def test_delete_not_found(client):
-    """Deleting a non-existent favorite returns 404."""
+    """Deleting a non-existent favorite returns 404 and deletes nothing."""
+    await client.post("/favorites/", json=SAMPLE_MEAL)
+    before = (await client.get("/favorites/")).json()
     r = await client.delete("/favorites/9999")
     assert r.status_code == 404
+    assert (await client.get("/favorites/")).json() == before
 
 
 @pytest.mark.asyncio
@@ -78,9 +81,12 @@ async def test_update(client):
 
 @pytest.mark.asyncio
 async def test_update_not_found(client):
-    """Updating a non-existent favorite returns 404."""
-    r = await client.put("/favorites/9999", json=SAMPLE_MEAL)
+    """Updating a non-existent favorite returns 404, saves nothing and changes no other favorite."""
+    await client.post("/favorites/", json=SAMPLE_MEAL)
+    before = (await client.get("/favorites/")).json()
+    r = await client.put("/favorites/9999", json={**SAMPLE_MEAL, "meal_name": "Another name"})
     assert r.status_code == 404
+    assert (await client.get("/favorites/")).json() == before
 
 
 async def _second_user_auth():
