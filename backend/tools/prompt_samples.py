@@ -36,7 +36,8 @@ PLAN_CASES are menus for the prep plan test, shaped the way the Prep Plan button
 REVIEW_CASES are fixed drafts with items the fridge lacks, sent to the reviser alone (#148): a
 missing dish ingredient another fridge item can replace, one nothing replaces, a fridge item
 written with a cut on either side (big_fridge keeps "Turkey slices"), a favorite's fridge item
-the review must keep, and prep words to fix (#176).
+the review must keep, prep words to fix (#176), and an item nobody eats on its own, served alone
+beside the dish it goes with (#263).
 """
 
 import random
@@ -579,11 +580,12 @@ PLAN_CASES = {
 }
 
 
-def _review(sample: str, name: str, minutes: int, *menu: dict, may_keep: tuple = ()) -> dict:
+def _review(sample: str, name: str, minutes: int, *menu: dict, may_keep: tuple = (), lone: tuple = ()) -> dict:
     """A review case: the sample's user, in the Suggest mode they usually press, and a draft meal in
     the app's format, the way the pipeline hands it to the reviser. `may_keep` names missing items
     the review may keep as written although they contain a fridge name, so they count as still
-    missing, not renamed (#176)."""
+    missing, not renamed (#176). `lone` names the draft's items nobody eats on their own, which the
+    review moves into a dish, serves with another item through a method, or leaves out (#263)."""
     for item in menu:
         if not item.get("method"):  # the draft writes no methods; the reviser does
             item.pop("method", None)
@@ -591,6 +593,7 @@ def _review(sample: str, name: str, minutes: int, *menu: dict, may_keep: tuple =
         **SAMPLES[sample],
         "sample": sample,
         "may_keep": list(may_keep),
+        "lone": list(lone),
         "draft": {"menu": list(menu), "menu_name": name, "description": f"{name} from the fridge.", "prep_time_min": minutes},
     }
 
@@ -627,4 +630,10 @@ REVIEW_CASES = {
                               ("Spinach", 1, "handful", "mixed")),
                         _dish("Jam toast", "", ("Whole wheat bread", 2, "slice"), ("Strawberry jam", 1, "tbsp", "toasted")),
                         _served("Coffee", 1, "glass"), may_keep=("Egg whites", "Smoked cheddar")),
+    # A seasoning served as a menu item of its own beside the dish it flavors, the way a server menu listed cinnamon
+    # (#263); everything is in the fridge, so the code check finds nothing and only the review's own question is left
+    "cinnamon": _review("en", "Oat morning", 10,
+                        _dish("Banana oatmeal", "", ("Oats", 0.5, "glass"), ("Milk", 1, "glass"),
+                              ("Banana", 1, "pcs", "sliced"), ("Honey", 1, "tsp")),
+                        _served("Cinnamon", 1, "tsp"), _served("Tea", 1, "tea glass"), lone=("Cinnamon",)),
 }

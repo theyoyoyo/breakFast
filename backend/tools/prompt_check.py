@@ -36,7 +36,8 @@ Personas, each run for a sample user (tools/prompt_samples.py):
   items the fridge lacks, so the reply shows how the review swaps them (#148): a name it brings
   in that's neither in the fridge nor the draft is flagged (outside), and the note names each
   swap, what stays missing (the review may keep an item nothing replaces), the draft's fridge
-  items it dropped and the prep words it wrote (#176).
+  items it dropped and the prep words it wrote (#176). A case's item nobody eats on its own
+  (`lone`) still served alone with no method is flagged (alone), and the note says where it went (#263).
 - chat: the typed messages of a --scenario (chat by default, or pressed) sent to the chat
   persona one at a time, with the chat so far as history. The chat talks and menus come
   only from a Suggest press (#168), so a reply with food amounts, numbered steps or a
@@ -148,12 +149,16 @@ PERSONAS = {
     },
     "shopping": {"stages": ("suggest", "more"), "problems": ("dish", "vague", "repeat", "turkish")},
     "plan": {"stages": ("plan",), "problems": ("unlisted", "method", "order", "turkish")},
-    "review": {"stages": ("final",), "problems": ("outside", "renamed", "units", "amounts", "avoided", "named", "turkish")},
+    "review": {
+        "stages": ("final",),
+        "problems": ("outside", "renamed", "units", "amounts", "avoided", "named", "turkish", "alone"),
+    },
     "chat": {"stages": CHAT_MESSAGES, "problems": ("food", "amounts", "steps", "block", "turkish")},
 }
 STAGES = PERSONAS["suggest"]["stages"]
 # Bumped when a check changes what counts as clean, so a test is compared only with tests scored the same way
-CHECKS = 6
+# (7 was used by an unmerged branch's tests, so the review's alone check is 8)
+CHECKS = 8
 _TURKISH_LETTERS = set("çğıöşüÇĞİÖŞÜ")
 
 # Shopping names that aren't one specific product: alternatives, examples or filler words
@@ -423,13 +428,36 @@ def check_reply(text: str, sample: dict, scenario: dict | None = None, draft: st
     return result
 
 
+def _item_food(item: dict) -> list[str]:
+    """A menu item's food: its ingredients' names, or its own name for a simple item."""
+    return [str(s.get("name", "")) for s in item.get("ingredients") or [] if isinstance(s, dict)] or [str(item.get("name", ""))]
+
+
+def lone_items(meal: dict, case: dict) -> tuple[list[str], list[str]]:
+    """Where the review put each of the case's items nobody eats on its own (`lone`, #263): flagged when it
+    is still a menu item of its own with no method, so the plan makes it alone, and noted when it moved
+    into a dish. One served alone with a method that says how shows in the simple items note, and one
+    left out as dropped. Only the case names the items, so code needs no food list."""
+    alone, notes = [], []
+    items = [i for i in meal["menu"] if isinstance(i, dict)]
+    for name in case.get("lone", ()):
+        for item in items:
+            food = _item_food(item)
+            if all(same_name(name, f) for f in food):
+                if not str(item.get("method") or "").strip():
+                    alone.append(str(item.get("name")))
+            elif any(same_name(name, f) for f in food):
+                notes.append(f"{name}: in {item.get('name')}")
+    return alone, notes
+
+
 def check_review(text: str, case: dict, draft: str) -> dict:
     """Score the reviser's meal for a review case's fixed draft: check_reply's problems, except that a
     missing item is only noted, since the review may keep one nothing replaces, and a missing name the
     draft didn't have is flagged as brought in from outside the fridge (`outside`). A name the case
     lets the review keep as written (`may_keep`: another item that contains a fridge name, #176) is
     still missing rather than renamed. The note names the swaps, what stays missing and the draft's
-    fridge items the review dropped."""
+    fridge items the review dropped, and where the case's lone items went (lone_items)."""
     result = check_reply(text, case, draft=draft)
     if not result["json"]:
         return _no_json("review")
@@ -443,10 +471,12 @@ def check_review(text: str, case: dict, draft: str) -> dict:
     stocked = [n for n in drafted if n not in find_missing_ingredients(case["draft"], case["ingredients"])]
     dropped = [n for n in stocked if not any(same_name(n, f) for f in final)]
     kept = [m for m in missing if m not in result["issues"]["outside"]] + allowed
+    result["issues"]["alone"], lone = lone_items(meal, case)
     notes = [
         result.get("note", ""),
         "still missing: " + ", ".join(kept) if kept else "",
         "dropped: " + ", ".join(dropped) if dropped else "",
+        *lone,
     ]
     result["note"] = "; ".join(n for n in notes if n)
     if not result["note"]:
