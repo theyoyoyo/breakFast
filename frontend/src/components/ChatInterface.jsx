@@ -123,8 +123,12 @@ function keepUnchangedBlocks(prev, next) {
 export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref) {
   const [messages, setMessages] = useState([WELCOME_MSG])
   const [input, setInput] = useState('')
+  // This device's request on its way (one at a time, in whichever chat it was sent from):
   // null = idle, '' = thinking (no tokens yet), string = streaming content
   const [streamBuffer, setStreamBuffer] = useState(null)
+  // The chat that request belongs to: its reply shows only there, and stays there after a switch
+  const [requestSession, setRequestSession] = useState(null)
+  const requestSessionRef = useRef(null)
   // The reply on its way answers a Suggest press: its progress shows on the user's side
   const [pendingSuggest, setPendingSuggest] = useState(false)
   // New, Delete, Back or Next running: the others wait (their buttons are off) until it's done
@@ -159,9 +163,12 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
   const unmountedRef = useRef(false) // a session check that answers after unmount mustn't reconnect
   const onMealLoggedRef = useRef(onMealLogged)
   const sessionIdRef = useRef(null)
+  // Stop was pressed and the server hasn't confirmed yet: the stopped request's frames are dropped
   const abortedRef = useRef(false)
-  // A stopped Suggest press's meal arrives right after its done: it mustn't become a card
-  const dropMealRef = useRef(false)
+  // The stopped request finished (and was saved) before the server read Stop: reload once confirmed
+  const stoppedLateRef = useRef(false)
+  // A message waiting for the socket to open, so Stop can take it back
+  const queuedSendRef = useRef(null)
   const messagesRef = useRef(messages)
   const analyzeAbortRef = useRef(null)
   const { isListening, startListening, stopListening, supported: voiceSupported } = useVoice()
@@ -319,67 +326,87 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streamBuffer, analyzingIdx, pipelineStep])
 
+  // This device's request has ended: nothing on its way any more
+  const endRequest = useCallback(() => {
+    setStreamBuffer(null)
+    setPendingSuggest(false)
+    setPipelineStep(null)
+    requestSessionRef.current = null
+    setRequestSession(null)
+  }, [])
+
   const ensureSocket = useCallback(() => {
     const state = wsRef.current?.readyState
     if (state === WebSocket.OPEN || state === WebSocket.CONNECTING) return wsRef.current
 
     let opened = false
     const ws = createChatSocket({
-      // Skipped once the reply was stopped; the pipeline step clears when tokens start flowing
+      // Collected in any chat (shown only in the request's own); skipped once the reply was
+      // stopped. The pipeline step clears when tokens start flowing
       onToken: (chunk) => {
-        if (!abortedRef.current) {
-          setPipelineStep(null)
-          setStreamBuffer((prev) => (prev ?? '') + chunk)
-        }
+        if (abortedRef.current) return
+        setPipelineStep(null)
+        setStreamBuffer((prev) => (prev ?? '') + chunk)
       },
-      // messageId is the saved reply's id (lets a card edit save into it)
-      onDone: (full, messageId) => {
+      // messageId is the saved reply's id (lets a card edit save into it); sessionId its chat
+      onDone: (full, messageId, sessionId) => {
         syncLyric(full) // keep client lyric index in sync if this was a fallback lyric
         if (abortedRef.current) {
-          // The stopped reply's own done (the server answers in order), already handled by
-          // handleStop: the meal that may follow it is dropped too, and a message sent since
-          // keeps waiting for its own reply
-          abortedRef.current = false
-          setAborted(false)
-          dropMealRef.current = true
+          // The stopped request ended before the server read Stop, so it was saved: the chat
+          // reloads once Stop is confirmed
+          stoppedLateRef.current = true
           return
         }
-        dropMealRef.current = false
-        setPipelineStep(null)
-        setMessages((prev) => [...prev, { id: messageId, role: 'assistant', content: full }])
-        setPendingSuggest(false)
-        setStreamBuffer(null)
+        const chat = sessionId ?? requestSessionRef.current
+        endRequest()
+        // Saved in its own chat, which shows it when the user goes back there
+        if (chat && chat !== sessionIdRef.current) return
+        // Going back while it came may have loaded it already
+        setMessages((prev) => (messageId != null && prev.some((m) => m.id === messageId)
+          ? prev
+          : [...prev, { id: messageId, role: 'assistant', content: full }]))
       },
-      // A suggested meal: attached to the last assistant message as its card, and selected
-      onMealLogged: (meal) => {
-        if (dropMealRef.current) { dropMealRef.current = false; return } // its reply was stopped
+      // A suggested meal: attached to the last assistant message as its card, and selected, when its
+      // chat is open (else its chat shows it, selected, on the way back); dropped once stopped
+      onMealLogged: (meal, sessionId) => {
+        if (abortedRef.current) return
         const normalized = normalizeMeal(meal)
-        setMessages((prev) => {
-          const lastIdx = prev.length - 1
-          setMealBlocks((blocks) => ({ ...blocks, [lastIdx]: normalized }))
-          setCheckedMealIdx(lastIdx)
-          return prev
-        })
+        if (!sessionId || sessionId === sessionIdRef.current) {
+          setMessages((prev) => {
+            const lastIdx = prev.length - 1
+            setMealBlocks((blocks) => ({ ...blocks, [lastIdx]: normalized }))
+            setCheckedMealIdx(lastIdx)
+            return prev
+          })
+        }
         onMealLoggedRef.current?.(normalized)
+      },
+      // The server has ended the stopped request, so all its frames are in: this device's next
+      // request shows again, and one that had been saved already reloads the chat
+      onStopped: () => {
+        abortedRef.current = false
+        setAborted(false)
+        if (stoppedLateRef.current) {
+          stoppedLateRef.current = false
+          setSyncPending(true)
+        }
       },
       // No error message in the chat: the header already shows "reconnecting…"
       onError: () => {
         if (wsRef.current !== ws) return // an old socket, already replaced
-        setStreamBuffer(null)
-        setPendingSuggest(false)
-        setPipelineStep(null)
+        endRequest()
         setConnected(false)
       },
       // Auto-reconnect with exponential backoff (max 30s).
       // Skipped for a socket already replaced or closed on unmount (wsRef no longer points to it).
       onClose: () => {
         if (wsRef.current !== ws) return
-        setStreamBuffer(null)
-        setPendingSuggest(false)
-        setPipelineStep(null)
+        endRequest()
         setConnected(false)
-        // A stopped reply's done can't arrive on this socket any more
+        // A stopped request's confirmation can't arrive on this socket any more
         abortedRef.current = false
+        stoppedLateRef.current = false
+        queuedSendRef.current = null
         setAborted(false)
         wsRef.current = null
         const reconnect = () => {
@@ -417,7 +444,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     })
     wsRef.current = ws
     return ws
-  }, [refreshNavState])
+  }, [refreshNavState, endRequest])
 
   // Open the socket on mount so other devices' changes arrive; close it on unmount
   useEffect(() => {
@@ -457,8 +484,10 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
 
     setMessages((prev) => [...prev, { role: 'user', content: msg }])
     setInput('')
-    // A stopped reply still on its way stays stopped: its tokens and done are skipped
+    // A stopped request still ending stays stopped: its frames come before this one's
     setPendingSuggest(type === 'suggest')
+    requestSessionRef.current = sessionIdRef.current
+    setRequestSession(sessionIdRef.current)
 
     const payload = { message: msg }
     if (type !== 'chat') payload.type = type
@@ -468,11 +497,17 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     const ws = ensureSocket()
     if (ws.readyState === WebSocket.OPEN) {
       setStreamBuffer('')  // '' = thinking
+      queuedSendRef.current = null
       ws.send(JSON.stringify(payload))
     } else {
       // Backend not connected yet — wait for connection, then send
       setStreamBuffer('')
-      ws.addEventListener('open', () => ws.send(JSON.stringify(payload)), { once: true })
+      const send = () => {
+        queuedSendRef.current = null
+        ws.send(JSON.stringify(payload))
+      }
+      queuedSendRef.current = { ws, send }
+      ws.addEventListener('open', send, { once: true })
     }
   }, [streamBuffer, analyzingIdx, ensureSocket])
 
@@ -483,7 +518,8 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     }
   }
 
-  // Open a chat on screen with its saved messages, and tell the socket which chat is open
+  // Open a chat on screen with its saved messages, and tell the socket which chat is open.
+  // A request on its way stays with its own chat: it shows again when that chat is open.
   const showSession = useCallback((id, msgs) => {
     sessionIdRef.current = id
     setSessionId(id)
@@ -492,8 +528,6 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     setMessages(allMsgs)
     setMealBlocks(blocks)
     setCheckedMealIdx(selectedIndex(allMsgs, blocks))
-    setStreamBuffer(null)
-    setPendingSuggest(false)
     setInput('')
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ session_id: id }))
@@ -567,16 +601,26 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
   }
 
   const handleStop = useCallback(() => {
-    // Stop streaming chat/suggestion: what came so far stays, marked as stopped (on this device
-    // only: the server still finishes the reply and saves it whole). Nothing came: nothing stays.
+    // Stop the request on its way: the server ends its model call and saves no reply (a typed
+    // message stays saved). What came so far stays on screen, marked as stopped, until the chat
+    // reloads; nothing came: nothing stays. Its frames are dropped until the server confirms.
     if (streamBuffer !== null) {
-      abortedRef.current = true
-      setAborted(true)
-      setPipelineStep(null)
-      setPendingSuggest(false)
+      const ws = wsRef.current
+      const queued = queuedSendRef.current
+      if (queued) {
+        // Never sent (the socket hadn't opened): nothing to stop on the server
+        queued.ws.removeEventListener('open', queued.send)
+        queuedSendRef.current = null
+      } else if (ws?.readyState === WebSocket.OPEN) {
+        abortedRef.current = true
+        setAborted(true)
+        ws.send(JSON.stringify({ type: 'stop' }))
+      }
       const partial = stripStreamingJsonBlock(streamBuffer)
-      if (partial) setMessages((msgs) => [...msgs, { role: 'assistant', content: partial, stopped: true }])
-      setStreamBuffer(null)
+      if (partial && requestSessionRef.current === sessionIdRef.current) {
+        setMessages((msgs) => [...msgs, { role: 'assistant', content: partial, stopped: true }])
+      }
+      endRequest()
     }
     // Cancel ongoing analysis
     if (analyzeAbortRef.current) {
@@ -585,7 +629,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       setAnalyzingIdx(null)
       setMessages(prev => [...prev, { role: 'assistant', content: '📊 [Analysis stopped]' }])
     }
-  }, [streamBuffer])
+  }, [streamBuffer, endRequest])
 
   const handleSuggest = useCallback((mode) => {
     sendMessage(SUGGEST_MESSAGES[mode] || SUGGEST_MESSAGES.default, 'suggest', mode || null)
@@ -671,11 +715,13 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     }
   }, [])
 
-  // True when anything is busy (streaming, analyzing, or scheduling)
+  // True when anything is busy (this device's request in any chat, analyzing, or scheduling)
   const isBusy = streamBuffer !== null || analyzingIdx !== null || schedulingIdx !== null
-  // A stopped reply still runs on the server until its done arrives, so a reload waits for that too
-  // and so does a session button still running
-  const syncBusy = isBusy || aborted || sessionBusy
+  // The request on its way belongs to the chat on screen, so its reply shows here
+  const streamHere = streamBuffer !== null && (requestSession === null || requestSession === sessionId)
+  // A reload waits for a reply on its way into this chat, an analysis or a plan, for a stopped
+  // request until the server confirms it ended, and for a session button still running
+  const syncBusy = streamHere || analyzingIdx !== null || schedulingIdx !== null || aborted || sessionBusy
   busyRef.current = syncBusy
 
   // Reload once nothing is in flight, so a streaming reply or an analysis on its way isn't lost
@@ -750,10 +796,10 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
           )
         })}
 
-        {streamBuffer !== null && streamBuffer !== '' && (
+        {streamHere && streamBuffer !== '' && (
           <div style={s.bubble('assistant')}><MarkdownText text={stripStreamingJsonBlock(streamBuffer)} /></div>
         )}
-        {streamBuffer === '' && (
+        {streamHere && streamBuffer === '' && (
           <div style={s.thinking(pendingSuggest ? 'user' : 'assistant')}>{PIPELINE_STEPS[pipelineStep] || 'Thinking…'}</div>
         )}
         {analyzingIdx !== null && (

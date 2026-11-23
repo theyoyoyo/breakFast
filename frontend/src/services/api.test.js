@@ -280,41 +280,46 @@ describe('chat sync API', () => {
     )
   })
 
-  // The chat socket hands done its saved message id and session_updated its session id
+  // The chat socket hands done its saved message id and its chat, and session_updated its session id
   it('passes the done message id and session_updated to their callbacks', () => {
     const sockets = []
     vi.stubGlobal('WebSocket', class { constructor() { sockets.push(this) } })
     const onDone = vi.fn()
     const onSessionUpdated = vi.fn()
     createChatSocket({ onDone, onSessionUpdated })
-    sockets[0].onmessage({ data: JSON.stringify({ type: 'done', content: 'Hi', message_id: 5 }) })
+    sockets[0].onmessage({ data: JSON.stringify({ type: 'done', content: 'Hi', message_id: 5, session_id: 's2' }) })
     sockets[0].onmessage({ data: JSON.stringify({ type: 'session_updated', session_id: 's1' }) })
-    expect(onDone).toHaveBeenCalledWith('Hi', 5)
+    expect(onDone).toHaveBeenCalledWith('Hi', 5, 's2')
     expect(onSessionUpdated).toHaveBeenCalledWith('s1')
     vi.unstubAllGlobals()
   })
 
-  // Each frame type reaches the handler named for it, and the socket's own error and close reach theirs
+  // Each frame type reaches the handler named for it with the reply's chat, and the socket's own error and close reach theirs
   it('routes each frame to its named handler', () => {
     const sockets = []
     vi.stubGlobal('WebSocket', class { constructor() { sockets.push(this) } })
     const handlers = {
-      onToken: vi.fn(), onMealLogged: vi.fn(), onProgress: vi.fn(), onNotice: vi.fn(), onError: vi.fn(), onClose: vi.fn(),
+      onToken: vi.fn(), onMealLogged: vi.fn(), onProgress: vi.fn(), onStopped: vi.fn(),
+      onNotice: vi.fn(), onError: vi.fn(), onClose: vi.fn(),
     }
     createChatSocket(handlers)
     const meal = { menu_name: 'Egg Breakfast', menu: [] }
     for (const frame of [
-      { type: 'token', content: 'Hel' },
-      { type: 'meal_logged', meal },
-      { type: 'progress', step: 'drafting' },
+      { type: 'token', content: 'Hel', session_id: 's1' },
+      { type: 'meal_logged', meal, session_id: 's1' },
+      { type: 'progress', step: 'drafting', session_id: 's1' },
+      { type: 'stopped', session_id: 's1' },
+      { type: 'stopped' },
       { type: 'shopping_suggestions_updated' },
     ]) sockets[0].onmessage({ data: JSON.stringify(frame) })
     sockets[0].onmessage({ data: 'not json' })
     sockets[0].onerror()
     sockets[0].onclose()
-    expect(handlers.onToken).toHaveBeenCalledWith('Hel')
-    expect(handlers.onMealLogged).toHaveBeenCalledWith(meal)
-    expect(handlers.onProgress).toHaveBeenCalledWith('drafting')
+    expect(handlers.onToken).toHaveBeenCalledWith('Hel', 's1')
+    expect(handlers.onMealLogged).toHaveBeenCalledWith(meal, 's1')
+    expect(handlers.onProgress).toHaveBeenCalledWith('drafting', 's1')
+    expect(handlers.onStopped).toHaveBeenCalledWith('s1')
+    expect(handlers.onStopped).toHaveBeenCalledWith(null)
     expect(handlers.onNotice).toHaveBeenCalledTimes(1)
     expect(handlers.onNotice).toHaveBeenCalledWith({ type: 'shopping_suggestions_updated' })
     expect(handlers.onError).toHaveBeenCalledTimes(1)
@@ -328,7 +333,7 @@ describe('chat sync API', () => {
     vi.stubGlobal('WebSocket', class { constructor() { sockets.push(this) } })
     createChatSocket({})
     expect(() => {
-      for (const type of ['token', 'done', 'meal_logged', 'progress', 'session_updated', 'error', 'other']) {
+      for (const type of ['token', 'done', 'meal_logged', 'progress', 'stopped', 'session_updated', 'error', 'other']) {
         sockets[0].onmessage({ data: JSON.stringify({ type }) })
       }
       sockets[0].onerror()
@@ -344,8 +349,8 @@ describe('chat sync API', () => {
     const onDone = vi.fn()
     const onNotice = vi.fn()
     createChatSocket({ onDone, onNotice })
-    sockets[0].onmessage({ data: JSON.stringify({ type: 'error', code: 'session_not_found', message: 'Gone' }) })
-    expect(onDone).toHaveBeenCalledWith('Gone')
+    sockets[0].onmessage({ data: JSON.stringify({ type: 'error', code: 'session_not_found', message: 'Gone', session_id: 's1' }) })
+    expect(onDone).toHaveBeenCalledWith('Gone', undefined, 's1')
     expect(onNotice).not.toHaveBeenCalled()
     vi.unstubAllGlobals()
   })

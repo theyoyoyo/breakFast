@@ -1,7 +1,7 @@
 /**
  * Tests for the main path through the chat: a typed message goes out on the socket and its reply
- * streams in, Stop keeps what came so far with a "Stopped" note (or nothing, when nothing came), an error
- * frame shows as the reply, the chat's sessions switch with Back / Next, start with New and go with Del, one
+ * streams in, Stop tells the server and keeps what came so far with a "Stopped" note (or nothing, when
+ * nothing came), a reply stays in its own chat when the user switches away, an error frame shows as the reply, the chat's sessions switch with Back / Next, start with New and go with Del, one
  * at a time however fast they're tapped; a Suggest press shows only its progress, on the user's side, and
  * then the meal card, selected, which a tap unselects and whose edits are saved with its message.
  * These tests check what the user sees and what reaches the server, not how it looks.
@@ -56,6 +56,7 @@ function fakeSocket(handlers) {
     send: vi.fn((data) => socket.frames.push(JSON.parse(data))),
     close: vi.fn(),
     addEventListener: vi.fn((type, fn) => { listeners[type] = fn }),
+    removeEventListener: vi.fn((type, fn) => { if (listeners[type] === fn) delete listeners[type] }),
   }
   return socket
 }
@@ -186,14 +187,15 @@ describe('ChatInterface sending a message', () => {
 })
 
 describe('ChatInterface Stop', () => {
-  // Stop keeps what came so far with a "Stopped" note under it, and the late done of that reply adds nothing
+  // Stop tells the server and keeps what came so far with a "Stopped" note under it, and that reply's late words add nothing
   it('keeps the partial reply and ignores its late done', async () => {
     await renderChat()
     type('Tell me a long story')
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
-    serverSends('onToken', 'Once upon a time')
+    serverSends('onToken', 'Once upon a time', 's2')
     fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
 
+    expect(socket.frames).toEqual([{ message: 'Tell me a long story', session_id: 's2' }, { type: 'stop' }])
     expect(screen.getByText('Once upon a time')).toBeInTheDocument()
     expect(screen.getByText('Stopped')).toBeInTheDocument()
     expect(screen.queryByText(/\[stopped\]/)).toBeNull()
@@ -233,7 +235,7 @@ describe('ChatInterface Stop', () => {
     expect(selectSessionMessage).not.toHaveBeenCalled()
   })
 
-  // A message sent right after Stop waits for its own reply: the stopped one's late tokens and done don't answer it
+  // A message sent right after Stop waits for its own reply: the stopped one's late words, before the server confirms, don't answer it
   it('does not answer a new message with the stopped reply', async () => {
     await renderChat()
     type('One')
@@ -242,29 +244,121 @@ describe('ChatInterface Stop', () => {
     type('Two')
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
 
-    serverSends('onToken', 'Late words')
-    serverSends('onDone', 'Late words for One', 12)
+    serverSends('onToken', 'Late words', 's2')
     expect(screen.queryByText(/Late words/)).toBeNull()
+    serverSends('onStopped', 's2')
     expect(screen.getByText('Thinking…')).toBeInTheDocument()
 
-    serverSends('onDone', 'Answer to Two', 14)
+    serverSends('onDone', 'Answer to Two', 14, 's2')
     expect(screen.getByText('Answer to Two')).toBeInTheDocument()
+    expect(socket.frames).toEqual([{ message: 'One', session_id: 's2' }, { type: 'stop' }, { message: 'Two', session_id: 's2' }])
   })
 
-  // After a stopped reply's done, the next message streams its reply as usual
+  // Once the server confirms Stop, the next message streams its reply as usual
   it('takes the next message after a stopped reply', async () => {
     await renderChat()
     type('One')
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
     fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
-    serverSends('onDone', 'Ignored reply', 12)
+    serverSends('onStopped', 's2')
 
     type('Two')
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
-    serverSends('onDone', 'Second reply', 14)
+    serverSends('onToken', 'Second ', 's2')
+    serverSends('onDone', 'Second reply', 14, 's2')
     expect(screen.getByText('Second reply')).toBeInTheDocument()
-    expect(screen.queryByText('Ignored reply')).toBeNull()
-    expect(socket.frames).toEqual([{ message: 'One', session_id: 's2' }, { message: 'Two', session_id: 's2' }])
+  })
+
+  // A reply that ended (and was saved) before the server read Stop shows once the server confirms, from the saved chat
+  it('reloads the chat when the stopped reply had already been saved', async () => {
+    await renderChat()
+    type('Quick one')
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+    serverSends('onDone', 'Saved answer', 12, 's2')
+    expect(screen.queryByText('Saved answer')).toBeNull()
+
+    MESSAGES.s2 = [...MESSAGES.s2, { id: 11, role: 'user', content: 'Quick one' }, { id: 12, role: 'assistant', content: 'Saved answer' }]
+    try {
+      serverSends('onStopped', 's2')
+      expect(await screen.findByText('Saved answer')).toBeInTheDocument()
+    } finally {
+      MESSAGES.s2 = MESSAGES.s2.slice(0, 1)
+    }
+  })
+
+  // A message whose socket hadn't opened yet is taken back by Stop, so it never goes out
+  it('takes back a message still waiting for the socket', async () => {
+    createChatSocket.mockImplementation((handlers) => ({ ...fakeSocket(handlers), readyState: WebSocket.CONNECTING }))
+    await renderChat()
+    const connecting = socket
+    type('Never mind')
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+    act(() => connecting.listeners.open?.())
+    expect(connecting.frames).toEqual([])
+    expect(screen.getByPlaceholderText(BOX)).toBeEnabled()
+  })
+})
+
+describe('ChatInterface switching chats mid-reply', () => {
+  // A reply still coming when the user opens another chat never shows there, and is in its own chat on the way back
+  it('keeps a reply that finishes after a switch in its own chat', async () => {
+    await renderChat()
+    type('Eggs or oats?')
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    serverSends('onToken', 'Oats, ', 's2')
+
+    fireEvent.click(screen.getByRole('button', { name: /Back/ }))
+    expect(await screen.findByText('Older chat answer')).toBeInTheDocument()
+    expect(screen.queryByText(/Oats/)).toBeNull()
+    expect(screen.queryByText('Thinking…')).toBeNull()
+
+    serverSends('onToken', 'with honey.', 's2')
+    serverSends('onDone', 'Oats, with honey.', 21, 's2')
+    expect(screen.queryByText(/Oats/)).toBeNull()
+
+    MESSAGES.s2 = [...MESSAGES.s2, { id: 20, role: 'user', content: 'Eggs or oats?' }, { id: 21, role: 'assistant', content: 'Oats, with honey.' }]
+    try {
+      await waitFor(() => expect(screen.getByRole('button', { name: /Next/ })).toBeEnabled())
+      fireEvent.click(screen.getByRole('button', { name: /Next/ }))
+      expect(await screen.findByText('Oats, with honey.')).toBeInTheDocument()
+      expect(screen.getAllByText('Oats, with honey.')).toHaveLength(1)
+    } finally {
+      MESSAGES.s2 = MESSAGES.s2.slice(0, 1)
+    }
+  })
+
+  // Going back to the chat while its reply still comes shows the words so far, and the reply once, when it's done
+  it('shows the reply again in its chat on the way back while it still comes', async () => {
+    await renderChat()
+    type('Eggs or oats?')
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    serverSends('onToken', 'Oats, ', 's2')
+
+    fireEvent.click(screen.getByRole('button', { name: /Back/ }))
+    expect(await screen.findByText('Older chat answer')).toBeInTheDocument()
+    serverSends('onToken', 'with', 's2')
+    await waitFor(() => expect(screen.getByRole('button', { name: /Next/ })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: /Next/ }))
+    expect(await screen.findByText('Oats, with')).toBeInTheDocument()
+
+    serverSends('onDone', 'Oats, with honey.', 21, 's2')
+    expect(screen.getAllByText('Oats, with honey.')).toHaveLength(1)
+    expect(screen.queryByText('Oats, with')).toBeNull()
+  })
+
+  // A suggested menu made for a chat the user has left doesn't become a card in the chat on screen
+  it('keeps a Suggest card out of the chat on screen', async () => {
+    await renderChat()
+    fireEvent.click(screen.getByRole('button', { name: 'Suggest breakfast' }))
+    fireEvent.click(screen.getByRole('button', { name: /Back/ }))
+    expect(await screen.findByText('Older chat answer')).toBeInTheDocument()
+
+    serverSends('onDone', suggestionReply('A warm omelette with toast on the side.', OMELETTE_MENU), 12, 's2')
+    serverSends('onMealLogged', OMELETTE_MENU, 's2')
+    expect(screen.queryByText('Sunday Omelette')).toBeNull()
+    expect(screen.queryByText('A warm omelette with toast on the side.')).toBeNull()
   })
 })
 
