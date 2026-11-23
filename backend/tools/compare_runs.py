@@ -142,6 +142,17 @@ SELECTED = {
 }
 SELECTED_NAME = "selected"
 
+# The pairs a page asks you to vote on: 15 English ones, mostly the samples earlier votes told apart most often
+# (Turkish waits for a Turkish focus). --all pairs every sample.
+VOTE_SET = {
+    "suggest": ["en", "diabetic", "big_fridge", "vegan"],
+    "suggest-chat": ["en:chat", "greek:chat", "student:chat"],
+    "plan": ["boiled", "fried", "avocado"],
+    "review": ["tamagoyaki", "pancakes"],
+    "shopping": ["en", "diabetic"],
+    "chat": ["en:chat"],
+}
+
 
 def selected_folder(test: str, language: str | None, selected: dict | None = None) -> str:
     """The folder of the model chosen for a test and reply language."""
@@ -173,18 +184,23 @@ def selected_outputs(cand_folder: str, selected: dict | None = None) -> tuple[di
     return base, kept, bases, skipped
 
 
-def build_pairs(base: dict[str, dict], cand: dict[str, dict], name: str) -> tuple[list[dict], dict, list[str]]:
+def build_pairs(base: dict[str, dict], cand: dict[str, dict], name: str,
+                keep: dict[str, list[str]] | None = None) -> tuple[list[dict], dict, list[str]]:
     """Pairs of the two models' replies by test, sample and run, each with its input; which side is A
-    (seeded by the pair, so a rebuild keeps it); and what only one model has."""
+    (seeded by the pair, so a rebuild keeps it); and what only one model has. With `keep`, only its tests
+    and samples are paired."""
     pairs, key, unpaired = [], {}, []
     for test in sorted(set(base) | set(cand)):
+        if keep is not None and test not in keep:
+            continue
         if test not in base or test not in cand:
             unpaired.append(f"{test}: only {'the baseline' if test in base else 'the candidate'}")
             continue
         persona = _persona(test)
         inputs = (_load(MODELS_DIR / "inputs" / f"{test}.json") or {}).get("samples", {})
-        theirs = {(r["sample"], r["run"]): r for r in cand[test]["records"]}
-        for r in base[test]["records"]:
+        wanted = (lambda r: True) if keep is None else (lambda r: r["sample"] in keep[test])
+        theirs = {(r["sample"], r["run"]): r for r in cand[test]["records"] if wanted(r)}
+        for r in filter(wanted, base[test]["records"]):
             other = theirs.pop((r["sample"], r["run"]), None)
             if other is None:
                 unpaired.append(f"{test} {r['sample']} run {r['run']}: only the baseline")
@@ -246,9 +262,10 @@ def _no_data(folder: str) -> SystemExit:
     return SystemExit(f"No model test data in {MODELS_DIR / folder}. Run tools.model_battery first.")
 
 
-def build_page(base_folder: str | None, cand_folder: str) -> tuple[Path, Path, list[str]]:
+def build_page(base_folder: str | None, cand_folder: str, every: bool = False) -> tuple[Path, Path, list[str]]:
     """Write the page, the blind pairs and the key; return the page, the blind file and what isn't paired.
-    Without a baseline folder, each sample's baseline is the model chosen for its test and language (SELECTED)."""
+    Without a baseline folder, each sample's baseline is the model chosen for its test and language (SELECTED).
+    The page pairs only VOTE_SET's samples, or every sample with `every`."""
     cand = model_outputs(cand_folder)
     if not cand:
         raise _no_data(cand_folder)
@@ -261,7 +278,7 @@ def build_page(base_folder: str | None, cand_folder: str) -> tuple[Path, Path, l
         base, cand_kept, bases, notes = selected_outputs(cand_folder)
         base_label = "chosen: " + ", ".join(sorted(set(bases.values()))) if bases else "the chosen models"
     name = pair_name(base_folder or SELECTED_NAME, cand_folder)
-    pairs, key, unpaired = build_pairs(base, cand if base_folder else cand_kept, name)
+    pairs, key, unpaired = build_pairs(base, cand if base_folder else cand_kept, name, None if every else VOTE_SET)
     folders = sorted(p.name for p in MODELS_DIR.iterdir() if p.is_dir() and p.name not in ("inputs", "votes"))
     chosen = base_folder or (lambda test: selected_folder(test, None))
     data = {
@@ -290,11 +307,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--think", choices=["on", "off"], help="the candidate's think setting (default: none sent)")
     parser.add_argument("--baseline", help="one model to compare with (default: the model chosen for each test and language)")
     parser.add_argument("--baseline-think", choices=["on", "off"], help="the baseline's think setting")
+    parser.add_argument("--all", action="store_true", help="pair every sample, not only the 15 to vote on (VOTE_SET)")
     args = parser.parse_args(argv)
     think = {"on": True, "off": False}
     page, blind, unpaired = build_page(
         args.baseline and model_folder(args.baseline, think.get(args.baseline_think)),
-        model_folder(args.model, think.get(args.think)),
+        model_folder(args.model, think.get(args.think)), every=args.all,
     )
     for line in unpaired:
         print(f"Not paired: {line}")

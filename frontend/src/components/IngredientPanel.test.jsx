@@ -225,4 +225,30 @@ describe('IngredientPanel fridge rows', () => {
     await waitFor(() => expect(api.deleteIngredient).toHaveBeenCalledWith(2))
     delete Element.prototype.scrollIntoView
   })
+
+  // Open the edit row of Cucumber and type a new name into it
+  async function editCucumberTo(name) {
+    render(<IngredientPanel visible />)
+    await screen.findByText('Cucumber')
+    fireEvent.click(screen.getAllByRole('button', { name: 'Edit' }).at(-1))
+    fireEvent.change(screen.getByDisplayValue('Cucumber'), { target: { value: name } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  }
+
+  // A 409 on rename names the taken item, trimmed, and leaves the edit open
+  it('says the name is already in the fridge on a 409 and keeps the edit open', async () => {
+    api.updateIngredient.mockRejectedValueOnce(Object.assign(new Error('API error 409'), { status: 409 }))
+    await editCucumberTo('  Tomatoes ')
+    expect(await screen.findByText('Tomatoes is already in your fridge')).toBeInTheDocument()
+    expect(api.updateIngredient).toHaveBeenCalledWith(2, expect.objectContaining({ name: 'Tomatoes' }))
+    expect(screen.getByDisplayValue('Tomatoes')).toBeInTheDocument()
+  })
+
+  // Any other failure of a rename keeps the generic message
+  it('keeps the generic message for other rename failures', async () => {
+    api.updateIngredient.mockRejectedValueOnce(Object.assign(new Error('API error 500'), { status: 500 }))
+    await editCucumberTo('Pickles')
+    expect(await screen.findByText('Failed to update ingredient')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Pickles')).toBeInTheDocument()
+  })
 })

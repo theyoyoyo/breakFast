@@ -20,5 +20,8 @@ echo Starting backend (serves API + frontend)...
 echo Access at: http://localhost:8000
 echo.
 
+REM The backend serves the built frontend (frontend\dist) only when this is true
+set SERVE_FRONTEND=true
+
 cd /d "%~dp0backend"
 python -m uvicorn main:app --host 0.0.0.0 --port 8000

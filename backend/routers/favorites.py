@@ -9,10 +9,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from auth import require_user
 from database import get_db
 from db_helpers import row_to_favorite
+from models.meal import FavoriteIn
 
 router = APIRouter(prefix="/favorites", tags=["favorites"])
 
 NAME_TAKEN = "A favorite with this name already exists"
+DEFAULT_NAME = "Meal"  # a favorite sent without a name
 
 
 def _name_key(name) -> str:
@@ -42,11 +44,11 @@ async def list_favorites(user_id: int = Depends(require_user)):
 
 
 @router.post("/", status_code=201)
-async def add_favorite(meal: dict, user_id: int = Depends(require_user)):
-    ingredients = _json.dumps(meal.get("ingredients", []), ensure_ascii=False)
-    steps = _json.dumps(meal.get("steps", []), ensure_ascii=False)
-    menu_items = meal.get("menu_items") or meal.get("menu")
-    name = meal.get("menu_name") or meal.get("meal_name", "Meal")
+async def add_favorite(meal: FavoriteIn, user_id: int = Depends(require_user)):
+    ingredients = _json.dumps(meal.ingredients or [], ensure_ascii=False)
+    steps = _json.dumps(meal.steps or [], ensure_ascii=False)
+    menu_items = meal.menu_items or meal.menu
+    name = meal.menu_name or meal.meal_name or DEFAULT_NAME
     async with get_db() as db:
         if await _name_taken(db, user_id, name):
             raise HTTPException(status_code=409, detail=NAME_TAKEN)
@@ -59,11 +61,11 @@ async def add_favorite(meal: dict, user_id: int = Depends(require_user)):
             (
                 user_id,
                 name,
-                meal.get("description"),
+                meal.description,
                 ingredients,
                 steps,
-                meal.get("prep_time_min"),
-                meal.get("nutrition_note"),
+                meal.prep_time_min,
+                meal.nutrition_note,
                 _json.dumps(menu_items, ensure_ascii=False) if menu_items else None,
             ),
         )
@@ -72,11 +74,11 @@ async def add_favorite(meal: dict, user_id: int = Depends(require_user)):
 
 
 @router.put("/{fav_id}")
-async def update_favorite(fav_id: int, meal: dict, user_id: int = Depends(require_user)):
-    ingredients = _json.dumps(meal.get("ingredients", []), ensure_ascii=False)
-    steps = _json.dumps(meal.get("steps", []), ensure_ascii=False)
-    menu_items = meal.get("menu_items") or meal.get("menu")
-    name = meal.get("menu_name") or meal.get("meal_name", "Meal")
+async def update_favorite(fav_id: int, meal: FavoriteIn, user_id: int = Depends(require_user)):
+    ingredients = _json.dumps(meal.ingredients or [], ensure_ascii=False)
+    steps = _json.dumps(meal.steps or [], ensure_ascii=False)
+    menu_items = meal.menu_items or meal.menu
+    name = meal.menu_name or meal.meal_name or DEFAULT_NAME
     async with get_db() as db:
         async with db.execute(
             "SELECT meal_name FROM favorite_meals WHERE id = ? AND user_id = ?", (fav_id, user_id)
@@ -97,11 +99,11 @@ async def update_favorite(fav_id: int, meal: dict, user_id: int = Depends(requir
             """,
             (
                 name,
-                meal.get("description"),
+                meal.description,
                 ingredients,
                 steps,
-                meal.get("prep_time_min"),
-                meal.get("nutrition_note"),
+                meal.prep_time_min,
+                meal.nutrition_note,
                 _json.dumps(menu_items, ensure_ascii=False) if menu_items else None,
                 fav_id,
                 user_id,

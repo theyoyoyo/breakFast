@@ -16,11 +16,18 @@ import ConfirmPrompt from './ConfirmPrompt'
 import MealEditor from './MealEditor'
 import StarRating from './StarRating'
 import { THEMES, applyTheme, storedTheme } from '../utils/theme'
+import { APPEARANCES, applyAppearance, storedAppearance } from '../utils/appearance'
 import { applyLanguage } from '../utils/language'
 import { COUNTRIES, countryCode } from '../utils/countries'
 import { useLanguage } from '../hooks/useLanguage'
 import { useSyncNotice } from '../hooks/useSyncNotice'
+import { useMode } from '../hooks/useMode'
 import * as s from './SettingsPanel.styles'
+import Logo from './Logo'
+import { Monitor, Sun, Moon, Plus } from 'lucide-react'
+
+// Appearance buttons: Auto shows a screen (it follows the device)
+const APPEARANCE_ICONS = { auto: Monitor, light: Sun, dark: Moon }
 
 // Display names for the stored supplement frequency values
 const FREQUENCY_LABELS = { daily: 'Daily', sometimes: 'Occasional' }
@@ -76,6 +83,9 @@ export default function SettingsPanel({ visible }) {
   const language = useLanguage()
   // Theme (orange / purple / green) — saved per user, cached per device
   const [theme, setTheme] = useState(storedTheme)
+  // Appearance (Auto / Light / Dark) — saved per user, cached per device, like the theme
+  const [appearance, setAppearance] = useState(storedAppearance)
+  const mode = useMode()
 
   // Weekly summary in suggestions toggle (default off)
   const [weeklySummaryInSuggestions, setWeeklySummaryInSuggestions] = useState(false)
@@ -83,6 +93,10 @@ export default function SettingsPanel({ visible }) {
   // Shopping suggestions removed with × that new suggestions leave out (7 days), and the open "Are you sure?"
   const [removedCount, setRemovedCount] = useState(0)
   const [askBringBack, setAskBringBack] = useState(false)
+
+  // Delete meals older than one month: the open "Are you sure?", then the note with how many went
+  const [askDeleteOld, setAskDeleteOld] = useState(false)
+  const [oldMealsNote, setOldMealsNote] = useState(null)
 
   const loadRemovedCount = () => {
     getRemovedSuggestionCount().then(r => setRemovedCount(r.count)).catch(() => {})
@@ -121,6 +135,8 @@ export default function SettingsPanel({ visible }) {
       setWeeklySummaryInSuggestions(weeklySummaryPref?.value === 'true')
       const themePref = prefs.find(p => p.key === 'theme')
       if (themePref) setTheme(applyTheme(themePref.value))
+      // Always, like App's login: a user with nothing saved gets Auto, not the last user's choice on this device
+      setAppearance(applyAppearance(prefs.find(p => p.key === 'appearance')?.value))
     } catch {
       setError('Failed to load settings')
     }
@@ -143,6 +159,16 @@ export default function SettingsPanel({ visible }) {
       await setPreference('theme', key)
     } catch {
       setTheme(applyTheme(previous))
+    }
+  }
+
+  const handleAppearanceChange = async (key) => {
+    const previous = appearance
+    setAppearance(applyAppearance(key))
+    try {
+      await setPreference('appearance', key)
+    } catch {
+      setAppearance(applyAppearance(previous))
     }
   }
 
@@ -178,6 +204,22 @@ export default function SettingsPanel({ visible }) {
     } catch {
       setError('Failed to bring back removed suggestions')
     }
+  }
+
+  const handleDeleteOldMeals = async () => {
+    setAskDeleteOld(false)
+    try {
+      setError(null)
+      const result = await deleteOldMeals()
+      setOldMealsNote(result.deleted > 0
+        ? `${result.deleted} ${result.deleted === 1 ? 'meal' : 'meals'} older than one month deleted`
+        : 'No meals older than one month')
+    } catch {
+      setOldMealsNote('Failed to delete old meals')
+      return
+    }
+    // Reload the history so its count and list drop the deleted meals (a failure here keeps the old list)
+    getMeals().then(setMeals).catch(() => {})
   }
 
   // Rating handlers
@@ -436,7 +478,7 @@ export default function SettingsPanel({ visible }) {
     !profile.age || !profile.gender || !profile.height_cm || !profile.weight_kg || !profile.activity_level
   )
   const missingField = (val) => profileIncomplete && !val
-    ? { borderColor: '#e74c3c' } : {}
+    ? { borderColor: 'var(--c-red)' } : {}
 
   // --- Weekly Summary sub-page ---
   if (view === 'weekly') {
@@ -600,7 +642,7 @@ export default function SettingsPanel({ visible }) {
               onKeyDown={(e) => e.key === 'Enter' && handleAddRule()}
               placeholder="e.g. Avoid refined sugars, Favor omega-3 sources…"
             />
-            <button style={s.addBtn} onClick={handleAddRule}>+</button>
+            <button style={s.addBtn} onClick={handleAddRule} aria-label="Add"><Plus size={16} strokeWidth={3} aria-hidden="true" /></button>
           </div>
           {pendingRuleDeletes.size > 0 && (
             <button style={s.saveBtn} onClick={handleSaveRules}>
@@ -645,7 +687,7 @@ export default function SettingsPanel({ visible }) {
               onKeyDown={(e) => e.key === 'Enter' && handleAddRating()}
               placeholder="Add product…"
             />
-            <button style={s.addBtn} onClick={handleAddRating}>+</button>
+            <button style={s.addBtn} onClick={handleAddRating} aria-label="Add"><Plus size={16} strokeWidth={3} aria-hidden="true" /></button>
           </div>
         </div>
       </div>
@@ -656,7 +698,7 @@ export default function SettingsPanel({ visible }) {
   return (
     <div style={s.container}>
       <div style={s.brandHeaderRow}>
-        <span>break FAST</span>
+        <Logo withName height={26} />
         <span style={s.tabName}>Settings</span>
       </div>
 
@@ -667,7 +709,7 @@ export default function SettingsPanel({ visible }) {
         <div style={s.section}>
           <div style={s.sectionLabel}>
             Profile
-            {profileIncomplete && <span style={{ color: '#e74c3c', marginLeft: 6, fontSize: 10 }}>●</span>}
+            {profileIncomplete && <span style={{ color: 'var(--c-red)', marginLeft: 6, fontSize: 10 }}>●</span>}
           </div>
           {/* Age + Gender and Height + Weight: four in a row where they fit, two by two on a phone */}
           <div style={s.profileRow}>
@@ -853,7 +895,7 @@ export default function SettingsPanel({ visible }) {
                 onKeyDown={(e) => e.key === 'Enter' && handleAddSupplement()}
                 placeholder="e.g. Vitamin D3 1000IU, K2 100mcg, Zinc 15mg"
               />
-              <button style={s.addBtn} onClick={handleAddSupplement}>+</button>
+              <button style={s.addBtn} onClick={handleAddSupplement} aria-label="Add"><Plus size={16} strokeWidth={3} aria-hidden="true" /></button>
             </div>
           </div>
         </div>
@@ -862,23 +904,25 @@ export default function SettingsPanel({ visible }) {
         <div style={s.section}>
           <div style={s.sectionLabel}>AI settings</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
-            <span style={{ fontSize: 13, color: language === 'en' ? 'var(--accent)' : 'var(--text-muted)' }}>English</span>
+            {/* Two equal choices, not on/off: the track never fills, the knob sits by the chosen one,
+                which is bold in the accent */}
+            <span style={s.choiceLabel(language === 'en')}>English</span>
             <button
               style={{
                 width: 44, height: 24, borderRadius: 12, border: '1px solid var(--border)',
-                background: language === 'tr' ? 'var(--accent)' : 'var(--surface2)',
-                cursor: 'pointer', position: 'relative', transition: 'background 0.2s',
+                background: 'var(--surface2)',
+                cursor: 'pointer', position: 'relative',
               }}
               onClick={handleLanguageToggle}
               title={`Switch to ${language === 'en' ? 'Turkish' : 'English'}`}
             >
               <span style={{
                 position: 'absolute', top: 3, width: 16, height: 16, borderRadius: 8,
-                background: '#fff', transition: 'left 0.2s',
+                background: 'var(--accent)', transition: 'left 0.2s',
                 left: language === 'tr' ? 24 : 4,
               }} />
             </button>
-            <span style={{ fontSize: 13, color: language === 'tr' ? 'var(--accent)' : 'var(--text-muted)' }}>Turkish</span>
+            <span style={s.choiceLabel(language === 'tr')}>Turkish</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
             <span style={{ fontSize: 13, color: 'var(--text-muted)', flex: 1 }}>Weekly review in suggestions</span>
@@ -893,7 +937,7 @@ export default function SettingsPanel({ visible }) {
             >
               <span style={{
                 position: 'absolute', top: 3, width: 16, height: 16, borderRadius: 8,
-                background: '#fff', transition: 'left 0.2s',
+                background: weeklySummaryInSuggestions ? '#fff' : 'var(--knob-off)', transition: 'left 0.2s',
                 left: weeklySummaryInSuggestions ? 24 : 4,
               }} />
             </button>
@@ -922,6 +966,27 @@ export default function SettingsPanel({ visible }) {
           )}
         </div>
 
+        {/* Appearance — light or dark; Auto follows the device */}
+        <div style={s.section}>
+          <div style={s.sectionLabel}>Appearance</div>
+          <div style={s.themeRow}>
+            {APPEARANCES.map(a => {
+              const Icon = APPEARANCE_ICONS[a.key]
+              return (
+                <button
+                  key={a.key}
+                  style={s.themeBtn(appearance === a.key)}
+                  onClick={() => handleAppearanceChange(a.key)}
+                  aria-pressed={appearance === a.key}
+                >
+                  <Icon size={14} aria-hidden="true" />
+                  {a.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
         {/* Theme — only the accent colors change */}
         <div style={s.section}>
           <div style={s.sectionLabel}>Theme</div>
@@ -933,7 +998,7 @@ export default function SettingsPanel({ visible }) {
                 onClick={() => handleThemeChange(t.key)}
                 aria-pressed={theme === t.key}
               >
-                <span style={s.themeSwatch(t.swatch)} />
+                <span style={s.themeSwatch(mode === 'light' ? t.lightSwatch : t.swatch)} />
                 {t.label}
               </button>
             ))}
@@ -980,22 +1045,23 @@ export default function SettingsPanel({ visible }) {
 
         <button
           style={s.dangerBtn}
-          onClick={async () => {
-            try {
-              setError(null)
-              const result = await deleteOldMeals()
-              const msg = result.deleted > 0
-                ? `${result.deleted} old meal(s) deleted`
-                : 'No meals older than 1 year'
-              setError(msg)
-              setTimeout(() => setError(prev => prev === msg ? null : prev), 3000)
-            } catch {
-              setError('Failed to delete old meals')
-            }
-          }}
+          onClick={() => { setOldMealsNote(null); setAskDeleteOld(true) }}
         >
-          🗑 Delete meals older than 1 year
+          🗑 Delete meals older than one month
         </button>
+        {askDeleteOld && (
+          <div style={s.bringBackPrompt}>
+            <ConfirmPrompt
+              label="Delete old meals"
+              message="Are you sure you want to delete every meal older than one month?"
+              confirmLabel="Delete"
+              danger
+              onConfirm={handleDeleteOldMeals}
+              onCancel={() => setAskDeleteOld(false)}
+            />
+          </div>
+        )}
+        {oldMealsNote && <div style={s.oldMealsNote}>{oldMealsNote}</div>}
       </div>
     </div>
   )

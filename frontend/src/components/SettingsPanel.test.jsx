@@ -3,7 +3,8 @@
  * "Occasional" for occasional ones, and can be edited with ✏️; the theme picker offers all five themes;
  * the header shows the app name and the tab's name; the optional country saves with the profile, listed as
  * "Name (CODE)" and shown as its code; the profile boxes can shrink to a phone's width; removed shopping
- * suggestions can be brought back from AI settings after an "Are you sure?" prompt.
+ * suggestions can be brought back from AI settings after an "Are you sure?" prompt; meals older than one month
+ * are deleted after one too, with a note saying how many went (or that it failed), and the history reloads.
  * API calls are mocked — no real network calls are made.
  */
 
@@ -36,6 +37,8 @@ describe('SettingsPanel', () => {
     api.getSupplements.mockResolvedValue([])
     api.getProfile.mockResolvedValue(null)
     api.getRemovedSuggestionCount.mockResolvedValue({ count: 0 })
+    api.getMeals.mockResolvedValue([])
+    api.deleteOldMeals.mockResolvedValue({})
   })
 
   it('adds a supplement as Daily without asking for a frequency', async () => {
@@ -43,7 +46,7 @@ describe('SettingsPanel', () => {
     const name = await screen.findByPlaceholderText('Supplement name…')
     expect(screen.queryByRole('option', { name: /sometimes/i })).toBeNull()
     fireEvent.change(name, { target: { value: 'Vitamin D' } })
-    fireEvent.click(screen.getAllByRole('button', { name: '+' }).at(-1))
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add' }).at(-1))
     await waitFor(() => expect(api.createSupplement).toHaveBeenCalledWith('Vitamin D', '', 'daily'))
   })
 
@@ -71,10 +74,10 @@ describe('SettingsPanel', () => {
     await waitFor(() => expect(screen.queryByLabelText('Contents')).toBeNull())
   })
 
-  // The header shows the app name, like Chat, and the tab's name at the right
+  // The header shows the logo, like Chat, and the tab's name at the right
   it('titles the tab with the app name and the tab name', async () => {
     render(<SettingsPanel visible />)
-    const title = await screen.findByText('break FAST')
+    const title = await screen.findByRole('img', { name: 'break FAST' })
     expect(title.nextSibling).toHaveTextContent('Settings')
   })
 
@@ -161,6 +164,20 @@ describe('SettingsPanel', () => {
     }
   })
 
+  // Appearance (#235): Light paints the page light at once and is saved as the user's preference
+  it('switches the appearance and saves it', async () => {
+    render(<SettingsPanel visible />)
+    const light = await screen.findByRole('button', { name: 'Light' })
+    expect(screen.getByRole('button', { name: 'Auto' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(light)
+    expect(document.documentElement.dataset.mode).toBe('light')
+    expect(light).toHaveAttribute('aria-pressed', 'true')
+    await waitFor(() => expect(api.setPreference).toHaveBeenCalledWith('appearance', 'light'))
+    fireEvent.click(screen.getByRole('button', { name: 'Dark' }))
+    expect(document.documentElement.dataset.mode).toBe('dark')
+    localStorage.clear()
+  })
+
   // With nothing removed in the last 7 days the button shows 0 and can't be pressed
   it('disables Bring back at 0', async () => {
     render(<SettingsPanel visible />)
@@ -199,5 +216,62 @@ describe('SettingsPanel', () => {
     api.getRemovedSuggestionCount.mockResolvedValue({ count: 1 })
     act(() => emitSyncNotice({ type: 'shopping_suggestions_updated' }))
     expect(await screen.findByRole('button', { name: 'Bring back (1)' })).toBeEnabled()
+  })
+
+  // The first tap only asks; Delete removes the old meals and the note says how many
+  it('deletes meals older than one month after the prompt and shows the count', async () => {
+    api.deleteOldMeals.mockResolvedValue({ deleted: 2 })
+    render(<SettingsPanel visible />)
+    fireEvent.click(await screen.findByRole('button', { name: /Delete meals older than one month/ }))
+    expect(screen.getByText(/Are you sure you want to delete every meal older than one month/)).toBeInTheDocument()
+    expect(api.deleteOldMeals).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    expect(await screen.findByText('2 meals older than one month deleted')).toBeInTheDocument()
+    expect(api.deleteOldMeals).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText(/Are you sure/)).toBeNull()
+  })
+
+  // With nothing older than a month, the note says there were none
+  it('says when there were no meals older than one month', async () => {
+    api.deleteOldMeals.mockResolvedValue({ deleted: 0 })
+    render(<SettingsPanel visible />)
+    fireEvent.click(await screen.findByRole('button', { name: /Delete meals older than one month/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    expect(await screen.findByText('No meals older than one month')).toBeInTheDocument()
+  })
+
+  // Cancel closes the prompt without deleting anything
+  it('cancels the old-meals prompt', async () => {
+    render(<SettingsPanel visible />)
+    fireEvent.click(await screen.findByRole('button', { name: /Delete meals older than one month/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByText(/Are you sure/)).toBeNull()
+    expect(api.deleteOldMeals).not.toHaveBeenCalled()
+  })
+
+  // A delete that went through reloads the history, so its count drops the deleted meals
+  it('reloads the meal history after deleting old meals', async () => {
+    let rows = [{ id: 1, meal_name: 'Old' }, { id: 2, meal_name: 'New' }]
+    api.getMeals.mockImplementation(() => Promise.resolve(rows))
+    api.deleteOldMeals.mockImplementation(() => { rows = [{ id: 2, meal_name: 'New' }]; return Promise.resolve({ deleted: 1 }) })
+    render(<SettingsPanel visible />)
+    expect(await screen.findByRole('button', { name: /Meal History \(2\)/ })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Delete meals older than one month/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    expect(await screen.findByText('1 meal older than one month deleted')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /Meal History \(1\)/ })).toBeInTheDocument()
+  })
+
+  // A delete that fails says so under the button and keeps the history as it was
+  it('shows a note when deleting old meals fails', async () => {
+    api.getMeals.mockResolvedValue([{ id: 1, meal_name: 'Old' }])
+    api.deleteOldMeals.mockRejectedValue(new Error('500'))
+    render(<SettingsPanel visible />)
+    expect(await screen.findByRole('button', { name: /Meal History \(1\)/ })).toBeInTheDocument()
+    const loads = api.getMeals.mock.calls.length
+    fireEvent.click(screen.getByRole('button', { name: /Delete meals older than one month/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    expect(await screen.findByText('Failed to delete old meals')).toBeInTheDocument()
+    expect(api.getMeals.mock.calls.length).toBe(loads)
   })
 })

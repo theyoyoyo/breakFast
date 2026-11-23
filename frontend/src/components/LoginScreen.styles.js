@@ -10,13 +10,6 @@ export const container = {
   gap: 24,
 }
 
-export const title = {
-  fontSize: 32,
-  fontWeight: 700,
-  color: 'var(--accent)',
-  letterSpacing: '0.02em',
-}
-
 export const form = {
   display: 'flex',
   flexDirection: 'column',
@@ -46,8 +39,15 @@ export const btn = {
   transition: 'opacity 0.15s',
 }
 
+// Information, not an error: muted, so it reads calmly above the form
+export const note = {
+  color: 'var(--text-muted)',
+  fontSize: 14,
+  textAlign: 'center',
+}
+
 export const error = {
-  color: '#e74c3c',
+  color: 'var(--c-red)',
   fontSize: 14,
   textAlign: 'center',
 }

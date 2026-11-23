@@ -3,29 +3,30 @@
 All queries are scoped to the authenticated user.
 """
 
-from database import get_db
-from fastapi import APIRouter, Depends, HTTPException
-from auth import require_user
-from pydantic import BaseModel
 from typing import Literal
 
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+
+from auth import require_user
+from database import get_db
+from models.limits import Text
 
 router = APIRouter(prefix="/health-rules", tags=["health-rules"])
 
 
 class HealthRuleIn(BaseModel):
-    rule_text: str
+    rule_text: Text
     priority: Literal["low", "high", "critical"] = "high"
 
 
 class HealthRuleUpdate(BaseModel):
-    rule_text: str | None = None
+    rule_text: Text | None = None
     priority: Literal["low", "high", "critical"] | None = None
 
 
 class HealthRuleOut(BaseModel):
     id: int
-    user_id: int
     rule_text: str
     priority: str
     created_at: str
@@ -67,7 +68,7 @@ async def update_health_rule(rule_id: int, body: HealthRuleUpdate, user_id: int 
             updates.append("priority = ?")
             params.append(body.priority)
         if not updates:
-            raise HTTPException(status_code=400, detail="Nothing to update")
+            raise HTTPException(status_code=422, detail="Nothing to update")
         updates.append("updated_at = datetime('now')")
         params.extend([rule_id, user_id])
         await db.execute(

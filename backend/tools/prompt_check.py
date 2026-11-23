@@ -14,7 +14,7 @@ Run from backend/, with the server's Ollama reachable (docs/SETUPALL.md, BONUS C
     python -m tools.prompt_check --history
 
 Personas, each run for a sample user (tools/prompt_samples.py):
-- suggest (default): one Suggest press through the real draft → review → refine
+- suggest (default): one Suggest press through the real draft → revise → present
   pipeline, in the mode the sample's user usually presses unless --mode is given.
   The draft and the final reply are both scored; --draft stops after the draft (one
   model call instead of three). --scenario says what the press comes after: a fresh
@@ -64,21 +64,42 @@ import httpx
 
 from models.units import UNIT_ALIASES, UNIT_PAIRS, unknown_units
 from routers.chat import SUGGEST_TEMPERATURES
-from routers.scheduler import _build_plan, served_items
-from services import llm, pipeline, suggestion
+from services import llm, pipeline
 from services.chat_block import SUGGEST_MESSAGES, chat_history, format_chat_block
+
 # The fridge check's own word handling, to tell renamed items from missing ones
 from services.fridge import (
-    _FOLD, _tokens, _words, find_avoided, find_missing_ingredients, meal_ingredient_names, name_tokens, same_name,
+    _FOLD,
+    _tokens,
+    _words,
+    find_avoided,
+    find_missing_ingredients,
+    meal_ingredient_names,
+    name_tokens,
+    same_name,
     same_tokens,
 )
-from services.personas import build_scheduler_prompt, build_scheduler_user_message
+from services.personas import build_chat_prompt, build_scheduler_prompt, build_scheduler_user_message
 from services.personas.chat import build_chat_message
 from services.personas.shopping import build_shopping_prompt
+from services.prep_plan import _build_plan, served_items
 from services.shopping import (
-    SUGGESTIONS_SCHEMA, dish_names, new_suggestions, parse_suggestions, pick_input, shopping_request,
+    SUGGESTIONS_SCHEMA,
+    dish_names,
+    new_suggestions,
+    parse_suggestions,
+    pick_input,
+    shopping_request,
 )
-from tools.prompt_samples import CHAT_MESSAGES, PLAN_CASES, REVIEW_CASES, SAMPLE_MODES, SAMPLES, SCENARIOS, chat_scenario
+from tools.prompt_samples import (
+    CHAT_MESSAGES,
+    PLAN_CASES,
+    REVIEW_CASES,
+    SAMPLE_MODES,
+    SAMPLES,
+    SCENARIOS,
+    chat_scenario,
+)
 from utils import extract_json_block
 
 BACKEND = Path(__file__).resolve().parent.parent
@@ -109,7 +130,7 @@ def chat_rows(chat: list[dict], mode: str | None) -> list[dict]:
     return rows
 
 
-# Suggest Shopping's temperature (routers/ingredients.py, get_shopping_suggestions)
+# Suggest Shopping's temperature (routers/shopping.py, get_shopping_suggestions)
 SHOPPING_TEMPERATURE = 0.6
 # Seeds the share of fridge items and taste hints each press shows, so tests compare
 SHOPPING_SEED = 130
@@ -729,7 +750,7 @@ async def suggest_once(sample: dict, mode: str | None, draft_only: bool, scenari
 
 
 def shopping_prompt(sample: dict, hints: list[str]) -> str:
-    """The shopping system prompt with this press's taste hints, built the way routers/ingredients.py builds it."""
+    """The shopping system prompt with this press's taste hints, built the way routers/shopping.py builds it."""
     return build_shopping_prompt(
         taste_hints=hints,
         user_preferences=sample["preferences"],
@@ -775,7 +796,7 @@ async def plan_once(case: dict, sent: dict) -> dict:
     prompt = build_scheduler_prompt(name, [], "", kitchen_appliances=case["kitchen_appliances"], language=language)
     message = build_scheduler_user_message(name, [], "", menu=case["menu"], language=language)
     sent.setdefault(prompt, None)
-    chunks = [c async for c in suggestion.stream_response(
+    chunks = [c async for c in llm.stream_response(
         prompt, [], message, temperature=PLAN_TEMPERATURE, task="plan", language=language,
     )]
     return {"request": message, "plan": "".join(chunks)}
@@ -797,7 +818,7 @@ async def review_once(case: dict, mode: str | None) -> dict:
 
 def chat_prompt(sample: dict) -> str:
     """The chat persona's system prompt, built the way routers/chat.py builds it."""
-    return suggestion.build_chat_prompt(
+    return build_chat_prompt(
         ingredient_inventory=sample["ingredients"],
         recent_meal_history=sample["history"],
         user_preferences=sample["preferences"],
@@ -824,7 +845,7 @@ async def chat_once(sample: dict, mode: str | None, scenario: dict, sent: dict) 
             history += chat_history(chat_rows([entry], mode))
             continue
         message = build_chat_message(entry["content"], sample["language"])
-        reply = "".join([c async for c in suggestion.stream_response(prompt, history, message, task="chat", language=sample["language"])])
+        reply = "".join([c async for c in llm.stream_response(prompt, history, message, task="chat", language=sample["language"])])
         replies[next(kinds)] = reply
         history += [entry, {"role": "assistant", "content": reply}]
     return replies
@@ -1215,7 +1236,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--think", choices=["on", "off"],
-        help="send Ollama's think field to that model (default: OLLAMA_THINK, unset sends none)",
+        help="send Ollama's think field to that model (default: OLLAMA_THINK; unset sends none, off for the default model)",
     )
     parser.add_argument(
         "--data", action="store_true",
@@ -1257,9 +1278,11 @@ def model_label() -> str:
     """The models the test runs on, as the app picks them: OLLAMA_MODEL with its think setting, then each
     model a task or reply language has of its own, with the keys that use it (#192)."""
     by_model: dict[str, list[str]] = {}
-    for key, (model, think) in llm.OLLAMA_ROUTES.items():
+    for key in llm.OLLAMA_ROUTES:
+        model, think = llm.model_for(task=key, language=key)  # a key is a task or a language
         by_model.setdefault(model + _think_label(think), []).append(key)
-    return "; ".join([llm.OLLAMA_MODEL + _think_label(llm.OLLAMA_THINK)] + [f"{', '.join(k)}: {m}" for m, k in by_model.items()])
+    model, think = llm.model_for()
+    return "; ".join([model + _think_label(think)] + [f"{', '.join(k)}: {m}" for m, k in by_model.items()])
 
 
 async def main(argv: list[str] | None = None) -> int:
@@ -1277,6 +1300,7 @@ async def main(argv: list[str] | None = None) -> int:
         return 2
     # A test on the app's own picks compares with earlier tests on the same picks
     model = llm.OLLAMA_MODEL if not llm.OLLAMA_ROUTES else model_label()
+    think = llm.model_for()[1]  # what OLLAMA_MODEL gets: OLLAMA_THINK, else the default model's own
     if not await llm.check_llm_availability():
         print(f"Ollama isn't reachable at {args.url}. See docs/SETUPALL.md, BONUS C.")
         return 1
@@ -1293,12 +1317,12 @@ async def main(argv: list[str] | None = None) -> int:
     records, prompts = await run(args.samples, args.runs, args.mode, args.draft, args.persona, args.scenarios)
     results = stage_results(records, args.persona)
     report = summarize(records, args.persona) + "\n\n" + "\n".join(
-        compare(results, load_history(), mode, args.persona, model, llm.OLLAMA_THINK)
+        compare(results, load_history(), mode, args.persona, model, think)
     )
     log = save_log(records, prompts, header, report, diff)
     if args.data and records:
         meta = {
-            "model": llm.OLLAMA_MODEL, "think": llm.OLLAMA_THINK, "date": f"{datetime.now():%Y-%m-%d %H:%M}",
+            "model": llm.OLLAMA_MODEL, "think": think, "date": f"{datetime.now():%Y-%m-%d %H:%M}",
             "prompt": prompt, "commit": commit, "scenario": args.scenario, "mode": args.mode, "runs": args.runs,
             "note": args.note, "log": log.name, "gpu": await gpu_share(llm.OLLAMA_MODEL),
         }
@@ -1307,7 +1331,7 @@ async def main(argv: list[str] | None = None) -> int:
     if results:
         entry = {
             "date": f"{datetime.now():%Y-%m-%d %H:%M}", "prompt": prompt, "commit": commit,
-            "model": model, "think": llm.OLLAMA_THINK,
+            "model": model, "think": think,
             "persona": args.persona, "mode": mode, "scenario": args.scenario, "checks": CHECKS,
             "draft_only": args.draft, "runs": args.runs, "note": args.note, "log": log.name, "results": results,
         }

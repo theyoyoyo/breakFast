@@ -4,18 +4,21 @@ Tries Ollama; if unavailable, raises LLMUnavailableError and callers fall
 back to the next line of FALLBACK_LYRICS.
 """
 
-import httpx
 import json
 from typing import AsyncGenerator
 
+import httpx
+
 from config import (
+    DEFAULT_MODEL,
+    DEFAULT_THINK,
     OLLAMA_BASE_URL,
     OLLAMA_MODEL,
     OLLAMA_NUM_CTX,
     OLLAMA_ROUTES,
     OLLAMA_THINK,
+    OLLAMA_TIMEOUT,
 )
-
 
 FALLBACK_LYRICS = [
     "Benim aklım ocakta kaldı~",
@@ -71,8 +74,14 @@ async def check_llm_availability() -> bool:
 
 def model_for(task: str | None = None, language: str | None = None) -> tuple[str, bool | None]:
     """The model and think value for a call (#192): its reply language's model, else its task's
-    (config.MODEL_TASKS), else OLLAMA_MODEL with OLLAMA_THINK. Read on every call."""
-    return OLLAMA_ROUTES.get(language) or OLLAMA_ROUTES.get(task) or (OLLAMA_MODEL, OLLAMA_THINK)
+    (config.MODEL_TASKS), else OLLAMA_MODEL. The think value is that model's own OLLAMA_THINK_<KEY>,
+    else OLLAMA_THINK, else DEFAULT_THINK for the default model and none for any other. Read on every call."""
+    model, think = OLLAMA_ROUTES.get(language) or OLLAMA_ROUTES.get(task) or (OLLAMA_MODEL, None)
+    if think is None:
+        think = OLLAMA_THINK
+    if think is None and model == DEFAULT_MODEL:
+        think = DEFAULT_THINK
+    return model, think
 
 
 async def chat_stream(
@@ -93,15 +102,19 @@ async def chat_stream(
         yield chunk
 
 
-async def chat_complete(
+async def stream_response(
     system_prompt: str,
-    messages: list[dict],
-) -> str:
-    """Non-streaming call. Returns the full response as a single string."""
-    chunks = []
-    async for chunk in chat_stream(system_prompt, messages):
-        chunks.append(chunk)
-    return "".join(chunks)
+    conversation_history: list[dict],
+    user_message: str,
+    temperature: float | None = None,
+    task: str | None = None,
+    language: str | None = None,
+) -> AsyncGenerator[str, None]:
+    """Stream a reply to one user message after the conversation so far, from the model for this
+    task and reply language (#192)."""
+    messages = conversation_history + [{"role": "user", "content": user_message}]
+    async for chunk in chat_stream(system_prompt, messages, temperature=temperature, task=task, language=language):
+        yield chunk
 
 
 async def chat_json(
@@ -129,7 +142,7 @@ async def chat_json(
         "options": _options(temperature),
         **_think(think),
     }
-    async with httpx.AsyncClient(timeout=120.0) as client:
+    async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
         response = await client.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload)
         try:
             response.raise_for_status()
@@ -170,7 +183,7 @@ async def _ollama_stream(
         "options": _options(temperature),
         **_think(think),
     }
-    async with httpx.AsyncClient(timeout=120.0) as client:
+    async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
         async with client.stream(
             "POST",
             f"{OLLAMA_BASE_URL}/api/chat",

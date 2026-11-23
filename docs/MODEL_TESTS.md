@@ -89,6 +89,9 @@ the model thinks.
    sample's replies side by side as "A" and "B" (the menu, reply text, prep plan or chat
    reply, with the code's flags and seconds), the models hidden. You vote **A**, **B** or
    **both equally good**, and the page shows which model was which and the tally at the end.
+   A page holds 15 English pairs (`VOTE_SET`): suggest 4, after a chat 3, plan 3, review 2,
+   shopping 2 and chat 1, mostly the samples earlier votes told apart most often. Turkish
+   waits for a Turkish focus, and `--all` pairs every sample.
 3. **Claude rates the breakfasts.** Claude reads the same pairs blind and votes too, with a
    short reason for each, judging breakfast quality: does it make a real, balanced
    breakfast from the fridge, are portions sensible, is the text natural English or
@@ -147,6 +150,37 @@ Clean replies per test, average seconds per sample in brackets:
   - `gemma3:4b`: 14–14, equal 15. The two tr chat pairs still need a vote on their Turkish replies.
   - `gemma4:e2b-it-q4_K_M` think on: 9–9, equal 24. Every Turkish sample went to gemma4 (5–0: suggest, after a chat, plan, shopping, chat), and shopping 2–0. Suggest went 3–2 to qwen2.5, and after a chat 3–2.
   - `gemma4:e4b-it-qat` think off: 17–3, equal 22. Suggest 6–0, plan 6–0, every Turkish sample 5–0, after a chat 2–1, review 1–0, shopping 1–1, chat 1–1.
+- **Your votes against the chosen models** (prompt a5c7028, each pair against the model chosen for its test and language):
+  - `gemma4:e4b-it-qat` think on: 12–15, equal 15, at about 2.5 times the time (93 s per Suggest press against 37 s). Suggest 4–2, after a chat 4–5, plan 2–4 (two of the losses are its unreadable plans), review 0–3, shopping 0–1, chat 2–0. Against e4b think off it went 11–13, and against e2b think on 1–2. Its wins were mostly small fridges (demo, sparse, student, vegan) and its losses mostly big ones (en, big_fridge, picky, greek). Thinking isn't a large gain, so the chosen models stay, and `qwen3:8b` think on (about 196 s per press) isn't worth a vote.
+
+### Every model, 2026-11-09 and 10 (prompt a5c7028, one press per sample)
+
+Clean replies per test, average seconds per sample in brackets, and the model's share on the 6 GB GPU. A reply that hit the 120 s timeout counts as an error. Thinking on made `qwen3.5:4b`, `qwen3.5:9b` and `granite4.2:8b` time out on almost every JSON reply, and the plans they did finish took minutes. The data is archived in `tools/runs/models-archive-a5c7028/`, since the fuller samples (#188) give a new prompt version.
+
+| Model | Suggest | After a chat | Review | Plan | Shopping | Chat | GPU |
+|---|---|---|---|---|---|---|---|
+| `gemma4:e4b-it-qat` think off | 12/12 (37) | 7/10 (33) | 5/5 (14) | 6/8 (12) | 0/4 (21) | 3/3 (9) | 100% |
+| `gemma4:e4b-it-qat` think on | 12/12 (93) | 9/10 (100) | 5/5 (34) | 6/8 (39) | 0/4 (78) | 3/3 (44) | 100% |
+| `gemma4:e2b-it-q4_K_M` think on | 11/12 (40) | 10/10 (45) | 5/5 (15) | 5/8 (12) | 0/4 (35) | 2/3 (23) | 100% |
+| `gemma4:e2b-it-q4_K_M` think off | 10/12 (14) | 9/10 (15) | 5/5 (5) | 4/8 (4) | 0/4 (10) | 1/3 (5) | 100% |
+| `gemma3:4b` | 9/12 (23) | 9/10 (26) | 5/5 (12) | 6/8 (8) | 0/4 (18) | 3/3 (7) | 100% |
+| `qwen2.5:7b` | 10/12 (31) | 9/10 (34) | 4/5 (15) | 6/8 (12) | 0/4 (25) | 1/3 (8) | 100% |
+| `qwen3.5:4b` think off | 10/12 (29) | 8/10 (33) | 5/5 (13) | 6/8 (10) | 1/4 (20) | 1/3 (9) | 100% |
+| `qwen3.5:4b` think on | 1/12, 11 timeouts | 1/10, 9 timeouts | 0/5 | 5/8 (169) | 0/4, 4 timeouts | 3/3 (333) | 100% |
+| `qwen3:4b-instruct-2507-q8_0` | 10/12 (42) | 3/10 (44) | 5/5 (20) | 6/8 (12) | 0/4 (34) | 3/3 (6) | 87% |
+| `qwen3:8b` think off | 10/12 (72) | 10/10 (76) | 5/5 (30) | 6/8 (21) | 0/4 (44) | 2/3 (14) | 79% |
+| `qwen3:8b` think on | 12/12 (196) | 10/10 (195) | 4/5 (83) | 6/8 (208) | 1/4 (170), 1 timeout | 1/3 (94) | 79% |
+| `llama3.1:8b` | 10/12 (43) | 7/10 (42) | 3/5 (18) | 8/8 (18) | 1/4 (32) | 1/3 (13) | 83% |
+| `granite4.2:8b` think off | 7/12 (94) | 4/10 (96) | 5/5 (42) | 7/8 (30) | 0/4 (73) | 0/3 (23) | 75% |
+| `granite4.2:8b` think on | 0/12, all timeouts | 0/10, all timeouts | 0/5 | 4/8 (645) | 0/4, all timeouts | 3/3 (142) | 75% |
+| `ministral-3:8b` | 9/12 (109) | 9/10 (102) | 5/5 (37) | 6/8 (32) | 0/4 (81) | 0/3 (18) | 79% |
+| `aya-expanse:8b` | 7/12 (75) | 7/10 (78) | 4/5 (31) | 6/8 (23) | 0/4 (45) | 0/3 (19) | 71% |
+| `qwen3.5:9b` think off | 8/12 (76) | 8/10 (107) | 5/5 (32) | 7/8 (29) | 0/4 (62) | 3/3 (18) | 80% |
+| `qwen3.5:9b` think on | 2/12, 10 timeouts | 0/10, all timeouts | 3/5 (91) | 4/8 (433) | 0/4, all timeouts | 3/3 (597) | 80% |
+
+Shopping is almost never clean for any model: most flags are repeats, which the dedupe drops in the app.
+
+**At 150 s** (`OLLAMA_TIMEOUT`, 2026-11-10), the replies that timed out ran again. `qwen3:8b` think on finished the after-a-chat press and one of the two reviews and shopping presses that had timed out (its row above). `qwen3.5:4b`, `qwen3.5:9b` and `granite4.2:8b` think on still timed out on their first two suggestions, so the rest was skipped: they think for minutes per call, too slow for a morning press.
 
 ### Chosen models
 
@@ -168,7 +202,10 @@ Found in the votes. When the models are chosen, add each one's code flags and th
 - **Plan, boiled** (`gemma4:e2b` think on, run `2026-11-09_205202`): butters the bread, then slices it, though it comes as slices (2 slice).
 - **Suggest, sparse** (`gemma3:4b`, run `2026-11-09_065448`): bread twice, a slice in the omelette and 50 g served on its own.
 - **Review, pancakes** (`qwen2.5:7b` and `gemma4:e4b` think off): swaps the blueberries for strawberries and keeps the name "Blueberry pancakes". A dish's name should follow its food.
-- **Review, frittata** (`qwen2.5:7b` and `gemma4:e4b` think off): drops the smoked salmon, which nothing replaces, and keeps the name "Salmon frittata". The salmon should stay as written, marked missing, or the name should change.
+- **Review, frittata** (`qwen2.5:7b` and `gemma4:e4b` think off): drops the smoked salmon, which nothing replaces, and keeps the name "Salmon frittata". The salmon should stay as written, marked missing, or the name should change. With the fuller samples (#188), e4b still drops it, adds spinach and renames the dish "Feta & Spinach Frittata", before and after #193 (runs `2026-11-10_050715`, `2026-11-10_051033`).
+- **Review, omurice** (`gemma4:e4b` think off, both runs above): swaps the rice for pita bread and keeps the name "Omurice", a rice dish. The `named` label can't see it, since "rice" sits inside the word. The greek fridge has no rice, so no review could make that dish: the case is now `tamagoyaki`, a Japanese dish the fridge can make, missing only sugar (honey does its job) and soy sauce (nothing does).
+- **Prep words** (`gemma4:e4b` think off, the runs above and `2026-11-10_050918`, `2026-11-10_051219`): the reviser fills obvious forms with "N/A", "as is", "No prep needed" or "Cold". Prep words are for a form the dish needs.
+- **Shopping, copied examples** (`gemma4:e2b` think on, runs `2026-11-10_050336`, `2026-11-10_050555`): the naming rule's examples come back as items, "Dried apricots" in 5 of the 8 presses and "Smoked salmon" in 4, before and after #190. With the rule in plain words (run `2026-11-10_140449`, `ab/190/after2-190/`): no smoked salmon, dried apricots twice, more spices and herbs, but "Fresh" came back three times and the diabetic list put qualifiers last ("Greek yogurt plain", "Berries mixed").
 
 ## Models
 

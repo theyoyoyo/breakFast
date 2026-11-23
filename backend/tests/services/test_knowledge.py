@@ -10,19 +10,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from services.knowledge import (
-    format_ingredients,
     format_history,
-    format_preferences,
-    format_habits,
-    format_health_rules,
-    format_avoid_list,
-    format_behavioral,
-    format_user_profile,
-    format_supplements,
-    format_ingredient_item,
-    format_meal_detail,
     format_history_detailed,
     format_history_for_weekly_review,
+    format_ingredient_item,
+    format_ingredients,
+    format_meal_detail,
 )
 
 
@@ -157,36 +150,10 @@ class TestMealDetailStructured:
         assert "peynir" in result
 
 
-class TestKnowledgeMatchesSuggestion:
-    """Verify knowledge.py exports are the same functions used by suggestion.py aliases."""
-
-    # Knowledge formatters are imported and re-exported in suggestion.py
-    def test_suggestion_uses_knowledge_formatters(self):
-        from services.suggestion import (
-            _format_ingredients,
-            _format_history,
-            _format_preferences,
-            _format_habits,
-            _format_health_rules,
-            _format_avoid_list,
-            _format_behavioral,
-            _format_user_profile,
-            _format_supplements,
-        )
-        assert _format_ingredients is format_ingredients
-        assert _format_history is format_history
-        assert _format_preferences is format_preferences
-        assert _format_habits is format_habits
-        assert _format_health_rules is format_health_rules
-        assert _format_avoid_list is format_avoid_list
-        assert _format_behavioral is format_behavioral
-        assert _format_user_profile is format_user_profile
-        assert _format_supplements is format_supplements
-
-
 # Today's date reads as an English sentence part, with the country when set
 def test_format_today():
     from datetime import date
+
     from services.knowledge import format_today
     day = date(2026, 10, 27)
     assert format_today(day) == "Tuesday, 27 October 2026"

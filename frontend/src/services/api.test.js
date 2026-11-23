@@ -9,11 +9,13 @@ import {
   addIngredient,
   deleteIngredient,
   setPreference,
-  getMeals,
   updateSessionMessage,
   createChatSocket,
   login,
+  logout,
   LoginLimitError,
+  NetworkError,
+  onSessionEnded,
   getRemovedSuggestionCount,
   bringBackRemovedSuggestions,
 } from './api'
@@ -46,6 +48,71 @@ describe('apiFetch error handling', () => {
 })
 
 
+describe('ended session', () => {
+  let ended
+  let stopListening
+
+  function storeSession(token) {
+    localStorage.setItem('bf_token', token)
+    localStorage.setItem('bf_user', JSON.stringify({ id: 1, name: 'Alice' }))
+  }
+
+  beforeEach(() => {
+    localStorage.clear()
+    ended = vi.fn()
+    stopListening?.()
+    stopListening = onSessionEnded(ended)
+  })
+
+  // A 401 clears the stored session, tells the app once, and still throws for the caller
+  it('clears the stored session and tells the app on 401', async () => {
+    storeSession('tok-1')
+    const stub = mockFetch(401, { detail: 'Not authenticated' })
+    vi.stubGlobal('fetch', stub)
+    const err = await getIngredients().catch(e => e)
+    expect(err.status).toBe(401)
+    expect(localStorage.getItem('bf_token')).toBeNull()
+    expect(localStorage.getItem('bf_user')).toBeNull()
+    expect(ended).toHaveBeenCalledTimes(1)
+    expect(stub).toHaveBeenCalledTimes(1) // no /auth/logout for a session the server already ended
+  })
+
+  // A 401 for a request sent with an old token leaves a session made meanwhile alone
+  it('keeps a newer session when a 401 for an older token arrives', async () => {
+    storeSession('tok-1')
+    let answer
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(resolve => { answer = resolve })))
+    const done = getIngredients().catch(e => e)
+    storeSession('tok-2')
+    answer({ ok: false, status: 401, json: () => Promise.resolve({}) })
+    expect((await done).status).toBe(401)
+    expect(localStorage.getItem('bf_token')).toBe('tok-2')
+    expect(localStorage.getItem('bf_user')).not.toBeNull()
+    expect(ended).not.toHaveBeenCalled()
+  })
+
+  // An unreachable server is not a logout: the session stays and the app isn't told
+  it('keeps the session on a network error', async () => {
+    storeSession('tok-1')
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+    await expect(getIngredients()).rejects.toBeInstanceOf(NetworkError)
+    expect(localStorage.getItem('bf_token')).toBe('tok-1')
+    expect(ended).not.toHaveBeenCalled()
+  })
+
+  // Other errors (404, 500) keep the session and the app isn't told
+  it('keeps the session on other errors', async () => {
+    storeSession('tok-1')
+    for (const status of [404, 500]) {
+      vi.stubGlobal('fetch', mockFetch(status, {}))
+      await expect(getIngredients()).rejects.toThrow(`API error ${status}`)
+    }
+    expect(localStorage.getItem('bf_token')).toBe('tok-1')
+    expect(ended).not.toHaveBeenCalled()
+  })
+})
+
+
 describe('login', () => {
   // A rate-limited login throws LoginLimitError carrying the server's Retry-After seconds
   it('throws LoginLimitError with the wait on 429', async () => {
@@ -73,6 +140,68 @@ describe('login', () => {
     const err = await login('Alice', '999999').catch(e => e)
     expect(err).not.toBeInstanceOf(LoginLimitError)
     expect(err.message).toBe('Login failed')
+  })
+})
+
+
+describe('logout', () => {
+  function storeSession(token) {
+    localStorage.setItem('bf_token', token)
+    localStorage.setItem('bf_user', JSON.stringify({ id: 1, name: 'Alice' }))
+  }
+
+  beforeEach(() => localStorage.clear())
+
+  // Logout ends the stored session on the server with its own token and clears it on the device
+  it('POSTs /auth/logout with the session token and clears the stored session', async () => {
+    storeSession('tok-1')
+    const stub = vi.fn().mockResolvedValue({ ok: true, status: 204 })
+    vi.stubGlobal('fetch', stub)
+    await logout()
+    expect(stub).toHaveBeenCalledWith(
+      expect.stringMatching(/\/auth\/logout$/),
+      expect.objectContaining({ method: 'POST', headers: { Authorization: 'Bearer tok-1' } }),
+    )
+    expect(localStorage.getItem('bf_token')).toBeNull()
+    expect(localStorage.getItem('bf_user')).toBeNull()
+  })
+
+  // An unreachable server still logs the device out, without an error
+  it('clears the stored session when the server cannot be reached', async () => {
+    storeSession('tok-1')
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+    await expect(logout()).resolves.toBeUndefined()
+    expect(localStorage.getItem('bf_token')).toBeNull()
+    expect(localStorage.getItem('bf_user')).toBeNull()
+  })
+
+  // A server error still logs the device out, without an error
+  it('clears the stored session when the server answers with an error', async () => {
+    storeSession('tok-1')
+    vi.stubGlobal('fetch', mockFetch(500, { detail: 'Server error' }))
+    await expect(logout()).resolves.toBeUndefined()
+    expect(localStorage.getItem('bf_token')).toBeNull()
+  })
+
+  // The session is gone before the server answers, so a login made meanwhile keeps its new one
+  it('clears the stored session before the call answers', async () => {
+    storeSession('tok-1')
+    let answer
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(resolve => { answer = resolve })))
+    const done = logout()
+    expect(localStorage.getItem('bf_token')).toBeNull()
+    storeSession('tok-2')
+    answer({ ok: true, status: 204 })
+    await done
+    expect(localStorage.getItem('bf_token')).toBe('tok-2')
+  })
+
+  // With no stored session there is nothing to end, so no call is made
+  it('makes no call without a stored session', async () => {
+    const stub = vi.fn()
+    vi.stubGlobal('fetch', stub)
+    await logout()
+    expect(stub).not.toHaveBeenCalled()
   })
 })
 
@@ -154,6 +283,55 @@ describe('chat sync API', () => {
     sockets[0].onmessage({ data: JSON.stringify({ type: 'session_updated', session_id: 's1' }) })
     expect(onDone).toHaveBeenCalledWith('Hi', 5)
     expect(onSessionUpdated).toHaveBeenCalledWith('s1')
+    vi.unstubAllGlobals()
+  })
+
+  // A refused reply's error text reaches onDone without a message id, so the chat stops waiting, and isn't a notice
+  it('passes a socket error to onDone as the reply', () => {
+    const sockets = []
+    vi.stubGlobal('WebSocket', class { constructor() { sockets.push(this) } })
+    const onDone = vi.fn()
+    const onNotice = vi.fn()
+    createChatSocket(vi.fn(), onDone, vi.fn(), null, null, null, null, onNotice)
+    sockets[0].onmessage({ data: JSON.stringify({ type: 'error', code: 'session_not_found', message: 'Gone' }) })
+    expect(onDone).toHaveBeenCalledWith('Gone')
+    expect(onNotice).not.toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
+})
+
+
+describe('chat socket auth', () => {
+  function stubSockets() {
+    const sockets = []
+    vi.stubGlobal('WebSocket', class {
+      constructor(url, protocols) {
+        this.url = url
+        this.protocols = protocols
+        sockets.push(this)
+      }
+    })
+    return sockets
+  }
+
+  beforeEach(() => localStorage.clear())
+
+  // The token goes in the Sec-WebSocket-Protocol header as bearer plus the token, and the URL carries none
+  it('opens /chat with the token as a subprotocol, not in the URL', () => {
+    localStorage.setItem('bf_token', 'tok-1')
+    const sockets = stubSockets()
+    createChatSocket(vi.fn(), vi.fn(), vi.fn())
+    expect(sockets[0].url).toMatch(/\/chat$/)
+    expect(sockets[0].url).not.toContain('tok-1')
+    expect(sockets[0].protocols).toEqual(['bearer', 'tok-1'])
+    vi.unstubAllGlobals()
+  })
+
+  // Without a stored session the socket sends bearer alone, since an empty subprotocol would throw
+  it('opens /chat with bearer alone when there is no stored session', () => {
+    const sockets = stubSockets()
+    createChatSocket(vi.fn(), vi.fn(), vi.fn())
+    expect(sockets[0].protocols).toEqual(['bearer'])
     vi.unstubAllGlobals()
   })
 })

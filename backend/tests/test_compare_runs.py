@@ -3,7 +3,15 @@
 import json
 from unittest.mock import patch
 
-from tools.compare_runs import build_page, build_pairs, output_view, overview, pair_name, selected_folder, selected_outputs
+from tools.compare_runs import (
+    build_page,
+    build_pairs,
+    output_view,
+    overview,
+    pair_name,
+    selected_folder,
+    selected_outputs,
+)
 from tools.prompt_samples import PLAN_CASES
 
 CLEAN = {"json": True, "issues": {"missing": []}}
@@ -74,6 +82,20 @@ def test_blind_file_and_page(tmp_path):
     assert {f for p in data["pairs"] for side in "AB" for f in p[side]["flags"]} == {"clean", "missing: Salmon"}
 
 
+# A page pairs only the vote set's samples (a test it doesn't name gets none), and every sample with every=True
+def test_page_pairs_the_vote_set(tmp_path):
+    _inputs(tmp_path)
+    for folder, model in (("base", "base:7b"), ("cand", "cand:4b")):
+        _write(tmp_path, folder, model, [_record(s, f"{model} {s}") for s in ("en", "tr", "mixed")])
+        _write(tmp_path, folder, model, [_record("en", "x")], test="review")
+    keep = {"suggest": ["en", "mixed"]}
+    with patch("tools.compare_runs.MODELS_DIR", tmp_path), patch("tools.compare_runs.VOTE_SET", keep):
+        voted = json.loads(build_page("base", "cand")[1].read_text(encoding="utf-8"))["pairs"]
+        every = json.loads(build_page("base", "cand", every=True)[1].read_text(encoding="utf-8"))["pairs"]
+    assert [p["id"] for p in voted] == ["suggest|en|1", "suggest|mixed|1"]
+    assert len(every) == 4
+
+
 # The overview counts each model's clean samples, average seconds and errors per test, and marks a model whose
 # outputs came from another prompt version than the baseline's
 def test_overview_marks_other_prompt(tmp_path):
@@ -102,7 +124,7 @@ def test_selected_baseline(tmp_path):
     selected = {"default": ("main:7b", None), "tests": {"shopping": ("turkish:4b", True)}, "languages": {"tr": ("turkish:4b", True)}}
     with patch("tools.compare_runs.MODELS_DIR", tmp_path), patch("tools.compare_runs.SELECTED", selected):
         assert selected_folder("shopping", "en") == selected_folder("suggest", "tr") == "turkish_4b-think-on"
-        page, _, unpaired = build_page(None, "cand_8b")
+        page, _, unpaired = build_page(None, "cand_8b", every=True)
         _, kept, bases, skipped = selected_outputs("turkish_4b-think-on")
     data = json.loads(page.read_text(encoding="utf-8").split("const DATA = ", 1)[1].split(";\nconst store", 1)[0])
     assert data["pair"] == "selected__vs__cand_8b" and unpaired == []

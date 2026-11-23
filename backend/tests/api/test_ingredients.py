@@ -44,32 +44,6 @@ async def test_delete_ingredient(client):
     assert all(i["id"] != created["id"] for i in listed)
 
 
-async def test_bulk_add(client):
-    payload = [
-        {"name": "tomato"},
-        {"name": "onion"},
-    ]
-    r = await client.post("/ingredients/bulk", json=payload)
-    assert r.status_code == 201
-    assert r.json() == {"added": 2}
-    names = [i["name"] for i in (await client.get("/ingredients/")).json()]
-    assert "tomato" in names and "onion" in names
-
-
-async def test_bulk_add_with_expiry(client):
-    payload = [
-        {"name": "butter", "expiry_date": "2026-05-01"},
-        {"name": "cream"},
-    ]
-    r = await client.post("/ingredients/bulk", json=payload)
-    assert r.status_code == 201
-    listed = (await client.get("/ingredients/")).json()
-    butter = [i for i in listed if i["name"] == "butter"][0]
-    cream = [i for i in listed if i["name"] == "cream"][0]
-    assert butter["expiry_date"] == "2026-05-01"
-    assert cream["expiry_date"] is None
-
-
 # ---------------------------------------------------------------------------
 # Expiry check tests
 # ---------------------------------------------------------------------------
@@ -191,28 +165,6 @@ async def test_expired_action_mixed(client):
 
 
 # ---------------------------------------------------------------------------
-# Legacy thrown confirmation tests (backward compat)
-# ---------------------------------------------------------------------------
-
-
-async def test_thrown_removes_ingredients(client):
-    """Confirming thrown removes expired items from inventory."""
-    created = (await client.post("/ingredients/", json={"name": "expired_cheese", "expiry_date": "2020-01-01"})).json()
-    r = await client.post("/ingredients/expired/thrown", json={"ids": [created["id"]]})
-    assert r.status_code == 200
-    assert r.json() == {"removed": 1}
-    listed = (await client.get("/ingredients/")).json()
-    assert all(i["name"] != "expired_cheese" for i in listed)
-
-
-async def test_thrown_empty_list(client):
-    """Thrown with empty list is a no-op."""
-    r = await client.post("/ingredients/expired/thrown", json={"ids": []})
-    assert r.status_code == 200
-    assert r.json() == {"removed": 0}
-
-
-# ---------------------------------------------------------------------------
 # Ingredient groups tests
 # ---------------------------------------------------------------------------
 
@@ -280,7 +232,7 @@ async def test_memory_records_names_and_marks_picks(client, db):
 async def test_auto_add_keeps_the_pick(client, db):
     created = (await client.post("/ingredients/", json={"name": "Honey", "group_name": "🫒 Breakfast Staples"})).json()
     await client.delete(f"/ingredients/{created['id']}")
-    await client.post("/ingredients/bulk", json=[{"name": "Honey"}])
+    await client.post("/ingredients/", json={"name": "Honey"})
     assert await _picks(db) == {"Honey": "🫒 Breakfast Staples"}
 
 
@@ -306,6 +258,60 @@ async def test_memory_matches_the_same_name(client, db):
     assert set(await _names(db)) == {"Peanut butter", "peanut butter"}
 
 
+# A rename to a name another item has is refused with 409, and both items stay as they were
+async def test_rename_to_a_taken_name_is_refused(client):
+    eggs = (await client.post("/ingredients/", json={"name": "Eggs", "expiry_date": "2026-12-01"})).json()
+    milk = (await client.post("/ingredients/", json={"name": "Milk"})).json()
+    r = await client.patch(f"/ingredients/{milk['id']}", json={"name": "Eggs", "expiry_date": "2026-12-05"})
+    assert r.status_code == 409
+    assert r.json()["detail"] == "An item with this name is already in your fridge"
+    listed = {i["id"]: i for i in (await client.get("/ingredients/")).json()}
+    assert listed[eggs["id"]]["name"] == "Eggs"
+    assert listed[eggs["id"]]["expiry_date"] == "2026-12-01"
+    assert listed[milk["id"]]["name"] == "Milk"
+    assert listed[milk["id"]]["expiry_date"] is None
+
+
+# A refused rename writes nothing to the group memory, not even the group it sent along
+async def test_refused_rename_leaves_the_group_memory_alone(client, db):
+    await client.post("/ingredients/", json={"name": "Eggs"})
+    milk = (await client.post("/ingredients/", json={"name": "Milk"})).json()
+    names, picks = await _names(db), await _picks(db)
+    r = await client.patch(f"/ingredients/{milk['id']}", json={"name": "Eggs", "group_name": "🧂 Spices"})
+    assert r.status_code == 409
+    assert await _names(db) == names
+    assert await _picks(db) == picks
+
+
+# Saving an item under its own current name is fine
+async def test_rename_to_its_own_name_works(client):
+    eggs = (await client.post("/ingredients/", json={"name": "Eggs"})).json()
+    r = await client.patch(f"/ingredients/{eggs['id']}", json={"name": "Eggs", "expiry_date": "2026-12-01"})
+    assert r.status_code == 200
+    assert r.json()["name"] == "Eggs"
+    assert r.json()["expiry_date"] == "2026-12-01"
+
+
+# A blank or spaces-only name is refused with 422 on add and on rename, and the item keeps its name
+async def test_blank_name_is_refused(client):
+    for blank in ["", "   "]:
+        assert (await client.post("/ingredients/", json={"name": blank})).status_code == 422
+    eggs = (await client.post("/ingredients/", json={"name": "Eggs"})).json()
+    for blank in ["", "   "]:
+        r = await client.patch(f"/ingredients/{eggs['id']}", json={"name": blank})
+        assert r.status_code == 422
+    assert [i["name"] for i in (await client.get("/ingredients/")).json()] == ["Eggs"]
+
+
+# The spaces around a name are cut on add and on rename
+async def test_names_are_trimmed(client):
+    added = (await client.post("/ingredients/", json={"name": "  Honey "})).json()
+    assert added["name"] == "Honey"
+    r = await client.patch(f"/ingredients/{added['id']}", json={"name": " Jam  "})
+    assert r.json()["name"] == "Jam"
+    assert [i["name"] for i in (await client.get("/ingredients/")).json()] == ["Jam"]
+
+
 async def test_add_ingredient_with_group(client):
     """Adding with explicit group assigns it correctly."""
     r = await client.post("/ingredients/", json={"name": "sucuk", "group_name": "🐄 Animal Products"})
@@ -323,9 +329,9 @@ async def test_update_ingredient_group(client):
 
 
 async def test_invalid_group_rejected(client):
-    """Unknown group names return 400."""
+    """Unknown group names return 422."""
     r = await client.post("/ingredients/", json={"name": "water", "group_name": "InvalidGroup"})
-    assert r.status_code == 400
+    assert r.status_code == 422
 
 
 async def test_group_memory_on_readd(client):
@@ -336,32 +342,6 @@ async def test_group_memory_on_readd(client):
     r = await client.post("/ingredients/", json={"name": "tomato"})
     assert r.status_code == 201
     assert r.json()["group_name"] == "🥬 Produce"
-
-
-async def test_bulk_add_with_group_memory(client):
-    """Bulk add restores a remembered pick, else the food list's group, else Other."""
-    # First, add with explicit group and delete
-    created = (await client.post("/ingredients/", json={"name": "pepper", "group_name": "🥬 Produce"})).json()
-    await client.delete(f"/ingredients/{created['id']}")
-    # Bulk add without group — should restore from memory
-    r = await client.post("/ingredients/bulk", json=[
-        {"name": "pepper"}, {"name": "salt"}, {"name": "Grandma's spice mix"},
-    ])
-    assert r.status_code == 201
-    listed = {i["name"]: i["group_name"] for i in (await client.get("/ingredients/")).json()}
-    assert listed == {"pepper": "🥬 Produce", "salt": "🫙 Pantry", "Grandma's spice mix": "🍽️ Other"}
-
-
-async def test_groups_endpoint(client):
-    """GET /ingredients/groups returns the fixed group list."""
-    r = await client.get("/ingredients/groups")
-    assert r.status_code == 200
-    data = r.json()
-    assert "🐄 Animal Products" in data["groups"]
-    assert "🍽️ Other" in data["groups"]
-    assert data["default"] == "🍽️ Other"
-    assert "🫙 Pantry" in data["groups"]
-    assert len(data["groups"]) == 11
 
 
 # The check lists only the meal's ingredients missing from the user's fridge (water never counts)

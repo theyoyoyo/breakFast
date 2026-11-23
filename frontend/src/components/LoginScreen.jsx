@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { login, NetworkError, LoginLimitError } from '../services/api'
 import * as s from './LoginScreen.styles'
+import Logo from './Logo'
 
 /** The message for a rate-limited login: the wait in seconds or minutes, or "later" when unknown. */
 export function retryMessage(seconds) {
@@ -16,7 +17,8 @@ function errorMessage(err) {
   return 'Invalid name or PIN'
 }
 
-export default function LoginScreen({ onLogin }) {
+/** `note` tells the user why the login is back (their session ended); none on a plain start. */
+export default function LoginScreen({ onLogin, note = '' }) {
   const [name, setName] = useState('demo')
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
@@ -43,8 +45,9 @@ export default function LoginScreen({ onLogin }) {
 
   return (
     <div style={s.container}>
-      <div style={s.title}>break FAST</div>
+      <Logo withName height={56} />
       <form style={s.form} onSubmit={handleSubmit}>
+        {note && <div style={s.note}>{note}</div>}
         <input
           style={s.input}
           type="text"

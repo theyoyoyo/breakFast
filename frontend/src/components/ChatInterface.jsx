@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react'
-import { createChatSocket, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, saveSessionMessage, updateSessionMessage, saveAteDraft, selectSessionMessage, getTodaySupplements, toggleSupplement, analyzeMeal, getSchedule } from '../services/api'
+import { createChatSocket, checkAuth, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, saveSessionMessage, updateSessionMessage, saveAteDraft, selectSessionMessage, getTodaySupplements, toggleSupplement, analyzeMeal, getSchedule } from '../services/api'
 import { useVoice } from '../hooks/useVoice'
 import { emitSyncNotice, useSyncNotice } from '../hooks/useSyncNotice'
 import SuggestButton from './SuggestButton'
@@ -10,6 +10,7 @@ import PrepPlanText from './PrepPlanText'
 import { normalizeMeal } from '../utils/ingredients'
 import { isPrepPlan } from '../utils/prepPlan'
 import * as s from './ChatInterface.styles'
+import Logo from './Logo'
 
 const WELCOME_MSG = { role: 'assistant', content: "Good morning! Tell me what's in your fridge and I'll plan your breakfast." }
 
@@ -109,42 +110,6 @@ function keepUnchangedBlocks(prev, next) {
   return kept
 }
 
-// Template meal for demo/preview without LLM
-const DEMO_MEAL = {
-  menu_name: 'Classic Spread Breakfast',
-  meal_name: 'Classic Spread Breakfast',
-  description: 'A rich, balanced Turkish breakfast — menemen, fresh cheese, and olives.',
-  menu: [
-    {
-      name: 'Menemen',
-      ingredients: [
-        { name: 'Egg', amount: 2, unit: 'pcs' },
-        { name: 'Tomato', amount: 1, unit: 'pcs' },
-        { name: 'Green pepper', amount: 1, unit: 'pcs' },
-        { name: 'Olive oil', amount: 1, unit: 'tbsp' },
-      ],
-    },
-    { name: 'White cheese', amount: 50, unit: 'g', ingredients: [] },
-    { name: 'Olives', amount: 6, unit: 'pcs', ingredients: [] },
-    { name: 'Cucumber', amount: 1, unit: 'pcs', ingredients: [] },
-    { name: 'Bread', amount: 3, unit: 'slice', ingredients: [] },
-    { name: 'Honey', amount: 1, unit: 'tbsp', ingredients: [] },
-  ],
-  prep_time_min: 12,
-  nutrition_note: 'Rich in protein, calcium, and healthy fats.',
-}
-
-// Demo schedule output — shows what the scheduler produces for the demo meal
-const DEMO_SCHEDULE = `📋 Classic Spread Breakfast — Prep Plan
-
-⏱ Plan (12 min)
-  0:00  — Menemen: Chop 1 green pepper and 1 tomato
-         ↳ Heat 1 tbsp olive oil in the pan
-         ↳ Cook the pepper until soft (3 min) [Stove]
-         ↳ Add the tomato and simmer (4 min) [Stove]
-         ↳ Stir in 2 eggs until just set
-  0:12  — Ready! ✓`
-
 export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref) {
   const [messages, setMessages] = useState([WELCOME_MSG])
   const [input, setInput] = useState('')
@@ -175,13 +140,14 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
   const messagesEndRef = useRef(null)
   const reconnectTimer = useRef(null)
   const reconnectDelay = useRef(1000)
+  const unmountedRef = useRef(false) // a session check that answers after unmount mustn't reconnect
   const onMealLoggedRef = useRef(onMealLogged)
   const sessionIdRef = useRef(null)
   const abortedRef = useRef(false)
   const analyzeAbortRef = useRef(null)
   const { isListening, startListening, stopListening, supported: voiceSupported } = useVoice()
 
-  // Inject a meal into chat (used by demo and favorites send-to-chat)
+  // Inject a meal into chat (used by favorites send-to-chat)
   const injectMealToChat = useCallback((meal, introText) => {
     // Normalize: map menu_items → menu so MealBlock renders correctly
     const normalized = normalizeMeal({
@@ -216,13 +182,6 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
 
   // Expose methods to parent via ref
   useImperativeHandle(ref, () => ({
-    injectDemoMeal: () => {
-      const introText = "Here's a nice classic spread breakfast for you! 🫕\n\nA balanced Turkish breakfast with fresh, wholesome ingredients."
-      injectMealToChat(DEMO_MEAL, introText)
-    },
-    injectDemoSchedule: () => {
-      appendSavedMessage(DEMO_SCHEDULE)
-    },
     injectFavoriteMeal: (meal) => {
       const introText = `⭐ From favorites: ${meal.meal_name}\n\n${meal.description || 'Enjoy!'}`
       injectMealToChat(meal, introText)
@@ -341,6 +300,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     const state = wsRef.current?.readyState
     if (state === WebSocket.OPEN || state === WebSocket.CONNECTING) return wsRef.current
 
+    let opened = false
     const ws = createChatSocket(
       // onToken — skip if aborted; clear pipeline step when tokens start flowing
       (chunk) => {
@@ -391,10 +351,18 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
         abortedRef.current = false
         setAborted(false)
         wsRef.current = null
-        reconnectTimer.current = setTimeout(() => {
-          reconnectDelay.current = Math.min(reconnectDelay.current * 2, 30000)
-          ensureSocket()
-        }, reconnectDelay.current)
+        const reconnect = () => {
+          reconnectTimer.current = setTimeout(() => {
+            reconnectDelay.current = Math.min(reconnectDelay.current * 2, 30000)
+            ensureSocket()
+          }, reconnectDelay.current)
+        }
+        if (opened) { reconnect(); return }
+        // Never opened: the server may have refused the session (a restart ends them all), which a
+        // socket can't tell. One request can: its 401 ends the session and the app shows the login,
+        // so only another answer reconnects (skipped after unmount or once a new socket is open).
+        const retry = () => { if (!unmountedRef.current && !wsRef.current) reconnect() }
+        checkAuth().then(retry, (err) => { if (err?.status !== 401) retry() })
       },
       // onProgress — pipeline step updates
       (step) => {
@@ -410,6 +378,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       emitSyncNotice
     )
     ws.addEventListener('open', () => {
+      opened = true
       hasConnectedRef.current = true
       setConnected(true)
       reconnectDelay.current = 1000 // reset backoff on successful connect
@@ -422,8 +391,10 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
 
   // Open the socket on mount so other devices' changes arrive; close it on unmount
   useEffect(() => {
+    unmountedRef.current = false
     ensureSocket()
     return () => {
+      unmountedRef.current = true
       clearTimeout(reconnectTimer.current)
       const ws = wsRef.current
       wsRef.current = null // tells onClose not to reconnect
@@ -714,7 +685,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
   return (
     <div style={s.container}>
       <div style={{ ...s.header, display: 'flex', alignItems: 'center' }}>
-        <span>break FAST</span>
+        <Logo withName height={26} />
         {!connected && hasConnectedRef.current && (
           <span style={s.connStatus}> — reconnecting…</span>
         )}

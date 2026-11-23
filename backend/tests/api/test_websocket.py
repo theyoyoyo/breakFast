@@ -8,12 +8,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import json
+
 import aiosqlite
 import pytest
 import pytest_asyncio
 
 import database
-from auth import hash_pin, create_token
+from auth import create_token, hash_pin
+from tests.chat_socket import open_chat
 
 
 @pytest_asyncio.fixture
@@ -38,39 +40,70 @@ async def ws_setup(tmp_path, monkeypatch):
     return app, token, user_id
 
 
+def _close_code(app, url="/chat", subprotocols=None) -> int | None:
+    """Open the chat socket: None when it opens, else the code it was refused with."""
+    from starlette.testclient import TestClient
+    from starlette.websockets import WebSocketDisconnect
+
+    try:
+        with TestClient(app).websocket_connect(url, subprotocols=subprotocols):
+            return None
+    except WebSocketDisconnect as exc:
+        return exc.code
+
+
+# The socket opens with the token in its header and answers "bearer", which a browser needs to keep it open
+@pytest.mark.asyncio
+async def test_websocket_opens_with_token_in_header(ws_setup):
+    app, token, _ = ws_setup
+    from starlette.testclient import TestClient
+
+    with open_chat(TestClient(app), token) as ws:
+        assert ws.accepted_subprotocol == "bearer"
+
+
+# A socket without a token is refused
 @pytest.mark.asyncio
 async def test_websocket_rejects_missing_token(ws_setup):
-    """WebSocket without token query param should fail."""
     app, _, _ = ws_setup
-    from starlette.testclient import TestClient
-
-    client = TestClient(app)
-    # Missing token — FastAPI returns 422 (validation error) for missing required query param
-    with pytest.raises(Exception):
-        with client.websocket_connect("/chat"):
-            pass
+    assert _close_code(app) == 4001
 
 
+# A socket with an unknown token is refused
 @pytest.mark.asyncio
 async def test_websocket_rejects_invalid_token(ws_setup):
-    """WebSocket with invalid token should be closed with 4001."""
     app, _, _ = ws_setup
-    from starlette.testclient import TestClient
+    assert _close_code(app, subprotocols=["bearer", "invalid_token_xxx"]) == 4001
 
-    client = TestClient(app)
-    with pytest.raises(Exception):
-        with client.websocket_connect("/chat?token=invalid_token_xxx") as ws:
-            # Should be closed immediately
-            ws.receive_json()
+
+# A valid token in the URL no longer opens the socket, so a token can't end up in a URL by mistake
+@pytest.mark.asyncio
+async def test_websocket_rejects_token_in_url(ws_setup):
+    app, token, _ = ws_setup
+    assert _close_code(app, url=f"/chat?token={token}") == 4001
+
+
+# Only "bearer" followed by the token opens the socket; any other header shape is refused, even with a valid token
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "protocols",
+    [["TOKEN"], ["bearer"], ["TOKEN", "bearer"], ["bearer", "TOKEN", "extra"], ["Bearer", "TOKEN"]],
+)
+async def test_websocket_rejects_other_header_shapes(ws_setup, protocols):
+    app, token, _ = ws_setup
+    sent = [token if p == "TOKEN" else p for p in protocols]
+    assert _close_code(app, subprotocols=sent) == 4001
 
 
 @pytest.mark.asyncio
 async def test_websocket_accepts_valid_token(ws_setup):
     """WebSocket with valid token should connect and accept messages."""
     app, token, _ = ws_setup
-    from starlette.testclient import TestClient
     from unittest.mock import patch
-    from services.llm import LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE, FALLBACK_LYRICS
+
+    from starlette.testclient import TestClient
+
+    from services.llm import FALLBACK_LYRICS, LLM_UNAVAILABLE_MESSAGE, LLMUnavailableError
 
     client = TestClient(app)
 
@@ -82,7 +115,7 @@ async def test_websocket_accepts_valid_token(ws_setup):
 
     with patch("routers.chat.build_chat_prompt", return_value="test prompt"), \
          patch("routers.chat.stream_response", mock_stream):
-        with client.websocket_connect(f"/chat?token={token}") as ws:
+        with open_chat(client, token) as ws:
             ws.send_text(json.dumps({"message": "hello"}))
 
             # Should get done message with a fallback lyric line
@@ -95,8 +128,10 @@ async def test_websocket_accepts_valid_token(ws_setup):
 async def test_websocket_handles_generic_exception(ws_setup):
     """WebSocket should return fallback message on unexpected exceptions (not crash)."""
     app, token, _ = ws_setup
-    from starlette.testclient import TestClient
     from unittest.mock import patch
+
+    from starlette.testclient import TestClient
+
     from services.llm import FALLBACK_LYRICS
 
     client = TestClient(app)
@@ -107,7 +142,7 @@ async def test_websocket_handles_generic_exception(ws_setup):
 
     with patch("routers.chat.build_chat_prompt", return_value="test prompt"), \
          patch("routers.chat.stream_response", mock_stream_crash):
-        with client.websocket_connect(f"/chat?token={token}") as ws:
+        with open_chat(client, token) as ws:
             ws.send_text(json.dumps({"message": "hello"}))
 
             msg = ws.receive_json()
@@ -119,9 +154,11 @@ async def test_websocket_handles_generic_exception(ws_setup):
 async def test_websocket_build_chat_prompt_no_mock(ws_setup):
     """WebSocket should work with the real build_chat_prompt."""
     app, token, _ = ws_setup
-    from starlette.testclient import TestClient
     from unittest.mock import patch
-    from services.llm import LLMUnavailableError, LLM_UNAVAILABLE_MESSAGE, FALLBACK_LYRICS
+
+    from starlette.testclient import TestClient
+
+    from services.llm import FALLBACK_LYRICS, LLM_UNAVAILABLE_MESSAGE, LLMUnavailableError
 
     client = TestClient(app)
 
@@ -132,7 +169,7 @@ async def test_websocket_build_chat_prompt_no_mock(ws_setup):
         yield
 
     with patch("routers.chat.stream_response", mock_stream):
-        with client.websocket_connect(f"/chat?token={token}") as ws:
+        with open_chat(client, token) as ws:
             ws.send_text(json.dumps({"message": "hello"}))
 
             msg = ws.receive_json()
@@ -144,8 +181,9 @@ async def test_websocket_build_chat_prompt_no_mock(ws_setup):
 async def test_websocket_suggest_type_uses_pipeline(ws_setup):
     """WebSocket with type=suggest should route through the suggestion pipeline."""
     app, token, _ = ws_setup
+    from unittest.mock import MagicMock, patch
+
     from starlette.testclient import TestClient
-    from unittest.mock import patch, MagicMock
 
     client = TestClient(app)
 
@@ -157,7 +195,7 @@ async def test_websocket_suggest_type_uses_pipeline(ws_setup):
     mock_fn = MagicMock(side_effect=mock_pipeline)
 
     with patch("routers.chat.run_suggestion_pipeline", mock_fn):
-        with client.websocket_connect(f"/chat?token={token}") as ws:
+        with open_chat(client, token) as ws:
             ws.send_text(json.dumps({"message": "Bana kahvaltı öner", "type": "suggest"}))
 
             messages = []
@@ -176,8 +214,9 @@ async def test_websocket_suggest_type_uses_pipeline(ws_setup):
 async def test_websocket_suggest_with_mode_passes_mode(ws_setup):
     """WebSocket with type=suggest and mode=favorites should pass mode to pipeline."""
     app, token, _ = ws_setup
+    from unittest.mock import MagicMock, patch
+
     from starlette.testclient import TestClient
-    from unittest.mock import patch, MagicMock
 
     client = TestClient(app)
 
@@ -187,7 +226,7 @@ async def test_websocket_suggest_with_mode_passes_mode(ws_setup):
     mock_fn = MagicMock(side_effect=mock_pipeline)
 
     with patch("routers.chat.run_suggestion_pipeline", mock_fn):
-        with client.websocket_connect(f"/chat?token={token}") as ws:
+        with open_chat(client, token) as ws:
             ws.send_text(json.dumps({
                 "message": "Sevdiğim yemeklerden öner",
                 "type": "suggest",
@@ -247,8 +286,10 @@ async def test_save_message_touches_only_own_session(ws_setup):
 @pytest.mark.asyncio
 async def test_websocket_logs_chat_reply_crash(ws_setup, caplog):
     app, token, _ = ws_setup
-    from starlette.testclient import TestClient
     from unittest.mock import patch
+
+    from starlette.testclient import TestClient
+
     from services.llm import FALLBACK_LYRICS
 
     async def mock_stream_crash(*args, **kwargs):
@@ -256,7 +297,7 @@ async def test_websocket_logs_chat_reply_crash(ws_setup, caplog):
         yield
 
     with patch("routers.chat.build_chat_prompt", return_value="test prompt"),          patch("routers.chat.stream_response", mock_stream_crash):
-        with TestClient(app).websocket_connect(f"/chat?token={token}") as ws:
+        with open_chat(TestClient(app), token) as ws:
             ws.send_text(json.dumps({"message": "hello"}))
             msg = ws.receive_json()
 
@@ -269,8 +310,10 @@ async def test_websocket_logs_chat_reply_crash(ws_setup, caplog):
 @pytest.mark.asyncio
 async def test_websocket_logs_suggestion_crash(ws_setup, caplog):
     app, token, _ = ws_setup
-    from starlette.testclient import TestClient
     from unittest.mock import patch
+
+    from starlette.testclient import TestClient
+
     from services.pipeline import RETRY_TEXTS
 
     async def mock_pipeline_crash(*args, **kwargs):
@@ -278,7 +321,7 @@ async def test_websocket_logs_suggestion_crash(ws_setup, caplog):
         yield
 
     with patch("routers.chat.run_suggestion_pipeline", mock_pipeline_crash):
-        with TestClient(app).websocket_connect(f"/chat?token={token}") as ws:
+        with open_chat(TestClient(app), token) as ws:
             ws.send_text(json.dumps({"message": "Suggest breakfast", "type": "suggest", "mode": "favorites"}))
             msg = ws.receive_json()
 
@@ -291,8 +334,10 @@ async def test_websocket_logs_suggestion_crash(ws_setup, caplog):
 @pytest.mark.asyncio
 async def test_websocket_suggest_empty_or_unreachable(ws_setup):
     app, token, _ = ws_setup
-    from starlette.testclient import TestClient
     from unittest.mock import patch
+
+    from starlette.testclient import TestClient
+
     from services.llm import FALLBACK_LYRICS, LLM_UNAVAILABLE_MESSAGE, LLMUnavailableError
     from services.pipeline import RETRY_TEXTS
 
@@ -306,7 +351,7 @@ async def test_websocket_suggest_empty_or_unreachable(ws_setup):
     replies = []
     for pipeline in (mock_pipeline_silent, mock_pipeline_unreachable):
         with patch("routers.chat.run_suggestion_pipeline", pipeline):
-            with TestClient(app).websocket_connect(f"/chat?token={token}") as ws:
+            with open_chat(TestClient(app), token) as ws:
                 ws.send_text(json.dumps({"message": "Suggest breakfast", "type": "suggest", "mode": "favorites"}))
                 msg = ws.receive_json()
                 while msg["type"] == "progress":
@@ -321,8 +366,9 @@ async def test_websocket_suggest_empty_or_unreachable(ws_setup):
 async def test_websocket_suggest_reads_the_chat_from_the_session(ws_setup):
     """A Suggest press gives the pipeline the chat block the server builds from the session, not what the client sends."""
     app, token, user_id = ws_setup
+    from unittest.mock import MagicMock, patch
+
     from starlette.testclient import TestClient
-    from unittest.mock import patch, MagicMock
 
     async with aiosqlite.connect(database.DATABASE_PATH) as db:
         await db.execute("INSERT INTO chat_sessions (id, user_id) VALUES ('s1', ?)", (user_id,))
@@ -338,7 +384,7 @@ async def test_websocket_suggest_reads_the_chat_from_the_session(ws_setup):
 
     mock_fn = MagicMock(side_effect=mock_pipeline)
     with patch("routers.chat.run_suggestion_pipeline", mock_fn):
-        with TestClient(app).websocket_connect(f"/chat?token={token}") as ws:
+        with open_chat(TestClient(app), token) as ws:
             ws.send_text(json.dumps({
                 "message": "Suggest Breakfast", "type": "suggest", "session_id": "s1", "chat_context": ["Sent by an old client"],
             }))
@@ -354,8 +400,10 @@ async def test_websocket_suggest_reads_the_chat_from_the_session(ws_setup):
 @pytest.mark.asyncio
 async def test_chat_reply_never_becomes_a_meal_card(ws_setup):
     app, token, user_id = ws_setup
-    from starlette.testclient import TestClient
     from unittest.mock import patch
+
+    from starlette.testclient import TestClient
+
     from services.chat_block import CHAT_SUGGEST_TEXTS
 
     card = {"menu_name": "Breakfast plate", "menu": [{"name": "Eggs", "amount": 2, "unit": "pcs", "ingredients": []}]}
@@ -384,7 +432,7 @@ async def test_chat_reply_never_becomes_a_meal_card(ws_setup):
 
     with patch("routers.chat.build_chat_prompt", return_value="test prompt"), \
          patch("routers.chat.stream_response", mock_stream):
-        with TestClient(app).websocket_connect(f"/chat?token={token}") as ws:
+        with open_chat(TestClient(app), token) as ws:
             ws.send_text(json.dumps({"message": "I only have 10 minutes.", "session_id": "s1"}))
             first = until_done(ws)
             ws.send_text(json.dumps({"message": "Anything is fine.", "session_id": "s1"}))
@@ -406,3 +454,228 @@ async def test_chat_reply_never_becomes_a_meal_card(ws_setup):
         async with db.execute("SELECT content FROM chat_messages WHERE role = 'user' ORDER BY id") as cur:
             typed = [r[0] for r in await cur.fetchall()]
     assert typed[1:] == ["I only have 10 minutes.", "Anything is fine."]
+
+
+# Two messages and their replies saved in the same second reach the chat persona as message 1, reply 1, message 2, reply 2
+@pytest.mark.asyncio
+async def test_chat_history_keeps_each_message_before_its_reply(ws_setup):
+    app, token, user_id = ws_setup
+    from unittest.mock import patch
+
+    from starlette.testclient import TestClient
+
+    chat = [("user", "Any eggs left?"), ("assistant", "Yes, six."), ("user", "And bread?"), ("assistant", "Half a loaf.")]
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        await db.execute("INSERT INTO chat_sessions (id, user_id) VALUES ('s1', ?)", (user_id,))
+        for role, content in chat:
+            await db.execute(
+                "INSERT INTO chat_messages (session_id, user_id, role, content, created_at) "
+                "VALUES ('s1', ?, ?, ?, '2026-01-01 08:00:00')",
+                (user_id, role, content),
+            )
+        await db.commit()
+
+    histories = []
+
+    async def mock_stream(system_prompt, history, message, temperature=None, **_):
+        histories.append(history)
+        yield "Sounds good."
+
+    with patch("routers.chat.build_chat_prompt", return_value="test prompt"), \
+         patch("routers.chat.stream_response", mock_stream):
+        with open_chat(TestClient(app), token) as ws:
+            ws.send_text(json.dumps({"message": "Thanks!", "session_id": "s1"}))
+            while ws.receive_json()["type"] != "done":
+                pass
+
+    assert histories == [[{"role": role, "content": content} for role, content in chat]]
+
+
+# A session with more than 20 messages gives the chat persona its newest 20, in chat order
+@pytest.mark.asyncio
+async def test_chat_history_is_the_newest_20_messages(ws_setup):
+    _, _, user_id = ws_setup
+    from routers.chat import _load_session_history
+
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        await db.execute("INSERT INTO chat_sessions (id, user_id) VALUES ('s1', ?)", (user_id,))
+        for n in range(1, 26):
+            # A message and its reply share a second, as the chat saves them
+            await db.execute(
+                "INSERT INTO chat_messages (session_id, user_id, role, content, created_at) VALUES ('s1', ?, ?, ?, ?)",
+                (user_id, "user" if n % 2 else "assistant", f"Message {n}", f"2026-01-01 08:00:{(n - 1) // 2:02d}"),
+            )
+        await db.commit()
+        history = await _load_session_history(db, "s1", user_id)
+
+    assert [m["content"] for m in history] == [f"Message {n}" for n in range(6, 26)]
+    assert [m["role"] for m in history] == ["assistant", "user"] * 10
+
+
+# A frame that is valid JSON but not an object (123, "hi", [1]) is read as plain text and the socket stays open
+@pytest.mark.asyncio
+@pytest.mark.parametrize("frame", ["123", '"hi"', "[1]"])
+async def test_chat_frame_that_is_not_an_object_is_plain_text(ws_setup, frame):
+    app, token, _ = ws_setup
+    from unittest.mock import patch
+
+    from starlette.testclient import TestClient
+
+    seen = []
+
+    async def mock_stream(system_prompt, history, message, temperature=None, **_):
+        seen.append(message)
+        yield "Reply."
+
+    with patch("routers.chat.build_chat_prompt", return_value="test prompt"),          patch("routers.chat.stream_response", mock_stream):
+        with open_chat(TestClient(app), token) as ws:
+            for text in (frame, "Next one"):
+                ws.send_text(text)
+                while (event := ws.receive_json())["type"] != "done":
+                    pass
+                assert event["content"] == "Reply."
+
+    assert len(seen) == 2 and frame in seen[0] and "Next one" in seen[1]
+
+
+# A message that isn't a string, or a session id, type or mode that isn't, is ignored and the next message still gets its reply
+@pytest.mark.asyncio
+@pytest.mark.parametrize("frame", [
+    {"message": 5},
+    {"message": ["a"]},
+    {"session_id": ["x"]},
+    {"message": "Hello", "session_id": {"a": 1}, "type": ["suggest"], "mode": ["explore"]},
+])
+async def test_chat_frame_with_a_value_of_the_wrong_type_is_ignored(ws_setup, frame):
+    app, token, _ = ws_setup
+    from unittest.mock import patch
+
+    from starlette.testclient import TestClient
+
+    async def mock_stream(system_prompt, history, message, temperature=None, **_):
+        yield "Reply."
+
+    with patch("routers.chat.build_chat_prompt", return_value="test prompt"),          patch("routers.chat.stream_response", mock_stream):
+        with open_chat(TestClient(app), token) as ws:
+            ws.send_text(json.dumps(frame))
+            if "message" in frame and isinstance(frame["message"], str):
+                while ws.receive_json()["type"] != "done":
+                    pass
+            ws.send_text(json.dumps({"message": "Normal message"}))
+            while (event := ws.receive_json())["type"] != "done":
+                pass
+            assert event["content"] == "Reply."
+
+
+async def _two_users_sessions(user_id: int) -> None:
+    """The caller's session 'own' and another user's session 'bob-session'."""
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        await db.execute("INSERT INTO users (name, pin_hash) VALUES ('Bob', 'unused')")
+        await db.execute(
+            "INSERT INTO chat_sessions (id, user_id) VALUES "
+            "('own', ?), ('bob-session', (SELECT id FROM users WHERE name = 'Bob'))",
+            (user_id,),
+        )
+        await db.commit()
+
+
+async def _saved_rows() -> dict:
+    """Session id of every saved chat message and suggestion."""
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        async with db.execute("SELECT session_id FROM chat_messages ORDER BY id") as cur:
+            messages = [r[0] for r in await cur.fetchall()]
+        async with db.execute("SELECT session_id FROM suggested_meals ORDER BY id") as cur:
+            suggestions = [r[0] for r in await cur.fetchall()]
+    return {"messages": messages, "suggestions": suggestions}
+
+
+# Switching the socket to a session that isn't the caller's is ignored, so the next message goes to the caller's own session
+@pytest.mark.asyncio
+async def test_switching_to_a_session_not_the_callers_is_ignored(ws_setup):
+    app, token, user_id = ws_setup
+    from unittest.mock import patch
+
+    from starlette.testclient import TestClient
+
+    await _two_users_sessions(user_id)
+
+    async def mock_stream(system_prompt, history, message, temperature=None, **_):
+        yield "Reply."
+
+    with patch("routers.chat.build_chat_prompt", return_value="test prompt"), \
+         patch("routers.chat.stream_response", mock_stream):
+        with open_chat(TestClient(app), token) as ws:
+            ws.send_text(json.dumps({"session_id": "own"}))
+            ws.send_text(json.dumps({"session_id": "bob-session"}))
+            ws.send_text(json.dumps({"message": "Hello"}))
+            while (event := ws.receive_json())["type"] != "done":
+                pass
+
+    assert event["content"] == "Reply."
+    assert (await _saved_rows())["messages"] == ["own", "own"]
+
+
+# A session deleted while its Suggest reply is made gets the error, and neither the messages nor the suggestion are saved
+@pytest.mark.asyncio
+async def test_session_deleted_during_a_reply_saves_nothing(ws_setup):
+    app, token, user_id = ws_setup
+    from unittest.mock import patch
+
+    from starlette.testclient import TestClient
+
+    from routers.chat import SESSION_GONE_TEXT
+
+    await _two_users_sessions(user_id)
+    meal = {"menu_name": "Plate", "menu": [{"name": "Egg", "amount": 2, "unit": "pcs", "ingredients": []}]}
+
+    async def mock_pipeline(context, user_message, mode=None, temperature=None, chat_block=None):
+        # Another device deletes the chat while the menu is drafted
+        async with aiosqlite.connect(database.DATABASE_PATH) as db:
+            await db.execute("DELETE FROM chat_sessions WHERE id = 'own'")
+            await db.commit()
+        yield {"type": "done", "content": "Enjoy!\n\n```json\n" + json.dumps(meal) + "\n```"}
+
+    with patch("routers.chat.run_suggestion_pipeline", mock_pipeline):
+        with open_chat(TestClient(app), token) as ws:
+            ws.send_text(json.dumps({"message": "Suggest Breakfast", "type": "suggest", "session_id": "own"}))
+            event = ws.receive_json()
+
+    assert event == {"type": "error", "code": "session_not_found", "message": SESSION_GONE_TEXT}
+    assert await _saved_rows() == {"messages": [], "suggestions": []}
+
+
+@pytest.mark.asyncio
+async def test_websocket_too_long_message_gets_a_note_and_is_not_saved(ws_setup):
+    """A typed message over the length limit gets a short note, never reaches the model and isn't saved, and a long one within it is answered."""
+    app, token, user_id = ws_setup
+    from unittest.mock import patch
+
+    from starlette.testclient import TestClient
+
+    from models.limits import CHAT_MESSAGE_MAX
+    from routers.chat import TOO_LONG_TEXTS
+
+    seen = []
+
+    async def mock_stream(system_prompt, history, message, **kwargs):
+        seen.append(message)
+        yield "Sure."
+
+    long_message = "I would like something warm today. " * 100
+    with patch("routers.chat.stream_response", mock_stream):
+        with open_chat(TestClient(app), token) as ws:
+            ws.send_text(json.dumps({"message": "x" * (CHAT_MESSAGE_MAX + 1), "session_id": "s1"}))
+            msg = ws.receive_json()
+            assert msg == {"type": "done", "content": TOO_LONG_TEXTS["en"]}
+            assert seen == []
+
+            ws.send_text(json.dumps({"message": long_message, "session_id": "s1"}))
+            assert ws.receive_json() == {"type": "token", "content": "Sure."}
+            assert ws.receive_json()["type"] == "done"
+    assert len(seen) == 1 and long_message.strip() in seen[0]
+
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        async with db.execute("SELECT content FROM chat_messages WHERE user_id = ? ORDER BY id", (user_id,)) as cur:
+            saved = [r[0] for r in await cur.fetchall()]
+    assert saved == [long_message.strip(), "Sure."]

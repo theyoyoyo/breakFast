@@ -29,8 +29,24 @@ function getToken() {
   return localStorage.getItem('bf_token') || ''
 }
 
-function authHeaders() {
-  return { Authorization: `Bearer ${getToken()}` }
+function authHeaders(token = getToken()) {
+  return { Authorization: `Bearer ${token}` }
+}
+
+// The server refused this device's session (it restarted, or the session was ended):
+// apiFetch clears it and tells the app through one window event, so it can show the login
+const SESSION_ENDED_EVENT = 'bf:session-ended'
+
+function endSession() {
+  localStorage.removeItem('bf_token')
+  localStorage.removeItem('bf_user')
+  window.dispatchEvent(new Event(SESSION_ENDED_EVENT))
+}
+
+/** Call `handler()` when a request is refused for an ended session; returns the unsubscribe. */
+export function onSessionEnded(handler) {
+  window.addEventListener(SESSION_ENDED_EVENT, handler)
+  return () => window.removeEventListener(SESSION_ENDED_EVENT, handler)
 }
 
 // ---------------------------------------------------------------------------
@@ -39,8 +55,9 @@ function authHeaders() {
 
 /** Fetch a URL, throw on non-2xx, and return parsed JSON (or undefined for 204). */
 async function apiFetch(url, options = {}) {
+  const token = getToken()
   const headers = {
-    ...authHeaders(),
+    ...authHeaders(token),
     ...(options.body ? { 'Content-Type': 'application/json' } : {}),
   }
   let r
@@ -50,6 +67,8 @@ async function apiFetch(url, options = {}) {
     throw new NetworkError()
   }
   if (!r.ok) {
+    // A refused session ends here, unless a login made while the request ran stored a new one
+    if (r.status === 401 && token === getToken()) endSession()
     // The status lets a caller tell a refusal (like 409, a name already taken) from other errors
     const err = new Error(`API error ${r.status}: ${url}`)
     err.status = r.status
@@ -84,9 +103,24 @@ export const login = async (name, pin) => {
   return r.json()
 }
 
-export const logout = () => {
+/**
+ * Log this device out: forget its stored session, then end it on the server too.
+ * The device is logged out even when the server can't be reached or the call fails.
+ * Storage is cleared before the call, so a login made while it runs keeps its new session.
+ */
+export const logout = async () => {
+  const token = getToken()
   localStorage.removeItem('bf_token')
   localStorage.removeItem('bf_user')
+  if (!token) return
+  try {
+    await fetch(`${BASE_URL}/auth/logout`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+  } catch {
+    // Offline: the session ends on the server at its next restart
+  }
 }
 
 export const checkAuth = () =>
@@ -122,7 +156,7 @@ export const handleExpiredAction = (delete_ids, keep_ids, shopping_ids) =>
   apiFetch(`${BASE_URL}/ingredients/expired/action`, json('POST', { delete_ids, keep_ids, shopping_ids }))
 
 export const getShoppingSuggestions = (exclude = []) =>
-  apiFetch(`${BASE_URL}/ingredients/shopping-suggestions`, json('POST', { exclude }))
+  apiFetch(`${BASE_URL}/shopping/suggestions/generate`, json('POST', { exclude }))
 
 // The Fridge tab's suggestions list, kept on the server → { items: [{ name, reason, checked }] }
 export const getSuggestionList = () =>
@@ -369,14 +403,17 @@ export const getSchedule = (meal_name, steps, ingredients, meal_id = null, menu 
 // ---------------------------------------------------------------------------
 
 /**
- * Open a WebSocket to /chat with auth token as query param.
- * onDone gets the reply and its saved message id; onSessionUpdated gets the id of a
+ * Open a WebSocket to /chat. The session token goes in the Sec-WebSocket-Protocol header
+ * ("bearer", then the token), the one header a page can set on a WebSocket, so it stays
+ * out of the URL. Without a stored token the socket sends "bearer" alone, which the
+ * server refuses (an empty subprotocol would throw).
+ * onDone gets the reply and its saved message id (a reply refused because its chat was deleted has none); onSessionUpdated gets the id of a
  * session another device (or a REST save) changed; onNotice gets any other notice
  * ({ type: 'supplements_updated' }, …) for the rest of the app.
  */
 export function createChatSocket(onToken, onDone, onMealLogged, onError, onClose, onProgress, onSessionUpdated, onNotice) {
   const token = getToken()
-  const ws = new WebSocket(`${WS_URL}/chat?token=${token}`)
+  const ws = new WebSocket(`${WS_URL}/chat`, token ? ['bearer', token] : ['bearer'])
 
   ws.onmessage = (event) => {
     try {
@@ -386,6 +423,8 @@ export function createChatSocket(onToken, onDone, onMealLogged, onError, onClose
       else if (msg.type === 'meal_logged') onMealLogged(msg.meal)
       else if (msg.type === 'progress') onProgress?.(msg.step)
       else if (msg.type === 'session_updated') onSessionUpdated?.(msg.session_id)
+      // The server refused the reply (its chat was deleted meanwhile): shown as the reply, so the chat stops waiting
+      else if (msg.type === 'error') onDone(msg.message)
       else if (msg.type) onNotice?.(msg)
     } catch {
       // ignore unparseable frames

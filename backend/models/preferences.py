@@ -1,10 +1,13 @@
-from pydantic import BaseModel
 from typing import Optional
+
+from pydantic import BaseModel
+
+from models.limits import ShortText, Text
 
 
 class PreferenceSet(BaseModel):
     # Only `value` is needed — the key comes from the URL path parameter.
-    value: str
+    value: Text
 
 
 class Preference(BaseModel):
@@ -15,8 +18,8 @@ class Preference(BaseModel):
 
 
 class HabitCreate(BaseModel):
-    description: str
-    source: Optional[str] = "stated"
+    description: Text
+    source: Optional[ShortText] = "stated"
 
 
 class Habit(BaseModel):

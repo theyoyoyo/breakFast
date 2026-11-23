@@ -1,4 +1,6 @@
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -11,20 +13,25 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "").strip() or DEFAULT_MODEL
 # Context length sent with every call. Chat history is about 6000 tokens, so
 # Ollama's own 4096 would drop the oldest messages without saying so.
 OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "8192"))
+# Seconds a call may wait for Ollama (to connect, and between the bytes of a reply). A
+# JSON reply comes all at once, so a model that thinks first must finish within it.
+OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "150"))
 
 
 def _think(raw: str | None) -> bool | None:
     return {"true": True, "false": False}.get((raw or "").strip().lower())
 
 
-# Ollama's think field, for models that can think before they answer: "true" or "false"
-# sends it with every call to OLLAMA_MODEL. Unset sends nothing, so the model keeps its own
-# default (Ollama refuses the field for a model that can't think); the default model sends false.
-OLLAMA_THINK = _think(os.getenv("OLLAMA_THINK") or ("" if os.getenv("OLLAMA_MODEL", "").strip() else "false"))
+# Ollama's think field, for models that can think before they answer: "true" or "false" sends it
+# with every call that has no think setting of its own (below). Unset sends nothing, so each model
+# keeps its own default (Ollama refuses the field for a model that can't think), except the
+# default model, which runs with DEFAULT_THINK.
+OLLAMA_THINK = _think(os.getenv("OLLAMA_THINK"))
+DEFAULT_THINK = False
 
 # A model per task or reply language (#192): OLLAMA_MODEL_<KEY>, with its own OLLAMA_THINK_<KEY>
-# (unset sends none), e.g. OLLAMA_MODEL_SHOPPING or OLLAMA_MODEL_TR. A call uses its reply
-# language's model, else its task's, else OLLAMA_MODEL.
+# (unset falls back to OLLAMA_THINK), e.g. OLLAMA_MODEL_SHOPPING or OLLAMA_MODEL_TR. A call uses
+# its reply language's model, else its task's, else OLLAMA_MODEL (services/llm.py, model_for).
 MODEL_TASKS = ("chat", "suggestion", "review", "analyst", "shopping", "plan", "weekly")
 MODEL_LANGUAGES = ("en", "tr")
 OLLAMA_ROUTES = {
@@ -33,7 +40,18 @@ OLLAMA_ROUTES = {
     if (model := os.getenv(f"OLLAMA_MODEL_{key.upper()}", "").strip())
 }
 
-DATABASE_PATH = os.getenv("DATABASE_PATH", "./breakFAST.db")
+
+def resolve_database_path(value: str) -> str:
+    """The database file's full path. A relative one counts from this folder (backend/),
+    not from the folder the program was started in: started elsewhere, the server or the
+    admin CLI would otherwise open a new, empty database there."""
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = Path(__file__).resolve().parent / path
+    return os.path.abspath(path)
+
+
+DATABASE_PATH = resolve_database_path(os.getenv("DATABASE_PATH") or "./breakFAST.db")
 
 _cors_raw = os.getenv("CORS_ORIGINS", "*")
 CORS_ORIGINS = [o.strip() for o in _cors_raw.split(",") if o.strip()]
@@ -42,6 +60,9 @@ CORS_ORIGINS = [o.strip() for o in _cors_raw.split(",") if o.strip()]
 CORS_ALLOW_CREDENTIALS = "*" not in CORS_ORIGINS
 
 SERVE_FRONTEND = os.getenv("SERVE_FRONTEND", "").lower() in ("1", "true", "yes")
+
+# Serve FastAPI's /docs, /redoc and /openapi.json (off by default)
+API_DOCS = os.getenv("API_DOCS", "").lower() in ("1", "true", "yes")
 
 # Create a "demo" user with an empty PIN on startup (for trying the app locally)
 DEMO_USER = os.getenv("DEMO_USER", "").lower() in ("1", "true", "yes")

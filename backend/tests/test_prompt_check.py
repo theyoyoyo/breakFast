@@ -7,15 +7,46 @@ import pytest
 
 from services import pipeline
 from services.chat_block import chat_history, format_chat_block
-from services.personas.chat import build_chat_message
 from services.fridge import find_missing_ingredients, same_name
+from services.personas.chat import build_chat_message
 from tools.prompt_check import (
-    CHECKS, PERSONAS, chat_once, chat_rows, check_chat, check_plan, check_reply, check_review, compare, data_name, describe,
-    is_clean, model_folder, model_label, parse_args, plan_once, recording_prompts, review_once, run, save_log, save_model_data,
-    score_shopping, shop_once, suggest_once, summarize,
+    CHECKS,
+    PERSONAS,
+    chat_once,
+    chat_rows,
+    check_chat,
+    check_plan,
+    check_reply,
+    check_review,
+    compare,
+    data_name,
+    describe,
+    is_clean,
+    model_folder,
+    model_label,
+    parse_args,
+    plan_once,
+    recording_prompts,
+    review_once,
+    run,
+    save_log,
+    save_model_data,
+    score_shopping,
+    shop_once,
+    suggest_once,
+    summarize,
 )
 from tools.prompt_samples import (
-    CHAT_MESSAGES, CHAT_MINUTES, NO_CHAT, PLAN_CASES, REVIEW_CASES, SAMPLE_MODES, SAMPLES, SCENARIOS, chat_picks, chat_scenario,
+    CHAT_MESSAGES,
+    CHAT_MINUTES,
+    NO_CHAT,
+    PLAN_CASES,
+    REVIEW_CASES,
+    SAMPLE_MODES,
+    SAMPLES,
+    SCENARIOS,
+    chat_picks,
+    chat_scenario,
     chat_texts,
 )
 
@@ -71,7 +102,8 @@ def test_prep_words_are_noted():
 # A final notes the review's swaps (#148): a dish ingredient marked as standing in for a missing item, and a draft's
 # missing item gone with no mark; a rename to the fridge name and a missing item the review kept aren't gone
 def test_review_swaps_are_noted():
-    ing = lambda name, **extra: {"name": name, "amount": 50, "unit": "g", **extra}
+    def ing(name, **extra):
+        return {"name": name, "amount": 50, "unit": "g", **extra}
     draft = _reply({"name": "Salmon omelette", "ingredients": [
         ing("Eggs"), ing("Salmon"), ing("Quinoa"), ing("Sliced tomatoes"), ing("Chives"),
     ]})
@@ -659,8 +691,10 @@ def test_plan_heating_without_an_appliance_is_noted():
     bare = check_plan(_plan(Boiled_eggs=["Hard-boil the eggs"]), PLAN_CASES["omelette"])
     assert is_clean(bare), describe(bare)
     assert bare["note"].endswith("; no appliance: Hard-boil the eggs (Boiled eggs)")
-    steps = lambda appliance: _plan(Avocado_toast=["Mash the avocado", ("Toast the bread", appliance), "Spread it on the toast"])
-    noted = lambda appliance, case: check_plan(steps(appliance), PLAN_CASES[case])["note"].partition("; no appliance: ")[2]
+    def steps(appliance):
+        return _plan(Avocado_toast=["Mash the avocado", ("Toast the bread", appliance), "Spread it on the toast"])
+    def noted(appliance, case):
+        return check_plan(steps(appliance), PLAN_CASES[case])["note"].partition("; no appliance: ")[2]
     assert noted("Oven", "avocado_oven") == ""
     assert noted("Toaster", "avocado_oven") == "Toast the bread (Avocado toast)"
     assert noted("", "avocado") == "Toast the bread (Avocado toast)"
@@ -688,7 +722,7 @@ async def test_plan_once_sends_the_menu_with_its_methods():
         yield "ok"
 
     requests = {}
-    with patch("services.suggestion.stream_response", fake_stream):
+    with patch("services.llm.stream_response", fake_stream):
         for key, case in PLAN_CASES.items():
             sent = {}
             replies = await plan_once(case, sent)
@@ -720,8 +754,8 @@ def test_review_scores_swaps_and_outside_names():
     assert swapped["note"] == "replaced Strawberries for Blueberries (Blueberry pancakes)"
     kept = check_review(_pancakes(*base, ("Blueberries", {})), case, draft)
     assert is_clean(kept) and kept["note"] == "still missing: Blueberries"
-    outside = check_review(_pancakes(*base[:4], ("Raspberries", {})), case, draft)
-    assert outside["issues"]["outside"] == ["Raspberries"]
+    outside = check_review(_pancakes(*base[:4], ("Mango", {})), case, draft)
+    assert outside["issues"]["outside"] == ["Mango"]
     assert outside["note"] == "gone, no mark: Blueberries; dropped: Maple syrup"
     assert describe(check_review("", case, draft)) == "no JSON"
 
@@ -731,13 +765,15 @@ def test_review_scores_swaps_and_outside_names():
 def test_review_case_may_keep_a_part():
     case = REVIEW_CASES["omelette"]
     draft = pipeline._meal_reply("", case["draft"])
-    ing = lambda name, **extra: {"name": name, "amount": 1, "unit": "pcs", **extra}
+    def ing(name, **extra):
+        return {"name": name, "amount": 1, "unit": "pcs", **extra}
     stocked = [ing("Sweet potatoes"), ing("Cheddar", prep="grated"), ing("Spinach")]
     toast = {"name": "Jam toast", "method": "Toast the bread, spread the jam", "ingredients": [
         ing("Whole wheat bread"), ing("Strawberry jam"),
     ]}
     coffee = {"name": "Coffee", "amount": 1, "unit": "glass", "ingredients": []}
-    omelette = lambda *items: {"name": "Sweet potato omelette", "method": "Cook", "ingredients": [*items, *stocked]}
+    def omelette(*items):
+        return {"name": "Sweet potato omelette", "method": "Cook", "ingredients": [*items, *stocked]}
     kept = check_review(_reply(omelette(ing("Egg whites"), ing("Onion", prep="diced")), toast, coffee), case, draft)
     assert is_clean(kept), describe(kept)
     assert kept["note"].endswith("still missing: Egg whites")
@@ -851,7 +887,7 @@ async def test_chat_once_sends_the_typed_messages_in_turn():
     scenario = chat_scenario("en", "pressed")
     typed = [e["content"] for e in scenario["chat"] if "press" not in e]
     sent = {}
-    with patch("services.suggestion.stream_response", fake_stream):
+    with patch("services.llm.stream_response", fake_stream):
         replies = await chat_once(EN, None, scenario, sent)
     assert list(replies) == ["chat", *CHAT_MESSAGES]
     assert replies["chat"] == "\n".join(typed) and replies["allowed"] == "reply 4"
@@ -874,7 +910,7 @@ async def test_chat_persona_run():
     async def fake_stream(system_prompt, history, message, temperature=None, **_):
         yield "Sounds good! Press Suggest when you're ready."
 
-    with patch("services.suggestion.stream_response", fake_stream):
+    with patch("services.llm.stream_response", fake_stream):
         records, _ = await run(["en"], 1, None, False, persona="chat", scenarios=["chat"])
     assert [r["sample"] for r in records] == ["en:chat"]
     assert list(records[0]["scores"]) == list(CHAT_MESSAGES)

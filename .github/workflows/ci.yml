@@ -1,0 +1,81 @@
+# Runs the backend and frontend test suites on every pull request and on master.
+# A push to a branch with an open PR is covered by pull_request, so branch pushes
+# don't trigger a second run.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # The README's minimum and the newest release.
+        python-version: ["3.11", "3.14"]
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      # requirements-dev.txt includes requirements.txt and adds pytest and ruff.
+      - run: pip install -r requirements-dev.txt
+      # Lint rules only (ruff.toml), no formatting; GitHub output marks findings on the PR's lines.
+      - run: python -m ruff check --output-format=github .
+      # The tests fake Ollama and use a temporary database per test.
+      - run: python -m pytest
+
+  frontend:
+    name: Frontend (Node 22)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          # Full history, so a pull request's changed files can be diffed against its base.
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          # The oldest Node LTS still maintained.
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      # ESLint on the src/ .js and .jsx files this pull request adds or changes only, until
+      # a full pass over the existing files (#220); skipped when there are none.
+      - name: Lint changed files
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git diff -z --name-only --relative --diff-filter=ACMR "origin/$BASE_REF...HEAD" -- 'src/*.js' 'src/*.jsx' > "$RUNNER_TEMP/changed"
+          if [ ! -s "$RUNNER_TEMP/changed" ]; then
+            echo "No changed frontend files to lint."
+            exit 0
+          fi
+          xargs -0 npx eslint < "$RUNNER_TEMP/changed"
+      - run: npm test
+      - run: npm run build

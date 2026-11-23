@@ -37,7 +37,7 @@ export default function FavoriteIngredientsPanel({ open, onClose }) {
       setAddedNames(new Set())
       load()
     }
-  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open])
 
   const handleAddToShopping = async (name) => {
     try {

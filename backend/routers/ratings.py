@@ -4,17 +4,18 @@ All queries are scoped to the authenticated user.
 """
 
 import aiosqlite
-from database import get_db
 from fastapi import APIRouter, Depends, HTTPException
-from auth import require_user
 from pydantic import BaseModel, Field
 
+from auth import require_user
+from database import get_db
+from models.limits import Name
 
 router = APIRouter(prefix="/ratings", tags=["ratings"])
 
 
 class RatingIn(BaseModel):
-    product_name: str
+    product_name: Name
     rating: int = Field(default=10, ge=1, le=10)
 
 
@@ -24,7 +25,6 @@ class RatingUpdate(BaseModel):
 
 class RatingOut(BaseModel):
     id: int
-    user_id: int
     product_name: str
     rating: int
     created_at: str

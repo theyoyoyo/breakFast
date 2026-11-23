@@ -5,15 +5,13 @@ All queries are scoped to the authenticated user.
 
 from datetime import date
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
-from database import get_db
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+
 from auth import require_user
-from fastapi import HTTPException
-from models.ingredient import (
-    Ingredient, IngredientCreate, IngredientUpdate,
-    INGREDIENT_GROUPS, DEFAULT_GROUP,
-)
+from database import get_db
+from models.ingredient import INGREDIENT_GROUPS, Ingredient, IngredientCreate, IngredientUpdate
+from models.limits import BULK_ITEMS_MAX, SizedDict
 from services.fridge import find_missing_ingredients
 from services.ingredient_groups import remember, resolve_groups
 
@@ -23,11 +21,10 @@ router = APIRouter(prefix="/ingredients", tags=["ingredients"])
 def _validate_group(group_name: str | None) -> str | None:
     """Reject unknown group names."""
     if group_name is not None and group_name not in INGREDIENT_GROUPS:
-        raise HTTPException(status_code=400, detail=f"Invalid group: {group_name}")
+        raise HTTPException(status_code=422, detail="Invalid group")
     return group_name
 
 
-# Shared upsert SQL used by both single-add and bulk-add
 _UPSERT_SQL = """
     INSERT INTO ingredient_inventory (user_id, name, expiry_date, group_name)
     VALUES (?, ?, ?, ?)
@@ -36,12 +33,6 @@ _UPSERT_SQL = """
         group_name = excluded.group_name,
         updated_at = datetime('now')
 """
-
-
-@router.get("/groups")
-async def list_groups():
-    """Return the fixed list of ingredient groups."""
-    return {"groups": INGREDIENT_GROUPS, "default": DEFAULT_GROUP}
 
 
 @router.get("/", response_model=list[Ingredient])
@@ -92,6 +83,14 @@ async def update_ingredient(ingredient_id: int, body: IngredientUpdate, user_id:
         updates["group_name"] = body.group_name
 
     async with get_db() as db:
+        if updates.get("name") is not None:
+            # Names are unique per user, so a taken name is refused before anything is written
+            async with db.execute(
+                "SELECT 1 FROM ingredient_inventory WHERE user_id = ? AND name = ? AND id != ?",
+                (user_id, updates["name"], ingredient_id),
+            ) as cur:
+                if await cur.fetchone():
+                    raise HTTPException(status_code=409, detail="An item with this name is already in your fridge")
         if updates:
             set_clause = ", ".join(f"{k} = ?" for k in updates)
             cursor = await db.execute(
@@ -132,29 +131,13 @@ async def delete_ingredient(ingredient_id: int, user_id: int = Depends(require_u
         await db.commit()
 
 
-@router.post("/bulk", status_code=201)
-async def bulk_add_ingredients(ingredients: list[IngredientCreate], user_id: int = Depends(require_user)):
-    """Add or update multiple ingredients at once (used after NL parsing)."""
-    for item in ingredients:
-        _validate_group(item.group_name)
-
-    async with get_db() as db:
-        groups = await resolve_groups(db, user_id, [item.name for item in ingredients])
-        for item in ingredients:
-            group = item.group_name or groups[item.name]
-            await db.execute(_UPSERT_SQL, (user_id, item.name, item.expiry_date, group))
-            await remember(db, user_id, item.name, group, picked=bool(item.group_name))
-        await db.commit()
-    return {"added": len(ingredients)}
-
-
 # ---------------------------------------------------------------------------
 # Missing-ingredient check (meal details highlight them, Confirm is blocked)
 # ---------------------------------------------------------------------------
 
 
 class MissingCheck(BaseModel):
-    meal: dict
+    meal: SizedDict
 
 
 @router.post("/check")
@@ -204,9 +187,9 @@ async def get_expired_ingredients(user_id: int = Depends(require_user)):
 
 
 class ExpiredActionRequest(BaseModel):
-    delete_ids: list[int] = []
-    keep_ids: list[int] = []
-    shopping_ids: list[int] = []
+    delete_ids: list[int] = Field(default=[], max_length=BULK_ITEMS_MAX)
+    keep_ids: list[int] = Field(default=[], max_length=BULK_ITEMS_MAX)
+    shopping_ids: list[int] = Field(default=[], max_length=BULK_ITEMS_MAX)
 
 
 @router.post("/expired/action", status_code=200)
@@ -252,108 +235,3 @@ async def handle_expired_action(body: ExpiredActionRequest, user_id: int = Depen
         "kept": len(body.keep_ids),
         "to_shopping": len(body.shopping_ids),
     }
-
-
-# Keep old endpoint for backward compat with existing tests
-class ThrownRequest(BaseModel):
-    ids: list[int]
-
-
-@router.post("/expired/thrown", status_code=200)
-async def confirm_thrown(body: ThrownRequest, user_id: int = Depends(require_user)):
-    """Remove expired ingredients that the user has confirmed as thrown away."""
-    async with get_db() as db:
-        for ingredient_id in body.ids:
-            await db.execute(
-                "DELETE FROM ingredient_inventory WHERE id = ? AND user_id = ?",
-                (ingredient_id, user_id),
-            )
-        await db.commit()
-    return {"removed": len(body.ids)}
-
-
-# ---------------------------------------------------------------------------
-# Shopping suggestions (LLM-powered)
-# ---------------------------------------------------------------------------
-
-
-class ShoppingSuggestionsRequest(BaseModel):
-    exclude: list[str] = []
-
-
-@router.post("/shopping-suggestions")
-async def get_shopping_suggestions(
-    body: ShoppingSuggestionsRequest | None = None,
-    user_id: int = Depends(require_user),
-):
-    """Generate AI-powered shopping suggestions based on full user context.
-
-    Code keeps only new items: anything in the fridge, on the shopping list,
-    already shown (`exclude`), on the avoid list or removed from the suggestions
-    list in the last 7 days is dropped by exact name.
-    When a whole reply is repeats, the model is asked once more.
-    """
-    import logging
-    import random
-    from services.context import load_shopping_context
-    from services.suggestion import build_shopping_prompt
-    from services.llm import chat_json, LLMUnavailableError, lyric_cycler
-    from services.shopping import (
-        SUGGESTIONS_SCHEMA, new_suggestions, parse_suggestions, pick_input, recently_removed, shopping_request,
-    )
-
-    shown = list(body.exclude) if body else []
-
-    try:
-        async with get_db() as db:
-            ctx = await load_shopping_context(db, user_id)
-            removed = await recently_removed(db, user_id)
-    except Exception as e:
-        logging.exception("Shopping context load failed")
-        return {"suggestions": [], "lyric": lyric_cycler.next(), "error": str(e)}
-
-    # The avoid list is a hard ban, so code enforces it beside the prompt rule.
-    # Items removed with × are left out by code only, so the prompt stays the same.
-    known = [i["name"] for i in ctx["ingredients"]] + ctx["shopping_list"] + ctx["avoid_list"] + removed
-    # This press shows a random share of the fridge and of the taste hints, so it starts somewhere new
-    fridge, hints = pick_input(ctx, random.Random())
-
-    for _ in range(2):
-        try:
-            prompt = build_shopping_prompt(
-                taste_hints=hints,
-                user_preferences=ctx["preferences"],
-                health_rules=ctx["health_rules"],
-                user_profile=ctx["user_profile"],
-                supplements=ctx["supplements"],
-                avoid_list=ctx["avoid_list"],
-                shopping_list=ctx["shopping_list"],
-                ratings=ctx["ratings"],
-                language=ctx["language"],
-                country=ctx["country"],
-            )
-            reply = await chat_json(
-                system_prompt=prompt,
-                messages=[{"role": "user", "content": shopping_request(ctx["language"], shown, fridge)}],
-                schema=SUGGESTIONS_SCHEMA,
-                temperature=0.6,
-                task="shopping",
-                language=ctx["language"],
-            )
-        except LLMUnavailableError:
-            return {"suggestions": [], "lyric": lyric_cycler.next()}
-        except Exception as e:
-            logging.exception("Shopping LLM call failed")
-            return {"suggestions": [], "lyric": lyric_cycler.next(), "error": str(e)}
-
-        items = parse_suggestions(reply)
-        if items is None:
-            logging.warning("Shopping suggestions: could not parse the reply: %r", reply)
-            return {"suggestions": [], "lyric": None, "error": "Could not read the AI reply. Please try again."}
-
-        fresh = new_suggestions(items, known + shown, ctx["dishes"])
-        if fresh:
-            return {"suggestions": fresh, "lyric": None}
-        shown += [i["name"] for i in items]
-
-    return {"suggestions": [], "lyric": None}

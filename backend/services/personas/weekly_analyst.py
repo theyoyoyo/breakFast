@@ -6,11 +6,7 @@ health conditions, and nutritional needs. Produces 4 scores + narrative.
 Not per-meal — this is a bird's-eye view of the whole week.
 """
 
-from services.knowledge import (
-    format_health_rules,
-    format_user_profile,
-    format_supplements_taken,
-)
+from services.knowledge import format_health_rules, format_supplements_taken, format_user_profile
 
 
 def _lang(language: str) -> str:

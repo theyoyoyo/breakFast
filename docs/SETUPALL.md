@@ -21,7 +21,7 @@ Make sure these are installed before starting. If any are missing, install them 
 |---|---|---|
 | **Git** | https://git-scm.com/downloads/win | `git --version` |
 | **Python 3.11+** | https://www.python.org/downloads/ | `python --version` → 3.11 or newer |
-| **Node.js 18+** | https://nodejs.org/ (LTS is fine) | `node --version` |
+| **Node.js 22.13+** | https://nodejs.org/ (LTS is fine) | `node --version` |
 | **VS Code** | https://code.visualstudio.com/ | (optional but recommended) |
 
 > **Python installer tip:** Check **"Add Python to PATH"** during install. If you
@@ -128,7 +128,8 @@ fit and every reply gets much slower. Then, on the Ollama server:
 ### A model per task or language (optional)
 
 One model serves every call by default. A task or a reply language can have its own
-model in `.env`, with its own think value; pull it too (`ollama pull <model>`):
+model in `.env`, with its own think value (unset uses `OLLAMA_THINK`); pull it too
+(`ollama pull <model>`):
 
 ```
 OLLAMA_MODEL_SHOPPING=gemma4:e2b-it-q4_K_M
@@ -193,6 +194,9 @@ containing `backend/`, `frontend/`, `CLAUDE.md`, etc.).
 
    # Serve built frontend from FastAPI (single-server production mode)
    SERVE_FRONTEND=true
+
+   # FastAPI's /docs, /redoc and /openapi.json are off unless this is true
+   API_DOCS=false
    ```
 
    **The key difference from dev:** Set `SERVE_FRONTEND=true`. This tells the backend
@@ -596,6 +600,24 @@ devices. No port forwarding, no dynamic DNS.
 1. Make sure Tailscale is connected on your phone (green key icon in notification bar).
 2. Open `http://100.x.x.x:8000` in your phone browser.
 3. Log in and test — chat, suggestions, everything should work.
+
+### B.4a — What needs HTTPS (and what doesn't)
+
+Plain `http://` over the Tailscale or LAN IP is enough for the app itself: chat,
+suggestions, fridge, everything the server does. Browsers only treat `localhost` and
+`https://` addresses as **secure**, and some features are switched off elsewhere:
+
+| Feature | Needs a secure address |
+|---|---|
+| Service worker (app shell cached, updates itself) | yes |
+| Install to the home screen (PWA) | yes |
+| Voice input (microphone, Web Speech) | yes |
+| Everything else | no |
+
+To get them on the phone, let Tailscale serve the app over HTTPS: turn on HTTPS for the
+tailnet in the admin console (DNS page), run `tailscale serve --bg 8000` on the server,
+and open the machine's `https://<machine>.<tailnet>.ts.net` name instead of the IP. Add
+that address to `CORS_ORIGINS` too. Opening `localhost` on the server itself always works.
 
 ### B.5 — Configure Ollama for Tailscale (important!)
 
