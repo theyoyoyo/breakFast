@@ -8,13 +8,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import aiosqlite
-import pytest
 
 import database
 from auth import hash_pin
 
 
-@pytest.mark.asyncio
 async def test_cleanup_removes_old_sessions(tmp_path, monkeypatch):
     """Sessions older than 8 days should be deleted on init_db."""
     db_path = str(tmp_path / "test.db")
@@ -70,7 +68,6 @@ async def test_cleanup_removes_old_sessions(tmp_path, monkeypatch):
     assert "recent message" in messages
 
 
-@pytest.mark.asyncio
 async def test_cleanup_preserves_recent_sessions(tmp_path, monkeypatch):
     """Sessions younger than 8 days should NOT be deleted."""
     db_path = str(tmp_path / "test.db")

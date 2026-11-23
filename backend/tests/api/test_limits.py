@@ -15,7 +15,6 @@ def _menu(count: int) -> list[dict]:
     return [{"name": f"Item {i}", "amount": 1, "unit": "pcs", "ingredients": []} for i in range(count)]
 
 
-@pytest.mark.asyncio
 async def test_fridge_name_over_limit_refused(client):
     """A fridge name over the length limit gets 422, and a long real one is still added."""
     r = await client.post("/ingredients/", json={"name": "x" * (limits.NAME_MAX + 1)})
@@ -24,7 +23,6 @@ async def test_fridge_name_over_limit_refused(client):
     assert r.status_code == 201
 
 
-@pytest.mark.asyncio
 async def test_bulk_shopping_over_limit_refused(client):
     """A bulk shopping request over the list limit gets 422, and a big real list is still added."""
     too_many = [{"item_name": f"Item {i}"} for i in range(limits.BULK_ITEMS_MAX + 1)]
@@ -34,7 +32,6 @@ async def test_bulk_shopping_over_limit_refused(client):
     assert len((await client.get("/shopping/")).json()) == 300
 
 
-@pytest.mark.asyncio
 async def test_shopping_item_name_over_limit_refused(client):
     """A shopping item name over the length limit gets 422, alone or in a bulk request."""
     long_name = "x" * (limits.NAME_MAX + 1)
@@ -42,7 +39,6 @@ async def test_shopping_item_name_over_limit_refused(client):
     assert (await client.post("/shopping/bulk", json=[{"item_name": long_name}])).status_code == 422
 
 
-@pytest.mark.asyncio
 async def test_habit_and_rule_text_over_limit_refused(client):
     """Habit and health rule text over the length limit gets 422, and a few sentences still save."""
     too_long = "x" * (limits.TEXT_MAX + 1)
@@ -53,7 +49,6 @@ async def test_habit_and_rule_text_over_limit_refused(client):
     assert (await client.post("/health-rules/", json={"rule_text": sentences})).status_code == 201
 
 
-@pytest.mark.asyncio
 async def test_preference_over_limit_refused(client):
     """A preference value or key over the length limit gets 422, and a sentence as the value still saves."""
     assert (await client.put("/preferences/avoid:x", json={"value": "x" * (limits.TEXT_MAX + 1)})).status_code == 422
@@ -63,7 +58,6 @@ async def test_preference_over_limit_refused(client):
     assert (await client.put(f"/preferences/avoid:{sentence}", json={"value": sentence})).status_code == 200
 
 
-@pytest.mark.asyncio
 async def test_meals_limit_bounds(client):
     """GET /meals takes a limit from 1 to the maximum and refuses anything else with 422."""
     assert (await client.get("/meals/?limit=0")).status_code == 422
@@ -74,7 +68,6 @@ async def test_meals_limit_bounds(client):
     assert (await client.get("/meals/")).status_code == 200
 
 
-@pytest.mark.asyncio
 async def test_logged_meal_menu_over_limit_refused(client):
     """A logged meal with a menu over the item limit gets 422, and a long real menu is still logged."""
     r = await client.post("/meals/", json={"meal_name": "Feast", "menu_items": _menu(limits.MENU_ITEMS_MAX + 1)})
@@ -84,14 +77,12 @@ async def test_logged_meal_menu_over_limit_refused(client):
     assert len(r.json()["menu_items"]) == 30
 
 
-@pytest.mark.asyncio
 async def test_logged_meal_oversized_json_refused(client):
     """A logged meal whose menu is too large as a whole gets 422, however few items it has."""
     huge = [{"name": "Dish", "ingredients": [], "method": "x" * limits.MEAL_JSON_MAX}]
     assert (await client.post("/meals/", json={"meal_name": "Feast", "menu_items": huge})).status_code == 422
 
 
-@pytest.mark.asyncio
 async def test_favorite_body_is_typed(client):
     """A favorite whose fields have the wrong type gets 422 instead of being stored."""
     assert (await client.post("/favorites/", json={"meal_name": "Toast", "ingredients": "bread"})).status_code == 422
@@ -101,7 +92,6 @@ async def test_favorite_body_is_typed(client):
     assert (await client.put(f"/favorites/{fav_id}", json={"meal_name": "Toast", "steps": "toast it"})).status_code == 422
 
 
-@pytest.mark.asyncio
 async def test_favorite_over_limits_refused(client):
     """A favorite with a name or a menu over the limits gets 422."""
     r = await client.post("/favorites/", json={"meal_name": "x" * (limits.MEAL_NAME_MAX + 1)})
@@ -112,7 +102,6 @@ async def test_favorite_over_limits_refused(client):
     assert r.status_code == 422
 
 
-@pytest.mark.asyncio
 async def test_favorite_saved_as_the_editor_sends_it(client):
     """A favorite sent with the editor's extra fields, a long menu and a prep time as text is saved."""
     meal = {
@@ -132,7 +121,6 @@ async def test_favorite_saved_as_the_editor_sends_it(client):
     assert saved["prep_time_min"] == 15
 
 
-@pytest.mark.asyncio
 async def test_session_message_over_limit_refused(client):
     """A saved chat message over the length limit or with an unknown role gets 422, and a long one still saves."""
     session_id = (await client.post("/sessions/")).json()["session_id"]
@@ -149,7 +137,6 @@ async def test_session_message_over_limit_refused(client):
     assert (await client.put(f"{url}/{message_id}", json={"ate_draft": {"menu": _menu(30)}})).status_code == 200
 
 
-@pytest.mark.asyncio
 async def test_refusals_are_422(client):
     """A blank staple name and a health rule update with nothing to change get 422."""
     assert (await client.post("/favorite-ingredients/", json={"ingredient_name": "   "})).status_code == 422
@@ -157,7 +144,6 @@ async def test_refusals_are_422(client):
     assert (await client.put(f"/health-rules/{rule_id}", json={})).status_code == 422
 
 
-@pytest.mark.asyncio
 async def test_invalid_group_reply_does_not_repeat_the_input(client):
     """An unknown group gets 422 with a fixed message that doesn't repeat what was sent."""
     r = await client.post("/ingredients/", json={"name": "Milk", "group_name": "Made-up group"})
@@ -165,7 +151,6 @@ async def test_invalid_group_reply_does_not_repeat_the_input(client):
     assert "Made-up group" not in r.text
 
 
-@pytest.mark.asyncio
 async def test_validation_reply_does_not_echo_the_input(client):
     """A 422 reply says where and why, without the value that was sent or library details."""
     secret = "s3cret-value-" + "x" * limits.NAME_MAX
@@ -177,7 +162,6 @@ async def test_validation_reply_does_not_echo_the_input(client):
     assert set(r.json()["detail"][0]) == {"loc", "msg"}
 
 
-@pytest.mark.asyncio
 async def test_login_validation_reply_does_not_echo_the_pin(client):
     """A login refused for its size doesn't send the PIN back."""
     pin = "9" * 65
@@ -186,7 +170,6 @@ async def test_login_validation_reply_does_not_echo_the_pin(client):
     assert pin not in r.text
 
 
-@pytest.mark.asyncio
 async def test_request_body_over_limit_refused(client):
     """A request body over the size limit gets 413 before it is read."""
     r = await client.post("/shopping/", json={"item_name": "x" * (limits.MAX_BODY_BYTES + 1)})
@@ -200,7 +183,6 @@ async def _chunks(body: bytes, size: int = 64 * 1024):
         yield body[start:start + size]
 
 
-@pytest.mark.asyncio
 async def test_undeclared_body_over_limit_refused(client):
     """A body sent without a declared length gets 413 once it passes the size limit, and nothing is saved."""
     body = json.dumps({"item_name": "x" * (limits.MAX_BODY_BYTES + 1)}).encode()
@@ -211,7 +193,6 @@ async def test_undeclared_body_over_limit_refused(client):
     assert (await client.get("/shopping/")).json() == []
 
 
-@pytest.mark.asyncio
 async def test_undeclared_body_under_limit_works(client):
     """A body sent without a declared length, in several pieces, under the size limit is read as usual."""
     items = [{"item_name": f"Item {i} " + "x" * 150} for i in range(limits.BULK_ITEMS_MAX)]
@@ -223,7 +204,6 @@ async def test_undeclared_body_under_limit_works(client):
     assert len((await client.get("/shopping/")).json()) == limits.BULK_ITEMS_MAX
 
 
-@pytest.mark.asyncio
 async def test_declared_length_that_is_not_a_number_refused(client):
     """A declared body length that isn't a number gets 413."""
     r = await client.post("/shopping/", content=b'{"item_name": "Milk"}', headers={
@@ -232,7 +212,6 @@ async def test_declared_length_that_is_not_a_number_refused(client):
     assert r.status_code == 413
 
 
-@pytest.mark.asyncio
 async def test_prep_time_out_of_range_refused(client):
     """A prep time below zero or over the maximum gets 422 on logged meals and favorites, and one in range saves."""
     for minutes in (-1, limits.PREP_TIME_MAX + 1):
@@ -245,7 +224,6 @@ async def test_prep_time_out_of_range_refused(client):
     assert (await client.post("/favorites/", json={"meal_name": "Toast", "prep_time_min": 20})).status_code == 201
 
 
-@pytest.mark.asyncio
 async def test_ingredient_quantity_out_of_range_refused(client):
     """An ingredient quantity below zero or over the maximum gets 422, and a real one is logged."""
     for quantity in (-1, limits.AMOUNT_MAX + 1):
@@ -255,7 +233,6 @@ async def test_ingredient_quantity_out_of_range_refused(client):
     assert (await client.post("/meals/", json=body)).status_code == 201
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize("field, too_low, too_high", [
     ("age", 0, limits.AGE_MAX + 1),
     ("height_cm", 0, limits.HEIGHT_CM_MAX + 1),
@@ -271,7 +248,6 @@ async def test_profile_numbers_out_of_range_refused(client, field, too_low, too_
     assert r.json()[field] == top
 
 
-@pytest.mark.asyncio
 async def test_profile_saved_before_the_ranges_still_reads(client, db):
     """A profile stored with a value outside today's ranges is still returned."""
     await client.put("/profile/", json={"age": 30})
@@ -304,7 +280,6 @@ _ID_PATHS = [
 ]
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize("method, path, body", _ID_PATHS)
 async def test_path_id_out_of_range_refused(client, method, path, body):
     """An id in a path below 1 or over the maximum gets 422, and an unknown id in range gets the route's usual reply."""
@@ -315,7 +290,6 @@ async def test_path_id_out_of_range_refused(client, method, path, body):
     assert r.status_code in (204, 404), path
 
 
-@pytest.mark.asyncio
 async def test_ids_in_bodies_out_of_range_refused(client):
     """An id in a request body or list below 1 or over the maximum gets 422 on each endpoint that takes one."""
     session_id = (await client.post("/sessions/")).json()["session_id"]
@@ -333,7 +307,6 @@ async def test_ids_in_bodies_out_of_range_refused(client):
     assert (await client.put(f"/sessions/{session_id}/selected", json={"message_id": None})).status_code == 200
 
 
-@pytest.mark.asyncio
 async def test_long_path_text_refused(client):
     """Text in a path longer than its matching field gets 422: session ids, preference keys, appliance keys, staples."""
     long_session = "s" * (limits.SESSION_ID_MAX + 1)
@@ -350,7 +323,6 @@ async def test_long_path_text_refused(client):
     assert (await client.put("/kitchen/spaceship", json={"enabled": True})).status_code == 404
 
 
-@pytest.mark.asyncio
 async def test_shopping_suggestions_error_holds_no_exception_text(client, caplog):
     """When shopping suggestions fail, the reply carries a fixed message and the cause goes to the log only."""
     cause = "Traceback: C:\\server\\secret\\path.py connection refused at 10.0.0.5"
@@ -363,7 +335,6 @@ async def test_shopping_suggestions_error_holds_no_exception_text(client, caplog
     assert "connection refused" in caplog.text
 
 
-@pytest.mark.asyncio
 async def test_shopping_context_error_holds_no_exception_text(client):
     """When loading the shopping context fails, the reply carries the same fixed message."""
     cause = "no such table: secret_table"
@@ -374,7 +345,6 @@ async def test_shopping_context_error_holds_no_exception_text(client):
     assert r.json()["error"] == "Could not get suggestions. Please try again."
 
 
-@pytest.mark.asyncio
 async def test_replies_leave_out_the_account_id(client):
     """Replies about the user's own data don't carry the account's internal id."""
     await client.post("/favorites/", json={"meal_name": "Toast"})

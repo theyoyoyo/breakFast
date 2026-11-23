@@ -1,6 +1,5 @@
 """Tests for the /favorites endpoints."""
 
-import pytest
 
 SAMPLE_MEAL = {
     "meal_name": "Serpme Kahvaltı",
@@ -15,7 +14,6 @@ SAMPLE_MEAL = {
 }
 
 
-@pytest.mark.asyncio
 async def test_list_empty(client):
     """Empty favorites list returns 200 with empty array."""
     r = await client.get("/favorites/")
@@ -23,7 +21,6 @@ async def test_list_empty(client):
     assert r.json() == []
 
 
-@pytest.mark.asyncio
 async def test_add_and_list(client):
     """Adding a favorite returns its id and it appears in the list."""
     r = await client.post("/favorites/", json=SAMPLE_MEAL)
@@ -40,7 +37,6 @@ async def test_add_and_list(client):
     assert len(favs[0]["ingredients"]) == 2
 
 
-@pytest.mark.asyncio
 async def test_delete(client):
     """Deleting a favorite removes it from the list."""
     r = await client.post("/favorites/", json=SAMPLE_MEAL)
@@ -53,7 +49,6 @@ async def test_delete(client):
     assert r.json() == []
 
 
-@pytest.mark.asyncio
 async def test_delete_not_found(client):
     """Deleting a non-existent favorite returns 404 and deletes nothing."""
     await client.post("/favorites/", json=SAMPLE_MEAL)
@@ -63,7 +58,6 @@ async def test_delete_not_found(client):
     assert (await client.get("/favorites/")).json() == before
 
 
-@pytest.mark.asyncio
 async def test_update(client):
     """Updating a favorite changes its data."""
     r = await client.post("/favorites/", json=SAMPLE_MEAL)
@@ -79,7 +73,6 @@ async def test_update(client):
     assert fav["prep_time_min"] == 20
 
 
-@pytest.mark.asyncio
 async def test_update_not_found(client):
     """Updating a non-existent favorite returns 404, saves nothing and changes no other favorite."""
     await client.post("/favorites/", json=SAMPLE_MEAL)
@@ -105,7 +98,6 @@ async def _second_user_auth():
 
 
 # A second favorite with a name already taken (any case, extra spaces) is refused, whatever its food
-@pytest.mark.asyncio
 async def test_same_name_refused(client):
     meal2 = {**SAMPLE_MEAL, "meal_name": "  SERPME kahvaltı ", "ingredients": [{"name": "Yumurta", "quantity": 2, "unit": "adet"}]}
     assert (await client.post("/favorites/", json=SAMPLE_MEAL)).status_code == 201
@@ -116,7 +108,6 @@ async def test_same_name_refused(client):
 
 
 # Names are unique per user: another user may save a favorite with the same name
-@pytest.mark.asyncio
 async def test_other_user_can_use_name(client):
     await client.post("/favorites/", json=SAMPLE_MEAL)
     r = await client.post("/favorites/", json=SAMPLE_MEAL, headers=await _second_user_auth())
@@ -124,7 +115,6 @@ async def test_other_user_can_use_name(client):
 
 
 # A rename to another favorite's name is refused and leaves the favorite as it was
-@pytest.mark.asyncio
 async def test_rename_to_taken_name_refused(client):
     await client.post("/favorites/", json=SAMPLE_MEAL)
     other_id = (await client.post("/favorites/", json={**SAMPLE_MEAL, "meal_name": "Omlet"})).json()["id"]
@@ -135,7 +125,6 @@ async def test_rename_to_taken_name_refused(client):
 
 
 # Favorites that shared a name before the rule can still be edited when they keep their name
-@pytest.mark.asyncio
 async def test_old_duplicates_keep_their_name(client, db):
     for _ in range(2):
         await db.execute(
@@ -148,7 +137,6 @@ async def test_old_duplicates_keep_their_name(client, db):
 
 
 # A favorite saved with an icon keeps it, and one saved without gets none (the app shows one from its id)
-@pytest.mark.asyncio
 async def test_favorite_keeps_its_emoji(client):
     await client.post("/favorites/", json={**SAMPLE_MEAL, "emoji": "🥐"})
     await client.post("/favorites/", json={**SAMPLE_MEAL, "meal_name": "Omlet", "emoji": "  "})
@@ -157,7 +145,6 @@ async def test_favorite_keeps_its_emoji(client):
 
 
 # An edit changes the icon when it sends one, and a rename sent without one keeps the saved icon
-@pytest.mark.asyncio
 async def test_update_changes_or_keeps_emoji(client):
     fav_id = (await client.post("/favorites/", json={**SAMPLE_MEAL, "emoji": "🥐"})).json()["id"]
 
@@ -170,7 +157,6 @@ async def test_update_changes_or_keeps_emoji(client):
 
 
 # An icon longer than one emoji is refused with 422
-@pytest.mark.asyncio
 async def test_long_emoji_refused(client):
     r = await client.post("/favorites/", json={**SAMPLE_MEAL, "emoji": "🥐" * 20})
     assert r.status_code == 422

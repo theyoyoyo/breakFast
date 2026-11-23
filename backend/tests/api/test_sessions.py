@@ -9,7 +9,6 @@ import pytest
 from tests.chat_socket import open_chat
 
 
-@pytest.mark.asyncio
 async def test_create_session(client):
     r = await client.post("/sessions/")
     assert r.status_code == 200
@@ -18,7 +17,6 @@ async def test_create_session(client):
     assert len(data["session_id"]) == 36  # UUID format
 
 
-@pytest.mark.asyncio
 async def test_get_active_session_creates_if_none(client):
     """First call to /sessions/active should auto-create a session."""
     r = await client.get("/sessions/active")
@@ -27,7 +25,6 @@ async def test_get_active_session_creates_if_none(client):
     assert "id" in data
 
 
-@pytest.mark.asyncio
 async def test_get_active_session_returns_latest(client):
     """Should return the most recently updated session."""
     await client.post("/sessions/")
@@ -39,7 +36,6 @@ async def test_get_active_session_returns_latest(client):
     assert r.json()["id"] == sid2
 
 
-@pytest.mark.asyncio
 async def test_list_sessions(client):
     await client.post("/sessions/")
     await client.post("/sessions/")
@@ -50,7 +46,6 @@ async def test_list_sessions(client):
     assert len(sessions) >= 2
 
 
-@pytest.mark.asyncio
 async def test_get_messages_empty(client):
     r = await client.post("/sessions/")
     sid = r.json()["session_id"]
@@ -60,7 +55,6 @@ async def test_get_messages_empty(client):
     assert r.json() == []
 
 
-@pytest.mark.asyncio
 async def test_delete_session(client):
     """Deleting a session should remove it and its messages."""
     r = await client.post("/sessions/")
@@ -75,7 +69,6 @@ async def test_delete_session(client):
     assert sid not in ids
 
 
-@pytest.mark.asyncio
 async def test_delete_session_goes_back_to_previous(client):
     """After deleting active session, previous session should become active."""
     r1 = await client.post("/sessions/")
@@ -92,7 +85,6 @@ async def test_delete_session_goes_back_to_previous(client):
     assert r.json()["id"] == sid1
 
 
-@pytest.mark.asyncio
 async def test_messages_persist_via_websocket(client, tmp_path, monkeypatch):
     """Messages sent via WebSocket should be persisted and retrievable."""
     import json

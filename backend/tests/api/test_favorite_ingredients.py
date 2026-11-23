@@ -1,9 +1,7 @@
 """Tests for the favorite ingredients API endpoints."""
 
-import pytest
 
 
-@pytest.mark.asyncio
 async def test_list_empty(client):
     """Empty favorites returns empty list."""
     r = await client.get("/favorite-ingredients/")
@@ -11,7 +9,6 @@ async def test_list_empty(client):
     assert r.json() == []
 
 
-@pytest.mark.asyncio
 async def test_add_and_list(client):
     """Add a favorite then list it."""
     r = await client.post("/favorite-ingredients/", json={"ingredient_name": "Ceviz"})
@@ -24,7 +21,6 @@ async def test_add_and_list(client):
     assert r2.json()[0]["ingredient_name"] == "Ceviz"
 
 
-@pytest.mark.asyncio
 async def test_duplicate_returns_409(client):
     """Adding the same ingredient twice returns 409."""
     await client.post("/favorite-ingredients/", json={"ingredient_name": "Bal"})
@@ -32,7 +28,6 @@ async def test_duplicate_returns_409(client):
     assert r.status_code == 409
 
 
-@pytest.mark.asyncio
 async def test_remove(client):
     """Remove a favorited ingredient."""
     await client.post("/favorite-ingredients/", json={"ingredient_name": "Tahin"})
@@ -43,7 +38,6 @@ async def test_remove(client):
     assert len(r2.json()) == 0
 
 
-@pytest.mark.asyncio
 async def test_remove_not_found(client):
     """Removing a non-existent favorite returns 404."""
     r = await client.delete("/favorite-ingredients/NonExistent")
