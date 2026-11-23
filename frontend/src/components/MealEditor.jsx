@@ -157,10 +157,19 @@ export default function MealEditor({
 
   // ── Top-level item handlers ──────────────────────────────────────────────
 
+  // Deleting an item clears the pairings that name it and keeps those items: the user deletes only what they tap (#263)
   const handleDelete = (idx) => {
     if (openDishIdx === idx) setOpenDishIdx(null)
     else if (openDishIdx !== null && openDishIdx > idx) setOpenDishIdx(i => i - 1)
-    setItems(prev => prev.filter((_, i) => i !== idx))
+    setItems(prev => {
+      const gone = String(prev[idx]?.name ?? '').trim().toLowerCase()
+      return prev.filter((_, i) => i !== idx).map(item => {
+        if (typeof item.serve_with !== 'string' || item.serve_with.trim().toLowerCase() !== gone) return item
+        const kept = { ...item }
+        delete kept.serve_with
+        return kept
+      })
+    })
   }
 
   const handleQtyChange = (idx, val) => {
@@ -317,17 +326,18 @@ export default function MealEditor({
   const handleSave = () => onSave?.(buildCurrentMeal())
 
   // How the suggestion meant each item to be made, behind the ℹ️ button: a dish's method, its ingredients'
-  // prep words ("Oats: rolled") and the ones the review put in for a missing item (#148), and the method
-  // of a simple item that is cut or cooked (#156)
+  // prep words ("Oats: rolled") and the ones the review put in for a missing item (#148), the method
+  // of a simple item that is cut or cooked (#156), and the item it's served with or on (#263)
   const prepDetails = menuMode
     ? items
         .map(item => ({
           dish: item.name,
           method: typeof item.method === 'string' ? item.method.trim() : '',
+          serveWith: servedWith(item, items),
           notes: (item.ingredients || []).filter(sub => typeof sub.prep === 'string' && sub.prep.trim()),
           swaps: isSimpleItem(item) ? [] : (item.ingredients || []).filter(sub => replacedName(sub)),
         }))
-        .filter(({ method, notes, swaps }) => method || notes.length > 0 || swaps.length > 0)
+        .filter(({ method, serveWith, notes, swaps }) => method || serveWith || notes.length > 0 || swaps.length > 0)
     : []
 
   // This meal is a favorite when one has its name (as typed now: exact, any case, like the server's
@@ -425,10 +435,11 @@ export default function MealEditor({
 
       {detailsOpen && prepDetails.length > 0 && (
         <div style={s.detailsBox}>
-          {prepDetails.map(({ dish, method, notes, swaps }, di) => (
+          {prepDetails.map(({ dish, method, serveWith, notes, swaps }, di) => (
             <div key={di}>
               <div style={s.detailsDish}>{dish}</div>
               {method && <div style={s.detailsMethod}>{method}</div>}
+              {serveWith && <div style={s.detailsLine}>Serve with: {serveWith}</div>}
               {notes.map((sub, ni) => (
                 <div key={`prep-${ni}`} style={s.detailsLine}>{sub.name}: {sub.prep.trim()}</div>
               ))}
@@ -633,4 +644,15 @@ function isSimpleItem(item) {
  */
 function replacedName(sub) {
   return typeof sub?.replaces === 'string' ? sub.replaces.trim() : ''
+}
+
+/**
+ * The menu item an item is served with or on (`serve_with`, #263), as that item is named now; '' when it
+ * names no other item of the menu, since an edit may have renamed or removed it. The field rides along
+ * with the item through edits, like its method.
+ */
+function servedWith(item, items) {
+  const target = typeof item?.serve_with === 'string' ? item.serve_with.trim().toLowerCase() : ''
+  const other = target && items.find(o => o !== item && String(o.name ?? '').trim().toLowerCase() === target)
+  return other ? String(other.name).trim() : ''
 }
