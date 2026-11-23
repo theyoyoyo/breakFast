@@ -76,6 +76,9 @@
   --c-gold: #4a3a10;               /* soft yellow fill */
   --c-gold-border: #b8922a;
   --c-gold-text: #e8c84a;
+  --c-ring-ready: #8bc59a;         /* a meal icon's readiness ring (#244) */
+  --c-ring-missing: #e8c84a;
+  --ring-w: 2px;
   --c-star: #f5a623;
   --c-error: #e76f51;
   --c-danger: #ec7063;             /* red text and icons */
@@ -180,6 +183,9 @@
   --c-gold: #f6ecc4;
   --c-gold-border: #b8922a;
   --c-gold-text: #7e6800;
+  --c-ring-ready: #3f9a5f;         /* livelier than the text colors; the ring is thicker */
+  --c-ring-missing: #c98f00;
+  --ring-w: 3px;
   --c-star: #b87a05;
   --c-error: #b64326;
   --c-danger: #b84137;

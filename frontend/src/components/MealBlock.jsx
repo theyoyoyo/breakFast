@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { addFavorite, deleteFavorite } from '../services/api'
 import { formatIngredient } from '../utils/ingredients'
-import { pickEmoji } from '../utils/emoji'
+import { mealEmoji } from '../utils/emoji'
 import { useMealReadiness } from '../hooks/useMealReadiness'
 import { useLanguage } from '../hooks/useLanguage'
 import MealEditor from './MealEditor'
@@ -12,12 +12,11 @@ import * as s from './MealBlock.styles'
  * Clickable meal summary block rendered inline in chat.
  * Shows checkbox, meal names, prep time, and analysis button.
  * Click opens the shared MealEditor in an overlay.
- * The icon's background shows readiness: green when everything is in the fridge (or marked
+ * The icon's ring shows readiness: green when everything is in the fridge (or marked
  * as obtained), yellow when something is still missing. fridgeCheckKey re-runs the check.
  */
 export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, analyzing, onSchedule, scheduling, fridgeCheckKey }) {
   const [panelOpen, setPanelOpen] = useState(false)
-  const [emoji] = useState(pickEmoji)
 
   const { readiness, stillMissing } = useMealReadiness(meal, fridgeCheckKey)
   const language = useLanguage()
@@ -32,6 +31,8 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
       : meal?.meal_name || 'Meal'
 
   const mealName = meal?.menu_name || meal?.meal_name || 'Meal'
+  // The icon the server gave the card (#244); an older card without one gets the same icon from its name
+  const emoji = mealEmoji(meal, mealName)
   // Stable object: MealEditor resets its edits whenever it receives a new meal
   const editorMeal = useMemo(() => ({ ...meal, meal_name: mealName }), [meal, mealName])
 
@@ -55,6 +56,7 @@ export default function MealBlock({ meal, checked, onCheck, onSave, onAnalyze, a
       prep_time_min: currentMeal.prep_time_min,
       nutrition_note: currentMeal.nutrition_note,
       menu_items: currentMeal.menu || currentMeal.menu_items || null,
+      emoji: currentMeal.emoji || emoji,
     })
     return id
   }

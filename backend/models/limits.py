@@ -21,6 +21,7 @@ NOTE_MAX = 5_000           # longer notes: description, supplement contents, a r
 CHAT_MESSAGE_MAX = 20_000  # one typed chat message
 MESSAGE_CONTENT_MAX = 200_000  # a stored chat message: a reply with its meal card, an analysis, a plan
 SESSION_ID_MAX = 100       # a chat session id
+EMOJI_MAX = 16             # a meal's icon: one emoji, a few code points with its variation selectors
 
 # --- Lists (items) ---
 MENU_ITEMS_MAX = 100       # dishes and items on one menu
@@ -52,6 +53,7 @@ ShortText = Annotated[str, StringConstraints(max_length=SHORT_TEXT_MAX)]
 Text = Annotated[str, StringConstraints(max_length=TEXT_MAX)]
 Note = Annotated[str, StringConstraints(max_length=NOTE_MAX)]
 MessageContent = Annotated[str, StringConstraints(max_length=MESSAGE_CONTENT_MAX)]
+Emoji = Annotated[str, StringConstraints(strip_whitespace=True, max_length=EMOJI_MAX)]
 
 # Free-form JSON values with a size cap
 SizedDict = Annotated[dict, AfterValidator(_sized)]

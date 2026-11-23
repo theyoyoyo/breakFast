@@ -33,6 +33,7 @@ import logging
 import re
 from typing import AsyncGenerator
 
+from models.meal import with_emoji
 from models.units import units_for, unknown_units
 from services.fridge import find_avoided, find_missing_ingredients, in_fridge, meal_ingredient_names, same_name
 from services.llm import chat_json, stream_response
@@ -437,6 +438,8 @@ async def run_suggestion_pipeline(
         text = _FENCED_RE.sub("", "".join(chunks)).strip()
     except Exception:
         logging.exception("Suggestion present step failed; code writes the text")
+    # The card's icon is picked once here, so every device and reload shows the same one (#244)
+    meal = with_emoji(meal)
     final_text = _meal_reply(text or _code_text(meal), meal)
 
     yield {"type": "token", "content": final_text}

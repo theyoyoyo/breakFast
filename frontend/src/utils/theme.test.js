@@ -114,6 +114,34 @@ describe('theme', () => {
     }
   })
 
+  // A meal icon's ready and missing rings (#244) pass 3:1 in dark and 2.3:1 in light (a livelier yellow, drawn 3px thick) on its tile and on the card
+  // around it in both modes; themes don't change these colors, so one check per mode covers all five
+  it('keeps the readiness rings visible in both modes', async () => {
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    const css = fs.readFileSync(path.resolve(process.cwd(), 'src/index.css'), 'utf8')
+    const block = (selector) => css.slice(css.indexOf(`${selector} {`)).split('}')[0]
+    const luminance = (hex) => {
+      const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+        .map(c => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+    const contrast = (a, b) => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
+      return (hi + 0.05) / (lo + 0.05)
+    }
+    for (const mode of [':root', ':root[data-mode="light"]']) {
+      const text = block(mode)
+      const color = (name) => text.match(new RegExp(`--${name}:\\s*(#[0-9a-f]{6})`, 'i'))?.[1]
+      const floor = mode === ':root' ? 3 : 2.3
+      for (const ring of ['c-ring-ready', 'c-ring-missing']) {
+        for (const bg of ['surface', 'surface2']) {
+          expect(contrast(color(ring), color(bg)), `${mode} ${ring} on ${bg}`).toBeGreaterThanOrEqual(floor)
+        }
+      }
+    }
+  })
+
   // Each swatch in Settings is the theme's accent in that mode
   it('matches the swatches to the accents', async () => {
     const fs = await import('node:fs')

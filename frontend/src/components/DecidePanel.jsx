@@ -129,6 +129,7 @@ export default function DecidePanel({ meal, saved, onSave, onClose, onConfirm, s
       prep_time_min: currentMeal.prep_time_min,
       nutrition_note: currentMeal.nutrition_note,
       menu_items: currentMeal.menu || currentMeal.menu_items || null,
+      emoji: currentMeal.emoji || null,
     })
     return id
   }, [])

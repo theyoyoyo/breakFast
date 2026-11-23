@@ -470,3 +470,19 @@ async def test_app_connections_enforce_foreign_keys(db_path):
             await db.execute(
                 "INSERT INTO chat_messages (session_id, user_id, role, content) VALUES ('made-up', 1, 'user', 'Hi')"
             )
+
+
+# Step 4 (#244) gives a database at version 3 the favorites' icon column, and its favorites keep their rows
+async def test_version_3_gets_favorite_emoji(db_path):
+    await database.init_db()
+    with closing(sqlite3.connect(db_path)) as db:
+        db.execute("INSERT INTO users (id, name, pin_hash) VALUES (1, 'Alice', 'x')")
+        db.execute("ALTER TABLE favorite_meals DROP COLUMN emoji")
+        db.execute("INSERT INTO favorite_meals (user_id, meal_name) VALUES (1, 'Plate')")
+        db.execute("PRAGMA user_version = 3")
+        db.commit()
+
+    await database.init_db()
+    assert "emoji" in _columns(db_path)["favorite_meals"]
+    assert _query(db_path, "SELECT meal_name, emoji FROM favorite_meals") == [("Plate", None)]
+    assert _query(db_path, "PRAGMA user_version") == [(LATEST,)]

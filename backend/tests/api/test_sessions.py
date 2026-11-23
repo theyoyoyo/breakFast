@@ -2,6 +2,8 @@
 Tests for /sessions endpoints — chat session management and message persistence.
 """
 
+import json
+
 import pytest
 
 from tests.chat_socket import open_chat
@@ -330,3 +332,18 @@ async def test_socket_session_frame_for_session_not_own_is_ignored(client, db):
     assert await _message_count(db, "bob-session") == 0
     assert await _message_count(db, "older-session") == 2
     assert await _message_count(db, "current-session") == 0
+
+
+# A favorite sent to chat is saved as a card whose meal block carries the favorite's icon
+async def test_favorite_sent_to_chat_keeps_its_emoji(client, db):
+    from utils import extract_json_block
+
+    await _add_session(db, "testuser", "own-session")
+    fav_id = (await client.post("/favorites/", json={"meal_name": "Plate", "emoji": "🥯"})).json()["id"]
+    fav = next(f for f in (await client.get("/favorites/")).json() if f["id"] == fav_id)
+    content = f"⭐ From favorites: Plate\n\n```json\n{json.dumps(fav, ensure_ascii=False)}\n```"
+
+    r = await client.post("/sessions/own-session/messages", json={"content": content, "select": True})
+    assert r.status_code == 200
+    saved = (await client.get("/sessions/own-session/messages")).json()[0]
+    assert extract_json_block(saved["content"])["emoji"] == "🥯"

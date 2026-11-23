@@ -1,3 +1,4 @@
+import random
 from typing import Any, List, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator
@@ -6,6 +7,7 @@ from models.limits import (
     INGREDIENTS_MAX,
     MENU_ITEMS_MAX,
     STEPS_MAX,
+    Emoji,
     MealName,
     Name,
     Note,
@@ -13,6 +15,22 @@ from models.limits import (
     SizedItem,
     SizedList,
 )
+
+# Breakfast emojis used as meal icons, mirrored in frontend/src/utils/emoji.js (edit both).
+# A suggestion gets one at random on the server; Favorites' picker offers only these.
+BREAKFAST_EMOJIS = [
+    "🍳", "🥐", "🧀", "🥚", "🫕", "🥞", "🧇", "🥣", "🍞", "🥯", "🫖", "☕",
+    "🥗", "🥑", "🍯", "🫒", "🧈", "🥛", "🍵", "🫐", "🍓", "🍌", "🍊", "🍇",
+    "🥜", "🌰", "🥒", "🍅", "🫑", "🌿", "🌶️", "🧄", "🫘", "🥕", "🌽", "🥦",
+    "🍋", "🥝", "🍑", "🫚", "🥥", "🧆", "🥙", "🫓", "🥖", "🥨", "🥮", "🍠",
+]
+
+
+def with_emoji(meal: dict) -> dict:
+    """The meal with an icon: one it already has stays, else a random one from the list."""
+    if meal.get("emoji"):
+        return meal
+    return {**meal, "emoji": random.choice(BREAKFAST_EMOJIS)}
 
 
 class MealIngredient(BaseModel):
@@ -44,6 +62,12 @@ class FavoriteIn(BaseModel):
     nutrition_note: Optional[Note] = None
     menu_items: Optional[SizedList] = Field(default=None, max_length=MENU_ITEMS_MAX)
     menu: Optional[SizedList] = Field(default=None, max_length=MENU_ITEMS_MAX)
+    emoji: Optional[Emoji] = None  # the meal's icon (#244); a blank one counts as none
+
+    @field_validator("emoji", mode="after")
+    @classmethod
+    def _blank_emoji(cls, v):
+        return v or None
 
     @field_validator("prep_time_min", mode="before")
     @classmethod

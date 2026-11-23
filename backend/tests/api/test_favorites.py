@@ -139,3 +139,32 @@ async def test_old_duplicates_keep_their_name(client, db):
     fav_id = (await client.get("/favorites/")).json()[0]["id"]
     r = await client.put(f"/favorites/{fav_id}", json={**SAMPLE_MEAL, "prep_time_min": 12})
     assert r.status_code == 200
+
+
+# A favorite saved with an icon keeps it, and one saved without gets none (the app shows one from its id)
+@pytest.mark.asyncio
+async def test_favorite_keeps_its_emoji(client):
+    await client.post("/favorites/", json={**SAMPLE_MEAL, "emoji": "🥐"})
+    await client.post("/favorites/", json={**SAMPLE_MEAL, "meal_name": "Omlet", "emoji": "  "})
+    favs = {f["meal_name"]: f["emoji"] for f in (await client.get("/favorites/")).json()}
+    assert favs == {"Serpme Kahvaltı": "🥐", "Omlet": None}
+
+
+# An edit changes the icon when it sends one, and a rename sent without one keeps the saved icon
+@pytest.mark.asyncio
+async def test_update_changes_or_keeps_emoji(client):
+    fav_id = (await client.post("/favorites/", json={**SAMPLE_MEAL, "emoji": "🥐"})).json()["id"]
+
+    assert (await client.put(f"/favorites/{fav_id}", json={**SAMPLE_MEAL, "emoji": "🧇"})).status_code == 200
+    assert (await client.get("/favorites/")).json()[0]["emoji"] == "🧇"
+
+    assert (await client.put(f"/favorites/{fav_id}", json={**SAMPLE_MEAL, "meal_name": "Brunch"})).status_code == 200
+    fav = (await client.get("/favorites/")).json()[0]
+    assert (fav["meal_name"], fav["emoji"]) == ("Brunch", "🧇")
+
+
+# An icon longer than one emoji is refused with 422
+@pytest.mark.asyncio
+async def test_long_emoji_refused(client):
+    r = await client.post("/favorites/", json={**SAMPLE_MEAL, "emoji": "🥐" * 20})
+    assert r.status_code == 422

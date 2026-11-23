@@ -178,6 +178,7 @@ CREATE TABLE IF NOT EXISTS favorite_meals (
     prep_time_min   INTEGER,
     nutrition_note  TEXT,
     menu_items      TEXT,           -- JSON menu array (new multi-item format)
+    emoji           TEXT,           -- the meal's icon (#244); none on older favorites
     created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -456,11 +457,17 @@ async def _drop_orphans(db) -> None:
             await db.execute(f"DELETE FROM {table} WHERE rowid = ?", (rowid,))
 
 
+async def _favorite_emoji(db) -> None:
+    """Step 4 (#244): a favorite keeps its icon; older favorites have none and show one from their id."""
+    await _add_column(db, "favorite_meals", "emoji", "TEXT")
+
+
 # (number, what it does, step). The number is the PRAGMA user_version once the step has run.
 MIGRATIONS = [
     (1, "group picks and the built-in food list", _regroup),
     (2, "tables and columns added before the numbered steps", _legacy_schema),
     (3, "rows left without their parent row", _drop_orphans),
+    (4, "a favorite's icon", _favorite_emoji),
 ]
 
 

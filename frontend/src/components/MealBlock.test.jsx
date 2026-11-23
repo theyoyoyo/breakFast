@@ -4,9 +4,10 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import MealBlock from './MealBlock'
-import { checkMissingIngredients } from '../services/api'
+import { checkMissingIngredients, addFavorite } from '../services/api'
+import { emojiFor } from '../utils/emoji'
 
 vi.mock('../services/api', () => ({
   checkMissingIngredients: vi.fn(),
@@ -57,5 +58,45 @@ describe('MealBlock readiness', () => {
     render(<MealBlock meal={MEAL} />)
     await waitFor(() => expect(checkMissingIngredients).toHaveBeenCalled())
     expect(screen.queryByTitle(/ready/i)).toBeNull()
+  })
+
+  // The card shows the icon the server gave its meal, the same on every render (#244)
+  it("shows the meal's saved icon", async () => {
+    checkMissingIngredients.mockResolvedValue({ missing: [] })
+    const { rerender } = render(<MealBlock meal={{ ...MEAL, emoji: '🥯' }} />)
+    expect(await screen.findByTitle('Ready — everything is in your fridge')).toHaveTextContent('🥯')
+    rerender(<MealBlock meal={{ ...MEAL, emoji: '🥯' }} />)
+    expect(screen.getByTitle('Ready — everything is in your fridge')).toHaveTextContent('🥯')
+  })
+
+  // An older card without an icon gets the same one from its name every time
+  it('gives an older card a stable icon', async () => {
+    checkMissingIngredients.mockResolvedValue({ missing: [] })
+    render(<MealBlock meal={MEAL} />)
+    expect(await screen.findByTitle('Ready — everything is in your fridge')).toHaveTextContent(emojiFor('Test Breakfast'))
+  })
+
+  // The ready and missing rings sit on a neutral tile in the mode's green and yellow, with no tinted fill
+  it('draws the readiness as a ring on a neutral tile', async () => {
+    checkMissingIngredients.mockResolvedValueOnce({ missing: [] }).mockResolvedValueOnce({ missing: ['Olives'] })
+    render(<MealBlock meal={MEAL} />)
+    const ready = await screen.findByTitle('Ready — everything is in your fridge')
+    expect(ready.style.background).toBe('var(--surface)')
+    expect(ready.style.border).toBe('var(--ring-w) solid var(--c-ring-ready)')
+    render(<MealBlock meal={MEAL} fridgeCheckKey={1} />)
+    const missing = await screen.findByTitle('Not ready — missing: Olives')
+    expect(missing.style.background).toBe('var(--surface)')
+    expect(missing.style.border).toBe('var(--ring-w) solid var(--c-ring-missing)')
+  })
+
+  // Saving a card to Favorites copies its icon
+  it('copies the icon to a new favorite', async () => {
+    checkMissingIngredients.mockResolvedValue({ missing: [] })
+    addFavorite.mockResolvedValue({ id: 3 })
+    render(<MealBlock meal={{ ...MEAL, emoji: '🥯' }} />)
+    fireEvent.click(await screen.findByText('Test Breakfast'))
+    fireEvent.click(await screen.findByTitle(/favorite/i))
+    await waitFor(() => expect(addFavorite).toHaveBeenCalled())
+    expect(addFavorite.mock.calls[0][0].emoji).toBe('🥯')
   })
 })
