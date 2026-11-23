@@ -18,13 +18,18 @@ Five users from the 15-fridge test (2026-10-30), whose replies looked clean but 
 - picky: nuts avoided with almond milk in the fridge, dislikes, favorites mode with saved
   favorite meals, staples and ratings from its fridge (#132).
 - diabetic: a critical blood sugar rule, with white bread and honey in the fridge.
-- student: no stove (microwave, kettle, toaster), ten minutes on weekdays.
-- big_fridge: about 50 items and every appliance.
+- student: a budget fridge and a microwave, ten minutes on weekdays.
+- big_fridge: about 60 items and every appliance.
+Kitchens are a usual home's (stove, oven, toaster, kettle, blender, sandwich press) plus any extra
+appliance a user has, and fridges hold about 45-55 items, pantry included, enough for options and rich menus,
+except demo (the app's
+starter fridge), sparse and bare (#188).
 - greek: explore mode, with figs and pomegranate in season.
 SAMPLE_MODES holds the Suggest mode a sample's user usually presses.
 
 chat_scenario() gives the chat a Suggest press comes after (--scenario, #159): none (fresh), a few
-typed messages (chat), or the same messages between two earlier presses (pressed).
+typed messages (chat), or the same messages between two earlier presses (pressed). The messages are
+in the sample's reply language, and mixed has no chat: en and tr cover it (#178).
 
 PLAN_CASES are menus for the prep plan test, shaped the way the Prep Plan button sends them.
 
@@ -37,8 +42,17 @@ the review must keep, and prep words to fix (#176).
 import random
 
 from models.ingredient import DEMO_FRIDGE
+from models.kitchen import KITCHEN_APPLIANCES
 from models.units import count_unit
 from services.fridge import same_name
+
+# A usual home kitchen (#188)
+_HOME = {"Stove", "Oven", "Toaster", "Kettle", "Blender", "Sandwich Press"}
+
+
+def _kitchen(*extra: str) -> list[str]:
+    """A usual home kitchen plus a user's extra appliances, in the app's order."""
+    return [a["name"] for a in KITCHEN_APPLIANCES if a["name"] in _HOME | set(extra)]
 
 
 def _fridge(groups: dict[str, list[str]]) -> list[dict]:
@@ -59,7 +73,7 @@ def _favorite(name: str, *menu: str | tuple[str, list[str]]) -> dict:
 
 
 # What every sample shares unless it says otherwise: no preferences, habits, rules or
-# supplements, a basic kitchen, an empty shopping list and no staples, saved favorite meals or ratings
+# supplements, a usual home kitchen, an empty shopping list and no staples, saved favorite meals or ratings
 _BASE = {
     "country": "Türkiye",
     "preferences": {},
@@ -69,7 +83,7 @@ _BASE = {
     "user_profile": None,
     "supplements": [],
     "avoid_list": [],
-    "kitchen_appliances": ["Stove", "Toaster", "Kettle"],
+    "kitchen_appliances": _kitchen(),
     "weekly_summary": None,
     "shopping_list": [],
     "favorites": [],
@@ -78,15 +92,17 @@ _BASE = {
 }
 
 _TURKISH_FRIDGE = _fridge({
-    "🐄 Animal Products": ["Yumurta", "Beyaz peynir", "Kaşar peyniri", "Tereyağı", "Yoğurt", "Süt", "Sucuk"],
-    "🥬 Produce": ["Domates", "Salatalık", "Sivri biber", "Maydanoz"],
-    "🍞 Breads": ["Ekmek", "Simit"],
-    "🍯 Sweets": ["Bal"],
-    "🫒 Breakfast Staples": ["Siyah zeytin"],
-    "🥜 Nuts & Seeds": ["Ceviz"],
-    "☕ Beverages": ["Çay"],
-    "🧂 Spices": ["Pul biber"],
-    "🫙 Pantry": ["Tuz", "Karabiber", "Zeytinyağı"],
+    "🐄 Animal Products": [
+        "Yumurta", "Beyaz peynir", "Kaşar peyniri", "Lor peyniri", "Tereyağı", "Kaymak", "Yoğurt", "Süt", "Sucuk",
+        "Pastırma", "Tulum peyniri", "Hellim"],
+    "🥬 Produce": ["Domates", "Salatalık", "Sivri biber", "Maydanoz", "Soğan", "Patates", "Ispanak", "Limon", "Sarımsak", "Taze soğan", "Dereotu", "Kabak", "Muz", "Elma"],
+    "🍞 Breads": ["Ekmek", "Simit", "Lavaş", "Pide", "Tam buğday ekmeği"],
+    "🍯 Sweets": ["Bal", "Vişne reçeli", "Tahin", "Pekmez", "Kayısı reçeli"],
+    "🫒 Breakfast Staples": ["Siyah zeytin", "Yeşil zeytin"],
+    "🥜 Nuts & Seeds": ["Ceviz", "Fındık", "Badem", "Susam"],
+    "☕ Beverages": ["Çay", "Türk kahvesi", "Portakal suyu"],
+    "🧂 Spices": ["Pul biber", "Kekik", "Kimyon", "Nane", "Sumak"],
+    "🫙 Pantry": ["Tuz", "Karabiber", "Zeytinyağı", "Ayçiçek yağı", "Un", "Domates salçası", "Yulaf", "Kabartma tozu"],
 })
 
 SAMPLES = {
@@ -94,15 +110,17 @@ SAMPLES = {
         **_BASE,
         "language": "en",
         "ingredients": _fridge({
-            "🐄 Animal Products": ["Eggs", "White cheese", "Butter", "Yogurt", "Milk"],
-            "🥬 Produce": ["Tomatoes", "Cucumber", "Green peppers", "Banana"],
-            "🍞 Breads": ["Bread", "Simit"],
-            "🍯 Sweets": ["Honey"],
-            "🫒 Breakfast Staples": ["Olives"],
-            "🥜 Nuts & Seeds": ["Walnuts"],
-            "☕ Beverages": ["Tea"],
-            "🧂 Spices": ["Red pepper flakes"],
-            "🫙 Pantry": ["Salt", "Black pepper", "Olive oil", "Oats"],
+            "🐄 Animal Products": ["Eggs", "White cheese", "Cheddar", "Butter", "Yogurt", "Milk", "Sausages", "Cream cheese", "Smoked turkey"],
+            "🥬 Produce": [
+                "Tomatoes", "Cucumber", "Green peppers", "Onion", "Potatoes", "Spinach", "Mushrooms", "Lemons", "Banana",
+                "Apples", "Parsley", "Garlic", "Zucchini", "Strawberries", "Oranges"],
+            "🍞 Breads": ["Bread", "Simit", "Whole wheat bread", "Pita bread"],
+            "🍯 Sweets": ["Honey", "Strawberry jam", "Tahini", "Chocolate spread"],
+            "🫒 Breakfast Staples": ["Olives", "Granola"],
+            "🥜 Nuts & Seeds": ["Walnuts", "Almonds", "Hazelnuts", "Sesame seeds"],
+            "☕ Beverages": ["Tea", "Coffee", "Orange juice"],
+            "🧂 Spices": ["Red pepper flakes", "Paprika", "Cumin", "Oregano", "Cinnamon"],
+            "🫙 Pantry": ["Salt", "Black pepper", "Olive oil", "Oats", "Flour", "Tomato paste", "Sunflower oil", "Baking powder", "Sugar"],
         }),
         "history": [
             {"meal_name": "Cheese omelette"},
@@ -181,12 +199,17 @@ SAMPLES = {
         **_BASE,
         "language": "en",
         "ingredients": _fridge({
-            "🌱 Plant-Based": ["Soy milk", "Peanut butter"],
-            "🥬 Produce": ["Banana", "Tomatoes", "Cucumber", "Spinach"],
-            "🍞 Breads": ["Bread"],
-            "🥜 Nuts & Seeds": ["Walnuts", "Chia seeds"],
-            "☕ Beverages": ["Tea"],
-            "🫙 Pantry": ["Oats", "Olive oil", "Salt"],
+            "🌱 Plant-Based": ["Soy milk", "Peanut butter", "Tofu", "Oat milk", "Coconut yogurt", "Almond butter"],
+            "🥬 Produce": [
+                "Banana", "Tomatoes", "Cucumber", "Spinach", "Avocado", "Mushrooms", "Onion", "Bell peppers",
+                "Sweet potatoes", "Lemons", "Garlic", "Kale", "Zucchini", "Blueberries", "Apples", "Oranges"],
+            "🍞 Breads": ["Bread", "Tortillas", "Bagels"],
+            "🍯 Sweets": ["Maple syrup", "Dates", "Dark chocolate"],
+            "🫒 Breakfast Staples": ["Olives", "Hummus", "Granola"],
+            "🥜 Nuts & Seeds": ["Walnuts", "Almonds", "Chia seeds", "Flax seeds", "Pumpkin seeds", "Cashews"],
+            "☕ Beverages": ["Tea", "Coffee", "Orange juice"],
+            "🧂 Spices": ["Cinnamon", "Turmeric", "Cumin", "Paprika", "Chili flakes"],
+            "🫙 Pantry": ["Oats", "Chickpeas", "Olive oil", "Salt", "Black pepper", "Black beans", "Quinoa", "Nutritional yeast", "Flour", "Baking powder"],
         }),
         "stated_habits": ["Plant-based"],
         "avoid_list": ["Eggs", "Milk", "Cheese", "Butter", "Honey", "Yogurt"],
@@ -197,14 +220,15 @@ SAMPLES = {
         "language": "en",
         "country": "Canada",
         "ingredients": _fridge({
-            "🐄 Animal Products": ["Eggs", "Milk", "Butter", "Cheddar", "Cream cheese", "Yogurt"],
-            "🥬 Produce": ["Strawberries", "Bananas", "Tomatoes", "Mushrooms"],
-            "🍞 Breads": ["Bread", "Bagels"],
-            "🍯 Sweets": ["Maple syrup", "Honey"],
-            "🫒 Breakfast Staples": ["Olives", "Granola"],
+            "🐄 Animal Products": ["Eggs", "Milk", "Butter", "Cheddar", "Cream cheese", "Yogurt", "Bacon", "Ham", "Mozzarella", "Sausages", "Turkey slices"],
+            "🥬 Produce": ["Strawberries", "Bananas", "Apples", "Tomatoes", "Mushrooms", "Potatoes", "Onion", "Raspberries", "Peaches", "Bell peppers", "Spinach"],
+            "🍞 Breads": ["Bread", "Bagels", "English muffins", "Tortillas", "Croissants"],
+            "🍯 Sweets": ["Maple syrup", "Honey", "Chocolate chips", "Strawberry jam"],
+            "🫒 Breakfast Staples": ["Olives", "Granola", "Cereal"],
             "🌱 Plant-Based": ["Almond milk"],
-            "☕ Beverages": ["Orange juice", "Hot chocolate"],
-            "🫙 Pantry": ["Flour", "Sugar", "Baking powder", "Oats", "Salt", "Vegetable oil"],
+            "☕ Beverages": ["Orange juice", "Hot chocolate", "Coffee"],
+            "🧂 Spices": ["Cinnamon", "Nutmeg"],
+            "🫙 Pantry": ["Flour", "Sugar", "Baking powder", "Vanilla extract", "Oats", "Salt", "Vegetable oil", "Brown sugar", "Cocoa powder"],
         }),
         "preferences": {
             "fav:pancakes": "Pancakes", "fav:cheese": "Cheese",
@@ -212,7 +236,7 @@ SAMPLES = {
         },
         "avoid_list": ["Peanuts", "Almonds", "Walnuts", "Hazelnuts", "Cashews"],
         "stated_habits": ["Sweet breakfasts on weekends"],
-        "kitchen_appliances": ["Stove", "Toaster", "Microwave"],
+        "kitchen_appliances": _kitchen("Microwave"),
         "history": [
             _meal("Pancakes with maple syrup", "Flour", "Eggs", "Milk", "Maple syrup"),
             _meal("Bagel with cream cheese", "Bagels", "Cream cheese"),
@@ -236,14 +260,17 @@ SAMPLES = {
         "language": "en",
         "country": "Germany",
         "ingredients": _fridge({
-            "🐄 Animal Products": ["Eggs", "Feta", "Plain yogurt", "Milk"],
-            "🥬 Produce": ["Tomatoes", "Cucumber", "Avocado", "Spinach", "Mushrooms", "Apples", "Strawberries"],
-            "🍞 Breads": ["Rye bread", "White bread"],
+            "🐄 Animal Products": ["Eggs", "Feta", "Cottage cheese", "Plain yogurt", "Milk", "Smoked salmon", "Turkey slices", "Greek yogurt", "Mozzarella"],
+            "🥬 Produce": [
+                "Tomatoes", "Cucumber", "Avocado", "Spinach", "Mushrooms", "Onion", "Bell peppers", "Zucchini", "Lemons",
+                "Apples", "Strawberries", "Cherry tomatoes", "Blueberries", "Raspberries", "Pears", "Garlic", "Parsley"],
+            "🍞 Breads": ["Rye bread", "White bread", "Whole grain crackers", "Whole wheat tortillas"],
             "🍯 Sweets": ["Honey", "Apricot jam"],
-            "🥜 Nuts & Seeds": ["Walnuts", "Chia seeds"],
-            "☕ Beverages": ["Orange juice", "Coffee"],
-            "🧂 Spices": ["Cinnamon"],
-            "🫙 Pantry": ["Olive oil", "Salt"],
+            "🫒 Breakfast Staples": ["Olives"],
+            "🥜 Nuts & Seeds": ["Walnuts", "Almonds", "Chia seeds", "Flax seeds", "Pumpkin seeds", "Hazelnuts"],
+            "☕ Beverages": ["Orange juice", "Coffee", "Green tea", "Herbal tea"],
+            "🧂 Spices": ["Cinnamon", "Turmeric", "Oregano"],
+            "🫙 Pantry": ["Oats", "Olive oil", "Salt", "Black pepper", "Chickpeas", "Quinoa"],
         }),
         "user_profile": {"age": 58, "gender": "female", "height_cm": 164, "weight_kg": 74, "activity_level": "light"},
         "health_rules": [
@@ -251,7 +278,6 @@ SAMPLES = {
             {"rule_text": "Limit salt, high blood pressure", "priority": "high"},
         ],
         "supplements": [{"name": "Vitamin B12", "contents": "500 mcg B12", "frequency": "daily", "taken_today": 1}],
-        "kitchen_appliances": ["Stove", "Oven", "Toaster", "Kettle"],
         "history": [
             _meal("Rye bread with feta", "Rye bread", "Feta", "Tomatoes"),
             _meal("Yogurt with strawberries", "Plain yogurt", "Strawberries"),
@@ -262,17 +288,18 @@ SAMPLES = {
         "language": "en",
         "country": "United Kingdom",
         "ingredients": _fridge({
-            "🐄 Animal Products": ["Eggs", "Milk", "Cheddar", "Butter"],
-            "🥬 Produce": ["Bananas", "Frozen peas"],
-            "🍞 Breads": ["Bread"],
-            "🍯 Sweets": ["Strawberry jam", "Peanut butter"],
-            "🫒 Breakfast Staples": ["Baked beans"],
-            "☕ Beverages": ["Instant coffee", "Tea"],
-            "🫙 Pantry": ["Porridge oats", "Salt", "Sunflower oil", "Ketchup"],
+            "🐄 Animal Products": ["Eggs", "Milk", "Cheddar", "Butter", "Sausages", "Ham", "Yogurt"],
+            "🥬 Produce": ["Bananas", "Apples", "Tomatoes", "Onion", "Potatoes", "Frozen peas", "Frozen berries", "Mushrooms", "Spinach", "Oranges"],
+            "🍞 Breads": ["Bread", "Tortillas", "Bagels", "Crumpets"],
+            "🍯 Sweets": ["Strawberry jam", "Peanut butter", "Chocolate spread", "Honey", "Golden syrup"],
+            "🫒 Breakfast Staples": ["Baked beans", "Cornflakes", "Granola"],
+            "☕ Beverages": ["Instant coffee", "Tea", "Orange juice"],
+            "🧂 Spices": ["Chili flakes", "Mixed herbs"],
+            "🫙 Pantry": ["Porridge oats", "Flour", "Salt", "Black pepper", "Sunflower oil", "Ketchup", "Brown sauce", "Baking powder", "Sugar"],
         }),
         "user_profile": {"age": 20, "gender": "male", "height_cm": 181, "weight_kg": 70, "activity_level": "light"},
         "stated_habits": ["No time on weekdays, 10 minutes max"],
-        "kitchen_appliances": ["Microwave", "Kettle", "Toaster"],
+        "kitchen_appliances": _kitchen("Microwave"),
         "history": [
             _meal("Toast with jam", "Bread", "Strawberry jam", "Butter"),
             _meal("Beans on toast", "Baked beans", "Bread"),
@@ -285,20 +312,18 @@ SAMPLES = {
         "ingredients": _fridge({
             "🐄 Animal Products": [
                 "Eggs", "Bacon", "Turkey slices", "Cheddar", "Mozzarella", "Cream cheese", "Greek yogurt", "Milk",
-                "Butter", "Heavy cream",
-            ],
+                "Butter", "Heavy cream", "Sausages", "Parmesan"],
             "🥬 Produce": [
                 "Spinach", "Kale", "Bell peppers", "Onion", "Garlic", "Tomatoes", "Avocado", "Mushrooms", "Zucchini",
-                "Sweet potatoes", "Apples", "Bananas", "Blueberries", "Strawberries", "Lemons",
-            ],
-            "🍞 Breads": ["Whole wheat bread", "Bagels", "Tortillas", "English muffins"],
-            "🍯 Sweets": ["Maple syrup", "Honey", "Strawberry jam", "Nutella"],
+                "Sweet potatoes", "Apples", "Bananas", "Blueberries", "Strawberries", "Lemons", "Cherry tomatoes", "Raspberries", "Oranges", "Arugula"],
+            "🍞 Breads": ["Whole wheat bread", "Bagels", "Tortillas", "English muffins", "Croissants"],
+            "🍯 Sweets": ["Maple syrup", "Honey", "Strawberry jam", "Nutella", "Peanut butter"],
             "🫒 Breakfast Staples": ["Granola", "Cereal"],
-            "🥜 Nuts & Seeds": ["Almonds", "Pecans", "Flax seeds"],
+            "🥜 Nuts & Seeds": ["Almonds", "Pecans", "Flax seeds", "Walnuts", "Chia seeds"],
             "🌱 Plant-Based": ["Almond milk"],
-            "☕ Beverages": ["Coffee", "Orange juice"],
+            "☕ Beverages": ["Coffee", "Orange juice", "Green tea"],
             "🧂 Spices": ["Cinnamon", "Paprika", "Chili flakes"],
-            "🫙 Pantry": ["Salt", "Black pepper", "Olive oil", "Flour", "Baking powder", "Sugar", "Vanilla extract"],
+            "🫙 Pantry": ["Salt", "Black pepper", "Olive oil", "Flour", "Baking powder", "Sugar", "Vanilla extract", "Oats"],
         }),
         "user_profile": {"age": 35, "gender": "female", "height_cm": 170, "weight_kg": 63, "activity_level": "active"},
         "kitchen_appliances": ["Stove", "Oven", "Air Fryer", "Toaster", "Microwave", "Blender", "Sandwich Press", "Kettle"],
@@ -317,17 +342,18 @@ SAMPLES = {
         "language": "en",
         "country": "Greece",
         "ingredients": _fridge({
-            "🐄 Animal Products": ["Feta", "Greek yogurt", "Eggs"],
-            "🥬 Produce": ["Tomatoes", "Cucumber", "Red onion", "Figs", "Pomegranate"],
-            "🍞 Breads": ["Pita bread"],
-            "🍯 Sweets": ["Honey", "Tahini"],
-            "🫒 Breakfast Staples": ["Kalamata olives", "Hummus"],
-            "🥜 Nuts & Seeds": ["Walnuts"],
-            "☕ Beverages": ["Greek coffee"],
-            "🧂 Spices": ["Oregano"],
-            "🫙 Pantry": ["Olive oil", "Salt"],
+            "🐄 Animal Products": ["Feta", "Greek yogurt", "Eggs", "Butter", "Milk", "Kasseri", "Halloumi"],
+            "🥬 Produce": [
+                "Tomatoes", "Cucumber", "Red onion", "Green peppers", "Spinach", "Zucchini", "Lemons", "Figs", "Pomegranate",
+                "Grapes", "Garlic", "Dill", "Mint", "Oranges", "Potatoes"],
+            "🍞 Breads": ["Pita bread", "Sourdough bread", "Phyllo dough", "Koulouri"],
+            "🍯 Sweets": ["Honey", "Tahini", "Fig jam", "Sour cherry jam"],
+            "🫒 Breakfast Staples": ["Kalamata olives", "Hummus", "Green olives"],
+            "🥜 Nuts & Seeds": ["Walnuts", "Almonds", "Pistachios", "Pine nuts"],
+            "☕ Beverages": ["Greek coffee", "Mountain tea", "Orange juice"],
+            "🧂 Spices": ["Oregano", "Cinnamon", "Thyme"],
+            "🫙 Pantry": ["Olive oil", "Salt", "Black pepper", "Flour", "Sesame seeds", "Semolina", "Raisins"],
         }),
-        "kitchen_appliances": ["Stove", "Oven", "Kettle"],
         "history": [
             _meal("Greek yogurt with honey and walnuts", "Greek yogurt", "Honey", "Walnuts"),
             _meal("Kagianas", "Eggs", "Tomatoes", "Feta"),
@@ -351,6 +377,8 @@ CHAT_MESSAGES = ("leave_out", "liked", "time", "allowed")
 CHAT_SEED = 159
 # Basics and drinks are picked only when a fridge has too few other items ("No salt please" is no breakfast wish)
 _BASICS = {"🫙 Pantry", "🧂 Spices", "☕ Beverages"}
+# Samples with no chat scenario: mixed tests Turkish fridge names with English replies, and en and tr cover the chat
+NO_CHAT = {"mixed"}
 
 
 def chat_picks(sample: dict, key: str) -> list[str] | None:
@@ -376,32 +404,48 @@ def _plate(name: str, items: list[str], language: str) -> dict:
     }
 
 
+def _lower(name: str, language: str) -> str:
+    """A fridge name inside a sentence: lowercase, with Turkish I and İ as ı and i."""
+    return (name.replace("I", "ı").replace("İ", "i") if language == "tr" else name).lower()
+
+
+def chat_texts(a: str, b: str, c: str, language: str) -> tuple[str, ...]:
+    """The four typed messages, in the user's reply language: leave out A and C, love B, the time limit,
+    then allow C again. A Turkish sentence starts with a fridge name, so no case ending is needed."""
+    if language == "tr":
+        return (
+            f"{a} ve {_lower(c, language)} olmasın lütfen.",
+            f"{b} olsun mutlaka, çok seviyorum.",
+            f"Sadece {CHAT_MINUTES} dakikam var.",
+            f"Aslında {_lower(c, language)} olabilir, sorun değil.",
+        )
+    return (
+        f"No {a.lower()} please, and no {c.lower()} either.",
+        f"I love {b.lower()}.",
+        f"I only have {CHAT_MINUTES} minutes.",
+        f"Actually {c.lower()} is fine again.",
+    )
+
+
 def chat_scenario(key: str, name: str) -> dict | None:
     """The chat before the Suggest press under test, and what it asks, so code can check the reply.
 
     chat lists the user's typed messages ({"role": "user", "content": ...}) and earlier Suggest presses
     ({"press": meal}, the menu that press got), oldest first. leave_out is still asked to be left out,
     liked and allowed (a ban taken back) must not be left out, and max_minutes is the time the chat gives.
-    None for a fresh chat, or when the sample's fridge is too small."""
-    if name == "fresh":
+    None for a fresh chat, a sample in NO_CHAT, or when the sample's fridge is too small."""
+    if name == "fresh" or key in NO_CHAT:
         return None
     sample = SAMPLES[key]
     picks = chat_picks(sample, key)
     if picks is None:
         return None
     a, b, c, d = picks
-    typed = [
-        {"role": "user", "content": text} for text in (
-            f"No {a.lower()} please, and no {c.lower()} either.",
-            f"I love {b.lower()}.",
-            f"I only have {CHAT_MINUTES} minutes.",
-            f"Actually {c.lower()} is fine again.",
-        )
-    ]
+    language = sample["language"]
+    typed = [{"role": "user", "content": text} for text in chat_texts(a, b, c, language)]
     if name == "chat":
         chat = typed
     else:
-        language = sample["language"]
         chat = [
             {"press": _plate("Breakfast plate", [a, b, c], language)},
             typed[0],
@@ -446,7 +490,7 @@ _SERVER_MENU = [
 # - bowls: the server menu whose plan switched dishes every minute (#152): two dishes made of short
 #   hands-on steps around their waits. The sweet potato is a simple item with a method: roasted in
 #   the air fryer, so it gets steps (#156).
-# - avocado, avocado_oven: the server menu with toast (#160), once with a Toaster and once with an Oven
+# - avocado, avocado_oven: the server menu with toast (#160), once in a home kitchen and once with an Oven
 #   and no Toaster, so toasting may use either.
 PLAN_CASES = {
     "boiled": {
@@ -508,7 +552,7 @@ PLAN_CASES = {
     },
     "bowls": {
         "language": "en",
-        "kitchen_appliances": ["Stove", "Air Fryer", "Kettle"],
+        "kitchen_appliances": _kitchen("Air Fryer"),
         "meal_name": "Autumn bowls",
         "menu": [
             _dish("Chia pudding", "Stir the chia seeds into the milk with the honey, let it set, top with the banana",
@@ -522,7 +566,7 @@ PLAN_CASES = {
     },
     "avocado": {
         "language": "en",
-        "kitchen_appliances": ["Stove", "Toaster", "Kettle"],
+        "kitchen_appliances": _kitchen(),
         "meal_name": "Green morning",
         "menu": _SERVER_MENU,
     },
@@ -557,11 +601,12 @@ REVIEW_CASES = {
                         _dish("Salmon frittata", "", ("Eggs", 3, "pcs"), ("Smoked salmon", 50, "g"),
                               ("Feta", 40, "g", "crumbled"), ("Red onion", 0.5, "pcs", "chopped")),
                         _served("Pita bread", 1, "pcs"), _served("Greek coffee", 1, "tea glass")),
-    # Two missing items the review swapped for other missing ones before (Rice for Quinoa, O)
-    "omurice": _review("greek", "Tokyo morning", 20,
-                       _dish("Omurice", "", ("Eggs", 2, "pcs"), ("Rice", 1, "glass"), ("Soy sauce", 1, "tbsp"),
-                             ("Tomatoes", 1, "pcs", "chopped")),
-                       _served("Greek coffee", 1, "tea glass")),
+    # A far dish whose base the fridge has, like greek's real explore drafts (miso soup, edamame pancakes): two missing
+    # seasonings in one dish, Sugar, which Honey replaces, and Soy sauce, which nothing in the fridge replaces
+    "tamagoyaki": _review("greek", "Tokyo morning", 15,
+                          _dish("Tamagoyaki", "", ("Eggs", 3, "pcs"), ("Sugar", 1, "tsp"), ("Soy sauce", 1, "tsp"),
+                                ("Olive oil", 1, "tsp")),
+                          _served("Mountain tea", 1, "glass")),
     # Renames both ways: the fridge's "Turkey slices" written plain, and "Avocado" written with its cut
     "wrap": _review("big_fridge", "Wrap morning", 10,
                     _dish("Turkey wrap", "", ("Tortillas", 1, "pcs"), ("Turkey", 60, "g"), ("Cream cheese", 1, "tbsp"),

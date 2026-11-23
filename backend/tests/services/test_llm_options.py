@@ -78,3 +78,58 @@ def test_num_ctx_env_var_overrides_default(monkeypatch):
     finally:
         monkeypatch.undo()
         importlib.reload(config)
+
+
+# OLLAMA_THINK unset sends no think field (the model's own default); set, both calls send it
+@pytest.mark.parametrize("think, expected", [(None, None), (False, False), (True, True)])
+async def test_calls_send_think_only_when_set(monkeypatch, think, expected):
+    monkeypatch.setattr(llm, "OLLAMA_THINK", think)
+    response = MagicMock()
+    response.json.return_value = {"message": {"content": "{}"}}
+    client = _mock_client()
+    client.post = AsyncMock(return_value=response)
+    client.stream = MagicMock(return_value=_FakeStream())
+    with patch("services.llm.check_llm_availability", return_value=True), \
+         patch("services.llm.httpx.AsyncClient", return_value=client):
+        await llm.chat_json("system", [], {"type": "object"})
+        [t async for t in llm.chat_stream("system", [])]
+
+    for payload in (client.post.call_args.kwargs["json"], client.stream.call_args.kwargs["json"]):
+        assert payload.get("think") == expected
+        assert ("think" in payload) == (think is not None)
+
+
+# OLLAMA_THINK reads true or false in any case; anything else leaves it unset
+@pytest.mark.parametrize("value, expected", [("", None), ("true", True), ("False", False), ("maybe", None)])
+def test_think_env_var(monkeypatch, value, expected):
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: False)
+    try:
+        monkeypatch.setenv("OLLAMA_THINK", value)
+        assert importlib.reload(config).OLLAMA_THINK is expected
+    finally:
+        monkeypatch.undo()
+        importlib.reload(config)
+
+
+# Both calls wait OLLAMA_TIMEOUT seconds for Ollama, 150 by default and set from the environment
+async def test_calls_wait_the_timeout(monkeypatch):
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: False)
+    try:
+        monkeypatch.delenv("OLLAMA_TIMEOUT", raising=False)
+        assert importlib.reload(config).OLLAMA_TIMEOUT == 150
+        monkeypatch.setenv("OLLAMA_TIMEOUT", "300")
+        assert importlib.reload(config).OLLAMA_TIMEOUT == 300
+    finally:
+        monkeypatch.undo()
+        importlib.reload(config)
+    monkeypatch.setattr(llm, "OLLAMA_TIMEOUT", 200.0)
+    response = MagicMock()
+    response.json.return_value = {"message": {"content": "{}"}}
+    client = _mock_client()
+    client.post = AsyncMock(return_value=response)
+    client.stream = MagicMock(return_value=_FakeStream())
+    with patch("services.llm.check_llm_availability", return_value=True), \
+         patch("services.llm.httpx.AsyncClient", return_value=client) as factory:
+        await llm.chat_json("system", [], {"type": "object"})
+        [t async for t in llm.chat_stream("system", [])]
+    assert [c.kwargs["timeout"] for c in factory.call_args_list] == [200.0, 200.0]

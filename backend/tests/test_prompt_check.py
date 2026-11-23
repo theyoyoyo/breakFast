@@ -19,14 +19,17 @@ from tools.prompt_check import (
     check_reply,
     check_review,
     compare,
+    data_name,
     describe,
     is_clean,
+    model_folder,
     parse_args,
     plan_once,
     recording_prompts,
     review_once,
     run,
     save_log,
+    save_model_data,
     score_shopping,
     shop_once,
     suggest_once,
@@ -35,6 +38,7 @@ from tools.prompt_check import (
 from tools.prompt_samples import (
     CHAT_MESSAGES,
     CHAT_MINUTES,
+    NO_CHAT,
     PLAN_CASES,
     REVIEW_CASES,
     SAMPLE_MODES,
@@ -42,6 +46,7 @@ from tools.prompt_samples import (
     SCENARIOS,
     chat_picks,
     chat_scenario,
+    chat_texts,
 )
 
 EN, TR = SAMPLES["en"], SAMPLES["tr"]
@@ -337,6 +342,14 @@ def test_chat_scenarios():
         f"I only have {CHAT_MINUTES} minutes.", f"Actually {c.lower()} is fine again.",
     ]
     assert chat["max_minutes"] == CHAT_MINUTES
+    # A Turkish user writes in Turkish (#178), and mixed has no chat: en and tr cover it
+    tr = chat_scenario("tr", "chat")
+    (tr_a,), (tr_c,) = tr["leave_out"], tr["allowed"]
+    assert [e["content"] for e in tr["chat"]][::3] == [
+        f"{tr_a} ve {tr_c.lower()} olmasın lütfen.", f"Aslında {tr_c.lower()} olabilir, sorun değil.",
+    ]
+    assert chat_scenario("mixed", "chat") is None and chat_scenario("mixed", "pressed") is None
+    assert chat_texts("Irmik", "Bal", "Islak kek", "tr")[0] == "Irmik ve ıslak kek olmasın lütfen."
     assert [e.get("content") for e in pressed["chat"]] == [None, typed[0], None, *typed[1:]]
     first, second = (e["press"] for e in pressed["chat"] if "press" in e)
     assert [i["name"] for i in first["menu"]] == [a, b, c]
@@ -348,14 +361,15 @@ def test_chat_scenarios():
 def test_scenario_chat_is_the_server_block():
     chat, pressed = chat_scenario("en", "chat"), chat_scenario("en", "pressed")
     typed = [e["content"] for e in chat["chat"]]
+    a, b, c, d = chat_picks(EN, "en")
     rows = chat_rows(pressed["chat"], None)
     assert [r["role"] for r in rows] == ["user", "assistant", "user", "user", "assistant", "user", "user", "user"]
     assert rows[0]["content"] == "Suggest Breakfast" and '"menu_name": "Breakfast plate"' in rows[1]["content"]
     assert chat_rows(pressed["chat"], "favorites")[0]["content"] == "Suggest breakfast from my favorite meals"
     assert format_chat_block(rows).split("\n\n", 1)[1].splitlines() == [
-        "- #1 Menu shown: Breakfast plate. Items: Eggs, Cucumber, Simit",
+        f"- #1 Menu shown: Breakfast plate. Items: {a}, {b}, {c}",
         f"- #2 User: {typed[0]}",
-        "- #3 Menu shown: Light plate. Items: Cucumber, Milk",
+        f"- #3 Menu shown: Light plate. Items: {b}, {d}",
         f"- #4 User: {typed[1]}",
         f"- #5 User: {typed[2]}",
         f"- #6 User (latest message): {typed[3]}",
@@ -420,7 +434,7 @@ async def test_scenarios_run_through_the_pipeline():
 
     with patch("services.pipeline.stream_response", _fake_stream), patch("services.pipeline.chat_json", chat_json):
         for key, sample in SAMPLES.items():
-            if sample.get("expects_note"):
+            if sample.get("expects_note") or key in NO_CHAT:
                 continue
             for name in ("chat", "pressed"):
                 scenario = chat_scenario(key, name)
@@ -474,6 +488,64 @@ def test_compare_with_best_earlier_test():
         "en final: 1/2 clean, 2 distinct ▼ best 2/2 clean, 2 distinct: prompt bbbbbbb (2026-10-27 23:21)",
         "en draft: 0/2 clean, 1 distinct · first test",
     ]
+
+
+# A test is compared only with earlier tests of its model and think setting (#178); a test from before --model
+# counts as the baseline model's
+def test_compare_by_model():
+    old = {"date": "2026-11-08 18:11", "prompt": "aaaaaaa", "mode": "usual", "checks": CHECKS, "note": "",
+           "results": {"en final": {"clean": 2, "scored": 2, "distinct": 2}}}
+    other = {**old, "prompt": "ccccccc", "model": "gemma3:4b", "results": {"en final": {"clean": 1, "scored": 2, "distinct": 1}}}
+    thinking = {**other, "think": True, "results": {"en final": {"clean": 2, "scored": 2, "distinct": 2}}}
+    now = {"en final": {"clean": 1, "scored": 2, "distinct": 1}}
+    assert compare(now, [old, other, thinking], "usual", model="gemma3:4b")[0].endswith("= best 1/2 clean, 1 distinct: prompt ccccccc (2026-11-08 18:11)")
+    assert "best 2/2 clean" in compare(now, [old, other, thinking], "usual")[0]
+    assert "best 2/2 clean" in compare(now, [old, other, thinking], "usual", model="gemma3:4b", think=True)[0]
+    assert compare(now, [old], "usual", model="llama3.1:8b") == ["en final: 1/2 clean, 1 distinct · first test"]
+
+
+# A model test's data files (#178): the inputs by sample label, with the chat a press comes after, and the model's
+# outputs in a folder per model and think setting, named after the test
+def test_model_data_files(tmp_path):
+    records = [
+        {"sample": "en", "mode": None, "run": 1, "seconds": 9.5, "error": None, "replies": {"final": "Hi"}, "scores": {}},
+        {"sample": "en:chat", "mode": None, "run": 1, "seconds": 8.0, "error": None, "replies": {"final": "Hi"}, "scores": {}},
+    ]
+    meta = {"model": "qwen3.5:4b", "think": False, "prompt": "aaaaaaa", "gpu": 100}
+    with patch("tools.prompt_check.MODELS_DIR", tmp_path):
+        inputs, outputs = save_model_data(records, "suggest", data_name("suggest", "all"), meta)
+    assert inputs == tmp_path / "inputs" / "suggest-all.json"
+    assert outputs == tmp_path / "qwen3.5_4b-think-off" / "suggest-all.json"
+    saved = json.loads(inputs.read_text(encoding="utf-8"))["samples"]
+    assert saved["en"]["chat"] is None and saved["en"]["data"]["ingredients"] == EN["ingredients"]
+    assert saved["en:chat"]["chat"] == chat_scenario("en", "chat")
+    out = json.loads(outputs.read_text(encoding="utf-8"))
+    assert (out["model"], out["think"], out["gpu"], out["test"]) == ("qwen3.5:4b", False, 100, "suggest-all")
+    assert [r["sample"] for r in out["records"]] == ["en", "en:chat"]
+    assert [data_name("suggest", "fresh"), data_name("chat", "chat"), data_name("review", "fresh", "explore")] == [
+        "suggest", "chat", "review-explore",
+    ]
+    assert model_folder("qwen2.5:7b", None) == "qwen2.5_7b"
+    assert parse_args(["--data"]).data and not parse_args([]).data
+
+
+# A rerun of some samples replaces only theirs in the model's file, in place, and keeps the rest, each record
+# naming the prompt version it ran on (a sample change gives a new one too)
+def test_model_data_rerun_keeps_other_samples(tmp_path):
+    def rec(sample, reply):
+        return {"sample": sample, "mode": None, "run": 1, "seconds": 9.0, "error": None, "replies": {"final": reply}, "scores": {}}
+
+    meta = {"model": "gemma3:4b", "think": None, "prompt": "aaaaaaa", "gpu": 100}
+    with patch("tools.prompt_check.MODELS_DIR", tmp_path):
+        save_model_data([rec("en:chat", "old en"), rec("tr:chat", "old tr")], "suggest", "suggest-chat", meta)
+        inputs, outputs = save_model_data([rec("tr:chat", "new tr"), rec("vegan:chat", "new vegan")], "suggest", "suggest-chat", meta)
+        out = json.loads(outputs.read_text(encoding="utf-8"))["records"]
+        assert [(r["sample"], r["replies"]["final"]) for r in out] == [("en:chat", "old en"), ("tr:chat", "new tr"), ("vegan:chat", "new vegan")]
+        assert list(json.loads(inputs.read_text(encoding="utf-8"))["samples"]) == ["en:chat", "tr:chat", "vegan:chat"]
+        save_model_data([rec("tr:chat", "newer tr")], "suggest", "suggest-chat", {**meta, "prompt": "bbbbbbb"})
+        out = json.loads(outputs.read_text(encoding="utf-8"))
+        assert [(r["sample"], r["prompt"]) for r in out["records"]] == [("en:chat", "aaaaaaa"), ("tr:chat", "bbbbbbb"), ("vegan:chat", "aaaaaaa")]
+        assert out["prompt"] == "bbbbbbb"
 
 
 def _shopping_reply(*names) -> str:
@@ -681,8 +753,8 @@ def test_review_scores_swaps_and_outside_names():
     assert swapped["note"] == "replaced Strawberries for Blueberries (Blueberry pancakes)"
     kept = check_review(_pancakes(*base, ("Blueberries", {})), case, draft)
     assert is_clean(kept) and kept["note"] == "still missing: Blueberries"
-    outside = check_review(_pancakes(*base[:4], ("Raspberries", {})), case, draft)
-    assert outside["issues"]["outside"] == ["Raspberries"]
+    outside = check_review(_pancakes(*base[:4], ("Mango", {})), case, draft)
+    assert outside["issues"]["outside"] == ["Mango"]
     assert outside["note"] == "gone, no mark: Blueberries; dropped: Maple syrup"
     assert describe(check_review("", case, draft)) == "no JSON"
 
@@ -851,3 +923,10 @@ def test_chat_persona_scenarios():
     assert parse_args(["--persona", "chat", "--scenario", "all"]).scenarios == ["chat", "pressed"]
     with pytest.raises(SystemExit):
         parse_args(["--persona", "chat", "--scenario", "fresh"])
+
+
+# --model and --think choose the model and Ollama's think field for one test
+def test_model_and_think_options():
+    args = parse_args(["--model", "gemma3:4b", "--think", "off"])
+    assert (args.model, args.think) == ("gemma3:4b", "off")
+    assert (parse_args([]).model, parse_args([]).think) == (None, None)

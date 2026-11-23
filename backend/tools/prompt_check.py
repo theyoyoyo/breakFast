@@ -60,6 +60,8 @@ from contextlib import aclosing, contextmanager
 from datetime import datetime
 from pathlib import Path
 
+import httpx
+
 from models.units import UNIT_ALIASES, UNIT_PAIRS, unknown_units
 from routers.chat import SUGGEST_TEMPERATURES
 from services import llm, pipeline
@@ -874,13 +876,13 @@ def _pool(persona: str) -> dict:
 
 def _cases(samples: list[str], scenarios: list[str]) -> list[tuple[str, str, dict | None]]:
     """(label, sample, chat scenario) for every sample and scenario: "en" for a fresh chat, "en:chat"
-    after one. A scenario the sample's fridge is too small for is skipped with a note."""
+    after one. A sample with no such scenario (a fridge too small, or not tested after a chat) is skipped with a note."""
     cases = []
     for key in samples:
         for name in scenarios:
             scenario = chat_scenario(key, name)
             if name != "fresh" and scenario is None:
-                print(f"{key}: fridge too small for the {name} scenario, skipped", flush=True)
+                print(f"{key}: no {name} scenario, skipped", flush=True)
                 continue
             cases.append((key if name == "fresh" else f"{key}:{name}", key, scenario))
     return cases
@@ -1046,14 +1048,23 @@ def _share(result: dict) -> tuple[float, float]:
     return result["clean"] / result["scored"], result["distinct"] / result["scored"]
 
 
-def compare(results: dict, history: list[dict], mode: str, persona: str = "suggest") -> list[str]:
-    """This test against the best earlier one per sample and stage, same persona, mode and checks: ▲ better, ▼ worse."""
+# Every test before --model (#178) ran on the app's model, so an entry without one counts as it
+BASELINE_MODEL = "qwen2.5:7b"
+
+
+def compare(
+    results: dict, history: list[dict], mode: str, persona: str = "suggest",
+    model: str = BASELINE_MODEL, think: bool | None = None,
+) -> list[str]:
+    """This test against the best earlier one per sample and stage, same persona, mode, checks, model and
+    think setting (#178): ▲ better, ▼ worse."""
     lines = []
     for key, now in results.items():
         text = f"{key}: {now['clean']}/{now['scored']} clean, {now['distinct']} distinct"
         earlier = [
             e for e in history
             if e.get("persona", "suggest") == persona and e.get("mode") == mode and e.get("checks", 1) == CHECKS
+            and (e.get("model") or BASELINE_MODEL) == model and e.get("think") == think
             and key in e.get("results", {})
         ]
         if not earlier:
@@ -1107,6 +1118,91 @@ def save_log(records: list[dict], prompts: dict, header: str, report: str, diff:
     return path
 
 
+# ── Model test data (#178) ──────────────────────────────────────────────────
+
+MODELS_DIR = RUNS_DIR / "models"
+
+
+def data_name(persona: str, scenario: str, mode: str | None = None, draft_only: bool = False) -> str:
+    """The data files' name for a test: the persona, then the chat it comes after unless it's the persona's
+    own default (a fresh press, or the chat persona's typed chat), then a mode given for every sample."""
+    default = "chat" if persona == "chat" else "fresh"
+    parts = [persona, *([scenario] if scenario != default else []), *([mode] if mode else []), *(["draft"] if draft_only else [])]
+    return "-".join(parts)
+
+
+def model_folder(model: str, think: bool | None) -> str:
+    """A folder name for a model and think setting: qwen3.5:4b with think off is qwen3.5_4b-think-off."""
+    name = re.sub(r"[^A-Za-z0-9._-]", "_", model)
+    return name if think is None else f"{name}-think-{'on' if think else 'off'}"
+
+
+def sample_inputs(records: list[dict], persona: str) -> dict:
+    """What each sample of a test got, by its label ("en", "en:chat"): the sample user, plan menu or review
+    draft, the Suggest mode, and the chat before the press."""
+    inputs = {}
+    for r in records:
+        if r["sample"] in inputs:
+            continue
+        key, _, scenario = r["sample"].partition(":")
+        inputs[r["sample"]] = {
+            "sample": key, "mode": r.get("mode"), "data": _pool(persona)[key],
+            "chat": chat_scenario(key, scenario) if scenario else None,
+        }
+    return inputs
+
+
+def _read_json(path: Path) -> dict:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _merged(old: list[dict], new: list[dict]) -> list[dict]:
+    """The old records with each sample the new run has replaced in place by its new records; new samples go last."""
+    ran, out, placed = {r["sample"] for r in new}, [], set()
+    for r in old:
+        if r["sample"] not in ran:
+            out.append(r)
+        elif r["sample"] not in placed:
+            out += [n for n in new if n["sample"] == r["sample"]]
+            placed.add(r["sample"])
+    return out + [n for n in new if n["sample"] not in placed]
+
+
+def save_model_data(records: list[dict], persona: str, test: str, meta: dict) -> tuple[Path, Path]:
+    """The test's inputs, the same for every model, and this model's outputs, in tools/runs/models/. A rerun
+    of the model replaces its outputs for the samples it ran and keeps the others (a rerun of one sample keeps
+    the rest). Each record names the prompt version it ran on, since a sample change gives a new one too."""
+    inputs = MODELS_DIR / "inputs" / f"{test}.json"
+    outputs = MODELS_DIR / model_folder(meta["model"], meta["think"]) / f"{test}.json"
+    old = _read_json(outputs)
+    kept = [{"prompt": old.get("prompt"), **r} for r in old.get("records", [])]
+    ran = [{**r, "prompt": meta["prompt"]} for r in records]
+    for path, data in (
+        (inputs, {"test": test, "persona": persona,
+                  "samples": {**_read_json(inputs).get("samples", {}), **sample_inputs(records, persona)}}),
+        (outputs, {**meta, "test": test, "persona": persona, "records": _merged(kept, ran)}),
+    ):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=1, default=str) + "\n", encoding="utf-8")
+    return inputs, outputs
+
+
+async def gpu_share(model: str) -> int | None:
+    """How much of the model Ollama holds on the GPU now (/api/ps), in percent; None when it isn't listed."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            models = (await client.get(f"{llm.OLLAMA_BASE_URL}/api/ps")).json().get("models", [])
+    except (httpx.HTTPError, ValueError):
+        return None
+    for m in models:
+        if model in (m.get("name"), m.get("model")) and m.get("size"):
+            return round(100 * m.get("size_vram", 0) / m["size"])
+    return None
+
+
 # ── CLI ─────────────────────────────────────────────────────────────────────
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -1130,6 +1226,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
              "(chat or pressed, default: chat)",
     )
     parser.add_argument("--draft", action="store_true", help="stop each run after the draft")
+    parser.add_argument("--model", help="Ollama model to test (default: OLLAMA_MODEL)")
+    parser.add_argument(
+        "--think", choices=["on", "off"],
+        help="send Ollama's think field on every call (default: OLLAMA_THINK, unset sends none)",
+    )
+    parser.add_argument(
+        "--data", action="store_true",
+        help="also write the model test data files in tools/runs/models/ (docs/MODEL_TESTS.md)",
+    )
     parser.add_argument("--note", default="", help="what this prompt version changes, kept in the history")
     parser.add_argument("--history", action="store_true", help="list earlier tests and exit")
     args = parser.parse_args(argv)
@@ -1157,12 +1262,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
+def _think_label() -> str:
+    """How the test sets Ollama's think field, for the header."""
+    return "" if llm.OLLAMA_THINK is None else f" (think {'on' if llm.OLLAMA_THINK else 'off'})"
+
+
 async def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     if args.history:
         print("\n".join(history_lines(load_history())))
         return 0
     llm.OLLAMA_BASE_URL = args.url  # llm reads it on every call, so every persona uses this server
+    if args.model:
+        llm.OLLAMA_MODEL = args.model
+    if args.think:
+        llm.OLLAMA_THINK = args.think == "on"
     if not await llm.check_llm_availability():
         print(f"Ollama isn't reachable at {args.url}. See docs/SETUPALL.md, BONUS C.")
         return 1
@@ -1170,18 +1284,30 @@ async def main(argv: list[str] | None = None) -> int:
     mode, prompt, commit = args.mode or "usual", prompt_id(), _commit()
     diff = _git("diff", "HEAD", "--", *PROMPT_SOURCES)
     header = (
-        f"Prompt {prompt} · commit {commit} · {llm.OLLAMA_MODEL} at {args.url} · {args.persona} · mode {mode} · "
+        f"Prompt {prompt} · commit {commit} · {llm.OLLAMA_MODEL}{_think_label()} at {args.url} · {args.persona} · "
+        f"mode {mode} · "
         f"{args.runs} runs per sample" + (f" · scenario {args.scenario}" if args.scenario != "fresh" else "")
         + (" · draft only" if args.draft else "") + (f' · "{args.note}"' if args.note else "")
     )
     print(header, flush=True)
     records, prompts = await run(args.samples, args.runs, args.mode, args.draft, args.persona, args.scenarios)
     results = stage_results(records, args.persona)
-    report = summarize(records, args.persona) + "\n\n" + "\n".join(compare(results, load_history(), mode, args.persona))
+    report = summarize(records, args.persona) + "\n\n" + "\n".join(
+        compare(results, load_history(), mode, args.persona, llm.OLLAMA_MODEL, llm.OLLAMA_THINK)
+    )
     log = save_log(records, prompts, header, report, diff)
+    if args.data and records:
+        meta = {
+            "model": llm.OLLAMA_MODEL, "think": llm.OLLAMA_THINK, "date": f"{datetime.now():%Y-%m-%d %H:%M}",
+            "prompt": prompt, "commit": commit, "scenario": args.scenario, "mode": args.mode, "runs": args.runs,
+            "note": args.note, "log": log.name, "gpu": await gpu_share(llm.OLLAMA_MODEL),
+        }
+        _, outputs = save_model_data(records, args.persona, data_name(args.persona, args.scenario, args.mode, args.draft), meta)
+        print(f"Model test data saved to {outputs}")
     if results:
         entry = {
             "date": f"{datetime.now():%Y-%m-%d %H:%M}", "prompt": prompt, "commit": commit,
+            "model": llm.OLLAMA_MODEL, "think": llm.OLLAMA_THINK,
             "persona": args.persona, "mode": mode, "scenario": args.scenario, "checks": CHECKS,
             "draft_only": args.draft, "runs": args.runs, "note": args.note, "log": log.name, "results": results,
         }
