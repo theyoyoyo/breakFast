@@ -12,6 +12,7 @@ import { render, screen, waitFor, fireEvent, within, act } from '@testing-librar
 import MealEditor from './MealEditor'
 import { checkMissingIngredients, getFavorites } from '../services/api'
 import { applyLanguage } from '../utils/language'
+import { OMELETTE_MENU, PLATE_MENU } from './meals.fixtures'
 
 vi.mock('../services/api', () => ({ checkMissingIngredients: vi.fn(), getFavorites: vi.fn(() => Promise.resolve([])) }))
 
@@ -550,5 +551,181 @@ describe('MealEditor units', () => {
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
       menu: [expect.objectContaining({ unit: 'adet' }), expect.objectContaining({ unit: 'tbsp' })],
     }))
+  })
+})
+
+describe('MealEditor editing', () => {
+  beforeEach(() => {
+    vi.mocked(checkMissingIngredients).mockReset()
+    localStorage.clear() // no remembered units
+  })
+
+  // Press Save once, and check it sent one meal like this one
+  function expectSaved(onSave, meal) {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(onSave).toHaveBeenCalledTimes(1)
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining(meal))
+  }
+
+  // A typed amount is saved as a number, and the other items keep theirs
+  it('saves a typed amount as a number', () => {
+    const onSave = vi.fn()
+    render(<MealEditor meal={PLATE_MENU} menuMode onSave={onSave} />)
+    fireEvent.change(screen.getByDisplayValue('50'), { target: { value: '72.5' } })
+    expect(onSave).not.toHaveBeenCalled()
+    expectSaved(onSave, { menu: [
+      expect.objectContaining({ name: 'Cheese', amount: 72.5, unit: 'g' }),
+      expect.objectContaining({ name: 'Tomato', amount: 1, unit: 'pcs' }),
+    ] })
+  })
+
+  // The amount box takes only numbers with up to two decimals, so a letter or a third decimal changes nothing
+  it('ignores amounts that are not a number with up to two decimals', () => {
+    render(<MealEditor meal={PLATE_MENU} menuMode />)
+    const cheese = screen.getByDisplayValue('50')
+    fireEvent.change(cheese, { target: { value: '5a' } })
+    expect(cheese).toHaveValue('50')
+    fireEvent.change(cheese, { target: { value: '1.255' } })
+    expect(cheese).toHaveValue('50')
+    fireEvent.change(cheese, { target: { value: '1.25' } })
+    expect(cheese).toHaveValue('1.25')
+  })
+
+  // An emptied or zero amount becomes 1 when the box loses focus
+  it('turns an empty or zero amount into 1 on blur', () => {
+    render(<MealEditor meal={PLATE_MENU} menuMode />)
+    const cheese = screen.getByDisplayValue('50')
+    fireEvent.change(cheese, { target: { value: '' } })
+    fireEvent.blur(cheese)
+    expect(cheese).toHaveValue('1')
+    fireEvent.change(cheese, { target: { value: '0' } })
+    fireEvent.blur(cheese)
+    expect(cheese).toHaveValue('1')
+  })
+
+  // ▲ adds one and ▼ takes one away, but never down to zero
+  it('steps an amount up and down, never to zero', () => {
+    const onChange = vi.fn()
+    render(<MealEditor meal={{ ...PLATE_MENU, menu: [PLATE_MENU.menu[1]] }} menuMode onChange={onChange} />)
+    const tomato = screen.getByDisplayValue('1')
+    fireEvent.click(screen.getByText('▲'))
+    fireEvent.click(screen.getByText('▲'))
+    expect(tomato).toHaveValue('3')
+    fireEvent.click(screen.getByText('▼'))
+    expect(tomato).toHaveValue('2')
+    fireEvent.click(screen.getByText('▼'))
+    fireEvent.click(screen.getByText('▼'))
+    expect(tomato).toHaveValue('1')
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      menu: [expect.objectContaining({ name: 'Tomato', amount: 1 })],
+    }))
+  })
+
+  // A new simple item gets amount 1 and a unit from its name, added with Enter or ＋ Item; a name already there (any case) isn't added twice
+  it('adds simple items once each', () => {
+    const onSave = vi.fn()
+    render(<MealEditor meal={PLATE_MENU} menuMode onSave={onSave} />)
+    const add = screen.getByPlaceholderText('Item or dish name…')
+    fireEvent.change(add, { target: { value: 'Honey' } })
+    fireEvent.keyDown(add, { key: 'Enter' })
+    expect(add).toHaveValue('')
+    fireEvent.change(add, { target: { value: 'Walnuts' } })
+    fireEvent.click(screen.getByRole('button', { name: '＋ Item' }))
+    fireEvent.change(add, { target: { value: 'cheese' } })
+    fireEvent.click(screen.getByRole('button', { name: '＋ Item' }))
+    fireEvent.change(add, { target: { value: '   ' } })
+    fireEvent.click(screen.getByRole('button', { name: '＋ Item' }))
+
+    expectSaved(onSave, { menu: [
+      expect.objectContaining({ name: 'Cheese' }),
+      expect.objectContaining({ name: 'Tomato' }),
+      expect.objectContaining({ name: 'Honey', amount: 1, ingredients: [] }),
+      expect.objectContaining({ name: 'Walnuts', amount: 1, ingredients: [] }),
+    ] })
+  })
+
+  // ＋ Dish adds a dish with no amount of its own; opened, it takes ingredients that can be stepped, typed and removed
+  it('adds a dish and edits its ingredients', () => {
+    const onSave = vi.fn()
+    render(<MealEditor meal={PLATE_MENU} menuMode onSave={onSave} />)
+    fireEvent.change(screen.getByPlaceholderText('Item or dish name…'), { target: { value: 'Pancakes' } })
+    fireEvent.click(screen.getByRole('button', { name: '＋ Dish' }))
+    fireEvent.click(screen.getByText('▶ Ingredients'))
+
+    const addSub = screen.getByPlaceholderText('Add ingredient…')
+    for (const name of ['Flour', 'Milk', 'Egg']) {
+      fireEvent.change(addSub, { target: { value: name } })
+      fireEvent.keyDown(addSub, { key: 'Enter' })
+    }
+    fireEvent.change(addSub, { target: { value: 'milk' } }) // already in the dish
+    fireEvent.keyDown(addSub, { key: 'Enter' })
+    expect(screen.getAllByText('Milk')).toHaveLength(1)
+    fireEvent.click(screen.getAllByText('▲').at(-1)) // Egg: 2
+    fireEvent.click(screen.getAllByTitle('Delete').at(-2)) // Milk
+    const flour = screen.getAllByDisplayValue('1').at(-1)
+    fireEvent.change(flour, { target: { value: '200' } })
+    fireEvent.blur(flour)
+
+    expectSaved(onSave, { menu: [
+      expect.anything(),
+      expect.anything(),
+      { name: 'Pancakes', ingredients: [
+        expect.objectContaining({ name: 'Flour', amount: 200 }),
+        expect.objectContaining({ name: 'Egg', amount: 2 }),
+      ] },
+    ] })
+  })
+
+  // A dish ingredient's steppers, a typed amount and its blur work like a simple item's, and its prep words stay
+  it('steps, types and blurs a dish ingredient amount', () => {
+    const onChange = vi.fn()
+    render(<MealEditor meal={OMELETTE_MENU} menuMode onChange={onChange} />)
+    fireEvent.click(screen.getByText('Veggie omelette'))
+    const egg = screen.getAllByDisplayValue('2')[0] // Egg, above Toast
+    fireEvent.change(egg, { target: { value: '' } })
+    fireEvent.blur(egg)
+    expect(egg).toHaveValue('1')
+    fireEvent.click(screen.getAllByText('▼')[0]) // Egg stays at 1
+    expect(egg).toHaveValue('1')
+    const pepper = screen.getByDisplayValue('0.5')
+    fireEvent.change(pepper, { target: { value: '0.75' } })
+    fireEvent.blur(pepper)
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      menu: expect.arrayContaining([expect.objectContaining({
+        name: 'Veggie omelette',
+        ingredients: [
+          expect.objectContaining({ name: 'Egg', amount: 1, prep: 'whisked' }),
+          expect.objectContaining({ name: 'Bell pepper', amount: 0.75, prep: 'diced' }),
+          expect.objectContaining({ name: 'Butter', amount: 1 }),
+        ],
+      })]),
+    }))
+  })
+
+  // The name and prep time are saved as edited, and an emptied name goes back to the meal's own on blur
+  it('saves an edited name and prep time, and restores an emptied name', () => {
+    const onSave = vi.fn()
+    render(<MealEditor meal={OMELETTE_MENU} menuMode onSave={onSave} />)
+    const name = screen.getByDisplayValue('Sunday Omelette')
+    fireEvent.change(name, { target: { value: '' } })
+    fireEvent.blur(name)
+    expect(name).toHaveValue('Sunday Omelette')
+    fireEvent.change(name, { target: { value: 'Lazy Omelette' } })
+    const prep = screen.getByDisplayValue('15')
+    fireEvent.change(prep, { target: { value: 'abc' } }) // not a number: ignored
+    expect(prep).toHaveValue('15')
+    fireEvent.change(prep, { target: { value: '20' } })
+    expectSaved(onSave, { menu_name: 'Lazy Omelette', meal_name: 'Lazy Omelette', prep_time_min: 20 })
+  })
+
+  // Close leaves without saving the edits
+  it('closes without saving', () => {
+    const onSave = vi.fn()
+    const onClose = vi.fn()
+    render(<MealEditor meal={PLATE_MENU} menuMode onSave={onSave} onClose={onClose} />)
+    fireEvent.change(screen.getByDisplayValue('50'), { target: { value: '60' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onSave).not.toHaveBeenCalled()
   })
 })
