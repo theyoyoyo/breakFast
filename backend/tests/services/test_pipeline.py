@@ -516,6 +516,35 @@ class TestPipelineOrchestrator:
         assert "Egg toast" not in plain[0]["system"]  # only favorites mode lists them
         assert len(system) > len(plain[0]["system"])
 
+    # The draft and the reviser get the weekly analysis's nutrient line, the reviser one more question with it (#206)
+    async def test_nutrients_reach_draft_and_reviser(self):
+        nutrients = {"lacking": ["iodine", "fiber"], "more_than_enough": ["selenium"]}
+        _, calls = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)), context={**SAMPLE_CONTEXT, "nutrients": nutrients})
+        draft, reviser = calls[0]["system"], calls[1]["system"]
+        for prompt in (draft, reviser):
+            assert "iodine, fiber" in prompt and "selenium" in prompt
+            # Below the health rules and the avoid list
+            assert prompt.index("iodine") > prompt.index("Favor omega-3") and prompt.index("iodine") > prompt.index("shellfish")
+        _, plain = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)))
+        assert len(reviser) - len(plain[1]["system"]) > len(draft) - len(plain[0]["system"])  # the question
+
+    # Nothing marked, or no recent analysis, leaves both prompts as they were
+    async def test_no_nutrient_line_without_marks(self):
+        _, plain = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)))
+        for nutrients in (None, {"lacking": [], "more_than_enough": []}):
+            _, calls = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)), context={**SAMPLE_CONTEXT, "nutrients": nutrients})
+            assert [c["system"] for c in calls[:2]] == [c["system"] for c in plain[:2]]
+
+    # Only a list with something marked is named, and the line names nutrients from the list, never a food
+    def test_nutrient_line_names_only_marked_lists(self):
+        from models.nutrients import NUTRIENTS
+        from services.knowledge import format_nutrients
+
+        line = format_nutrients({"lacking": [], "more_than_enough": ["sugar", "salt"]})
+        assert "lacking" not in line and line.endswith("sugar, salt.")
+        named = line.split(": ", 1)[1].removeprefix("more than enough ").rstrip(".").split(", ")
+        assert set(named) <= set(NUTRIENTS)
+
     # Pipeline propagates LLMUnavailableError from the draft step
     async def test_propagates_llm_error(self):
         from services.llm import LLMUnavailableError

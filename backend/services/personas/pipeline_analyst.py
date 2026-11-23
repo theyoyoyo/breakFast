@@ -13,6 +13,7 @@ from services.knowledge import (
     format_health_rules,
     format_history_detailed,
     format_ingredients,
+    format_nutrients,
     format_supplements,
     format_user_profile,
 )
@@ -31,6 +32,12 @@ MODE_LINES = {
     "explore": "The user asked for something new from world cuisines: keep what makes this menu new to them.",
 }
 _PLAIN_MODE = "The user asked for a breakfast suggestion."
+
+# With the latest weekly analysis's nutrient line: one more question whose usual answer is no
+NUTRIENT_QUESTION = (
+    "   - Does the menu lean hard on a nutrient the recent breakfasts had more than enough of, or "
+    "miss an easy fix from the fridge for one they lacked?\n"
+)
 
 # After a chat: the reviser restates what the chat asks now before its changes and the meal
 # (revision_schema's `chat_asks`). Each ask names the numbered entries it comes from before its
@@ -73,7 +80,7 @@ Health rules:
 
 Avoid list: {avoid_list}
 Dislikes: {dislikes}
-
+{nutrients}
 ═══════════════════════════════════════════════════════════════
 FRIDGE (everything the user has, basics included)
 ═══════════════════════════════════════════════════════════════
@@ -96,7 +103,7 @@ can get it.
    - Does an item work against a [TOP PRIORITY] health rule?
    - Is an item on the dislikes list?
    - Is a portion far from a normal breakfast portion for this user?
-   - Is a menu item, a dish or not, something people don't eat on its own? Then it goes with the \
+{nutrient_question}   - Is a menu item, a dish or not, something people don't eat on its own? Then it goes with the \
 food it belongs to: move it into the ingredients of the dish it goes in, or keep it and pair it \
 with the item it is served with or on (step 4); leave it out only when it goes with nothing on the \
 menu.
@@ -130,9 +137,13 @@ def build_pipeline_analyst_prompt(
     mode: str | None = None,
     language: str = "en",
     chat: bool = False,
+    nutrients: dict | None = None,
 ) -> str:
     """Build the reviser's prompt (the Pipeline Analyst persona). After a chat (its block ends the
-    reviser's message), the reviser first lists what the chat asks for and follows each ask."""
+    reviser's message), the reviser first lists what the chat asks for and follows each ask.
+    `nutrients` (the latest weekly analysis's lists) adds its line and one narrow question when it
+    marks something."""
+    nutrient_line = format_nutrients(nutrients)
     dislikes = [v for k, v in (preferences or {}).items() if k.startswith("dislike:")]
     return PIPELINE_ANALYST_TEMPLATE.format(
         lang_instruction=_lang(language),
@@ -144,6 +155,8 @@ def build_pipeline_analyst_prompt(
         health_rules=format_health_rules(health_rules or []),
         avoid_list=format_avoid_list(avoid_list),
         dislikes=", ".join(dislikes) or "none",
+        nutrients=f"{nutrient_line}\n" if nutrient_line else "",
+        nutrient_question=NUTRIENT_QUESTION if nutrient_line else "",
         ingredient_inventory=format_ingredients(ingredient_inventory or []),
         unit_list=", ".join(units_for(language)),
         unit_sizes=unit_sizes(language),

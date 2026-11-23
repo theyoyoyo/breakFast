@@ -23,6 +23,7 @@ from services.knowledge import (
     format_health_rules,
     format_history,
     format_ingredients,
+    format_nutrients,
     format_preferences,
     format_ratings,
     format_supplements_taken,
@@ -34,6 +35,11 @@ from services.knowledge import (
 
 def _lang(language: str) -> str:
     return "Always respond in Turkish." if language != "en" else "Always respond in English."
+
+
+def _line(text: str) -> str:
+    """A hint line of its own, or nothing when there is no hint."""
+    return f"\n{text}\n" if text else ""
 
 
 SUGGESTION_TEMPLATE = """\
@@ -150,7 +156,7 @@ Each rule has a priority level:
 - [Important]: Strongly favor these when choosing ingredients and recipes.
 - [Nice to have]: Consider when possible, but don't force it.
 {health_rules}
-
+{nutrients}
 ═══════════════════════════════════════════════════════════════
 RESPONSE FORMAT
 ═══════════════════════════════════════════════════════════════
@@ -299,9 +305,11 @@ def build_suggestion_prompt(
     favorite_meals: list[dict] | None = None,
     favorites: list[str] | None = None,
     ratings: list[dict] | None = None,
+    nutrients: dict | None = None,
 ) -> str:
     """Build the suggestion persona system prompt. Favorites mode also lists the saved favorite
-    meals, the staples (favorite ingredients) and the item ratings."""
+    meals, the staples (favorite ingredients) and the item ratings. `nutrients` (the latest weekly
+    analysis's lists) adds one hint line below the health rules when it marks something."""
     appliance_str = ", ".join(kitchen_appliances) if kitchen_appliances else "Not configured"
     base = SUGGESTION_TEMPLATE.format(
         lang_instruction=_lang(language),
@@ -315,6 +323,7 @@ def build_suggestion_prompt(
         stated_habits=format_habits(stated_habits),
         behavioral_patterns=format_behavioral(inferred_habits),
         health_rules=format_health_rules(health_rules or []),
+        nutrients=_line(format_nutrients(nutrients)),
         user_profile=format_user_profile(user_profile),
         supplements=format_supplements_taken(supplements),
         avoid_list=format_avoid_list(avoid_list),

@@ -12,6 +12,7 @@ from datetime import date as date_type
 from db_helpers import parse_json_field
 from models.kitchen import DEFAULT_ENABLED_KEYS, KITCHEN_APPLIANCES
 from services.shopping import dish_names
+from services.weekly import fetch_recent_analysis
 
 # App settings stored as preferences; they're not food preferences, so prompts never see them
 SETTING_KEYS = {"response_language", "theme", "appearance", "weekly_summary_in_suggestions"}
@@ -148,9 +149,18 @@ async def load_chat_context(db, user_id: int) -> dict:
     filtered_prefs = _food_preferences(prefs)
     language = prefs.get("response_language", "en")
 
-    # Only inject weekly summary into suggestions if the user has opted in
+    # The latest weekly analysis of the last 7 days: its narrative only when the user opted in,
+    # its nutrients always (the draft and the reviser read them; the chat persona doesn't)
+    analysis = await fetch_recent_analysis(db, user_id)
     use_weekly_summary = prefs.get("weekly_summary_in_suggestions", "false") == "true"
-    weekly_summary = await fetch_weekly_summary(db, user_id) if use_weekly_summary else None
+    weekly_summary = (
+        {"narrative": analysis["narrative"], "scores": analysis["scores"]}
+        if analysis and use_weekly_summary else None
+    )
+    nutrients = (
+        {"lacking": analysis["lacking"], "more_than_enough": analysis["more_than_enough"]}
+        if analysis else None
+    )
 
     return {
         "ingredients": ingredients,
@@ -164,6 +174,7 @@ async def load_chat_context(db, user_id: int) -> dict:
         "avoid_list": avoid_list,
         "kitchen_appliances": kitchen_appliances,
         "weekly_summary": weekly_summary,
+        "nutrients": nutrients,
         "favorite_meals": favorite_meals,
         "favorites": favorites,
         "ratings": ratings,
@@ -259,19 +270,6 @@ async def load_shopping_context(db, user_id: int) -> dict:
         "country": (user_profile or {}).get("country"),
         "language": language,
     }
-
-
-async def fetch_weekly_summary(db, user_id: int) -> dict | None:
-    """Fetch the cached weekly summary for the current ISO week, or None."""
-    week_key = date_type.today().strftime("%G-W%V")
-    async with db.execute(
-        "SELECT narrative, scores FROM weekly_summaries WHERE user_id = ? AND week_key = ?",
-        (user_id, week_key),
-    ) as cur:
-        row = await cur.fetchone()
-    if row:
-        return {"narrative": row["narrative"], "scores": row["scores"]}
-    return None
 
 
 async def load_analyst_context(db, user_id: int) -> dict:
