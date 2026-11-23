@@ -660,6 +660,14 @@ class TestFridgeRule:
         assert "`method`" in prompt
         assert "`prep`" in prompt
 
+    # The reviser's narrow questions (step 2) ask whether a menu item is something nobody eats on its own, with no
+    # food named, since the model copies examples into menus (#263)
+    def test_pipeline_analyst_asks_about_items_nobody_eats_alone(self):
+        prompt = build_pipeline_analyst_prompt([], ingredient_inventory=[{"name": "Oats"}])
+        questions = prompt[prompt.index("\n2. "):prompt.index("\n3. ")]
+        assert "on its own" in questions
+        assert "cinnamon" not in prompt.lower()
+
 
 # ---------------------------------------------------------------------------
 # Present step: the reply text from the final meal
