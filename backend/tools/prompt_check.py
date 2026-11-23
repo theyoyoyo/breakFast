@@ -37,7 +37,8 @@ Personas, each run for a sample user (tools/prompt_samples.py):
   in that's neither in the fridge nor the draft is flagged (outside), and the note names each
   swap, what stays missing (the review may keep an item nothing replaces), the draft's fridge
   items it dropped and the prep words it wrote (#176). A case's item nobody eats on its own
-  (`lone`) still on the menu by itself is flagged (alone), and the note says which dish it joined (#263).
+  (`lone`) still on the menu by itself with no `serve_with` is flagged (alone); the note says
+  which dish it joined, and every final's note lists the items served with another one (#263).
 - chat: the typed messages of a --scenario (chat by default, or pressed) sent to the chat
   persona one at a time, with the chat so far as history. The chat talks and menus come
   only from a Suggest press (#168), so a reply with food amounts, numbered steps or a
@@ -77,6 +78,7 @@ from services.fridge import (
     find_missing_ingredients,
     meal_ingredient_names,
     name_tokens,
+    paired_item,
     same_name,
     same_tokens,
 )
@@ -157,8 +159,9 @@ PERSONAS = {
 }
 STAGES = PERSONAS["suggest"]["stages"]
 # Bumped when a check changes what counts as clean, so a test is compared only with tests scored the same way
-# (7 was used by an unmerged branch's tests, so the review's alone check is 8)
-CHECKS = 8
+# (7 was used by an unmerged branch's tests; 8 was the review's alone check before an item could name the one it's
+# served with, #263)
+CHECKS = 9
 _TURKISH_LETTERS = set("çğıöşüÇĞİÖŞÜ")
 
 # Shopping names that aren't one specific product: alternatives, examples or filler words
@@ -198,10 +201,11 @@ _COOKING = {
     "boil": ("boil", "simmer", "poach", "hasla", "kaynat"),
     "fry": ("fry", "frie", "saute", "scrambl", "kizart", "kavur"),
 }
-# Color and form words that don't name a food on their own, so a "Green smoothie" isn't about "Green peppers"
+# Color and form words that don't name a food on their own, so a "Green smoothie" isn't about "Green peppers" and a
+# "Pumpkin puree spread" isn't about "Chocolate spread" (#263)
 _NOT_FOOD = {
     "white", "black", "green", "red", "yellow", "brown", "fresh", "dried", "frozen", "whole", "plain", "cooked",
-    "raw", "smoked", "sliced", "ground", "sweet", "light", "beyaz", "siyah", "yesil", "kirmizi", "taze",
+    "raw", "smoked", "sliced", "ground", "sweet", "light", "spread", "beyaz", "siyah", "yesil", "kirmizi", "taze",
 }
 _NUMBER = r"(?<![\w.,])(\d+(?:[.,/]\d+)?|[½¼¾])"
 # A number with a unit from the app's list, in either language ("50 g", "2 slices", "1 çay kaşığı")
@@ -417,10 +421,15 @@ def check_reply(text: str, sample: dict, scenario: dict | None = None, draft: st
         for ing in i.get("ingredients") or []
         if isinstance(ing, dict) and isinstance(ing.get("prep"), str) and ing["prep"].strip()
     ]
+    # Items served with or on another one (#263), so a pairing that doesn't fit shows in the log
+    paired = [
+        f"{i.get('name')} → {paired_item(i, meal['menu'])}" for i in meal["menu"] if paired_item(i, meal["menu"])
+    ]
     notes = [
         note,
         "simple items: " + "; ".join(readied) if readied else "",
         "prep: " + "; ".join(prepped) if prepped else "",
+        "served with: " + "; ".join(paired) if paired else "",
         *swap_notes(meal, draft, sample["ingredients"]),
     ]
     if any(notes):
@@ -433,19 +442,28 @@ def _item_food(item: dict) -> list[str]:
     return [str(s.get("name", "")) for s in item.get("ingredients") or [] if isinstance(s, dict)] or [str(item.get("name", ""))]
 
 
+def _same_names(a: list[str], b: list[str]) -> bool:
+    """Two lists of the same names in any order (same_name)."""
+    return len(a) == len(b) and all(any(same_name(x, y) for y in b) for x in a)
+
+
 def lone_items(meal: dict, case: dict) -> tuple[list[str], list[str]]:
-    """Where the review put each of the case's items nobody eats on its own (`lone`, #263): flagged while it
-    is still a menu item of its own, method or not, since the plan then makes it alone (its method shows in
-    the simple items note), and noted when it moved into a dish (one left out shows as dropped). Only the
-    case names the items, so code needs no food list."""
+    """Where the review put each of the case's items nobody eats on its own (`lone`, #263). The item is
+    still there when a menu item has its name or its draft food (renamed): flagged when it names no other
+    item it's served with (`serve_with`, paired_item), method or not, since the app then serves and plans
+    it as food of its own; a paired one shows in the served with note. It's noted when its food moved into
+    a dish, and one left out shows as dropped. Only the case names the items, so code needs no food list."""
     alone, notes = [], []
     items = [i for i in meal["menu"] if isinstance(i, dict)]
+    drafted = {str(i.get("name")): _item_food(i) for i in case["draft"]["menu"] if isinstance(i, dict)}
     for name in case.get("lone", ()):
+        lone = drafted.get(name, [name])
         for item in items:
             food = _item_food(item)
-            if all(same_name(name, f) for f in food):
-                alone.append(str(item.get("name")))
-            elif any(same_name(name, f) for f in food):
+            if same_name(name, str(item.get("name", ""))) or _same_names(food, lone):
+                if not paired_item(item, meal["menu"]):
+                    alone.append(str(item.get("name")))
+            elif all(any(same_name(n, f) for f in food) for n in lone):
                 notes.append(f"{name}: in {item.get('name')}")
     return alone, notes
 
