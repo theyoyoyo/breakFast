@@ -359,12 +359,17 @@ async def test_demo_user_not_created_by_default(unauth_client):
     assert r.status_code == 401
 
 
+# With DEMO_USER on, the start creates one demo account, whose empty PIN logs in and opens protected routes
 async def test_demo_user_created_when_enabled(unauth_client, monkeypatch):
     monkeypatch.setattr(database, "DEMO_USER", True)
     monkeypatch.setattr(config, "DEMO_USER", True)
     await database.init_db()
     r = await unauth_client.post("/auth/login", json={"name": "demo", "pin": ""})
     assert r.status_code == 200
+    assert (await unauth_client.get("/health/auth", headers={"Authorization": f"Bearer {r.json()['token']}"})).status_code == 200
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        async with db.execute("SELECT COUNT(*) FROM users WHERE name = 'demo'") as cur:
+            assert await cur.fetchone() == (1,)
 
 
 # A demo account left over from a try-out can't log in with its empty PIN once DEMO_USER is off

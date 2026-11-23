@@ -51,34 +51,19 @@ async def test_upsert_profile_partial_fields(client):
     assert data["height_cm"] is None
 
 
-async def test_negative_age_rejected(client):
-    """Negative age values should be rejected with 422."""
-    r = await client.put("/profile/", json={"age": -5})
+# An age, height or weight of zero or below is refused with 422, and the saved profile stays as it was
+@pytest.mark.parametrize("body", [
+    {"age": -5},
+    {"age": 0},
+    {"height_cm": -170},
+    {"weight_kg": -80},
+    {"weight_kg": 0},
+])
+async def test_impossible_profile_values_rejected(client, body):
+    saved = (await client.put("/profile/", json={"age": 30, "height_cm": 180, "weight_kg": 75})).json()
+    r = await client.put("/profile/", json=body)
     assert r.status_code == 422
-
-
-async def test_zero_age_rejected(client):
-    """Zero age should be rejected with 422."""
-    r = await client.put("/profile/", json={"age": 0})
-    assert r.status_code == 422
-
-
-async def test_negative_height_rejected(client):
-    """Negative height values should be rejected with 422."""
-    r = await client.put("/profile/", json={"height_cm": -170})
-    assert r.status_code == 422
-
-
-async def test_negative_weight_rejected(client):
-    """Negative weight values should be rejected with 422."""
-    r = await client.put("/profile/", json={"weight_kg": -80})
-    assert r.status_code == 422
-
-
-async def test_zero_weight_rejected(client):
-    """Zero weight should be rejected with 422."""
-    r = await client.put("/profile/", json={"weight_kg": 0})
-    assert r.status_code == 422
+    assert (await client.get("/profile/")).json() == saved
 
 
 async def test_clear_individual_field(client):
