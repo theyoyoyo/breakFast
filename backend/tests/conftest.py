@@ -21,6 +21,20 @@ from httpx import ASGITransport, AsyncClient
 
 
 @pytest.fixture(autouse=True)
+def no_model_settings_file(tmp_path):
+    """Point the model picker's settings file at an empty folder, so a real backend/model_settings.json
+    never changes which model a test's calls name. Set without monkeypatch, so a test's
+    monkeypatch.undo() (the config reload tests) doesn't bring the real file back; first, so it's undone last."""
+    from services import llm
+    from services.model_settings import ModelSettingsFile
+
+    saved = llm.MODEL_SETTINGS_PATH, llm._model_settings
+    llm.MODEL_SETTINGS_PATH, llm._model_settings = tmp_path / "model_settings.json", ModelSettingsFile()
+    yield
+    llm.MODEL_SETTINGS_PATH, llm._model_settings = saved
+
+
+@pytest.fixture(autouse=True)
 def fast_pin_hashing(request, monkeypatch):
     """Hash PINs at a tiny scrypt cost, since the real one is slow on purpose."""
     if request.node.get_closest_marker("real_scrypt"):
@@ -29,17 +43,6 @@ def fast_pin_hashing(request, monkeypatch):
 
     monkeypatch.setattr(auth, "SCRYPT_N", 2**4)
     monkeypatch.setattr(auth, "SCRYPT_P", 1)
-
-
-@pytest.fixture(autouse=True)
-def no_model_settings_file(tmp_path, monkeypatch):
-    """Point the model picker's settings file at an empty folder, so a real backend/model_settings.json
-    never changes which model a test's calls name."""
-    from services import llm
-    from services.model_settings import ModelSettingsFile
-
-    monkeypatch.setattr(llm, "MODEL_SETTINGS_PATH", tmp_path / "model_settings.json")
-    monkeypatch.setattr(llm, "_model_settings", ModelSettingsFile())
 
 
 @pytest.fixture(autouse=True)
