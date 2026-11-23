@@ -50,6 +50,17 @@ const PIPELINE_STEPS = {
   finalizing: 'Final touches…',
 }
 
+// The Suggest button's message for each mode. The server reads the chat so far from the session
+// (services/chat_block.py) and leaves these texts out of it: they are mirrored there as
+// SUGGEST_MESSAGES, so edit both. The chat doesn't show them either, only the press's progress.
+const SUGGEST_MESSAGES = {
+  default: 'Suggest Breakfast',
+  favorites: 'Suggest breakfast from my favorite meals',
+  explore: 'Suggest a different breakfast from world cuisines',
+}
+const SUGGEST_TEXTS = new Set(Object.values(SUGGEST_MESSAGES))
+const isSuggestPress = (m) => m.role === 'user' && SUGGEST_TEXTS.has(m.content)
+
 // Strip ```json ... ``` blocks from message text
 const JSON_BLOCK_RE = /```json[\s\S]*?```/g
 function stripJsonBlock(text) {
@@ -114,6 +125,12 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
   const [input, setInput] = useState('')
   // null = idle, '' = thinking (no tokens yet), string = streaming content
   const [streamBuffer, setStreamBuffer] = useState(null)
+  // The reply on its way answers a Suggest press: its progress shows on the user's side
+  const [pendingSuggest, setPendingSuggest] = useState(false)
+  // New, Delete, Back or Next running: the others wait (their buttons are off) until it's done
+  const [sessionBusy, setSessionBusy] = useState(false)
+  const sessionBusyRef = useRef(false)
+  const navSeq = useRef(0)
   const [connected, setConnected] = useState(false)
   const [sessionId, setSessionId] = useState(null)
   const [hasOlder, setHasOlder] = useState(false)
@@ -143,6 +160,9 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
   const onMealLoggedRef = useRef(onMealLogged)
   const sessionIdRef = useRef(null)
   const abortedRef = useRef(false)
+  // A stopped Suggest press's meal arrives right after its done: it mustn't become a card
+  const dropMealRef = useRef(false)
+  const messagesRef = useRef(messages)
   const analyzeAbortRef = useRef(null)
   const { isListening, startListening, stopListening, supported: voiceSupported } = useVoice()
 
@@ -190,17 +210,20 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
   // Keep refs in sync so socket callbacks always see the latest props/functions
   useEffect(() => { onMealLoggedRef.current = onMealLogged }, [onMealLogged])
   useEffect(() => { sessionIdRef.current = sessionId }, [sessionId])
+  useEffect(() => { messagesRef.current = messages }, [messages])
 
-  const refreshNavState = useCallback(async (currentId) => {
+  // Back and Next follow the server's list: each shows only when there's a chat to move to.
+  // Only the latest check applies, to the chat open when it answers.
+  const refreshNavState = useCallback(async () => {
+    const seq = ++navSeq.current
+    let sessions = []
     try {
-      const sessions = await listSessions()
-      const idx = sessions.findIndex(s => s.id === currentId)
-      setHasOlder(idx < sessions.length - 1)
-      setHasNewer(idx > 0)
-    } catch {
-      setHasOlder(false)
-      setHasNewer(false)
-    }
+      sessions = await listSessions()
+    } catch { /* Backend not available: neither shows */ }
+    if (seq !== navSeq.current) return
+    const idx = sessions.findIndex(s => s.id === sessionIdRef.current)
+    setHasOlder(idx !== -1 && idx < sessions.length - 1)
+    setHasNewer(idx > 0)
   }, [])
 
   const loadTodaySupplements = useCallback(async () => {
@@ -239,15 +262,16 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       try {
         const session = await getActiveSession()
         if (cancelled) return
+        sessionIdRef.current = session.id
         setSessionId(session.id)
         const msgs = await getSessionMessages(session.id)
-        if (cancelled) return
+        if (cancelled || sessionIdRef.current !== session.id) return
         const allMsgs = toChatMessages(msgs)
         const blocks = parseMealBlocksFromMessages(allMsgs)
         setMessages(allMsgs)
         setMealBlocks(blocks)
         setCheckedMealIdx(selectedIndex(allMsgs, blocks))
-        await refreshNavState(session.id)
+        await refreshNavState()
       } catch {
         // Backend not available yet — will work once connected
       }
@@ -270,8 +294,8 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     }
     // Only the latest reload applies, and only to the chat it loaded
     if (seq !== reloadSeq.current || id !== sessionIdRef.current) return
-    // A reply or an analysis started while loading: reload again once it's done
-    if (busyRef.current) {
+    // A reply, an analysis or a session button started while loading: reload again once it's done
+    if (busyRef.current || sessionBusyRef.current) {
       setSyncPending(true)
       return
     }
@@ -280,7 +304,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     setMessages(prev => (sameMessages(prev, allMsgs) ? prev : allMsgs))
     setMealBlocks(prev => keepUnchangedBlocks(prev, blocks))
     setCheckedMealIdx(selectedIndex(allMsgs, blocks))
-    refreshNavState(id)
+    refreshNavState()
   }, [parseMealBlocksFromMessages, refreshNavState])
 
   // Refresh supplements when Chat tab becomes visible (picks up Settings changes)
@@ -310,19 +334,25 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       },
       // messageId is the saved reply's id (lets a card edit save into it)
       onDone: (full, messageId) => {
-        setPipelineStep(null)
         syncLyric(full) // keep client lyric index in sync if this was a fallback lyric
         if (abortedRef.current) {
-          // Already handled by handleStop
+          // The stopped reply's own done (the server answers in order), already handled by
+          // handleStop: the meal that may follow it is dropped too, and a message sent since
+          // keeps waiting for its own reply
           abortedRef.current = false
           setAborted(false)
-        } else {
-          setMessages((prev) => [...prev, { id: messageId, role: 'assistant', content: full }])
+          dropMealRef.current = true
+          return
         }
+        dropMealRef.current = false
+        setPipelineStep(null)
+        setMessages((prev) => [...prev, { id: messageId, role: 'assistant', content: full }])
+        setPendingSuggest(false)
         setStreamBuffer(null)
       },
       // A suggested meal: attached to the last assistant message as its card, and selected
       onMealLogged: (meal) => {
+        if (dropMealRef.current) { dropMealRef.current = false; return } // its reply was stopped
         const normalized = normalizeMeal(meal)
         setMessages((prev) => {
           const lastIdx = prev.length - 1
@@ -336,6 +366,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       onError: () => {
         if (wsRef.current !== ws) return // an old socket, already replaced
         setStreamBuffer(null)
+        setPendingSuggest(false)
         setPipelineStep(null)
         setConnected(false)
       },
@@ -344,6 +375,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       onClose: () => {
         if (wsRef.current !== ws) return
         setStreamBuffer(null)
+        setPendingSuggest(false)
         setPipelineStep(null)
         setConnected(false)
         // A stopped reply's done can't arrive on this socket any more
@@ -365,12 +397,12 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       },
       // Pipeline step updates
       onProgress: (step) => {
-        setPipelineStep(step)
+        if (!abortedRef.current) setPipelineStep(step)
       },
       // A session changed elsewhere: reload it if it's on screen, else only Back / Next may have changed
       onSessionUpdated: (changedId) => {
         if (changedId === sessionIdRef.current) setSyncPending(true)
-        else if (sessionIdRef.current) refreshNavState(sessionIdRef.current)
+        else if (sessionIdRef.current) refreshNavState()
       },
       // Any other change (supplements, shopping suggestions) goes to every panel
       onNotice: emitSyncNotice,
@@ -425,8 +457,8 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
 
     setMessages((prev) => [...prev, { role: 'user', content: msg }])
     setInput('')
-    abortedRef.current = false
-    setAborted(false)
+    // A stopped reply still on its way stays stopped: its tokens and done are skipped
+    setPendingSuggest(type === 'suggest')
 
     const payload = { message: msg }
     if (type !== 'chat') payload.type = type
@@ -451,90 +483,77 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     }
   }
 
-  const handleNewSession = useCallback(async () => {
-    try {
-      const { session_id } = await createSession()
-      setSessionId(session_id)
-      setMessages([WELCOME_MSG])
-      setMealBlocks({})
-      setCheckedMealIdx(null)
-      setStreamBuffer(null)
-      setInput('')
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ session_id }))
-      }
-      await refreshNavState(session_id)
-    } catch {
-      // Backend not available
-    }
-  }, [refreshNavState])
-
-  const switchToSession = useCallback(async (targetId) => {
-    setSessionId(targetId)
-    const msgs = await getSessionMessages(targetId)
+  // Open a chat on screen with its saved messages, and tell the socket which chat is open
+  const showSession = useCallback((id, msgs) => {
+    sessionIdRef.current = id
+    setSessionId(id)
     const allMsgs = toChatMessages(msgs)
     const blocks = parseMealBlocksFromMessages(allMsgs)
     setMessages(allMsgs)
     setMealBlocks(blocks)
     setCheckedMealIdx(selectedIndex(allMsgs, blocks))
     setStreamBuffer(null)
+    setPendingSuggest(false)
     setInput('')
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ session_id: targetId }))
+      wsRef.current.send(JSON.stringify({ session_id: id }))
     }
-    await refreshNavState(targetId)
-  }, [refreshNavState, parseMealBlocksFromMessages])
+  }, [parseMealBlocksFromMessages])
 
-  const handleBack = useCallback(async () => {
-    if (!sessionIdRef.current) return
+  // New, Delete, Back and Next run one at a time: a tap while one runs is dropped (the buttons are
+  // off meanwhile), a reload already on its way is dropped and comes again once it's done, and
+  // Back and Next are then read again from the server's list
+  const runSessionAction = useCallback(async (action) => {
+    if (sessionBusyRef.current) return
+    sessionBusyRef.current = true
+    setSessionBusy(true)
+    reloadSeq.current++
     try {
-      const sessions = await listSessions()
-      const idx = sessions.findIndex(s => s.id === sessionIdRef.current)
-      if (idx < sessions.length - 1) {
-        await switchToSession(sessions[idx + 1].id)
-      }
+      await action()
     } catch { /* Backend not available */ }
-  }, [switchToSession])
+    await refreshNavState()
+    sessionBusyRef.current = false
+    setSessionBusy(false)
+  }, [refreshNavState])
 
-  const handleNext = useCallback(async () => {
+  // A chat with nothing in it yet stays open: New only starts one when this one has messages
+  const handleNewSession = useCallback(() => runSessionAction(async () => {
+    if (messagesRef.current.length <= 1) return
+    const { session_id } = await createSession()
+    showSession(session_id, [])
+  }), [runSessionAction, showSession])
+
+  // Move to the chat `step` places along the server's list (newest first): 1 is Back, -1 is Next
+  const moveSession = useCallback((step) => runSessionAction(async () => {
     if (!sessionIdRef.current) return
-    try {
-      const sessions = await listSessions()
-      const idx = sessions.findIndex(s => s.id === sessionIdRef.current)
-      if (idx > 0) {
-        await switchToSession(sessions[idx - 1].id)
-      }
-    } catch { /* Backend not available */ }
-  }, [switchToSession])
+    const sessions = await listSessions()
+    const idx = sessions.findIndex(s => s.id === sessionIdRef.current)
+    const target = idx === -1 ? null : sessions[idx + step]
+    if (!target) return
+    const msgs = await getSessionMessages(target.id)
+    showSession(target.id, msgs)
+  }), [runSessionAction, showSession])
+  const handleBack = useCallback(() => moveSession(1), [moveSession])
+  const handleNext = useCallback(() => moveSession(-1), [moveSession])
 
-  const handleDeleteSession = useCallback(async () => {
-    if (!sessionIdRef.current) return
-    try {
-      const currentId = sessionIdRef.current
-      const sessions = await listSessions()
-      const idx = sessions.findIndex(s => s.id === currentId)
-      await deleteSession(currentId)
-
-      // Navigate to adjacent session or create new
-      if (sessions.length > 1) {
-        const nextIdx = idx > 0 ? idx - 1 : idx + 1
-        await switchToSession(sessions[nextIdx].id)
-      } else {
-        const { session_id } = await createSession()
-        setSessionId(session_id)
-        setMessages([WELCOME_MSG])
-        setMealBlocks({})
-        setCheckedMealIdx(null)
-        setStreamBuffer(null)
-        setInput('')
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({ session_id }))
-        }
-        // Back and Next show only when there's a chat to go to (switchToSession does this itself)
-        await refreshNavState(session_id)
-      }
-    } catch { /* Backend not available */ }
-  }, [switchToSession, refreshNavState])
+  // Delete the open chat and open the one beside it (the newer one first), or, when it was the
+  // only chat, a fresh empty one
+  const handleDeleteSession = useCallback(() => runSessionAction(async () => {
+    const currentId = sessionIdRef.current
+    if (!currentId) return
+    const sessions = await listSessions()
+    const idx = sessions.findIndex(s => s.id === currentId)
+    await deleteSession(currentId)
+    const rest = sessions.filter(s => s.id !== currentId)
+    const target = (idx > 0 ? sessions[idx - 1] : sessions[idx + 1]) ?? rest[0]
+    if (target) {
+      const msgs = await getSessionMessages(target.id)
+      showSession(target.id, msgs)
+    } else {
+      const { session_id } = await createSession()
+      showSession(session_id, [])
+    }
+  }), [runSessionAction, showSession])
 
   const handleMic = () => {
     if (isListening) {
@@ -548,17 +567,16 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
   }
 
   const handleStop = useCallback(() => {
-    // Stop streaming chat/suggestion
+    // Stop streaming chat/suggestion: what came so far stays, marked as stopped (on this device
+    // only: the server still finishes the reply and saves it whole). Nothing came: nothing stays.
     if (streamBuffer !== null) {
       abortedRef.current = true
       setAborted(true)
       setPipelineStep(null)
-      setStreamBuffer((prev) => {
-        const partial = prev || ''
-        const stopped = partial ? partial + '\n\n[stopped]' : '[stopped]'
-        setMessages((msgs) => [...msgs, { role: 'assistant', content: stopped }])
-        return null
-      })
+      setPendingSuggest(false)
+      const partial = stripStreamingJsonBlock(streamBuffer)
+      if (partial) setMessages((msgs) => [...msgs, { role: 'assistant', content: partial, stopped: true }])
+      setStreamBuffer(null)
     }
     // Cancel ongoing analysis
     if (analyzeAbortRef.current) {
@@ -569,14 +587,8 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     }
   }, [streamBuffer])
 
-  // The server reads the chat so far from the session (services/chat_block.py), and leaves these
-  // button texts out of it: they are mirrored there as SUGGEST_MESSAGES, so edit both
   const handleSuggest = useCallback((mode) => {
-    const modeLabels = {
-      favorites: 'Suggest breakfast from my favorite meals',
-      explore: 'Suggest a different breakfast from world cuisines',
-    }
-    sendMessage(modeLabels[mode] || 'Suggest Breakfast', 'suggest', mode || null)
+    sendMessage(SUGGEST_MESSAGES[mode] || SUGGEST_MESSAGES.default, 'suggest', mode || null)
   }, [sendMessage])
 
   const handleAnalyze = useCallback(async (msgIdx) => {
@@ -662,7 +674,8 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
   // True when anything is busy (streaming, analyzing, or scheduling)
   const isBusy = streamBuffer !== null || analyzingIdx !== null || schedulingIdx !== null
   // A stopped reply still runs on the server until its done arrives, so a reload waits for that too
-  const syncBusy = isBusy || aborted
+  // and so does a session button still running
+  const syncBusy = isBusy || aborted || sessionBusy
   busyRef.current = syncBusy
 
   // Reload once nothing is in flight, so a streaming reply or an analysis on its way isn't lost
@@ -687,22 +700,24 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
         {!connected && hasConnectedRef.current && (
           <span style={s.connStatus}> — reconnecting…</span>
         )}
-        <button style={{ ...s.newSessionBtn, visibility: hasOlder ? 'visible' : 'hidden' }} onClick={handleBack} title="Previous session">
+        <button style={{ ...s.newSessionBtn, ...s.sessionBtnState(sessionBusy), visibility: hasOlder ? 'visible' : 'hidden' }} onClick={handleBack} disabled={sessionBusy} title="Previous session">
           ◀ Back
         </button>
-        <button style={{ ...s.newSessionBtn, visibility: hasNewer ? 'visible' : 'hidden' }} onClick={handleNext} title="Next session">
+        <button style={{ ...s.newSessionBtn, ...s.sessionBtnState(sessionBusy), visibility: hasNewer ? 'visible' : 'hidden' }} onClick={handleNext} disabled={sessionBusy} title="Next session">
           Next ▶
         </button>
-        <button style={s.newSessionBtn} onClick={handleNewSession} title="Start a new conversation">
+        <button style={{ ...s.newSessionBtn, ...s.sessionBtnState(sessionBusy) }} onClick={handleNewSession} disabled={sessionBusy} title="Start a new conversation">
           ✚ New
         </button>
-        <button style={s.deleteSessionBtn} onClick={handleDeleteSession} title="Delete this session">
+        <button style={{ ...s.deleteSessionBtn, ...s.sessionBtnState(sessionBusy) }} onClick={handleDeleteSession} disabled={sessionBusy} title="Delete this session">
           🗑 Del
         </button>
       </div>
 
       <div style={s.messages}>
         {messages.map((m, i) => {
+          // A Suggest press shows only its progress, then its card, never the button's text
+          if (isSuggestPress(m)) return null
           const hasMealBlock = mealBlocks[i] !== undefined
           // Always strip JSON blocks from assistant messages — prevents a flash of raw
           // JSON between onDone (message added) and onMealLogged (hasMealBlock set).
@@ -717,6 +732,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
                     : <MarkdownText text={displayText} />}
                 </div>
               )}
+              {m.stopped && <div style={s.stoppedNote}>Stopped</div>}
               {hasMealBlock && (
                 <MealBlock
                   meal={mealBlocks[i]}
@@ -738,10 +754,10 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
           <div style={s.bubble('assistant')}><MarkdownText text={stripStreamingJsonBlock(streamBuffer)} /></div>
         )}
         {streamBuffer === '' && (
-          <div style={s.thinking}>{PIPELINE_STEPS[pipelineStep] || 'Thinking…'}</div>
+          <div style={s.thinking(pendingSuggest ? 'user' : 'assistant')}>{PIPELINE_STEPS[pipelineStep] || 'Thinking…'}</div>
         )}
         {analyzingIdx !== null && (
-          <div style={s.thinking}>Analyzing…</div>
+          <div style={s.thinking('assistant')}>Analyzing…</div>
         )}
 
         <div ref={messagesEndRef} />
