@@ -250,6 +250,11 @@
 /* Page-wide base rules sit in Tailwind's base layer, so a utility class (p-4, m-2, text-…) wins over
    them; unlayered CSS would beat every utility. Inline styles still win over both. */
 @layer base {
+  /* The login's PIN box has its own show/hide button, so Edge's built-in one stays hidden */
+  .bf-pin::-ms-reveal, .bf-pin::-ms-clear {
+    display: none;
+  }
+
   *, *::before, *::after {
     box-sizing: border-box;
     margin: 0;

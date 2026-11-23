@@ -59,4 +59,26 @@ describe('LoginScreen', () => {
     render(<LoginScreen onLogin={vi.fn()} note="Your session ended. Please log in again." />)
     expect(screen.getByText('Your session ended. Please log in again.')).toHaveStyle({ color: 'var(--text-muted)' })
   })
+
+  // The show/hide button switches the PIN between hidden and readable
+  it('shows and hides the PIN', () => {
+    render(<LoginScreen onLogin={vi.fn()} />)
+    const pin = screen.getByPlaceholderText('PIN')
+    expect(pin).toHaveAttribute('type', 'password')
+    fireEvent.click(screen.getByRole('button', { name: 'Show PIN' }))
+    expect(pin).toHaveAttribute('type', 'text')
+    fireEvent.click(screen.getByRole('button', { name: 'Hide PIN' }))
+    expect(pin).toHaveAttribute('type', 'password')
+  })
+
+  // After a wrong PIN the show/hide button is still there and still works, with the PIN kept
+  it('keeps the show/hide button after a wrong PIN', async () => {
+    api.login.mockRejectedValue(new Error('Login failed'))
+    render(<LoginScreen onLogin={vi.fn()} />)
+    submit('Alice', '999999')
+    await screen.findByText('Invalid name or PIN')
+    fireEvent.click(screen.getByRole('button', { name: 'Show PIN' }))
+    expect(screen.getByPlaceholderText('PIN')).toHaveAttribute('type', 'text')
+    expect(screen.getByPlaceholderText('PIN')).toHaveValue('999999')
+  })
 })
