@@ -37,7 +37,7 @@ Personas, each run for a sample user (tools/prompt_samples.py):
   in that's neither in the fridge nor the draft is flagged (outside), and the note names each
   swap, what stays missing (the review may keep an item nothing replaces), the draft's fridge
   items it dropped and the prep words it wrote (#176). A case's item nobody eats on its own
-  (`lone`) still served alone with no method is flagged (alone), and the note says where it went (#263).
+  (`lone`) still on the menu by itself is flagged (alone), and the note says which dish it joined (#263).
 - chat: the typed messages of a --scenario (chat by default, or pressed) sent to the chat
   persona one at a time, with the chat so far as history. The chat talks and menus come
   only from a Suggest press (#168), so a reply with food amounts, numbered steps or a
@@ -434,18 +434,17 @@ def _item_food(item: dict) -> list[str]:
 
 
 def lone_items(meal: dict, case: dict) -> tuple[list[str], list[str]]:
-    """Where the review put each of the case's items nobody eats on its own (`lone`, #263): flagged when it
-    is still a menu item of its own with no method, so the plan makes it alone, and noted when it moved
-    into a dish. One served alone with a method that says how shows in the simple items note, and one
-    left out as dropped. Only the case names the items, so code needs no food list."""
+    """Where the review put each of the case's items nobody eats on its own (`lone`, #263): flagged while it
+    is still a menu item of its own, method or not, since the plan then makes it alone (its method shows in
+    the simple items note), and noted when it moved into a dish (one left out shows as dropped). Only the
+    case names the items, so code needs no food list."""
     alone, notes = [], []
     items = [i for i in meal["menu"] if isinstance(i, dict)]
     for name in case.get("lone", ()):
         for item in items:
             food = _item_food(item)
             if all(same_name(name, f) for f in food):
-                if not str(item.get("method") or "").strip():
-                    alone.append(str(item.get("name")))
+                alone.append(str(item.get("name")))
             elif any(same_name(name, f) for f in food):
                 notes.append(f"{name}: in {item.get('name')}")
     return alone, notes

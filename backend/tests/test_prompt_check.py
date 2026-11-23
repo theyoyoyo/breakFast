@@ -801,8 +801,8 @@ async def test_review_once_sends_the_draft():
         assert all("method" not in item for item in case["draft"]["menu"])
 
 
-# The cinnamon case serves a fridge seasoning alone (#263): left alone with no method it's flagged; moved into the
-# oatmeal, served with a method that says how, or left out, it's clean, and the note says where it went
+# The cinnamon case serves a fridge seasoning alone (#263): still a menu item of its own it's flagged, with a method
+# too, since the plan makes it alone; moved into the oatmeal or left out it's clean, and the note says where it went
 def test_review_flags_a_lone_item_still_alone():
     case = REVIEW_CASES["cinnamon"]
     draft = pipeline._meal_reply("", case["draft"])
@@ -817,7 +817,7 @@ def test_review_flags_a_lone_item_still_alone():
     moved = check_review(_reply(oatmeal({"name": "Cinnamon", "amount": 1, "unit": "tsp"}), tea), case, draft)
     assert is_clean(moved) and moved["note"] == "Cinnamon: in Banana oatmeal"
     served = check_review(_reply(oatmeal(), {**cinnamon, "method": "Sprinkle over the oatmeal"}, tea), case, draft)
-    assert is_clean(served) and served["note"] == "simple items: Cinnamon: Sprinkle over the oatmeal"
+    assert served["issues"]["alone"] == ["Cinnamon"] and served["note"] == "simple items: Cinnamon: Sprinkle over the oatmeal"
     left_out = check_review(_reply(oatmeal(), tea), case, draft)
     assert is_clean(left_out) and left_out["note"] == "dropped: Cinnamon"
     assert REVIEW_CASES["pancakes"]["lone"] == [] and "alone" in PERSONAS["review"]["problems"]
