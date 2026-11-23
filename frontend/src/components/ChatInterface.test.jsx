@@ -17,7 +17,7 @@ import ChatInterface from './ChatInterface'
 import MarkdownText from './MarkdownText'
 import { LYRIC_PLAN, OLD_PLAN, PLAN } from '../utils/prepPlan.fixtures'
 import {
-  createChatSocket, checkAuth, getActiveSession, listSessions, getSessionMessages,
+  createChatSocket, checkAuth, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages,
   saveSessionMessage, updateSessionMessage, saveAteDraft, selectSessionMessage, analyzeMeal, getTodaySupplements, toggleSupplement,
   checkMissingIngredients, getRatings, logMeal,
 } from '../services/api'
@@ -486,5 +486,79 @@ describe('ChatInterface prep plans', () => {
     for (const [shown, plan] of bubbles) {
       expect(shown).toBe(render(<MarkdownText text={plan} />).container.innerHTML)
     }
+  })
+})
+
+describe('ChatInterface session buttons after a delete', () => {
+  // The user's chats on a fake server, newest first; each holds one message naming it
+  let chats
+
+  function fakeServer(ids, activeId) {
+    chats = [...ids]
+    getActiveSession.mockResolvedValue({ id: activeId })
+    listSessions.mockImplementation(async () => chats.map(id => ({ id })))
+    getSessionMessages.mockImplementation(async (id) => [{ id: 1, role: 'user', content: `Chat ${id}` }])
+    deleteSession.mockImplementation(async (id) => { chats = chats.filter(c => c !== id) })
+    createSession.mockImplementation(async () => { chats = ['new', ...chats]; return { session_id: 'new' } })
+  }
+
+  const back = () => screen.queryByRole('button', { name: /Back/ })
+  const next = () => screen.queryByRole('button', { name: /Next/ })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    Element.prototype.scrollIntoView = vi.fn()
+    createChatSocket.mockImplementation(() => ({
+      readyState: WebSocket.OPEN, send: vi.fn(), close: vi.fn(), addEventListener: vi.fn(),
+    }))
+    getTodaySupplements.mockResolvedValue([])
+    checkAuth.mockResolvedValue({})
+  })
+
+  // Deleting a chat with chats on both sides opens the newer one, shows only Back, and Back opens the older chat
+  it('refreshes Back and Next after deleting a middle chat', async () => {
+    fakeServer(['s3', 's2', 's1'], 's2')
+    render(<ChatInterface visible />)
+    await screen.findByText('Chat s2')
+    await waitFor(() => expect(next()).not.toBeNull())
+
+    fireEvent.click(screen.getByRole('button', { name: /Del/ }))
+    await screen.findByText('Chat s3')
+    await waitFor(() => expect(next()).toBeNull())
+    expect(back()).not.toBeNull()
+
+    fireEvent.click(back())
+    await screen.findByText('Chat s1')
+    await waitFor(() => expect(back()).toBeNull())
+    expect(next()).not.toBeNull()
+  })
+
+  // Deleting the newest chat opens the next older one, with only Back shown
+  it('refreshes Back and Next after deleting the newest chat', async () => {
+    fakeServer(['s3', 's2', 's1'], 's3')
+    render(<ChatInterface visible />)
+    await screen.findByText('Chat s3')
+    await waitFor(() => expect(back()).not.toBeNull())
+
+    fireEvent.click(screen.getByRole('button', { name: /Del/ }))
+    await screen.findByText('Chat s2')
+    await waitFor(() => expect(back()).not.toBeNull())
+    expect(next()).toBeNull()
+  })
+
+  // Deleting the only chat starts a new one and hides both buttons, also when the screen still showed Back
+  it('hides Back and Next after deleting the only chat', async () => {
+    fakeServer(['s1', 'old'], 's1')
+    render(<ChatInterface visible />)
+    await screen.findByText('Chat s1')
+    await waitFor(() => expect(back()).not.toBeNull())
+    // Another device deletes the older chat, so this one is now the only chat
+    chats = ['s1']
+
+    fireEvent.click(screen.getByRole('button', { name: /Del/ }))
+    await waitFor(() => expect(createSession).toHaveBeenCalled())
+    await waitFor(() => expect(screen.queryByText('Chat s1')).toBeNull())
+    await waitFor(() => expect(back()).toBeNull())
+    expect(next()).toBeNull()
   })
 })

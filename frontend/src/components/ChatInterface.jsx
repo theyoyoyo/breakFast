@@ -531,6 +531,8 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
         if (wsRef.current?.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify({ session_id }))
         }
+        // Back and Next show only when there's a chat to go to (switchToSession does this itself)
+        await refreshNavState(session_id)
       }
     } catch { /* Backend not available */ }
   }, [switchToSession, refreshNavState])
