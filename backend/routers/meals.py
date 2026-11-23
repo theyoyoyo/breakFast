@@ -158,6 +158,7 @@ async def generate_weekly_review(user_id: int = Depends(require_user)):
     )
 
 
+# Nothing in the app calls this yet; kept for later use.
 @router.get("/{meal_id}", response_model=Meal)
 async def get_meal(meal_id: Id, user_id: int = Depends(require_user)):
     async with get_db() as db:
