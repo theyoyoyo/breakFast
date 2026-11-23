@@ -225,9 +225,10 @@ describe('ingredient API', () => {
     const stub = mockFetch(201, { id: 1, name: 'eggs' })
     vi.stubGlobal('fetch', stub)
     await addIngredient('eggs', '2026-04-01', '🧀 Şarküteri')
-    const [, opts] = stub.mock.calls[0]
-    expect(opts.method).toBe('POST')
-    expect(JSON.parse(opts.body)).toEqual({ name: 'eggs', expiry_date: '2026-04-01', group_name: '🧀 Şarküteri' })
+    expect(stub).toHaveBeenCalledWith(expect.stringContaining('/ingredients/'), expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ name: 'eggs', expiry_date: '2026-04-01', group_name: '🧀 Şarküteri' }),
+    }))
   })
 })
 
@@ -237,9 +238,10 @@ describe('preference API', () => {
     const stub = mockFetch(200, { key: 'fav:eggs', value: 'eggs' })
     vi.stubGlobal('fetch', stub)
     await setPreference('fav:eggs', 'eggs')
-    const [url, opts] = stub.mock.calls[0]
-    expect(url).toContain('/preferences/fav%3Aeggs')
-    expect(JSON.parse(opts.body)).toEqual({ value: 'eggs' })
+    expect(stub).toHaveBeenCalledWith(
+      expect.stringContaining('/preferences/fav%3Aeggs'),
+      expect.objectContaining({ body: JSON.stringify({ value: 'eggs' }) }),
+    )
   })
 })
 
@@ -250,12 +252,13 @@ describe('shopping suggestions API', () => {
     const stub = mockFetch(200, { count: 2 })
     vi.stubGlobal('fetch', stub)
     expect(await getRemovedSuggestionCount()).toEqual({ count: 2 })
-    expect(stub.mock.calls[0][0]).toMatch(/\/shopping\/suggestions\/removed$/)
+    expect(stub).toHaveBeenCalledWith(expect.stringMatching(/\/shopping\/suggestions\/removed$/), expect.anything())
     vi.stubGlobal('fetch', mockFetch(204))
     await bringBackRemovedSuggestions()
-    const [url, opts] = fetch.mock.calls[0]
-    expect(url).toMatch(/\/shopping\/suggestions\/removed$/)
-    expect(opts.method).toBe('DELETE')
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/shopping\/suggestions\/removed$/),
+      expect.objectContaining({ method: 'DELETE' }),
+    )
   })
 })
 
@@ -266,10 +269,10 @@ describe('chat sync API', () => {
     const stub = mockFetch(200, { status: 'ok' })
     vi.stubGlobal('fetch', stub)
     await updateSessionMessage('s1', 7, 'edited')
-    const [url, opts] = stub.mock.calls[0]
-    expect(url).toContain('/sessions/s1/messages/7')
-    expect(opts.method).toBe('PUT')
-    expect(JSON.parse(opts.body)).toEqual({ content: 'edited' })
+    expect(stub).toHaveBeenCalledWith(
+      expect.stringContaining('/sessions/s1/messages/7'),
+      expect.objectContaining({ method: 'PUT', body: JSON.stringify({ content: 'edited' }) }),
+    )
   })
 
   // The chat socket hands done its saved message id and session_updated its session id
@@ -278,11 +281,54 @@ describe('chat sync API', () => {
     vi.stubGlobal('WebSocket', class { constructor() { sockets.push(this) } })
     const onDone = vi.fn()
     const onSessionUpdated = vi.fn()
-    createChatSocket(vi.fn(), onDone, vi.fn(), null, null, null, onSessionUpdated)
+    createChatSocket({ onDone, onSessionUpdated })
     sockets[0].onmessage({ data: JSON.stringify({ type: 'done', content: 'Hi', message_id: 5 }) })
     sockets[0].onmessage({ data: JSON.stringify({ type: 'session_updated', session_id: 's1' }) })
     expect(onDone).toHaveBeenCalledWith('Hi', 5)
     expect(onSessionUpdated).toHaveBeenCalledWith('s1')
+    vi.unstubAllGlobals()
+  })
+
+  // Each frame type reaches the handler named for it, and the socket's own error and close reach theirs
+  it('routes each frame to its named handler', () => {
+    const sockets = []
+    vi.stubGlobal('WebSocket', class { constructor() { sockets.push(this) } })
+    const handlers = {
+      onToken: vi.fn(), onMealLogged: vi.fn(), onProgress: vi.fn(), onNotice: vi.fn(), onError: vi.fn(), onClose: vi.fn(),
+    }
+    createChatSocket(handlers)
+    const meal = { menu_name: 'Egg Breakfast', menu: [] }
+    for (const frame of [
+      { type: 'token', content: 'Hel' },
+      { type: 'meal_logged', meal },
+      { type: 'progress', step: 'drafting' },
+      { type: 'shopping_suggestions_updated' },
+    ]) sockets[0].onmessage({ data: JSON.stringify(frame) })
+    sockets[0].onmessage({ data: 'not json' })
+    sockets[0].onerror()
+    sockets[0].onclose()
+    expect(handlers.onToken).toHaveBeenCalledWith('Hel')
+    expect(handlers.onMealLogged).toHaveBeenCalledWith(meal)
+    expect(handlers.onProgress).toHaveBeenCalledWith('drafting')
+    expect(handlers.onNotice).toHaveBeenCalledTimes(1)
+    expect(handlers.onNotice).toHaveBeenCalledWith({ type: 'shopping_suggestions_updated' })
+    expect(handlers.onError).toHaveBeenCalledTimes(1)
+    expect(handlers.onClose).toHaveBeenCalledTimes(1)
+    vi.unstubAllGlobals()
+  })
+
+  // A handler left out is skipped, so a socket that only listens for some frames doesn't throw
+  it('skips frames whose handler was left out', () => {
+    const sockets = []
+    vi.stubGlobal('WebSocket', class { constructor() { sockets.push(this) } })
+    createChatSocket({})
+    expect(() => {
+      for (const type of ['token', 'done', 'meal_logged', 'progress', 'session_updated', 'error', 'other']) {
+        sockets[0].onmessage({ data: JSON.stringify({ type }) })
+      }
+      sockets[0].onerror()
+      sockets[0].onclose()
+    }).not.toThrow()
     vi.unstubAllGlobals()
   })
 
@@ -292,7 +338,7 @@ describe('chat sync API', () => {
     vi.stubGlobal('WebSocket', class { constructor() { sockets.push(this) } })
     const onDone = vi.fn()
     const onNotice = vi.fn()
-    createChatSocket(vi.fn(), onDone, vi.fn(), null, null, null, null, onNotice)
+    createChatSocket({ onDone, onNotice })
     sockets[0].onmessage({ data: JSON.stringify({ type: 'error', code: 'session_not_found', message: 'Gone' }) })
     expect(onDone).toHaveBeenCalledWith('Gone')
     expect(onNotice).not.toHaveBeenCalled()
@@ -320,7 +366,7 @@ describe('chat socket auth', () => {
   it('opens /chat with the token as a subprotocol, not in the URL', () => {
     localStorage.setItem('bf_token', 'tok-1')
     const sockets = stubSockets()
-    createChatSocket(vi.fn(), vi.fn(), vi.fn())
+    createChatSocket({})
     expect(sockets[0].url).toMatch(/\/chat$/)
     expect(sockets[0].url).not.toContain('tok-1')
     expect(sockets[0].protocols).toEqual(['bearer', 'tok-1'])
@@ -330,7 +376,7 @@ describe('chat socket auth', () => {
   // Without a stored session the socket sends bearer alone, since an empty subprotocol would throw
   it('opens /chat with bearer alone when there is no stored session', () => {
     const sockets = stubSockets()
-    createChatSocket(vi.fn(), vi.fn(), vi.fn())
+    createChatSocket({})
     expect(sockets[0].protocols).toEqual(['bearer'])
     vi.unstubAllGlobals()
   })

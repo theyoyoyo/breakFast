@@ -96,7 +96,7 @@ describe('DecidePanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
     expect(onSave).toHaveBeenCalledTimes(1)
-    expect(onSave.mock.calls[0][0].menu.map(i => i.name)).toEqual(['Bread'])
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ menu: [expect.objectContaining({ name: 'Bread' })] }))
     expect(logMeal).not.toHaveBeenCalled()
   })
 
@@ -198,7 +198,9 @@ describe('DecidePanel', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Supplements' }))
       fireEvent.click(screen.getByRole('button', { name: '✓ Vitamin D' }))
       fireEvent.click(screen.getByRole('button', { name: 'Magnesium' }))
-      expect(onToggle.mock.calls).toEqual([[1, true], [2, false]])
+      expect(onToggle).toHaveBeenCalledTimes(2)
+      expect(onToggle).toHaveBeenNthCalledWith(1, 1, true)
+      expect(onToggle).toHaveBeenNthCalledWith(2, 2, false)
       expect(screen.getByRole('group', { name: "Today's supplements" })).toBeInTheDocument() // still open
     })
 

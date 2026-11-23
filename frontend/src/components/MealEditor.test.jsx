@@ -3,7 +3,8 @@
  * and can be marked as obtained for the meal (yellow → green), a dish's all at once with a tap
  * on its name. Also the header (☆ filled when a favorite has the meal's name and food, a note
  * when another favorite has the name, prep time in min), the ✱ and ℹ️ line on a dish ingredient the
- * review put in for a missing one, and units that follow the AI language.
+ * review put in for a missing one, and units that follow the AI language. Editing: typed amounts,
+ * the ▲ / ▼ steppers and blur, new items and dishes, a dish's ingredients, the name and prep time.
  * The backend check is mocked — no real network calls are made.
  */
 
@@ -12,6 +13,7 @@ import { render, screen, waitFor, fireEvent, within, act } from '@testing-librar
 import MealEditor from './MealEditor'
 import { checkMissingIngredients, getFavorites } from '../services/api'
 import { applyLanguage } from '../utils/language'
+import { OMELETTE_MENU, PLATE_MENU } from './meals.fixtures'
 
 vi.mock('../services/api', () => ({ checkMissingIngredients: vi.fn(), getFavorites: vi.fn(() => Promise.resolve([])) }))
 
@@ -82,7 +84,7 @@ describe('MealEditor fridge check', () => {
     render(<MealEditor meal={{ ...MEAL, obtained: ['Olives'] }} menuMode checkFridge onSave={onSave} />)
     expect(await screen.findByTitle(OBTAINED)).toHaveTextContent('Olives')
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    expect(onSave.mock.calls[0][0].obtained).toEqual(['Olives'])
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ obtained: ['Olives'] }))
   })
 
   // A tap on a dish's name marks all of its missing items (name included) and a second tap unmarks
@@ -150,8 +152,7 @@ describe('MealEditor fridge check', () => {
     await waitFor(() => expect(onMissingChange).toHaveBeenLastCalledWith(['Olives']))
     fireEvent.click(screen.getAllByTitle('Delete')[1]) // dish row first, then Olives
     await waitFor(() => expect(onMissingChange).toHaveBeenLastCalledWith([]))
-    const lastMeal = checkMissingIngredients.mock.calls.at(-1)[0]
-    expect(lastMeal.menu.map(item => item.name)).toEqual(['Menemen'])
+    expect(checkMissingIngredients).toHaveBeenLastCalledWith({ menu: [expect.objectContaining({ name: 'Menemen' })] })
   })
 
   it('does not call the backend unless checkFridge is on', async () => {
@@ -232,7 +233,7 @@ describe('MealEditor header', () => {
     await waitFor(() => expect(star).toBeEnabled()) // once the favorites are loaded
     fireEvent.click(star)
     await waitFor(() => expect(star).toHaveAttribute('aria-pressed', 'true'))
-    expect(onFavorite.mock.calls[0][0].menu_name).toBe('Test Breakfast')
+    expect(onFavorite).toHaveBeenCalledWith(expect.objectContaining({ menu_name: 'Test Breakfast' }))
     expect(star).toHaveAccessibleName('Remove from favorites')
     fireEvent.click(star)
     await waitFor(() => expect(star).toHaveAttribute('aria-pressed', 'false'))
@@ -281,7 +282,7 @@ describe('MealEditor header', () => {
     expect(screen.queryByText(/is already in Favorites/)).toBeNull()
     fireEvent.click(star)
     await waitFor(() => expect(star).toHaveAttribute('aria-pressed', 'true'))
-    expect(onFavorite.mock.calls[0][0].menu_name).toBe('Test Breakfast 2')
+    expect(onFavorite).toHaveBeenCalledWith(expect.objectContaining({ menu_name: 'Test Breakfast 2' }))
   })
 
   // The server's refusal (another device took the name meanwhile) shows the same note
@@ -335,8 +336,12 @@ describe('MealEditor prep words', () => {
     const { unmount } = render(<MealEditor meal={PREP_MEAL} menuMode onChange={onChange} />)
     fireEvent.click(screen.getByText('▶ Ingredients'))
     fireEvent.click(screen.getAllByText('▲')[0])
-    const oats = onChange.mock.lastCall[0].menu[0].ingredients[0]
-    expect(oats).toMatchObject({ name: 'Oats', amount: 2, prep: 'rolled' })
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      menu: [expect.objectContaining({ ingredients: [
+        expect.objectContaining({ name: 'Oats', amount: 2, prep: 'rolled' }),
+        expect.objectContaining({ name: 'Banana', prep: 'sliced' }),
+      ] })],
+    }))
     unmount()
     render(<MealEditor meal={MEAL} menuMode />)
     expect(screen.queryByTitle('Preparation details')).toBeNull()
@@ -373,7 +378,9 @@ describe('MealEditor prep words', () => {
     expect(screen.getByText('Peel, cube and roast')).toBeInTheDocument()
     expect(screen.queryByText('Olives', { selector: 'div' })).toBeNull()
     fireEvent.click(screen.getAllByText('▲')[0])
-    expect(onChange.mock.lastCall[0].menu[0]).toMatchObject({ name: 'Sweet potato', method: 'Peel, cube and roast' })
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      menu: [expect.objectContaining({ name: 'Sweet potato', amount: 301, method: 'Peel, cube and roast' }), expect.anything()],
+    }))
   })
 
   it('keeps a dish method through edits', () => {
@@ -381,9 +388,12 @@ describe('MealEditor prep words', () => {
     render(<MealEditor meal={METHOD_MEAL} menuMode onChange={onChange} />)
     fireEvent.click(screen.getByText('▶ Ingredients'))
     fireEvent.click(screen.getAllByText('▲')[0])
-    const dish = onChange.mock.lastCall[0].menu[0]
-    expect(dish.method).toBe('Hard-boil the eggs, peel, slice into the bread')
-    expect(dish.ingredients[0]).toMatchObject({ name: 'Eggs', amount: 3 })
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      menu: [expect.objectContaining({
+        method: 'Hard-boil the eggs, peel, slice into the bread',
+        ingredients: [expect.objectContaining({ name: 'Eggs', amount: 3 }), expect.objectContaining({ name: 'Bread' })],
+      }), expect.anything()],
+    }))
   })
 })
 
@@ -455,11 +465,13 @@ describe('MealEditor replaced ingredients', () => {
     fireEvent.click(screen.getAllByText('▲')[2])
     fireEvent.click(screen.getAllByTitle('Delete')[1]) // the dish's trash first, then Eggs
     const expected = [{ name: 'Feta', amount: 51, unit: 'tbsp', replaces: 'Salmon' }]
-    expect(onChange.mock.lastCall[0].menu[0].ingredients).toEqual(expected)
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      menu: [expect.objectContaining({ ingredients: expected }), expect.anything()],
+    }))
     expect(screen.getByRole('img', { name: 'Instead of Salmon' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    expect(onSave.mock.calls[0][0].menu[0].ingredients).toEqual(expected)
-    expect(onSave.mock.calls[0][0].menu_items[0].ingredients).toEqual(expected)
+    const dish = expect.objectContaining({ name: 'Frittata', ingredients: expected })
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ menu: [dish, expect.anything()], menu_items: [dish, expect.anything()] }))
   })
 
   // The editor changes a row's name by deleting it and adding another, and the new row has no replaces (no ✱, no ℹ️ line)
@@ -471,9 +483,15 @@ describe('MealEditor replaced ingredients', () => {
     const add = screen.getByPlaceholderText('Add ingredient…')
     fireEvent.change(add, { target: { value: 'Halloumi' } })
     fireEvent.keyDown(add, { key: 'Enter' })
-    const subs = onChange.mock.lastCall[0].menu[0].ingredients
-    expect(subs.map(sub => sub.name)).toEqual(['Eggs', 'Halloumi'])
-    expect(subs.some(sub => 'replaces' in sub)).toBe(false)
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      menu: [expect.objectContaining({ ingredients: [
+        { name: 'Eggs', amount: 3, unit: 'pcs' },
+        expect.objectContaining({ name: 'Halloumi' }),
+      ] }), expect.anything()],
+    }))
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      menu: [expect.objectContaining({ ingredients: [expect.anything(), expect.not.objectContaining({ replaces: expect.anything() })] }), expect.anything()],
+    }))
     expect(screen.queryByText('✱')).toBeNull()
     expect(screen.queryByTitle('Preparation details')).toBeNull()
   })
@@ -531,6 +549,184 @@ describe('MealEditor units', () => {
     render(<MealEditor meal={UNIT_MEAL} menuMode onSave={onSave} />)
     fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'tbsp' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    expect(onSave.mock.calls[0][0].menu.map(item => item.unit)).toEqual(['adet', 'tbsp'])
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      menu: [expect.objectContaining({ unit: 'adet' }), expect.objectContaining({ unit: 'tbsp' })],
+    }))
+  })
+})
+
+describe('MealEditor editing', () => {
+  beforeEach(() => {
+    vi.mocked(checkMissingIngredients).mockReset()
+    localStorage.clear() // no remembered units
+  })
+
+  // Press Save once, and check it sent one meal like this one
+  function expectSaved(onSave, meal) {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(onSave).toHaveBeenCalledTimes(1)
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining(meal))
+  }
+
+  // A typed amount is saved as a number, and the other items keep theirs
+  it('saves a typed amount as a number', () => {
+    const onSave = vi.fn()
+    render(<MealEditor meal={PLATE_MENU} menuMode onSave={onSave} />)
+    fireEvent.change(screen.getByDisplayValue('50'), { target: { value: '72.5' } })
+    expect(onSave).not.toHaveBeenCalled()
+    expectSaved(onSave, { menu: [
+      expect.objectContaining({ name: 'Cheese', amount: 72.5, unit: 'g' }),
+      expect.objectContaining({ name: 'Tomato', amount: 1, unit: 'pcs' }),
+    ] })
+  })
+
+  // The amount box takes only numbers with up to two decimals, so a letter or a third decimal changes nothing
+  it('ignores amounts that are not a number with up to two decimals', () => {
+    render(<MealEditor meal={PLATE_MENU} menuMode />)
+    const cheese = screen.getByDisplayValue('50')
+    fireEvent.change(cheese, { target: { value: '5a' } })
+    expect(cheese).toHaveValue('50')
+    fireEvent.change(cheese, { target: { value: '1.255' } })
+    expect(cheese).toHaveValue('50')
+    fireEvent.change(cheese, { target: { value: '1.25' } })
+    expect(cheese).toHaveValue('1.25')
+  })
+
+  // An emptied or zero amount becomes 1 when the box loses focus
+  it('turns an empty or zero amount into 1 on blur', () => {
+    render(<MealEditor meal={PLATE_MENU} menuMode />)
+    const cheese = screen.getByDisplayValue('50')
+    fireEvent.change(cheese, { target: { value: '' } })
+    fireEvent.blur(cheese)
+    expect(cheese).toHaveValue('1')
+    fireEvent.change(cheese, { target: { value: '0' } })
+    fireEvent.blur(cheese)
+    expect(cheese).toHaveValue('1')
+  })
+
+  // ▲ adds one and ▼ takes one away, but never down to zero
+  it('steps an amount up and down, never to zero', () => {
+    const onChange = vi.fn()
+    render(<MealEditor meal={{ ...PLATE_MENU, menu: [PLATE_MENU.menu[1]] }} menuMode onChange={onChange} />)
+    const tomato = screen.getByDisplayValue('1')
+    fireEvent.click(screen.getByText('▲'))
+    fireEvent.click(screen.getByText('▲'))
+    expect(tomato).toHaveValue('3')
+    fireEvent.click(screen.getByText('▼'))
+    expect(tomato).toHaveValue('2')
+    fireEvent.click(screen.getByText('▼'))
+    fireEvent.click(screen.getByText('▼'))
+    expect(tomato).toHaveValue('1')
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      menu: [expect.objectContaining({ name: 'Tomato', amount: 1 })],
+    }))
+  })
+
+  // A new simple item gets amount 1 and a unit from its name, added with Enter or ＋ Item; a name already there (any case) isn't added twice
+  it('adds simple items once each', () => {
+    const onSave = vi.fn()
+    render(<MealEditor meal={PLATE_MENU} menuMode onSave={onSave} />)
+    const add = screen.getByPlaceholderText('Item or dish name…')
+    fireEvent.change(add, { target: { value: 'Honey' } })
+    fireEvent.keyDown(add, { key: 'Enter' })
+    expect(add).toHaveValue('')
+    fireEvent.change(add, { target: { value: 'Walnuts' } })
+    fireEvent.click(screen.getByRole('button', { name: '＋ Item' }))
+    fireEvent.change(add, { target: { value: 'cheese' } })
+    fireEvent.click(screen.getByRole('button', { name: '＋ Item' }))
+    fireEvent.change(add, { target: { value: '   ' } })
+    fireEvent.click(screen.getByRole('button', { name: '＋ Item' }))
+
+    expectSaved(onSave, { menu: [
+      expect.objectContaining({ name: 'Cheese' }),
+      expect.objectContaining({ name: 'Tomato' }),
+      expect.objectContaining({ name: 'Honey', amount: 1, ingredients: [] }),
+      expect.objectContaining({ name: 'Walnuts', amount: 1, ingredients: [] }),
+    ] })
+  })
+
+  // ＋ Dish adds a dish with no amount of its own; opened, it takes ingredients that can be stepped, typed and removed
+  it('adds a dish and edits its ingredients', () => {
+    const onSave = vi.fn()
+    render(<MealEditor meal={PLATE_MENU} menuMode onSave={onSave} />)
+    fireEvent.change(screen.getByPlaceholderText('Item or dish name…'), { target: { value: 'Pancakes' } })
+    fireEvent.click(screen.getByRole('button', { name: '＋ Dish' }))
+    fireEvent.click(screen.getByText('▶ Ingredients'))
+
+    const addSub = screen.getByPlaceholderText('Add ingredient…')
+    for (const name of ['Flour', 'Milk', 'Egg']) {
+      fireEvent.change(addSub, { target: { value: name } })
+      fireEvent.keyDown(addSub, { key: 'Enter' })
+    }
+    fireEvent.change(addSub, { target: { value: 'milk' } }) // already in the dish
+    fireEvent.keyDown(addSub, { key: 'Enter' })
+    expect(screen.getAllByText('Milk')).toHaveLength(1)
+    fireEvent.click(screen.getAllByText('▲').at(-1)) // Egg: 2
+    fireEvent.click(screen.getAllByTitle('Delete').at(-2)) // Milk
+    const flour = screen.getAllByDisplayValue('1').at(-1)
+    fireEvent.change(flour, { target: { value: '200' } })
+    fireEvent.blur(flour)
+
+    expectSaved(onSave, { menu: [
+      expect.anything(),
+      expect.anything(),
+      { name: 'Pancakes', ingredients: [
+        expect.objectContaining({ name: 'Flour', amount: 200 }),
+        expect.objectContaining({ name: 'Egg', amount: 2 }),
+      ] },
+    ] })
+  })
+
+  // A dish ingredient's steppers, a typed amount and its blur work like a simple item's, and its prep words stay
+  it('steps, types and blurs a dish ingredient amount', () => {
+    const onChange = vi.fn()
+    render(<MealEditor meal={OMELETTE_MENU} menuMode onChange={onChange} />)
+    fireEvent.click(screen.getByText('Veggie omelette'))
+    const egg = screen.getAllByDisplayValue('2')[0] // Egg, above Toast
+    fireEvent.change(egg, { target: { value: '' } })
+    fireEvent.blur(egg)
+    expect(egg).toHaveValue('1')
+    fireEvent.click(screen.getAllByText('▼')[0]) // Egg stays at 1
+    expect(egg).toHaveValue('1')
+    const pepper = screen.getByDisplayValue('0.5')
+    fireEvent.change(pepper, { target: { value: '0.75' } })
+    fireEvent.blur(pepper)
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      menu: expect.arrayContaining([expect.objectContaining({
+        name: 'Veggie omelette',
+        ingredients: [
+          expect.objectContaining({ name: 'Egg', amount: 1, prep: 'whisked' }),
+          expect.objectContaining({ name: 'Bell pepper', amount: 0.75, prep: 'diced' }),
+          expect.objectContaining({ name: 'Butter', amount: 1 }),
+        ],
+      })]),
+    }))
+  })
+
+  // The name and prep time are saved as edited, and an emptied name goes back to the meal's own on blur
+  it('saves an edited name and prep time, and restores an emptied name', () => {
+    const onSave = vi.fn()
+    render(<MealEditor meal={OMELETTE_MENU} menuMode onSave={onSave} />)
+    const name = screen.getByDisplayValue('Sunday Omelette')
+    fireEvent.change(name, { target: { value: '' } })
+    fireEvent.blur(name)
+    expect(name).toHaveValue('Sunday Omelette')
+    fireEvent.change(name, { target: { value: 'Lazy Omelette' } })
+    const prep = screen.getByDisplayValue('15')
+    fireEvent.change(prep, { target: { value: 'abc' } }) // not a number: ignored
+    expect(prep).toHaveValue('15')
+    fireEvent.change(prep, { target: { value: '20' } })
+    expectSaved(onSave, { menu_name: 'Lazy Omelette', meal_name: 'Lazy Omelette', prep_time_min: 20 })
+  })
+
+  // Close leaves without saving the edits
+  it('closes without saving', () => {
+    const onSave = vi.fn()
+    const onClose = vi.fn()
+    render(<MealEditor meal={PLATE_MENU} menuMode onSave={onSave} onClose={onClose} />)
+    fireEvent.change(screen.getByDisplayValue('50'), { target: { value: '60' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onSave).not.toHaveBeenCalled()
   })
 })
