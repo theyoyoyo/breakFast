@@ -3,6 +3,8 @@
 import json
 from unittest.mock import patch
 
+from services.llm import FALLBACK_LYRICS, LLMUnavailableError
+
 
 def _mock_stream(text):
     """Mock stream_response that yields the whole reply in one chunk."""
@@ -113,39 +115,80 @@ async def test_plan_with_cached_schedule(client, db):
     assert data["formatted"] == cached["formatted"]
 
 
+# With Ollama unreachable a plan without a meal_id gets the next lyric and an empty plan
 async def test_plan_without_meal_id_llm_down(client):
-    """When meal_id is None and LLM unavailable, returns lyric fallback."""
-    r = await client.post("/scheduler/plan", json={
-        "meal_name": "Simple Meal",
-        "steps": ["Toast bread", "Spread butter"],
-        "ingredients": [{"name": "Bread"}, {"name": "Butter"}],
-    })
+    async def down(*args, **kwargs):
+        raise LLMUnavailableError()
+        yield
+
+    with patch("routers.scheduler.stream_response", side_effect=down) as llm:
+        r = await client.post("/scheduler/plan", json={
+            "meal_name": "Simple Meal",
+            "steps": ["Toast bread", "Spread butter"],
+            "ingredients": [{"name": "Bread"}, {"name": "Butter"}],
+        })
     assert r.status_code == 200
     data = r.json()
-    assert "formatted" in data
-    assert "timeline" in data
-    assert "makespan_min" in data
+    assert llm.call_count == 1
+    assert data["formatted"] in FALLBACK_LYRICS
+    assert data["timeline"] == [] and data["makespan_min"] == 0 and data["cached"] is False
 
 
-async def test_plan_caches_result(client, db):
-    """When meal_id is provided but no cache, endpoint doesn't crash."""
-    async with db.execute("SELECT id FROM users WHERE name = 'testuser'") as cur:
-        row = await cur.fetchone()
-        user_id = row[0]
+TOAST_REPLY = (
+    '```json\n{"dishes": [{"dish": "Toast", "steps": ['
+    '{"action": "Toast 2 slices of bread", "minutes": 3, "hands_on": false, "appliance": "Stove"}]}]}\n```'
+)
 
+
+async def _add_meal(db, user_name, meal_name, schedule=None):
+    """Log a meal for a user (created when missing) and return the meal's id."""
+    await db.execute("INSERT OR IGNORE INTO users (name, pin_hash) VALUES (?, '')", (user_name,))
+    async with db.execute("SELECT id FROM users WHERE name = ?", (user_name,)) as cur:
+        user_id = (await cur.fetchone())[0]
     cur = await db.execute(
-        """INSERT INTO meal_history (user_id, meal_name, ingredients, steps)
-           VALUES (?, ?, ?, ?)""",
-        (user_id, "Uncached Meal", "[]", "[]"),
+        "INSERT INTO meal_history (user_id, meal_name, ingredients, steps, schedule) VALUES (?, ?, '[]', '[]', ?)",
+        (user_id, meal_name, schedule),
     )
-    meal_id = cur.lastrowid
     await db.commit()
+    return cur.lastrowid
 
-    r = await client.post("/scheduler/plan", json={
-        "meal_name": "Uncached Meal",
-        "steps": ["Boil water"],
-        "ingredients": [],
-        "meal_id": meal_id,
-    })
-    assert r.status_code == 200
-    assert "formatted" in r.json()
+
+async def _schedule_of(db, meal_id):
+    """The plan stored with a meal, or None."""
+    async with db.execute("SELECT schedule FROM meal_history WHERE id = ?", (meal_id,)) as cur:
+        return (await cur.fetchone())[0]
+
+
+# A plan for the user's own meal is asked of the LLM once, saved with the meal, and the next request gets it from the cache
+async def test_plan_caches_result(client, db):
+    meal_id = await _add_meal(db, "testuser", "Toast")
+    body = {"meal_name": "Toast", "menu": [{"name": "Toast", "ingredients": [{"name": "Bread", "amount": 2, "unit": "slice"}]}],
+            "meal_id": meal_id}
+
+    with patch("routers.scheduler.stream_response", side_effect=_mock_stream(TOAST_REPLY)) as llm:
+        first = (await client.post("/scheduler/plan", json=body)).json()
+        second = (await client.post("/scheduler/plan", json=body)).json()
+
+    assert llm.call_count == 1
+    assert first["cached"] is False and second["cached"] is True
+    assert first["makespan_min"] == 3 and first["formatted"].startswith("⏱ Plan (3 min)")
+    plan = ("timeline", "makespan_min", "formatted")
+    assert {k: second[k] for k in plan} == {k: first[k] for k in plan}
+    assert json.loads(await _schedule_of(db, meal_id))["formatted"] == first["formatted"]
+
+
+# Another user's meal id neither returns that user's cached plan nor gets this plan saved over it
+async def test_plan_never_uses_another_users_meal(client, db):
+    theirs = json.dumps({"timeline": [], "makespan_min": 9, "formatted": "Their plan"})
+    cached_id = await _add_meal(db, "other", "Their meal", schedule=theirs)
+    empty_id = await _add_meal(db, "other", "Their other meal")
+
+    with patch("routers.scheduler.stream_response", side_effect=_mock_stream(TOAST_REPLY)) as llm:
+        for meal_id in (cached_id, empty_id):
+            r = await client.post("/scheduler/plan", json={"meal_name": "Toast", "steps": ["Toast bread"], "meal_id": meal_id})
+            assert r.status_code == 200
+            assert r.json()["cached"] is False and r.json()["formatted"].startswith("⏱ Plan (3 min)")
+
+    assert llm.call_count == 2
+    assert await _schedule_of(db, cached_id) == theirs
+    assert await _schedule_of(db, empty_id) is None
