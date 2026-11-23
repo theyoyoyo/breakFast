@@ -337,6 +337,15 @@ class TestPipelineOrchestrator:
         events, _ = await _run(_draft(_meal(EGGS)), _revision(worse))
         assert _without_emoji(extract_json_block(_final(events))) == _meal(EGGS)
 
+    # A review that moves an item into a dish or leaves one out (#263) is kept: fewer menu items isn't a worse result
+    async def test_revision_with_fewer_items_is_kept(self):
+        context = {**SAMPLE_CONTEXT, "ingredients": [{"name": "eggs"}, {"name": "Salt"}]}
+        draft = _meal(EGGS)
+        draft["menu"].append({"name": "Salt", "amount": 1, "unit": "pinch", "ingredients": []})
+        for revised in (_meal(EGGS, {"name": "Salt", "amount": 1, "unit": "pinch"}), _meal(EGGS)):
+            events, _ = await _run(_draft(draft), _revision(revised), context=context)
+            assert _without_emoji(extract_json_block(_final(events))) == revised
+
     # A revised meal with a new avoid-list item loses to the draft, even when the draft has more fridge misses
     async def test_falls_back_to_draft_when_revision_adds_an_avoided_item(self):
         draft = _meal({"name": "Toast", "amount": 1, "unit": "pcs"}, {"name": "Jam", "amount": 1, "unit": "tbsp"})
