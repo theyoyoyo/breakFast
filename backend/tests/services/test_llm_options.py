@@ -91,7 +91,8 @@ async def test_calls_send_think_only_when_set(monkeypatch, think, expected):
     client = _mock_client()
     client.post = AsyncMock(return_value=response)
     client.stream = MagicMock(return_value=_FakeStream())
-    with patch("services.llm.check_llm_availability", return_value=True),          patch("services.llm.httpx.AsyncClient", return_value=client):
+    with patch("services.llm.check_llm_availability", return_value=True), \
+         patch("services.llm.httpx.AsyncClient", return_value=client):
         await llm.chat_json("system", [], {"type": "object"})
         [t async for t in llm.chat_stream("system", [])]
 
@@ -158,7 +159,8 @@ async def test_calls_use_the_model_for_their_task_and_language(monkeypatch):
     client = _mock_client()
     client.post = AsyncMock(return_value=response)
     client.stream = MagicMock(return_value=_FakeStream())
-    with patch("services.llm.check_llm_availability", return_value=True),          patch("services.llm.httpx.AsyncClient", return_value=client):
+    with patch("services.llm.check_llm_availability", return_value=True), \
+         patch("services.llm.httpx.AsyncClient", return_value=client):
         await llm.chat_json("system", [], {"type": "object"}, task="shopping", language="en")
         [t async for t in llm.chat_stream("system", [], task="chat", language="tr")]
     sent, streamed = client.post.call_args.kwargs["json"], client.stream.call_args.kwargs["json"]
@@ -181,7 +183,8 @@ async def test_stream_response_routes_the_task(monkeypatch):
     client = _mock_client()
     client.stream = MagicMock(return_value=_FakeStream())
     history = [{"role": "user", "content": "Hi"}, {"role": "assistant", "content": "Hello"}]
-    with patch("services.llm.check_llm_availability", return_value=True),          patch("services.llm.httpx.AsyncClient", return_value=client):
+    with patch("services.llm.check_llm_availability", return_value=True), \
+         patch("services.llm.httpx.AsyncClient", return_value=client):
         tokens = [t async for t in llm.stream_response("system", history, "Eggs?", task="plan", language="en")]
     payload = client.stream.call_args.kwargs["json"]
     assert tokens == ["Hi"] and payload["model"] == "plan:4b"
@@ -205,7 +208,8 @@ async def test_calls_wait_the_timeout(monkeypatch):
     client = _mock_client()
     client.post = AsyncMock(return_value=response)
     client.stream = MagicMock(return_value=_FakeStream())
-    with patch("services.llm.check_llm_availability", return_value=True),          patch("services.llm.httpx.AsyncClient", return_value=client) as factory:
+    with patch("services.llm.check_llm_availability", return_value=True), \
+         patch("services.llm.httpx.AsyncClient", return_value=client) as factory:
         await llm.chat_json("system", [], {"type": "object"})
         [t async for t in llm.chat_stream("system", [])]
     assert [c.kwargs["timeout"] for c in factory.call_args_list] == [200.0, 200.0]
