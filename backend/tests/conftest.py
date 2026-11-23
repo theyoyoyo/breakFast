@@ -6,18 +6,122 @@ which patches database.DATABASE_PATH before creating the FastAPI test client.
 A test user is created and all requests include the auth token.
 PINs are hashed at a tiny scrypt cost unless a test is marked real_scrypt, and every test
 starts with no failed logins counted.
+
+The tests run with their own settings, whatever the machine's `.env` or shell says: `.env` is
+never loaded, every setting config.py reads starts at its default, and Ollama's address is one
+that can't resolve. No test can reach the network: Ollama counts as unreachable unless a test
+fakes it, and a test that still tries a real connection fails.
 """
 
+import os
+import shutil
+import socket
 import sys
+import tempfile
 from pathlib import Path
+
+# The settings config.py reads, cleared so each starts at its default (a developer's .env or
+# shell can't turn on the demo user, API docs or a model override), then the few the tests set.
+_SETTINGS = ("DATABASE_PATH", "CORS_ORIGINS", "SERVE_FRONTEND", "API_DOCS", "DEMO_USER")
+for _key in list(os.environ):
+    if _key.startswith("OLLAMA_") or _key in _SETTINGS:
+        del os.environ[_key]
+os.environ["OLLAMA_BASE_URL"] = "http://ollama.invalid"  # .invalid never resolves (RFC 2606)
+# A test that forgets its own database writes here, never to the real one
+_SCRATCH = tempfile.mkdtemp(prefix="breakfast-tests-")
+os.environ["DATABASE_PATH"] = str(Path(_SCRATCH) / "unused.db")
+
+# config.py calls load_dotenv() at import; make it a no-op before anything imports config
+import dotenv  # noqa: E402
+
+dotenv.load_dotenv = lambda *args, **kwargs: False
 
 # Make backend/ importable without installing the package
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import aiosqlite
-import pytest
-import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
+import aiosqlite  # noqa: E402
+import httpx  # noqa: E402
+import pytest  # noqa: E402
+import pytest_asyncio  # noqa: E402
+from httpx import ASGITransport, AsyncClient  # noqa: E402
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Remove the scratch folder behind the tests' DATABASE_PATH."""
+    shutil.rmtree(_SCRATCH, ignore_errors=True)
+
+
+_LOCAL_HOSTS = {None, "", "localhost", "127.0.0.1", "::1", "0.0.0.0"}
+
+
+@pytest.fixture(autouse=True)
+def no_network():
+    """Fail any test that opens a real connection: an HTTP request through httpx's network
+    transports (ASGI and mock transports stay allowed) or a name lookup or socket connect to a
+    host that isn't this machine. The attempt also raises, as if the network were down, so code
+    that catches the error can't hide it; the test fails at teardown either way. It keeps its own
+    MonkeyPatch, so a test's monkeypatch.undo() can't lift it. Yields the attempts, so the guard's
+    own test can check and clear them."""
+    attempts = []
+    monkeypatch = pytest.MonkeyPatch()
+
+    def refuse(what):
+        attempts.append(what)
+        raise httpx.ConnectError(f"tests may not use the network: {what}")
+
+    async def async_request(self, request):
+        refuse(f"HTTP {request.method} {request.url}")
+
+    def sync_request(self, request):
+        refuse(f"HTTP {request.method} {request.url}")
+
+    real_getaddrinfo = socket.getaddrinfo
+    real_connect, real_connect_ex = socket.socket.connect, socket.socket.connect_ex
+
+    def getaddrinfo(host, *args, **kwargs):
+        name = host.decode() if isinstance(host, bytes) else host
+        if name not in _LOCAL_HOSTS:
+            refuse(f"name lookup {name}")
+        return real_getaddrinfo(host, *args, **kwargs)
+
+    def is_local(address):
+        host = address[0] if isinstance(address, tuple) else None
+        return not isinstance(address, tuple) or host in _LOCAL_HOSTS or str(host).startswith("127.")
+
+    def connect(self, address):
+        if not is_local(address):
+            refuse(f"connect {address}")
+        return real_connect(self, address)
+
+    def connect_ex(self, address):
+        if not is_local(address):
+            refuse(f"connect {address}")
+        return real_connect_ex(self, address)
+
+    monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", async_request)
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", sync_request)
+    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
+    monkeypatch.setattr(socket.socket, "connect", connect)
+    monkeypatch.setattr(socket.socket, "connect_ex", connect_ex)
+    yield attempts
+    monkeypatch.undo()
+    if attempts:
+        pytest.fail(f"test tried the network: {attempts}")
+
+
+@pytest.fixture(autouse=True)
+def ollama_unreachable():
+    """Ollama counts as unreachable unless a test fakes it (tests that need it up patch
+    check_llm_availability or the call itself), so no test waits on a real connection. Its own
+    MonkeyPatch, like no_network's."""
+    from services import llm
+
+    async def unreachable():
+        return False
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(llm, "check_llm_availability", unreachable)
+        yield
 
 
 @pytest.fixture(autouse=True)
