@@ -265,6 +265,28 @@ def format_history_for_weekly_review(meals: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def format_nutrients(nutrients: dict | None) -> str:
+    """The nutrient line of the latest weekly analysis for the draft and the reviser, or "" when it
+    marks nothing. Nutrient names only (models/nutrients.py), never foods; a list with nothing
+    marked is left out."""
+    if not nutrients:
+        return ""
+    parts = [
+        f"{label} {', '.join(names)}"
+        for label, names in (
+            ("lacking", nutrients.get("lacking") or []),
+            ("more than enough", nutrients.get("more_than_enough") or []),
+        )
+        if names
+    ]
+    if not parts:
+        return ""
+    return (
+        "Nutrients in recent breakfasts, estimated from logged meals (weigh with the other hints): "
+        + "; ".join(parts) + "."
+    )
+
+
 def format_weekly_summary(summary: dict | None) -> str:
     """Format a saved weekly summary for the suggestion prompt (lean version).
 

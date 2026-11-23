@@ -91,6 +91,48 @@ async def test_chat_context_has_taste_hints(client, db):
     assert chat["ratings"] == [{"product_name": "Cheddar", "rating": 9}]
 
 
+async def _weekly_analysis(db, user_id: int, days_ago: int) -> None:
+    """An analysis run `days_ago` days ago that marked fiber lacking and sugar more than enough."""
+    await db.execute(
+        "INSERT INTO weekly_summaries (user_id, week_key, narrative, scores, created_at, lacking, more_than_enough) "
+        "VALUES (?, 'w', 'A sweet week', '[]', datetime('now', ?), '[\"fiber\"]', '[\"sugar\"]')",
+        (user_id, f"-{days_ago} days"),
+    )
+    await db.commit()
+
+
+# The suggestions read the nutrients of an analysis from the last 7 days only (#206)
+async def test_nutrients_from_a_recent_analysis_only(client, db):
+    from services.context import load_chat_context
+
+    async with db.execute("SELECT id FROM users WHERE name = 'testuser'") as cur:
+        user_id = (await cur.fetchone())[0]
+    assert (await load_chat_context(db, user_id))["nutrients"] is None
+
+    await _weekly_analysis(db, user_id, days_ago=3)
+    assert (await load_chat_context(db, user_id))["nutrients"] == {"lacking": ["fiber"], "more_than_enough": ["sugar"]}
+
+    await db.execute("UPDATE weekly_summaries SET created_at = datetime('now', '-8 days')")
+    await db.commit()
+    assert (await load_chat_context(db, user_id))["nutrients"] is None
+
+
+# The Settings switch governs only the weekly narrative; the nutrients reach the suggestions either way
+async def test_weekly_switch_governs_only_the_narrative(client, db):
+    from services.context import load_chat_context
+
+    async with db.execute("SELECT id FROM users WHERE name = 'testuser'") as cur:
+        user_id = (await cur.fetchone())[0]
+    await _weekly_analysis(db, user_id, days_ago=1)
+
+    off = await load_chat_context(db, user_id)
+    assert off["weekly_summary"] is None and off["nutrients"]["lacking"] == ["fiber"]
+
+    await client.put("/preferences/weekly_summary_in_suggestions", json={"value": "true"})
+    on = await load_chat_context(db, user_id)
+    assert on["weekly_summary"]["narrative"] == "A sweet week" and on["nutrients"]["lacking"] == ["fiber"]
+
+
 # The shopping context carries the saved favorite meals in place of recent meals
 async def test_shopping_context_has_favorite_meals_not_history(client, db):
     from services.context import load_shopping_context

@@ -488,6 +488,32 @@ async def test_version_3_gets_favorite_emoji(db_path):
     assert _query(db_path, "PRAGMA user_version") == [(LATEST,)]
 
 
+# Step 5 (#206) gives a database at version 4 the weekly analyses' days and nutrients and a meal's last edit;
+# an older analysis keeps its row and covers the 7 days up to the day it ran
+async def test_version_4_gets_weekly_nutrients(db_path):
+    await database.init_db()
+    with closing(sqlite3.connect(db_path)) as db:
+        db.execute("INSERT INTO users (id, name, pin_hash) VALUES (1, 'Alice', 'x')")
+        for column in ("period_start", "period_end", "lacking", "more_than_enough"):
+            db.execute(f"ALTER TABLE weekly_summaries DROP COLUMN {column}")
+        db.execute("ALTER TABLE meal_history DROP COLUMN updated_at")
+        db.execute(
+            "INSERT INTO weekly_summaries (user_id, week_key, narrative, scores, created_at) "
+            "VALUES (1, '2026-W47', 'A good week', '[]', '2026-11-20 08:00:00')"
+        )
+        db.execute("PRAGMA user_version = 4")
+        db.commit()
+
+    await database.init_db()
+    columns = _columns(db_path)
+    assert {"period_start", "period_end", "lacking", "more_than_enough"} <= columns["weekly_summaries"]
+    assert "updated_at" in columns["meal_history"]
+    assert _query(db_path, "SELECT narrative, period_start, period_end, lacking FROM weekly_summaries") == [
+        ("A good week", "2026-11-14", "2026-11-20", None),
+    ]
+    assert _query(db_path, "PRAGMA user_version") == [(LATEST,)]
+
+
 # A demo account created at the start with DEMO_USER on is a normal user, not an admin
 async def test_new_demo_user_is_not_admin(db_path, monkeypatch):
     monkeypatch.setattr(database, "DEMO_USER", True)

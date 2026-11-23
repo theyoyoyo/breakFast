@@ -18,6 +18,7 @@ import aiosqlite
 from config import DATABASE_PATH, DEMO_USER
 from models.ingredient import DEMO_FRIDGE
 from services.ingredient_groups import regroup_once
+from services.weekly import delete_old_analyses
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +81,8 @@ CREATE TABLE IF NOT EXISTS meal_history (
     rating          INTEGER,        -- 1 = thumbs down, 5 = thumbs up, NULL = no feedback
     cached_nutrition TEXT,           -- JSON (analyst output cache, NULL = not yet analyzed)
     menu_items      TEXT,           -- JSON menu array (new multi-item format)
-    logged_at       TEXT    NOT NULL DEFAULT (datetime('now'))
+    logged_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT            -- last edit (NULL = never edited); the weekly nudge reads it
 );
 
 CREATE TABLE IF NOT EXISTS user_preferences (
@@ -225,13 +227,20 @@ CREATE TABLE IF NOT EXISTS user_kitchen_appliances (
     UNIQUE(user_id, appliance_key)
 );
 
+-- Weekly analyses, kept six months. Each covers the 7 days up to the day it ran
+-- (period_start..period_end) and is filed under the calendar week it ran in (week_key, its ISO
+-- week); a new one replaces only the one from the same week.
 CREATE TABLE IF NOT EXISTS weekly_summaries (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id    INTEGER NOT NULL REFERENCES users(id),
     week_key   TEXT NOT NULL,
     narrative  TEXT NOT NULL,
     scores     TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    period_start     TEXT,          -- YYYY-MM-DD
+    period_end       TEXT,          -- YYYY-MM-DD
+    lacking          TEXT,          -- JSON list of nutrient names (models/nutrients.py)
+    more_than_enough TEXT           -- JSON list of nutrient names
 );
 
 -- Indices on frequently-filtered foreign key columns
@@ -462,12 +471,25 @@ async def _favorite_emoji(db) -> None:
     await _add_column(db, "favorite_meals", "emoji", "TEXT")
 
 
+async def _weekly_nutrients(db) -> None:
+    """Step 5 (#206): a weekly analysis keeps its 7 days and the nutrients it marked, and a meal
+    its last edit. An older analysis covered the 7 days up to the day it ran; its lists stay empty."""
+    for column in ("period_start", "period_end", "lacking", "more_than_enough"):
+        await _add_column(db, "weekly_summaries", column, "TEXT")
+    await _add_column(db, "meal_history", "updated_at", "TEXT")
+    await db.execute(
+        "UPDATE weekly_summaries SET period_start = date(created_at, '-6 days'), period_end = date(created_at) "
+        "WHERE period_start IS NULL OR period_end IS NULL"
+    )
+
+
 # (number, what it does, step). The number is the PRAGMA user_version once the step has run.
 MIGRATIONS = [
     (1, "group picks and the built-in food list", _regroup),
     (2, "tables and columns added before the numbered steps", _legacy_schema),
     (3, "rows left without their parent row", _drop_orphans),
     (4, "a favorite's icon", _favorite_emoji),
+    (5, "a weekly analysis's days and nutrients, a meal's last edit", _weekly_nutrients),
 ]
 
 
@@ -654,6 +676,8 @@ async def init_db() -> None:
         await db.execute(
             "DELETE FROM chat_sessions WHERE updated_at < datetime('now', '-8 days')"
         )
+        # Weekly analyses are kept six months
+        await delete_old_analyses(db)
 
         # Opt-in "demo" user with an empty PIN (DEMO_USER=true) for local try-outs.
         # Runs after the migrations; a newly created demo account gets a starter fridge.
