@@ -371,6 +371,7 @@ async def revise(
         mode=mode,
         language=language,
         chat=bool(chat_block),
+        nutrients=context.get("nutrients"),
     )
     problems = _code_check(draft_meal, context)
     missing = find_missing_ingredients(draft_meal, context["ingredients"])
@@ -443,6 +444,7 @@ async def run_suggestion_pipeline(
         favorite_meals=context.get("favorite_meals"),
         favorites=context.get("favorites"),
         ratings=context.get("ratings"),
+        nutrients=context.get("nutrients"),
     )
 
     # --- Step 1: Draft ---

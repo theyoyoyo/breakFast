@@ -17,11 +17,16 @@ const BUTTON = 'cursor-pointer rounded-lg px-4 py-2 text-sm'
  *   danger       — true for a delete: the action button is red
  *   onConfirm    — the action
  *   onCancel     — closes the window
+ *   notice       — true for a note with nothing to decide: only the action button (its OK), which
+ *                  has the focus; Esc and a tap outside still close it
  */
-export default function ConfirmDialog({ open, title, message, confirmLabel, danger = false, onConfirm, onCancel }) {
+export default function ConfirmDialog({
+  open, title, message, confirmLabel, danger = false, notice = false, onConfirm, onCancel,
+}) {
   const titleId = useId()
   const messageId = useId()
   const cancelRef = useRef(null)
+  const confirmRef = useRef(null)
   const panelRef = useRef(null)
   const onCancelRef = useRef(onCancel)
   useEffect(() => { onCancelRef.current = onCancel }, [onCancel])
@@ -29,7 +34,7 @@ export default function ConfirmDialog({ open, title, message, confirmLabel, dang
   useEffect(() => {
     if (!open) return undefined
     const opener = document.activeElement
-    cancelRef.current?.focus()
+    ;(cancelRef.current ?? confirmRef.current)?.focus()
     const handleKey = (e) => {
       if (e.key === 'Escape') {
         e.preventDefault()
@@ -70,15 +75,18 @@ export default function ConfirmDialog({ open, title, message, confirmLabel, dang
         <h2 id={titleId} className="m-0 mb-2 text-base font-semibold">{title}</h2>
         <p id={messageId} className="m-0 mb-5 text-sm text-fg-muted">{message}</p>
         <div className="flex justify-end gap-2">
+          {!notice && (
+            <button
+              ref={cancelRef}
+              type="button"
+              className={`${BUTTON} border border-solid border-line bg-transparent text-fg-muted`}
+              onClick={onCancel}
+            >
+              Cancel
+            </button>
+          )}
           <button
-            ref={cancelRef}
-            type="button"
-            className={`${BUTTON} border border-solid border-line bg-transparent text-fg-muted`}
-            onClick={onCancel}
-          >
-            Cancel
-          </button>
-          <button
+            ref={confirmRef}
             type="button"
             className={`${BUTTON} border-0 font-semibold text-white ${danger ? 'bg-danger-strong' : 'bg-secondary'}`}
             onClick={onConfirm}

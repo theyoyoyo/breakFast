@@ -4,7 +4,8 @@
  * the header shows the app name and the tab's name; the optional country saves with the profile, listed as
  * "Name (CODE)" and shown as its code; the profile boxes can shrink to a phone's width; removed shopping
  * suggestions can be brought back from AI settings after an "Are you sure?" prompt; meals older than one month
- * are deleted after one too (a pop-up window: Esc or Cancel closes it), with a note saying how many went (or that it failed), and the history reloads.
+ * are deleted after one too (a pop-up window: Esc or Cancel closes it), with a note saying how many went (or that it failed), and the history reloads;
+ * the Weekly Summary button nudges while the server asks for a weekly analysis.
  * API calls are mocked — no real network calls are made.
  */
 
@@ -25,7 +26,7 @@ vi.mock('../services/api', () => {
     addFavorite: ok({}), deleteFavorite: ok({}), getFavorites: ok([]),
     getPreferences: ok([]), setPreference: ok({}),
     analyzeMeal: ok({}),
-    getWeeklyReview: ok(null), generateWeeklyReview: ok({}),
+    getWeeklyReview: ok(null), generateWeeklyReview: ok({}), getWeeklyReviewStatus: ok({ nudge: false }),
     getKitchenAppliances: ok([]), toggleKitchenAppliance: ok({}),
     getRemovedSuggestionCount: ok({ count: 0 }), bringBackRemovedSuggestions: ok(undefined),
   }
@@ -39,6 +40,22 @@ describe('SettingsPanel', () => {
     api.getRemovedSuggestionCount.mockResolvedValue({ count: 0 })
     api.getMeals.mockResolvedValue([])
     api.deleteOldMeals.mockResolvedValue({})
+    api.getWeeklyReviewStatus.mockResolvedValue({ nudge: false })
+  })
+
+  // The Weekly Summary button carries the nudge only while the server says a meal is newer than the analysis
+  it('nudges on the Weekly Summary button when the server asks for an analysis', async () => {
+    api.getWeeklyReviewStatus.mockResolvedValue({ nudge: true })
+    const { unmount } = render(<SettingsPanel visible />)
+    const button = await screen.findByRole('button', { name: /weekly summary/i })
+    await waitFor(() => expect(button).toHaveTextContent(/weekly analysis/i))
+    unmount()
+
+    api.getWeeklyReviewStatus.mockResolvedValue({ nudge: false })
+    render(<SettingsPanel visible />)
+    const plain = await screen.findByRole('button', { name: /weekly summary/i })
+    await waitFor(() => expect(api.getWeeklyReviewStatus).toHaveBeenCalled())
+    expect(plain).not.toHaveTextContent(/weekly analysis/i)
   })
 
   // A new supplement starts as Daily, so adding one takes only its name

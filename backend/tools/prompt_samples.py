@@ -74,7 +74,8 @@ def _favorite(name: str, *menu: str | tuple[str, list[str]]) -> dict:
 
 
 # What every sample shares unless it says otherwise: no preferences, habits, rules or
-# supplements, a usual home kitchen, an empty shopping list and no staples, saved favorite meals or ratings
+# supplements, a usual home kitchen, an empty shopping list, no staples, saved favorite meals or ratings,
+# and no recent weekly analysis (its nutrients, #206)
 _BASE = {
     "country": "Türkiye",
     "preferences": {},
@@ -86,6 +87,7 @@ _BASE = {
     "avoid_list": [],
     "kitchen_appliances": _kitchen(),
     "weekly_summary": None,
+    "nutrients": None,
     "shopping_list": [],
     "favorites": [],
     "favorite_meals": [],
@@ -132,6 +134,8 @@ SAMPLES = {
             _favorite("Menemen", ("Menemen", ["Eggs", "Tomatoes", "Green peppers", "Olive oil"]), "Bread"),
             _favorite("Avocado toast", ("Avocado toast", ["Bread", "Avocado", "Eggs"])),
         ],
+        # A weekly analysis of these meals from the last 7 days
+        "nutrients": {"lacking": ["fiber", "vitamin C"], "more_than_enough": ["salt", "saturated fat"]},
     },
     "tr": {
         **_BASE,
@@ -250,6 +254,8 @@ SAMPLES = {
             ),
         ],
         "favorites": ["Cheddar", "Strawberries", "Maple syrup", "Bagels"],
+        # A weekly analysis of these meals from the last 7 days
+        "nutrients": {"lacking": ["protein", "fiber"], "more_than_enough": ["sugar"]},
         "ratings": [
             {"product_name": "Strawberries", "rating": 9},
             {"product_name": "Cream cheese", "rating": 8},

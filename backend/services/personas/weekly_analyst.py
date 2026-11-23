@@ -3,9 +3,12 @@ Weekly analyst persona — holistic 7-day nutrition review.
 
 Evaluates the user's week of breakfast meals against their profile,
 health conditions, and nutritional needs. Produces 4 scores + narrative.
-Not per-meal — this is a bird's-eye view of the whole week.
+Not per-meal — this is a bird's-eye view of the whole week. It also marks the nutrients the
+week lacked or had more than enough of (models.nutrients) for the next suggestions; the reply
+comes through structured outputs (services.weekly.WEEKLY_SCHEMA).
 """
 
+from models.nutrients import NUTRIENTS
 from services.knowledge import format_health_rules, format_supplements_taken, format_user_profile
 
 
@@ -70,23 +73,39 @@ Be honest and specific. A 70 should feel like a 70, not an 85.
 A short (1-sentence) note per score explaining the key driver.
 
 ═══════════════════════════════════════════════════════════════
+NUTRIENTS (for the app's next suggestions, not shown to the user)
+═══════════════════════════════════════════════════════════════
+The app plans the next breakfasts with two lists of nutrients from this week's meals, \
+supplements counted: `lacking`, what the breakfasts gave too little of, and \
+`more_than_enough`, what they gave more than enough of. Use only names from this list, most \
+important first: {nutrient_list}.
+Mark a nutrient only when the week's meals make you confident about it, and leave out every \
+nutrient you are not sure of: most stay off both lists, and an empty list is a good answer. \
+Start with the most important ones.
+
+═══════════════════════════════════════════════════════════════
 OUTPUT FORMAT
 ═══════════════════════════════════════════════════════════════
-Respond with ONLY the JSON block below — no text before or after:
+Reply with one JSON object: `narrative`, a 2-3 sentence overall assessment of the week \
+(specific, not generic), then `scores`, one entry per dimension above in that order (its \
+`label`, its `score` and a one-sentence `note`), then `lacking` and `more_than_enough`.
+This shows the reply's format only; the scores and the <…> parts are yours to fill:
 ```json
 {{
-  "narrative": "2-3 sentence overall assessment of the week. Specific, not generic.",
+  "narrative": "<your assessment of the week>",
   "scores": [
-    {{"label": "Nutritional Balance", "score": 75, "note": "Good macro coverage but low on fiber and Vitamin D."}},
-    {{"label": "Variety", "score": 80, "note": "Decent range but eggs appeared 4 out of 5 days."}},
-    {{"label": "Health Alignment", "score": 90, "note": "Meals aligned well with iron deficiency needs."}},
-    {{"label": "Energy & Protein", "score": 65, "note": "Protein targets met but caloric intake ran low on 2 days."}}
-  ]
+    {{"label": "Nutritional Balance", "score": 75, "note": "<the key driver>"}},
+    {{"label": "Variety", "score": 80, "note": "<the key driver>"}},
+    {{"label": "Health Alignment", "score": 90, "note": "<the key driver>"}},
+    {{"label": "Energy & Protein", "score": 65, "note": "<the key driver>"}}
+  ],
+  "lacking": ["<nutrient from the list>"],
+  "more_than_enough": []
 }}
 ```
 
 FINAL REMINDER: {lang_instruction} Write all review text in that language, even when meal names \
-are in another language. JSON keys stay as shown.
+are in another language. JSON keys and nutrient names stay as shown.
 """
 
 
@@ -97,12 +116,12 @@ def build_weekly_analyst_prompt(
     language: str = "en",
 ) -> str:
     """Build the weekly analyst system prompt."""
-    return WEEKLY_ANALYST_TEMPLATE.format(
-        lang_instruction=_lang(language),
-        user_profile=format_user_profile(user_profile),
-        supplements=format_supplements_taken(supplements),
-        health_rules=format_health_rules(health_rules or []),
-        weekly_meals="{weekly_meals}",  # filled separately per request
+    return build_weekly_analyst_prompt_with_meals(
+        "{weekly_meals}",  # filled separately per request
+        user_profile=user_profile,
+        supplements=supplements,
+        health_rules=health_rules,
+        language=language,
     )
 
 
@@ -119,5 +138,6 @@ def build_weekly_analyst_prompt_with_meals(
         user_profile=format_user_profile(user_profile),
         supplements=format_supplements_taken(supplements),
         health_rules=format_health_rules(health_rules or []),
+        nutrient_list=", ".join(NUTRIENTS),
         weekly_meals=weekly_meals_text,
     )

@@ -707,3 +707,34 @@ async def test_websocket_oversized_frame_gets_a_note_and_is_not_saved(ws_setup):
         async with db.execute("SELECT content FROM chat_messages WHERE user_id = ? ORDER BY id", (user_id,)) as cur:
             saved = [r[0] for r in await cur.fetchall()]
     assert saved == ["Hi", "Tamam."]
+
+
+# The chat persona never gets the weekly analysis's nutrient line, though the suggestions do (#206)
+async def test_chat_persona_gets_no_nutrients(ws_setup):
+    app, token, user_id = ws_setup
+    from unittest.mock import patch
+
+    from starlette.testclient import TestClient
+
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        await db.execute(
+            "INSERT INTO weekly_summaries (user_id, week_key, narrative, scores, period_start, period_end, "
+            "lacking, more_than_enough) VALUES (?, 'w', 'A week', '[]', date('now', '-6 days'), date('now'), ?, ?)",
+            (user_id, json.dumps(["iodine"]), json.dumps(["selenium"])),
+        )
+        await db.commit()
+
+    sent = []
+
+    async def mock_stream(system_prompt, history, message, temperature=None, **_):
+        sent.append(system_prompt + json.dumps(history) + message)
+        yield "Hello!"
+
+    with patch("routers.chat.stream_response", mock_stream):
+        with open_chat(TestClient(app), token) as ws:
+            ws.send_text(json.dumps({"message": "Good morning"}))
+            while ws.receive_json()["type"] != "done":
+                pass
+
+    assert len(sent) == 1
+    assert "iodine" not in sent[0] and "selenium" not in sent[0]
