@@ -4,8 +4,8 @@ Shared test fixtures for the break FAST backend.
 Each test function gets a fresh SQLite database via the `client` fixture,
 which patches database.DATABASE_PATH before creating the FastAPI test client.
 A test user is created and all requests include the auth token.
-PINs are hashed at a tiny scrypt cost unless a test is marked real_scrypt, and every test
-starts with no failed logins counted.
+PINs are hashed at a tiny scrypt cost unless a test is marked real_scrypt, every test
+starts with no failed logins counted, and it must end with no user's chat request slot held.
 
 The tests run with their own settings, whatever the machine's `.env` or shell says: `.env` is
 never loaded, every setting config.py reads starts at its default, and Ollama's address is one
@@ -155,6 +155,20 @@ def no_login_failures():
     import auth
 
     auth._login_failures.clear()
+
+
+@pytest.fixture(autouse=True)
+def no_held_request_slot():
+    """Fail any test that ends with a user's request slot still taken (#266): every way a chat request
+    ends must free it. Cleared either way, so one test's leftover can't make the next one busy."""
+    from services import chat_tasks
+
+    chat_tasks._running.clear()
+    yield
+    held = list(chat_tasks._running)
+    chat_tasks._running.clear()
+    if held:
+        pytest.fail(f"a request slot was still held at the end of the test: users {held}")
 
 
 @pytest_asyncio.fixture

@@ -4,8 +4,11 @@ Handles streaming conversation with context loading from DB.
 A Suggest press runs the suggestion pipeline and saves its meal to suggested_meals.
 Messages are persisted to chat_messages table for session continuity.
 Each open socket is registered in services/chat_sync, so a saved reply reaches the user's other devices.
+Each request runs as a task the socket can stop ({"type": "stop"}), one per user at a time across their
+devices (services/chat_tasks), and every frame of a reply names its chat (session_id).
 """
 
+import asyncio
 import json
 import logging
 import uuid
@@ -17,7 +20,7 @@ from database import get_db
 from db_helpers import owns_session
 from models.limits import CHAT_FRAME_MAX, CHAT_MESSAGE_MAX, SESSION_ID_MAX
 from models.units import count_unit
-from services import chat_sync
+from services import chat_sync, chat_tasks
 from services.chat_block import CHAT_SUGGEST_TEXTS, chat_history, drop_meal_block, load_chat_block
 from services.context import load_chat_context
 from services.llm import LLMUnavailableError, lyric_cycler, stream_response
@@ -139,6 +142,8 @@ async def chat_endpoint(websocket: WebSocket):
     chat_sync.register(user_id, websocket)
     cached_context: dict | None = None
     session_id: str | None = None
+    # This socket's latest request (it holds the user's slot in chat_tasks while its task runs)
+    current: chat_tasks.Request | None = None
     # False once this device drops mid-reply (a phone locked while waiting): the reply
     # still finishes and is saved, and the user's devices load it from the session
     client_live = True
@@ -150,22 +155,132 @@ async def chat_endpoint(websocket: WebSocket):
             return
         try:
             await websocket.send_json(event)
-        except WebSocketDisconnect:
+        except (WebSocketDisconnect, RuntimeError):
+            # Gone (a send on a closed socket raises RuntimeError): the reply goes on without it
             client_live = False
 
-    async def send_too_long() -> None:
-        """Tell this device its message was too long, in the user's reply language."""
+    async def reply_language() -> str:
+        """The user's reply language, loading the context once if needed."""
         nonlocal cached_context
         if cached_context is None:
             async with get_db() as db:
                 cached_context = await load_chat_context(db, user_id)
-        await send_live({"type": "done", "content": in_language(TOO_LONG_TEXTS, cached_context.get("language", "en"))})
+        return cached_context.get("language", "en")
+
+    async def send_note(texts: dict, note_session: str | None) -> None:
+        """Answer this device with a short note in the reply language (too long, busy): it ends the
+        device's wait like a reply, reaches no model and isn't saved."""
+        content = in_language(texts, await reply_language())
+        await send_live({"type": "done", "content": content, "session_id": note_session})
+
+    async def answer(request: chat_tasks.Request, prompt_type: str, user_message: str, language: str, work) -> None:
+        """Make one reply as the request's task, then save and send it. `work` is the pipeline's events
+        or the chat reply's tokens. Stop cancels this task while the model works, which closes the
+        model call; nothing more is saved. Once the reply is made its save runs whole (request.saving).
+        The user's slot is freed however the task ends."""
+        nonlocal session_id, cached_context
+        sid = request.session_id
+        try:
+            response_text = ""
+            if prompt_type == "suggest":
+                try:
+                    async for event in work:
+                        if event["type"] in ("progress", "token"):
+                            await send_live({**event, "session_id": sid})
+                        elif event["type"] == "done":
+                            response_text = event["content"]
+                except LLMUnavailableError:
+                    response_text = lyric_cycler.next()
+                except Exception:
+                    logging.exception("Suggestion pipeline failed; asking to press Suggest again")
+                # Ollama answered but the press failed (a timeout, an error) or said nothing:
+                # tell the user it failed instead of posting nothing or a lyric
+                response_text = response_text or in_language(RETRY_TEXTS, language)
+            else:
+                full_response = []
+                try:
+                    async for chunk in work:
+                        full_response.append(chunk)
+                        await send_live({"type": "token", "content": chunk, "session_id": sid})
+                    response_text = "".join(full_response)
+                except LLMUnavailableError:
+                    response_text = lyric_cycler.next()
+                except Exception:
+                    logging.exception("Chat reply failed; replying with a lyric")
+                    response_text = lyric_cycler.next()
+                # Meal cards come only from a Suggest press (#168): a chat reply keeps the text before
+                # any meal block, or points to Suggest when the block was all it wrote
+                response_text = drop_meal_block(response_text) or in_language(CHAT_SUGGEST_TEXTS, language)
+
+            # The reply is made: from here Stop waits for the save instead of cutting it in half
+            request.saving = True
+
+            # A Suggest reply's ```json meal block is saved as a suggestion and becomes a new meal card
+            meal_data = extract_json_block(response_text) if prompt_type == "suggest" else None
+            saved_text = response_text
+            async with get_db() as db:
+                still_owned = await owns_session(db, sid, user_id)
+            if not still_owned:
+                # The session was deleted while the reply was made: nothing left to save it to
+                chat_tasks.release(user_id, request)
+                if session_id == sid:
+                    session_id = None
+                await send_live({"type": "error", "code": "session_not_found", "message": SESSION_GONE_TEXT, "session_id": sid})
+                return
+            if meal_data:
+                async with get_db() as db:
+                    suggestion_id = await _save_suggestion(db, user_id, sid, meal_data, language)
+                meal_data["id"] = suggestion_id
+                # Normalize: ensure meal_name is always set (may come as menu_name)
+                if "menu_name" in meal_data and "meal_name" not in meal_data:
+                    meal_data["meal_name"] = meal_data["menu_name"]
+                # Re-serialize JSON block with id so it persists in the message
+                enriched_json = json.dumps(meal_data, ensure_ascii=False)
+                saved_text = response_text[:response_text.rfind("```json")] + "```json\n" + enriched_json + "\n```"
+
+            # Persist the reply, and a Suggest press's text before it (a typed message was saved when
+            # it came); a new suggestion becomes the selected meal card, on every device (this one
+            # selects it when meal_logged arrives)
+            async with get_db() as db:
+                if prompt_type == "suggest":
+                    await _save_message(db, sid, user_id, "user", user_message)
+                message_id = await _save_message(db, sid, user_id, "assistant", saved_text)
+                if meal_data:
+                    await db.execute(
+                        "UPDATE chat_sessions SET selected_message_id = ? WHERE id = ? AND user_id = ?",
+                        (message_id, sid, user_id),
+                    )
+                    await db.commit()
+
+            # Saved: the user's next request may start as soon as this device hears it's done
+            chat_tasks.release(user_id, request)
+
+            # The user's other devices reload this chat (they never get the tokens)
+            await chat_sync.notify_session_updated(user_id, sid, exclude=websocket)
+
+            # message_id lets this device save later meal card edits into the message
+            await send_live({"type": "done", "content": response_text, "message_id": message_id, "session_id": sid})
+
+            if meal_data:
+                await send_live({"type": "meal_logged", "meal": meal_data, "session_id": sid})
+                cached_context = None
+        except Exception:
+            # Unexpected (the database, say): the socket closes, as it did before requests ran as
+            # tasks, so the device stops waiting, reconnects and reloads the chat
+            logging.exception("Chat request failed; closing the socket")
+            try:
+                await websocket.close(code=1011)
+            except Exception:
+                pass
+        finally:
+            # Finished, failed, stopped or saved without its device: the slot is free again
+            chat_tasks.release(user_id, request)
 
     try:
         while True:
             raw = await websocket.receive_text()
             if len(raw) > CHAT_FRAME_MAX:
-                await send_too_long()
+                await send_note(TOO_LONG_TEXTS, session_id)
                 if not client_live:
                     break
                 continue
@@ -176,6 +291,17 @@ async def chat_endpoint(websocket: WebSocket):
             # Valid JSON that isn't an object (123, "hi", [1]) is plain text too
             if not isinstance(payload, dict):
                 payload = {"message": raw}
+
+            # Stop: this socket's request ends (its model call is closed, nothing more is saved), and
+            # the device is told once it has, so every frame of that request comes before this one
+            if payload.get("type") == "stop":
+                stopped, current = current, None
+                if stopped is not None:
+                    await chat_tasks.stop(stopped)
+                await send_live({"type": "stopped", "session_id": stopped.session_id if stopped else None})
+                if not client_live:
+                    break
+                continue
 
             # Handle session management messages
             # (a session id, mode or type that isn't a string is ignored: it would crash a lookup;
@@ -230,139 +356,73 @@ async def chat_endpoint(websocket: WebSocket):
                         )
                         await db.commit()
 
-            if cached_context is None:
-                async with get_db() as db:
-                    cached_context = await load_chat_context(db, user_id)
-
             if len(user_message) > CHAT_MESSAGE_MAX:
-                await send_too_long()
+                await send_note(TOO_LONG_TEXTS, session_id)
                 if not client_live:
                     break
                 continue
 
-            temperature = SUGGEST_TEMPERATURES.get(suggest_mode) if prompt_type == "suggest" else None
+            # One request per user at a time, on any of their devices: another one gets a note
+            request = chat_tasks.claim(user_id, session_id)
+            if request is None:
+                await send_note(chat_tasks.BUSY_TEXTS, session_id)
+                if not client_live:
+                    break
+                continue
 
-            if prompt_type == "suggest":
-                # Force fresh context for suggestion requests, and read the chat so far from the
-                # session (this press isn't saved yet), so every device sends the same chat
-                async with get_db() as db:
-                    cached_context = await load_chat_context(db, user_id)
-                    chat_block = await load_chat_block(db, session_id, user_id)
-
-                # Run the 3-step pipeline: draft → revise → present
-                response_text = ""
-                try:
-                    async for event in run_suggestion_pipeline(
+            try:
+                temperature = SUGGEST_TEMPERATURES.get(suggest_mode) if prompt_type == "suggest" else None
+                if prompt_type == "suggest":
+                    # Force fresh context for suggestion requests, and read the chat so far from the
+                    # session (this press isn't saved yet), so every device sends the same chat
+                    async with get_db() as db:
+                        cached_context = await load_chat_context(db, user_id)
+                        chat_block = await load_chat_block(db, session_id, user_id)
+                    language = cached_context.get("language", "en")
+                    # The 3-step pipeline: draft → revise → present
+                    work = run_suggestion_pipeline(
                         context=cached_context,
                         user_message=user_message,
                         mode=suggest_mode,
                         temperature=temperature,
                         chat_block=chat_block,
-                    ):
-                        if event["type"] == "progress":
-                            await send_live(event)
-                        elif event["type"] == "token":
-                            await send_live(event)
-                        elif event["type"] == "done":
-                            response_text = event["content"]
-                except LLMUnavailableError:
-                    response_text = lyric_cycler.next()
-                except Exception:
-                    logging.exception("Suggestion pipeline failed; asking to press Suggest again")
-                # Ollama answered but the press failed (a timeout, an error) or said nothing:
-                # tell the user it failed instead of posting nothing or a lyric
-                response_text = response_text or in_language(RETRY_TEXTS, cached_context.get("language", "en"))
-            else:
-                system_prompt = build_chat_prompt(
-                    ingredient_inventory=cached_context["ingredients"],
-                    recent_meal_history=cached_context["history"],
-                    user_preferences=cached_context["preferences"],
-                    stated_habits=cached_context["stated_habits"],
-                    inferred_habits=cached_context["inferred_habits"],
-                    health_rules=cached_context["health_rules"],
-                    avoid_list=cached_context["avoid_list"],
-                    kitchen_appliances=cached_context.get("kitchen_appliances"),
-                    language=cached_context.get("language", "en"),
-                )
-
-                # Load persisted conversation history for LLM context, meal cards as one line each
-                async with get_db() as db:
-                    conversation_history = chat_history(await _load_session_history(db, session_id, user_id))
-
-                # Stream response token by token
-                full_response = []
-                try:
-                    # The user's words with the app's note on how to reply; the words alone are saved
-                    message = build_chat_message(user_message, cached_context.get("language", "en"))
-                    async for chunk in stream_response(
-                        system_prompt, conversation_history, message, temperature=temperature,
-                        task="chat", language=cached_context.get("language", "en"),
-                    ):
-                        full_response.append(chunk)
-                        await send_live({"type": "token", "content": chunk})
-
-                    response_text = "".join(full_response)
-                except LLMUnavailableError:
-                    response_text = lyric_cycler.next()
-                except Exception:
-                    logging.exception("Chat reply failed; replying with a lyric")
-                    response_text = lyric_cycler.next()
-                # Meal cards come only from a Suggest press (#168): a chat reply keeps the text before
-                # any meal block, or points to Suggest when the block was all it wrote
-                response_text = (
-                    drop_meal_block(response_text)
-                    or in_language(CHAT_SUGGEST_TEXTS, cached_context.get("language", "en"))
-                )
-
-            # A Suggest reply's ```json meal block is saved as a suggestion and becomes a new meal card
-            meal_data = extract_json_block(response_text) if prompt_type == "suggest" else None
-            saved_text = response_text
-            async with get_db() as db:
-                still_owned = await owns_session(db, session_id, user_id)
-            if not still_owned:
-                # The session was deleted while the reply was made: nothing left to save it to
-                await send_live({"type": "error", "code": "session_not_found", "message": SESSION_GONE_TEXT})
-                session_id = None
-                if not client_live:
-                    break
-                continue
-            if meal_data:
-                async with get_db() as db:
-                    suggestion_id = await _save_suggestion(db, user_id, session_id, meal_data, cached_context.get("language", "en"))
-                meal_data["id"] = suggestion_id
-                # Normalize: ensure meal_name is always set (may come as menu_name)
-                if "menu_name" in meal_data and "meal_name" not in meal_data:
-                    meal_data["meal_name"] = meal_data["menu_name"]
-                # Re-serialize JSON block with id so it persists in the message
-                enriched_json = json.dumps(meal_data, ensure_ascii=False)
-                saved_text = response_text[:response_text.rfind("```json")] + "```json\n" + enriched_json + "\n```"
-
-            # Persist both messages to DB; a new suggestion becomes the selected meal card,
-            # on every device (this one selects it when meal_logged arrives)
-            async with get_db() as db:
-                await _save_message(db, session_id, user_id, "user", user_message)
-                message_id = await _save_message(db, session_id, user_id, "assistant", saved_text)
-                if meal_data:
-                    await db.execute(
-                        "UPDATE chat_sessions SET selected_message_id = ? WHERE id = ? AND user_id = ?",
-                        (message_id, session_id, user_id),
                     )
-                    await db.commit()
-
-            # The user's other devices reload this chat (they never get the tokens)
-            await chat_sync.notify_session_updated(user_id, session_id, exclude=websocket)
-
-            # message_id lets this device save later meal card edits into the message
-            await send_live({"type": "done", "content": response_text, "message_id": message_id})
-
-            if meal_data:
-                await send_live({"type": "meal_logged", "meal": meal_data})
-                cached_context = None
-
-            if not client_live:
-                break
+                else:
+                    language = await reply_language()
+                    system_prompt = build_chat_prompt(
+                        ingredient_inventory=cached_context["ingredients"],
+                        recent_meal_history=cached_context["history"],
+                        user_preferences=cached_context["preferences"],
+                        stated_habits=cached_context["stated_habits"],
+                        inferred_habits=cached_context["inferred_habits"],
+                        health_rules=cached_context["health_rules"],
+                        avoid_list=cached_context["avoid_list"],
+                        kitchen_appliances=cached_context.get("kitchen_appliances"),
+                        language=language,
+                    )
+                    # The conversation so far (meal cards as one line each), then the typed message, saved
+                    # at once: it was sent, so it stays when its reply is stopped, and the user's other
+                    # devices show it while the reply is made
+                    async with get_db() as db:
+                        conversation_history = chat_history(await _load_session_history(db, session_id, user_id))
+                        await _save_message(db, session_id, user_id, "user", user_message)
+                    await chat_sync.notify_session_updated(user_id, session_id, exclude=websocket)
+                    # The reply streamed token by token, to the user's words with the app's note on how
+                    # to reply; the words alone are saved
+                    work = stream_response(
+                        system_prompt, conversation_history, build_chat_message(user_message, language),
+                        temperature=temperature, task="chat", language=language,
+                    )
+                request.task = asyncio.create_task(answer(request, prompt_type, user_message, language, work))
+                current = request
+            except BaseException:
+                chat_tasks.release(user_id, request)
+                raise
 
     except WebSocketDisconnect:
         pass
     finally:
         chat_sync.unregister(user_id, websocket)
+        # A device that drops mid-reply without Stop: the reply still finishes and is saved
+        if current is not None and current.task is not None and not current.task.done():
+            await asyncio.wait({current.task})

@@ -622,7 +622,7 @@ async def test_session_deleted_during_a_reply_saves_nothing(ws_setup):
             ws.send_text(json.dumps({"message": "Suggest Breakfast", "type": "suggest", "session_id": "own"}))
             event = ws.receive_json()
 
-    assert event == {"type": "error", "code": "session_not_found", "message": SESSION_GONE_TEXT}
+    assert event == {"type": "error", "code": "session_not_found", "message": SESSION_GONE_TEXT, "session_id": "own"}
     assert await _saved_rows() == {"messages": [], "suggestions": []}
 
 
@@ -647,11 +647,11 @@ async def test_websocket_too_long_message_gets_a_note_and_is_not_saved(ws_setup)
         with open_chat(TestClient(app), token) as ws:
             ws.send_text(json.dumps({"message": "x" * (CHAT_MESSAGE_MAX + 1), "session_id": "s1"}))
             msg = ws.receive_json()
-            assert msg == {"type": "done", "content": TOO_LONG_TEXTS["en"]}
+            assert msg == {"type": "done", "content": TOO_LONG_TEXTS["en"], "session_id": msg["session_id"]}
             assert seen == []
 
             ws.send_text(json.dumps({"message": long_message, "session_id": "s1"}))
-            assert ws.receive_json() == {"type": "token", "content": "Sure."}
+            assert ws.receive_json() == {"type": "token", "content": "Sure.", "session_id": msg["session_id"]}
             assert ws.receive_json()["type"] == "done"
     assert len(seen) == 1 and long_message.strip() in seen[0]
 
@@ -692,12 +692,14 @@ async def test_websocket_oversized_frame_gets_a_note_and_is_not_saved(ws_setup):
     with patch("routers.chat.stream_response", mock_stream), patch("routers.chat.run_suggestion_pipeline", mock_pipeline):
         with open_chat(TestClient(app), token) as ws:
             ws.send_text(oversized)
-            assert ws.receive_json() == {"type": "done", "content": TOO_LONG_TEXTS["tr"]}
+            # Refused before it's read, so the note names the socket's chat: none yet
+            assert ws.receive_json() == {"type": "done", "content": TOO_LONG_TEXTS["tr"], "session_id": None}
             ws.send_text(json.dumps({"message": "Suggest", "type": "suggest", "session_id": "s1", "pad": "y" * CHAT_FRAME_MAX}))
-            assert ws.receive_json() == {"type": "done", "content": TOO_LONG_TEXTS["tr"]}
+            assert ws.receive_json() == {"type": "done", "content": TOO_LONG_TEXTS["tr"], "session_id": None}
             # The socket stays open, and a usual message is answered
             ws.send_text(json.dumps({"message": "Hi", "session_id": "s1"}))
-            assert ws.receive_json() == {"type": "token", "content": "Tamam."}
+            token = ws.receive_json()
+            assert (token["type"], token["content"]) == ("token", "Tamam.")
             assert ws.receive_json()["type"] == "done"
     assert len(seen) == 1
 

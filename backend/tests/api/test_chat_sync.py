@@ -80,7 +80,7 @@ def _pushes(received, kind="session_updated"):
     return [m for m in received if m["type"] == kind]
 
 
-# The user's other socket is told about the saved reply, without its tokens; the socket that asked isn't told.
+# The user's other socket is told about the saved message and its saved reply, without its tokens; the socket that asked isn't told.
 async def test_second_socket_gets_session_updated_after_reply(sync_setup):
     app, users = sync_setup
     token, _, session_id = users["ada"]
@@ -93,9 +93,10 @@ async def test_second_socket_gets_session_updated_after_reply(sync_setup):
             assert isinstance(asked[-1]["message_id"], int)
 
             seen = _chat(desktop)
-            assert seen[0] == {"type": "session_updated", "session_id": session_id}
+            assert _pushes(seen) == [{"type": "session_updated", "session_id": session_id}] * 2
             assert [m for m in seen if m["type"] == "token"] == [
-                {"type": "token", "content": "Hi"}, {"type": "token", "content": " there"},
+                {"type": "token", "content": "Hi", "session_id": session_id},
+                {"type": "token", "content": " there", "session_id": session_id},
             ]  # only the desktop's own reply was streamed to it
 
 
@@ -326,7 +327,8 @@ class _RecordingSocket:
         self.sent.append(data)
 
 
-# A device dropping mid-reply doesn't stop the reply: it is saved whole and the user's other socket is told.
+# A device dropping mid-reply doesn't stop the reply: it is saved whole, and the user's other socket is told
+# about the typed message and then the reply.
 async def test_reply_is_saved_when_socket_drops_mid_stream(sync_setup):
     _, users = sync_setup
     token, user_id, session_id = users["ada"]
@@ -344,7 +346,7 @@ async def test_reply_is_saved_when_socket_drops_mid_stream(sync_setup):
         async with db.execute("SELECT role, content FROM chat_messages WHERE session_id = ? ORDER BY id", (session_id,)) as cur:
             rows = [tuple(r) for r in await cur.fetchall()]
     assert rows == [("user", "hello"), ("assistant", "Hi there")]
-    assert other.sent == [{"type": "session_updated", "session_id": session_id}]
+    assert other.sent == [{"type": "session_updated", "session_id": session_id}] * 2
 
 
 # A socket that can't be sent to is dropped from the registry; the user's working socket still gets the push.
