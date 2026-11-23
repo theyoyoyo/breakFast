@@ -1,6 +1,8 @@
 # Runs the backend and frontend test suites on every pull request and on master.
 # A push to a branch with an open PR is covered by pull_request, so branch pushes
 # don't trigger a second run.
+# Actions are pinned to a commit, with its version in a comment; Dependabot keeps the pins
+# current (.github/dependabot.yml).
 name: CI
 
 on:
@@ -29,10 +31,10 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -52,12 +54,12 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           # Full history, so a pull request's changed files can be diffed against its base.
           fetch-depth: 0
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           # The oldest Node LTS still maintained.
           node-version: 22
