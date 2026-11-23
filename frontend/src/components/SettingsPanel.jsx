@@ -13,6 +13,7 @@ import {
 import WeeklySummary from './WeeklySummary'
 import KitchenSettings from './KitchenSettings'
 import ConfirmPrompt from './ConfirmPrompt'
+import ConfirmDialog from './ui/confirm-dialog'
 import MealEditor from './MealEditor'
 import StarRating from './StarRating'
 import { THEMES, applyTheme, storedTheme } from '../utils/theme'
@@ -93,7 +94,7 @@ export default function SettingsPanel({ visible }) {
   const [removedCount, setRemovedCount] = useState(0)
   const [askBringBack, setAskBringBack] = useState(false)
 
-  // Delete meals older than one month: the open "Are you sure?", then the note with how many went
+  // Delete meals older than one month: the open "Are you sure?" window, then the note with how many went
   const [askDeleteOld, setAskDeleteOld] = useState(false)
   const [oldMealsNote, setOldMealsNote] = useState(null)
 
@@ -1047,18 +1048,15 @@ export default function SettingsPanel({ visible }) {
         >
           🗑 Delete meals older than one month
         </button>
-        {askDeleteOld && (
-          <div style={s.bringBackPrompt}>
-            <ConfirmPrompt
-              label="Delete old meals"
-              message="Are you sure you want to delete every meal older than one month?"
-              confirmLabel="Delete"
-              danger
-              onConfirm={handleDeleteOldMeals}
-              onCancel={() => setAskDeleteOld(false)}
-            />
-          </div>
-        )}
+        <ConfirmDialog
+          open={askDeleteOld}
+          title="Delete old meals"
+          message="Are you sure you want to delete every meal older than one month?"
+          confirmLabel="Delete"
+          danger
+          onConfirm={handleDeleteOldMeals}
+          onCancel={() => setAskDeleteOld(false)}
+        />
         {oldMealsNote && <div style={s.oldMealsNote}>{oldMealsNote}</div>}
       </div>
     </div>

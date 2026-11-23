@@ -4,7 +4,7 @@
  * the header shows the app name and the tab's name; the optional country saves with the profile, listed as
  * "Name (CODE)" and shown as its code; the profile boxes can shrink to a phone's width; removed shopping
  * suggestions can be brought back from AI settings after an "Are you sure?" prompt; meals older than one month
- * are deleted after one too, with a note saying how many went (or that it failed), and the history reloads.
+ * are deleted after one too (a pop-up window: Esc or Cancel closes it), with a note saying how many went (or that it failed), and the history reloads.
  * API calls are mocked — no real network calls are made.
  */
 
@@ -229,12 +229,40 @@ describe('SettingsPanel', () => {
     api.deleteOldMeals.mockResolvedValue({ deleted: 2 })
     render(<SettingsPanel visible />)
     fireEvent.click(await screen.findByRole('button', { name: /Delete meals older than one month/ }))
-    expect(screen.getByText(/Are you sure you want to delete every meal older than one month/)).toBeInTheDocument()
+    const dialog = screen.getByRole('alertdialog', { name: 'Delete old meals' })
+    expect(dialog).toHaveAccessibleDescription(/Are you sure you want to delete every meal older than one month/)
     expect(api.deleteOldMeals).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     expect(await screen.findByText('2 meals older than one month deleted')).toBeInTheDocument()
     expect(api.deleteOldMeals).toHaveBeenCalledTimes(1)
-    expect(screen.queryByText(/Are you sure/)).toBeNull()
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+  })
+
+  // The old-meals question opens as a window with the focus on Cancel; Esc closes it and the focus goes back
+  it('asks about old meals in a window that Esc closes', async () => {
+    render(<SettingsPanel visible />)
+    const opener = await screen.findByRole('button', { name: /Delete meals older than one month/ })
+    opener.focus()
+    fireEvent.click(opener)
+    expect(screen.getByRole('alertdialog', { name: 'Delete old meals' })).toHaveAttribute('aria-modal', 'true')
+    expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(opener).toHaveFocus()
+    expect(api.deleteOldMeals).not.toHaveBeenCalled()
+  })
+
+  // Tab stays on the window's two buttons while it's open
+  it('keeps the focus inside the old-meals window', async () => {
+    render(<SettingsPanel visible />)
+    fireEvent.click(await screen.findByRole('button', { name: /Delete meals older than one month/ }))
+    const cancel = screen.getByRole('button', { name: 'Cancel' })
+    const del = screen.getByRole('button', { name: 'Delete' })
+    del.focus()
+    fireEvent.keyDown(document, { key: 'Tab' })
+    expect(cancel).toHaveFocus()
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
+    expect(del).toHaveFocus()
   })
 
   // With nothing older than a month, the note says there were none
@@ -251,7 +279,7 @@ describe('SettingsPanel', () => {
     render(<SettingsPanel visible />)
     fireEvent.click(await screen.findByRole('button', { name: /Delete meals older than one month/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(screen.queryByText(/Are you sure/)).toBeNull()
+    expect(screen.queryByRole('alertdialog')).toBeNull()
     expect(api.deleteOldMeals).not.toHaveBeenCalled()
   })
 
