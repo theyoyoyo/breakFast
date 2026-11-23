@@ -174,4 +174,48 @@ describe('DecidePanel', () => {
     expect(screen.queryByText('Honey')).toBeNull()
     expect(screen.queryByText('Olives')).toBeNull()
   })
+
+  describe('supplements', () => {
+    const SUPPS = [
+      { id: 1, name: 'Vitamin D', frequency: 'daily', taken_today: 1 },
+      { id: 2, name: 'Magnesium', frequency: 'sometimes', taken_today: 0 },
+    ]
+
+    // The 💊 button reveals today's supplements: daily ones ticked, occasional ones not
+    it('reveals daily supplements ticked and occasional ones not', async () => {
+      checkMissingIngredients.mockResolvedValue({ missing: [] })
+      render(<DecidePanel meal={MEAL} onClose={() => {}} supplements={SUPPS} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Supplements' }))
+      expect(screen.getByRole('button', { name: '✓ Vitamin D' })).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.getByRole('button', { name: 'Magnesium' })).toHaveAttribute('aria-pressed', 'false')
+    })
+
+    // A tap on a chip flips it at once, with its state before the tap
+    it('flips a supplement with one tap', async () => {
+      checkMissingIngredients.mockResolvedValue({ missing: [] })
+      const onToggle = vi.fn()
+      render(<DecidePanel meal={MEAL} onClose={() => {}} supplements={SUPPS} onToggleSupplement={onToggle} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Supplements' }))
+      fireEvent.click(screen.getByRole('button', { name: '✓ Vitamin D' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Magnesium' }))
+      expect(onToggle.mock.calls).toEqual([[1, true], [2, false]])
+      expect(screen.getByRole('group', { name: "Today's supplements" })).toBeInTheDocument() // still open
+    })
+
+    // Confirm works with the list open, and a tap anywhere else in the panel closes the list
+    it('keeps the list for Confirm and closes it on a tap elsewhere', async () => {
+      checkMissingIngredients.mockResolvedValue({ missing: [] })
+      const onConfirm = vi.fn()
+      render(<DecidePanel meal={MEAL} onClose={() => {}} onConfirm={onConfirm} supplements={SUPPS} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Supplements' }))
+      fireEvent.click(screen.getByText('Today I ate'))
+      expect(screen.queryByRole('group', { name: "Today's supplements" })).toBeNull()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Supplements' }))
+      await waitFor(() => expect(confirmBtn()).toBeEnabled())
+      fireEvent.click(confirmBtn())
+      await waitFor(() => expect(logMeal).toHaveBeenCalledTimes(1))
+      expect(onConfirm).toHaveBeenCalled()
+    })
+  })
 })
