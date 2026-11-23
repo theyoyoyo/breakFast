@@ -300,16 +300,16 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     if (state === WebSocket.OPEN || state === WebSocket.CONNECTING) return wsRef.current
 
     let opened = false
-    const ws = createChatSocket(
-      // onToken — skip if aborted; clear pipeline step when tokens start flowing
-      (chunk) => {
+    const ws = createChatSocket({
+      // Skipped once the reply was stopped; the pipeline step clears when tokens start flowing
+      onToken: (chunk) => {
         if (!abortedRef.current) {
           setPipelineStep(null)
           setStreamBuffer((prev) => (prev ?? '') + chunk)
         }
       },
-      // onDone — messageId is the saved reply's id (lets a card edit save into it)
-      (full, messageId) => {
+      // messageId is the saved reply's id (lets a card edit save into it)
+      onDone: (full, messageId) => {
         setPipelineStep(null)
         syncLyric(full) // keep client lyric index in sync if this was a fallback lyric
         if (abortedRef.current) {
@@ -321,8 +321,8 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
         }
         setStreamBuffer(null)
       },
-      // onMealLogged — attach meal block to the last assistant message
-      (meal) => {
+      // A suggested meal: attached to the last assistant message as its card, and selected
+      onMealLogged: (meal) => {
         const normalized = normalizeMeal(meal)
         setMessages((prev) => {
           const lastIdx = prev.length - 1
@@ -332,16 +332,16 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
         })
         onMealLoggedRef.current?.(normalized)
       },
-      // onError — don't spam chat with error messages, header already shows "reconnecting…"
-      () => {
+      // No error message in the chat: the header already shows "reconnecting…"
+      onError: () => {
         if (wsRef.current !== ws) return // an old socket, already replaced
         setStreamBuffer(null)
         setPipelineStep(null)
         setConnected(false)
       },
-      // onClose — auto-reconnect with exponential backoff (max 30s).
+      // Auto-reconnect with exponential backoff (max 30s).
       // Skipped for a socket already replaced or closed on unmount (wsRef no longer points to it).
-      () => {
+      onClose: () => {
         if (wsRef.current !== ws) return
         setStreamBuffer(null)
         setPipelineStep(null)
@@ -363,19 +363,18 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
         const retry = () => { if (!unmountedRef.current && !wsRef.current) reconnect() }
         checkAuth().then(retry, (err) => { if (err?.status !== 401) retry() })
       },
-      // onProgress — pipeline step updates
-      (step) => {
+      // Pipeline step updates
+      onProgress: (step) => {
         setPipelineStep(step)
       },
-      // onSessionUpdated — a session changed elsewhere: reload it if it's on screen,
-      // else only Back / Next may have changed
-      (changedId) => {
+      // A session changed elsewhere: reload it if it's on screen, else only Back / Next may have changed
+      onSessionUpdated: (changedId) => {
         if (changedId === sessionIdRef.current) setSyncPending(true)
         else if (sessionIdRef.current) refreshNavState(sessionIdRef.current)
       },
-      // onNotice — any other change (supplements, shopping suggestions) goes to every panel
-      emitSyncNotice
-    )
+      // Any other change (supplements, shopping suggestions) goes to every panel
+      onNotice: emitSyncNotice,
+    })
     ws.addEventListener('open', () => {
       opened = true
       hasConnectedRef.current = true

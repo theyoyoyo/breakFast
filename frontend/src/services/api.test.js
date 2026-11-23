@@ -278,7 +278,7 @@ describe('chat sync API', () => {
     vi.stubGlobal('WebSocket', class { constructor() { sockets.push(this) } })
     const onDone = vi.fn()
     const onSessionUpdated = vi.fn()
-    createChatSocket(vi.fn(), onDone, vi.fn(), null, null, null, onSessionUpdated)
+    createChatSocket({ onDone, onSessionUpdated })
     sockets[0].onmessage({ data: JSON.stringify({ type: 'done', content: 'Hi', message_id: 5 }) })
     sockets[0].onmessage({ data: JSON.stringify({ type: 'session_updated', session_id: 's1' }) })
     expect(onDone).toHaveBeenCalledWith('Hi', 5)
@@ -292,7 +292,7 @@ describe('chat sync API', () => {
     vi.stubGlobal('WebSocket', class { constructor() { sockets.push(this) } })
     const onDone = vi.fn()
     const onNotice = vi.fn()
-    createChatSocket(vi.fn(), onDone, vi.fn(), null, null, null, null, onNotice)
+    createChatSocket({ onDone, onNotice })
     sockets[0].onmessage({ data: JSON.stringify({ type: 'error', code: 'session_not_found', message: 'Gone' }) })
     expect(onDone).toHaveBeenCalledWith('Gone')
     expect(onNotice).not.toHaveBeenCalled()
@@ -320,7 +320,7 @@ describe('chat socket auth', () => {
   it('opens /chat with the token as a subprotocol, not in the URL', () => {
     localStorage.setItem('bf_token', 'tok-1')
     const sockets = stubSockets()
-    createChatSocket(vi.fn(), vi.fn(), vi.fn())
+    createChatSocket({})
     expect(sockets[0].url).toMatch(/\/chat$/)
     expect(sockets[0].url).not.toContain('tok-1')
     expect(sockets[0].protocols).toEqual(['bearer', 'tok-1'])
@@ -330,7 +330,7 @@ describe('chat socket auth', () => {
   // Without a stored session the socket sends bearer alone, since an empty subprotocol would throw
   it('opens /chat with bearer alone when there is no stored session', () => {
     const sockets = stubSockets()
-    createChatSocket(vi.fn(), vi.fn(), vi.fn())
+    createChatSocket({})
     expect(sockets[0].protocols).toEqual(['bearer'])
     vi.unstubAllGlobals()
   })

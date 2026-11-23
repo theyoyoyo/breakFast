@@ -67,16 +67,16 @@ const PHONE_REPLY = { id: 2, role: 'assistant', content: 'Fresh reply from the p
 const MEAL = { id: 7, menu_name: 'Test Breakfast', menu: [{ name: 'Olives', amount: 5, unit: 'pcs', ingredients: [] }] }
 const MEAL_MSG = { id: 3, role: 'assistant', content: 'Try this.\n\n```json\n' + JSON.stringify(MEAL) + '\n```' }
 
-// Fake chat sockets: each records the callbacks it was created with and its event listeners
+// Fake chat sockets: each records the handlers it was created with and its event listeners
 let sockets
 function lastSocket() {
   return sockets[sockets.length - 1]
 }
 function pushSessionUpdated(sessionId) {
-  act(() => lastSocket().callbacks[6](sessionId))
+  act(() => lastSocket().handlers.onSessionUpdated(sessionId))
 }
 function pushNotice(notice) {
-  act(() => lastSocket().callbacks[7](notice))
+  act(() => lastSocket().handlers.onNotice(notice))
 }
 
 function setVisibility(state) {
@@ -94,14 +94,14 @@ describe('ChatInterface sync', () => {
     vi.clearAllMocks()
     Element.prototype.scrollIntoView = vi.fn()
     sockets = []
-    createChatSocket.mockImplementation((...callbacks) => {
+    createChatSocket.mockImplementation((handlers) => {
       const listeners = {}
       const ws = {
         readyState: WebSocket.OPEN,
         send: vi.fn(),
         close: vi.fn(),
         addEventListener: vi.fn((type, fn) => { listeners[type] = fn }),
-        callbacks,
+        handlers,
         listeners,
       }
       sockets.push(ws)
@@ -161,7 +161,7 @@ describe('ChatInterface sync', () => {
     expect(lastSocket().send).toHaveBeenCalled()
 
     pushSessionUpdated('s1')
-    act(() => lastSocket().callbacks[0]('Half an ans'))
+    act(() => lastSocket().handlers.onToken('Half an ans'))
     await screen.findByText('Half an ans')
     expect(getSessionMessages).toHaveBeenCalledTimes(1)
     expect(screen.getByText('What now?')).toBeInTheDocument()
@@ -172,7 +172,7 @@ describe('ChatInterface sync', () => {
       { id: 5, role: 'assistant', content: 'Half an answer' },
       PHONE_REPLY,
     ])
-    act(() => lastSocket().callbacks[1]('Half an answer', 5))
+    act(() => lastSocket().handlers.onDone('Half an answer', 5))
     await screen.findByText('Fresh reply from the phone')
     expect(getSessionMessages).toHaveBeenCalledTimes(2)
     expect(screen.getByText('What now?')).toBeInTheDocument()
@@ -182,7 +182,7 @@ describe('ChatInterface sync', () => {
   // A socket the phone closed in the background reconnects as soon as the page is back, then reloads on open
   it('reconnects at once when the page returns after its socket closed', async () => {
     await renderChat()
-    act(() => lastSocket().callbacks[4]()) // onClose
+    act(() => lastSocket().handlers.onClose())
     expect(sockets).toHaveLength(1)
 
     setVisibility('visible')
@@ -380,14 +380,14 @@ describe('ChatInterface ended session', () => {
     vi.clearAllMocks()
     Element.prototype.scrollIntoView = vi.fn()
     sockets = []
-    createChatSocket.mockImplementation((...callbacks) => {
+    createChatSocket.mockImplementation((handlers) => {
       const listeners = {}
       const ws = {
         readyState: WebSocket.CONNECTING,
         send: vi.fn(),
         close: vi.fn(),
         addEventListener: vi.fn((type, fn) => { listeners[type] = fn }),
-        callbacks,
+        handlers,
         listeners,
       }
       sockets.push(ws)
@@ -405,7 +405,7 @@ describe('ChatInterface ended session', () => {
   // Close the last socket, let the session check answer, then run every pending reconnect timer
   async function closeAndWait() {
     vi.useFakeTimers()
-    act(() => lastSocket().callbacks[4]()) // onClose
+    act(() => lastSocket().handlers.onClose())
     await act(async () => { await Promise.resolve() })
     act(() => { vi.advanceTimersByTime(60000) })
   }
@@ -452,7 +452,7 @@ describe('ChatInterface ended session', () => {
     const { unmount } = render(<ChatInterface visible />)
     await screen.findByText('Hello')
     vi.useFakeTimers()
-    act(() => lastSocket().callbacks[4]()) // onClose
+    act(() => lastSocket().handlers.onClose())
     unmount()
     await act(async () => { answer({}) })
     expect(vi.getTimerCount()).toBe(0)
