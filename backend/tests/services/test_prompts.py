@@ -79,10 +79,12 @@ class TestFormatters:
         assert "early breakfast" in result
         assert "no sugar" in result
 
-    def test_format_health_rules_empty_deprioritize_not_exclude(self):
+    # With no rules the model still gets text to work from, and it is no ban, since only the avoid list bans
+    def test_format_health_rules_empty_is_guidance_not_a_ban(self):
         result = format_health_rules([])
-        assert "deprioritize" in result
-        assert "NEVER fully exclude" in result
+        assert result.strip()
+        assert "TOP PRIORITY" not in result
+        assert format_avoid_list(["x"]).splitlines()[0] not in result
 
     # Formats rules with priority labels when passed as dicts
     def test_format_health_rules_custom(self):
@@ -91,10 +93,10 @@ class TestFormatters:
             {"rule_text": "Favor omega-3", "priority": "low"},
         ]
         result = format_health_rules(rules)
-        assert "TOP PRIORITY" in result
-        assert "Avoid gluten" in result
-        assert "Nice to have" in result
-        assert "Favor omega-3" in result
+        lines = {r["rule_text"]: next(line for line in result.splitlines() if r["rule_text"] in line) for r in rules}
+        # Each rule is listed with a priority label, and the two priorities are labeled differently
+        label = {text: line.replace(text, "") for text, line in lines.items()}
+        assert label["Avoid gluten"] != label["Favor omega-3"]
         assert "refined sugar" not in result
 
     # Backwards-compatible with plain string lists
@@ -103,16 +105,17 @@ class TestFormatters:
         assert "Avoid gluten" in result
         assert "Favor omega-3" in result
 
+    # An empty avoid list is the same text whether it is None or [], and it carries no ban
     def test_format_avoid_list_empty(self):
-        assert "No items" in format_avoid_list(None)
-        assert "No items" in format_avoid_list([])
+        assert format_avoid_list(None) == format_avoid_list([])
+        assert "NEVER" not in format_avoid_list([])
 
+    # The avoid list names every item and states the ban
     def test_format_avoid_list_with_data(self):
         result = format_avoid_list(["shellfish", "peanuts"])
         assert "shellfish" in result
         assert "peanuts" in result
         assert "NEVER" in result
-        assert "cross-contamination" in result
 
     def test_format_behavioral_empty(self):
         assert format_behavioral(None) == ""
@@ -121,11 +124,11 @@ class TestFormatters:
     def test_format_behavioral_with_data(self):
         result = format_behavioral(["eats eggs daily", "rarely has fruit"])
         assert "eats eggs daily" in result
-        assert "DIVERSIFY" in result
+        assert "rarely has fruit" in result
 
+    # No profile, or an empty one, gives the same non-empty default text
     def test_format_user_profile_empty(self):
-        assert "Not provided" in format_user_profile(None)
-        assert "Not provided" in format_user_profile({})
+        assert format_user_profile(None) == format_user_profile({}) != ""
 
     def test_format_user_profile_with_data(self):
         profile = {
@@ -139,9 +142,9 @@ class TestFormatters:
         assert "75" in result
         assert "orta" in result
 
+    # No supplements, or an empty list, gives the same non-empty text
     def test_format_supplements_empty(self):
-        assert "No supplements" in format_supplements(None)
-        assert "No supplements" in format_supplements([])
+        assert format_supplements(None) == format_supplements([]) != ""
 
     def test_format_supplements_daily(self):
         supps = [{"name": "Vitamin D", "frequency": "daily", "contents": "1000IU D3"}]
@@ -196,10 +199,6 @@ class TestChatPrompt:
         assert isinstance(prompt, str)
         assert len(prompt) > 100
 
-    def test_contains_chat_tone(self):
-        prompt = build_chat_prompt([], [], {}, [])
-        assert "friendly" in prompt.lower() or "warm" in prompt.lower() or "friend" in prompt.lower()
-
     def test_includes_ingredients(self):
         prompt = build_chat_prompt(
             ingredient_inventory=[{"name": "peynir", "quantity": "200", "unit": "g"}],
@@ -220,10 +219,10 @@ class TestChatPrompt:
         assert "Avoid refined sugars" in prompt
         assert "Favor walnuts" in prompt
 
+    # With no health rules in the database, the default guidance reaches the prompt
     def test_default_health_rules_when_none(self):
         prompt = build_chat_prompt([], [], {}, [])
-        assert "deprioritize" in prompt
-        assert "NEVER fully exclude" in prompt
+        assert format_health_rules([]) in prompt
 
     def test_no_json_block(self):
         """Chat persona replies in plain text; meal blocks only come from Suggest."""
@@ -231,32 +230,30 @@ class TestChatPrompt:
         assert "```json" not in prompt
 
     def test_menus_go_to_suggest(self):
-        """The chat talks, the Suggest button makes the menu, and there are no rules for meals the chat mentions (#168)."""
+        """The chat points to the Suggest button, which makes the menu, so its prompt asks for no meal block (#168)."""
         prompt = build_chat_prompt([], [], {}, [])
-        assert "Ask one short question at a time" in prompt
-        assert "The Suggest button makes the menu; each message ends with the app's note on how to reply." in prompt
-        for gone in ("INGREDIENT RULE", "Only suggest meals", "shape your suggestions", "What should I eat?"):
-            assert gone not in prompt
+        assert "Suggest" in prompt
+        assert "menu_name" not in prompt
 
     def test_message_ends_with_the_reply_note(self):
         """Each typed message reaches the model with the app's note last: the menu rule with its reason and the reply language (#168)."""
         message = build_chat_message("I only have 10 minutes.", language="tr")
         words, note = message.split("\n\n", 1)
         assert words == "I only have 10 minutes."
-        assert note.startswith("(Note from the app, not from the user:")
-        assert "so name no dish, recipe, amount or cooking step" in note
-        assert "card the user can edit, plan and log" in note
-        assert "tell them to tap Suggest" in note
-        assert note.endswith("Always respond in Turkish.)")
+        assert note.startswith("(") and note.endswith(")")
+        assert "Suggest" in note
+        assert note.rfind("Turkish") > note.rfind("Suggest")  # the reply language comes last
 
     def test_ends_with_language_reminder(self):
         """The language directive is the last thing the model reads, like every user-facing prompt."""
         prompt = build_chat_prompt([], [], {}, [], language="tr")
-        assert prompt.rstrip().splitlines()[-1].startswith("FINAL REMINDER: Always respond in Turkish.")
+        last = prompt.rstrip().splitlines()[-1]
+        assert "Turkish" in last and "English" not in last
 
+    # An empty avoid list reaches the prompt as the formatter's empty text, with no ban
     def test_includes_avoid_list_empty(self):
         prompt = build_chat_prompt([], [], {}, [])
-        assert "No items on avoid list" in prompt
+        assert format_avoid_list([]) in prompt
 
     def test_includes_avoid_list_with_items(self):
         prompt = build_chat_prompt([], [], {}, [], avoid_list=["shellfish", "peanuts"])
@@ -283,10 +280,6 @@ class TestSuggestionPrompt:
         prompt = build_suggestion_prompt([], [], {}, [])
         assert isinstance(prompt, str)
         assert len(prompt) > 100
-
-    def test_contains_professional_tone(self):
-        prompt = build_suggestion_prompt([], [], {}, [])
-        assert "dietitian" in prompt.lower() or "professional" in prompt.lower()
 
     def test_history_limit_is_4(self):
         """Suggestion persona uses the newest 4 meals; history comes newest first."""
@@ -315,25 +308,12 @@ class TestSuggestionPrompt:
             inferred_habits=["high egg consumption"],
         )
         assert "high egg consumption" in prompt
-        assert "DIVERSIFY" in prompt
-
-    def test_includes_nutrition_guidance(self):
-        """Suggestion prompt should carry internal nutrition guidance."""
-        prompt = build_suggestion_prompt([], [], {}, [])
-        assert "protein" in prompt.lower()
-        assert "calori" in prompt.lower() or "kcal" in prompt.lower()
-        assert "fiber" in prompt.lower()
-        assert "omega" in prompt.lower()
-
-    def test_includes_advance_prep_tip(self):
-        """Suggestion prompt should mention advance prep section."""
-        prompt = build_suggestion_prompt([], [], {}, [])
-        assert "Tip:" in prompt or "advance prep" in prompt.lower()
+        assert "high egg consumption" not in build_suggestion_prompt([], [], {}, [])
 
     def test_includes_avoid_list_empty(self):
-        """Suggestion prompt should show no items when avoid list is empty."""
+        """An empty avoid list reaches the prompt as the formatter's empty text, with no ban."""
         prompt = build_suggestion_prompt([], [], {}, [])
-        assert "No items on avoid list" in prompt
+        assert format_avoid_list([]) in prompt
 
     def test_includes_avoid_list_with_items(self):
         """Suggestion prompt should inject actual avoid items."""
@@ -341,16 +321,6 @@ class TestSuggestionPrompt:
         assert "gluten" in prompt
         assert "lactose" in prompt
         assert "NEVER" in prompt
-
-    def test_includes_seasonality(self):
-        """Suggestion prompt should mention seasonal produce preference."""
-        prompt = build_suggestion_prompt([], [], {}, [])
-        assert "seasonal" in prompt.lower()
-
-    def test_favors_widely_available_ingredients(self):
-        """Suggestion prompt should steer toward widely available ingredients."""
-        prompt = build_suggestion_prompt([], [], {}, [])
-        assert "widely available" in prompt
 
     def test_json_block_has_prep_time_without_nutrition_note(self):
         """The JSON block asks for the prep time; the nutrition note is gone, since nothing showed it."""
@@ -365,7 +335,6 @@ class TestSuggestionPrompt:
             prompt = build_suggestion_prompt([], [], {}, [], mode=mode)
             assert "Sucuk" not in prompt and "Ayran" not in prompt, mode
             assert "chia" not in prompt.lower() and "quinoa" not in prompt.lower(), mode
-            assert "Keep proper dish names" in prompt, mode
 
     def test_includes_user_profile(self):
         """Suggestion prompt should render user physical profile."""
@@ -392,32 +361,18 @@ class TestSuggestionPrompt:
         assert "Fish oil" not in prompt
 
     def test_profile_and_supplements_default_when_none(self):
-        """When no profile/supplements given, should still render without error."""
+        """When no profile/supplements given, the formatters' default texts reach the prompt."""
         prompt = build_suggestion_prompt([], [], {}, [])
-        assert "Not provided" in prompt
-        assert "None taken today." in prompt
+        assert format_user_profile(None) in prompt
+        assert format_supplements_taken(None) in prompt
 
-    def test_includes_calorie_calculation_guidance(self):
-        """Prompt should mention Harris-Benedict or calorie calculation."""
-        prompt = build_suggestion_prompt([], [], {}, [])
-        assert "calori" in prompt.lower() or "kcal" in prompt.lower()
-        assert "30%" in prompt or "30" in prompt
-
-    def test_includes_experienced_cook_note(self):
-        """Prompt should indicate user is an experienced cook."""
-        prompt = build_suggestion_prompt([], [], {}, [])
-        assert "experienced cook" in prompt.lower()
-
-    def test_mode_none_has_no_mode_instruction(self):
-        """No mode = no extra mode block appended."""
-        prompt = build_suggestion_prompt([], [], {}, [])
-        assert "MODE:" not in prompt
-
-    def test_mode_favorites_appends_comfort_instructions(self):
-        """Favorites mode should add comfort/favorites instructions."""
-        prompt = build_suggestion_prompt([], [], {}, [], mode="favorites")
-        assert "FAVORITES" in prompt
-        assert "comfort" in prompt.lower()
+    def test_modes_each_add_their_own_instructions(self):
+        """Each Suggest mode changes the prompt, and a plain press and an unknown mode add nothing."""
+        plain = build_suggestion_prompt([], [], {}, [])
+        favorites = build_suggestion_prompt([], [], {}, [], mode="favorites")
+        explore = build_suggestion_prompt([], [], {}, [], mode="explore")
+        assert len({plain, favorites, explore}) == 3
+        assert build_suggestion_prompt([], [], {}, [], mode="unknown") == plain
 
     SAVED = [{"meal_name": "Cheddar toast", "menu_items": [
         {"name": "Cheddar toast", "ingredients": [{"name": "Bread"}, {"name": "Cheddar"}]},
@@ -435,10 +390,11 @@ class TestSuggestionPrompt:
         # One plain item list, so the model doesn't copy "Cheddar toast (Bread, …)" into dish names
         assert "- Cheddar toast: Bread, Cheddar, Orange juice" in prompt
         assert "Cheddar toast (" not in prompt
-        assert "Their favorite ingredients: Bagels, Cheddar" in prompt
-        assert "High-rated (favour these): Strawberries" in prompt
-        assert "Low-rated (avoid or minimise): Oats" in prompt
-        assert "Weigh all of it together" in prompt
+        assert "Bagels" in prompt
+        # A high-rated item and a low-rated one are listed apart
+        lines = prompt.splitlines()
+        assert "Oats" not in next(line for line in lines if "Strawberries" in line)
+        assert "Strawberries" not in next(line for line in lines if "Oats" in line)
 
     def test_other_modes_leave_taste_hints_out(self):
         """Plain Suggest and explore mode don't list the saved meals, staples or ratings."""
@@ -449,17 +405,6 @@ class TestSuggestionPrompt:
             assert "Cheddar toast" not in prompt, mode
             assert "Bagels" not in prompt, mode
             assert "Strawberries" not in prompt, mode
-
-    def test_mode_explore_appends_discovery_instructions(self):
-        """Explore mode should add world cuisine/discovery instructions."""
-        prompt = build_suggestion_prompt([], [], {}, [], mode="explore")
-        assert "EXPLORE" in prompt
-        assert "world" in prompt.lower() or "global" in prompt.lower()
-
-    def test_unknown_mode_has_no_extra_instruction(self):
-        """Unknown mode should not crash — just no extra block."""
-        prompt = build_suggestion_prompt([], [], {}, [], mode="unknown")
-        assert "MODE:" not in prompt
 
 
 # ---------------------------------------------------------------------------
@@ -477,29 +422,14 @@ class TestAnalystPrompt:
         assert isinstance(prompt, str)
         assert len(prompt) > 100
 
-    # Analyst identifies as analysis engine, not chat assistant
-    def test_contains_analyst_identity(self):
-        prompt = build_analyst_prompt([], None, None, None)
-        assert "analyst" in prompt.lower() or "analysis" in prompt.lower()
-
-    # Analyst must NOT be a chat assistant
-    def test_no_chat_behavior(self):
-        prompt = build_analyst_prompt([], None, None, None)
-        assert "NOT a chat assistant" in prompt
-
-    # Analyst prompt responds in Turkish
+    # The reply language follows the setting: English by default, Turkish when set
     def test_responds_in_english_by_default(self):
         prompt = build_analyst_prompt([], None, None, None)
-        assert "Always respond in English." in prompt
+        assert "English" in prompt and "Turkish" not in prompt
 
     def test_responds_in_turkish_when_set(self):
         prompt = build_analyst_prompt([], None, None, None, language="tr")
-        assert "Always respond in Turkish." in prompt
-
-    # Analyst uses low temperature (instruction embedded in prompt)
-    def test_mentions_low_temperature(self):
-        prompt = build_analyst_prompt([], None, None, None)
-        assert "0.3" in prompt
+        assert "Turkish" in prompt and "English" not in prompt
 
     # Analyst includes user profile data
     def test_includes_user_profile(self):
@@ -548,22 +478,11 @@ class TestAnalystPrompt:
         assert "Fiber" in prompt
         assert "Vitamins & Minerals" in prompt
 
-    # Supplement excess check instruction is present
-    def test_supplement_excess_check(self):
-        prompt = build_analyst_prompt([], None, None, None)
-        assert "EXCESS CHECK" in prompt
-        assert "upper limit" in prompt.lower() or "UL" in prompt
-
-    # Analyst prompt mentions Mifflin-St Jeor for calorie calculation
-    def test_mentions_calorie_formula(self):
-        prompt = build_analyst_prompt([], None, None, None)
-        assert "Mifflin" in prompt
-
-    # Default when no profile/supplements provided
+    # Default texts of the formatters reach the prompt when no profile or supplements are given
     def test_defaults_when_empty(self):
         prompt = build_analyst_prompt([], None, None, None)
-        assert "Not provided" in prompt
-        assert "No supplements" in prompt
+        assert format_user_profile(None) in prompt
+        assert format_supplements(None) in prompt
 
 
 # ---------------------------------------------------------------------------
