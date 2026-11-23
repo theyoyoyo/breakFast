@@ -608,6 +608,26 @@ class TestSchedulerUserMessage:
         assert "- Sweet potato (Peel, cube and roast): Sweet potato (300 g)" in msg
         assert "- White cheese (50 g), served as it is" in msg
 
+    def test_paired_item_names_its_pair(self):
+        """An item served with or on another one names it in its line, after a dish's method or on a served
+        item's line, and a pairing that names no other item of the menu is left out (#263)."""
+        menu = [
+            {"name": "Omelette", "ingredients": [{"name": "Egg", "amount": 2, "unit": "pcs"}]},
+            {"name": "Tahini dressing", "method": "Mix the tahini with the oat milk.", "serve_with": "Omelette", "ingredients": [
+                {"name": "Tahini", "amount": 1, "unit": "tbsp"},
+                {"name": "Oat milk", "amount": 2, "unit": "tbsp"},
+            ]},
+            {"name": "Honey", "amount": 1, "unit": "tsp", "serve_with": "Omelette", "ingredients": []},
+            {"name": "Banana", "amount": 1, "unit": "pcs", "serve_with": "Pancakes", "ingredients": []},
+        ]
+        lines = build_scheduler_user_message("Green morning", [], "", menu=menu).splitlines()
+        dressing = next(line for line in lines if line.startswith("- Tahini dressing ("))
+        assert "Mix the tahini with the oat milk" in dressing and "Omelette" in dressing.split(":")[0]
+        assert dressing.endswith("Tahini (1 tbsp), Oat milk (2 tbsp)")
+        assert "Omelette" in next(line for line in lines if line.startswith("- Honey"))
+        assert "Pancakes" not in next(line for line in lines if line.startswith("- Banana"))
+        assert "- Omelette: Egg (2 pcs)" in lines
+
     def test_water_is_planned_like_any_item(self):
         """Water in a recipe reaches the planner with the dish; a glass of water on its own is served as it is."""
         menu = [
