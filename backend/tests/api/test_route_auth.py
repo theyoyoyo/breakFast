@@ -13,6 +13,7 @@ from starlette.websockets import WebSocketDisconnect
 import database
 from auth import create_token, revoke_token
 from main import app
+from tests.routes import endpoints
 
 # The only routes that answer without a valid login, each with its reason
 PUBLIC = {
@@ -61,15 +62,15 @@ async def _snapshot():
 
 def _endpoints():
     """Every (method, path) in the app's route table, sockets as ("WS", path)."""
-    endpoints = []
-    for route in app.routes:
-        if isinstance(route, APIRoute):
-            endpoints += [(method, route.path) for method in sorted(route.methods - {"HEAD", "OPTIONS"})]
-        elif isinstance(route, APIWebSocketRoute):
-            endpoints.append(("WS", route.path))
+    found = []
+    for e in endpoints(app):
+        if isinstance(e.route, APIRoute):
+            found += [(method, e.path) for method in sorted(e.methods - {"HEAD", "OPTIONS"})]
+        elif isinstance(e.route, APIWebSocketRoute):
+            found.append(("WS", e.path))
         else:
-            endpoints.append((type(route).__name__, route.path))
-    return endpoints
+            found.append((type(e.route).__name__, e.path))
+    return found
 
 
 # Every route but the public ones refuses a request with no login, a malformed one, an unknown token or a logged-out one, and saves nothing
