@@ -6,12 +6,12 @@ import json
 import uuid
 
 import aiosqlite
-from fastapi.routing import APIRoute
 
 import database
 from auth import create_token, hash_pin
 from main import app
 from services import llm
+from tests.routes import api_endpoints
 
 MARK = "Zed"  # in every name and text the other user saves, so a reply that shows their data is caught
 MEAL = {"meal_name": "My meal", "ingredients": ["Bread"], "steps": []}
@@ -175,10 +175,10 @@ async def test_other_users_ids_are_not_found(client, monkeypatch):
 # Every app route with a path parameter has a case above, so a new id route fails until it gets one
 def test_every_id_route_has_a_case():
     id_routes = {
-        (method, route.path)
-        for route in app.routes
-        if isinstance(route, APIRoute) and "{" in route.path and route.path != "/{full_path:path}"
-        for method in route.methods - {"HEAD", "OPTIONS"}
+        (method, e.path)
+        for e in api_endpoints(app)
+        if "{" in e.path and e.path != "/{full_path:path}"
+        for method in e.methods - {"HEAD", "OPTIONS"}
     }
     covered = {(case[0], case[1]) for case in CASES}
     assert id_routes - covered == set()
