@@ -55,8 +55,9 @@ async def add_favorite(meal: FavoriteIn, user_id: int = Depends(require_user)):
         cur = await db.execute(
             """
             INSERT INTO favorite_meals
-                (user_id, meal_name, description, ingredients, steps, prep_time_min, nutrition_note, menu_items)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (user_id, meal_name, description, ingredients, steps, prep_time_min, nutrition_note, menu_items,
+                 emoji)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user_id,
@@ -67,6 +68,7 @@ async def add_favorite(meal: FavoriteIn, user_id: int = Depends(require_user)):
                 meal.prep_time_min,
                 meal.nutrition_note,
                 _json.dumps(menu_items, ensure_ascii=False) if menu_items else None,
+                meal.emoji,
             ),
         )
         await db.commit()
@@ -94,7 +96,8 @@ async def update_favorite(fav_id: int, meal: FavoriteIn, user_id: int = Depends(
             """
             UPDATE favorite_meals
             SET meal_name = ?, description = ?, ingredients = ?, steps = ?,
-                prep_time_min = ?, nutrition_note = ?, menu_items = ?
+                prep_time_min = ?, nutrition_note = ?, menu_items = ?,
+                emoji = COALESCE(?, emoji)  -- an edit sent without an icon keeps the saved one
             WHERE id = ? AND user_id = ?
             """,
             (
@@ -105,6 +108,7 @@ async def update_favorite(fav_id: int, meal: FavoriteIn, user_id: int = Depends(
                 meal.prep_time_min,
                 meal.nutrition_note,
                 _json.dumps(menu_items, ensure_ascii=False) if menu_items else None,
+                meal.emoji,
                 fav_id,
                 user_id,
             ),

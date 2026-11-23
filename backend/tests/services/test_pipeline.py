@@ -90,6 +90,11 @@ def _final(events) -> str:
     return done
 
 
+def _without_emoji(meal: dict) -> dict:
+    """The final meal without the icon the server gave it (random, #244)."""
+    return {k: v for k, v in meal.items() if k != "emoji"}
+
+
 # ---------------------------------------------------------------------------
 # Reviser prompt and schema
 # ---------------------------------------------------------------------------
@@ -214,6 +219,21 @@ class TestRevisionSchema:
 # ---------------------------------------------------------------------------
 
 class TestPipelineOrchestrator:
+    # The final meal gets one icon from the app's list on the server, so every device shows the same one
+    @pytest.mark.asyncio
+    async def test_final_meal_gets_an_emoji(self):
+        from models.meal import BREAKFAST_EMOJIS
+        events, calls = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)))
+        assert extract_json_block(_final(events))["emoji"] in BREAKFAST_EMOJIS
+        assert all("emoji" not in c["message"] for c in calls)
+
+    # A meal that already has an icon keeps it
+    @pytest.mark.asyncio
+    async def test_meal_keeps_its_emoji(self):
+        from models.meal import with_emoji
+        assert with_emoji({"menu_name": "Eggs", "emoji": "🥯"})["emoji"] == "🥯"
+        assert with_emoji({"menu_name": "Eggs", "emoji": ""})["emoji"]
+
     # The events come in order: drafting, the draft, analyzing, the review, finalizing, then the text
     @pytest.mark.asyncio
     async def test_event_order(self):
@@ -325,7 +345,7 @@ class TestPipelineOrchestrator:
     async def test_falls_back_to_draft_when_revision_is_worse(self):
         worse = _meal({"name": "Poached eggs", "amount": 2, "unit": "pcs"})
         events, _ = await _run(_draft(_meal(EGGS)), _revision(worse))
-        assert extract_json_block(_final(events)) == _meal(EGGS)
+        assert _without_emoji(extract_json_block(_final(events))) == _meal(EGGS)
 
     # A revised meal with a new avoid-list item loses to the draft, even when the draft has more fridge misses
     @pytest.mark.asyncio
@@ -333,7 +353,7 @@ class TestPipelineOrchestrator:
         draft = _meal({"name": "Toast", "amount": 1, "unit": "pcs"}, {"name": "Jam", "amount": 1, "unit": "tbsp"})
         allergen = _meal({"name": "Shellfish", "amount": 100, "unit": "g"})
         events, _ = await _run(_draft(draft), _revision(allergen))
-        assert extract_json_block(_final(events)) == draft
+        assert _without_emoji(extract_json_block(_final(events))) == draft
 
     # A revision that can't be read, or a reviser that fails, leaves the draft's meal
     @pytest.mark.asyncio
@@ -341,7 +361,7 @@ class TestPipelineOrchestrator:
         from services.llm import LLMUnavailableError
         for revision in ("not json", json.dumps({"changes": []}), LLMUnavailableError("down")):
             events, _ = await _run(_draft(_meal(EGGS)), revision)
-            assert extract_json_block(_final(events)) == _meal(EGGS)
+            assert _without_emoji(extract_json_block(_final(events))) == _meal(EGGS)
 
     # The present step reads only the final meal, not the draft's text, and the mode's temperature
     @pytest.mark.asyncio
@@ -366,7 +386,7 @@ class TestPipelineOrchestrator:
         events, _ = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)), present=other)
         final = _final(events)
         assert final.startswith("Enjoy!\n\n```json\n")
-        assert extract_json_block(final) == _meal(EGGS)
+        assert _without_emoji(extract_json_block(final)) == _meal(EGGS)
 
     # The draft is a structured call: its text first, then the meal in the reviser's shape without a method
     @pytest.mark.asyncio
