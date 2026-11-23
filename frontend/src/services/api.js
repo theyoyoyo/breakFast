@@ -245,6 +245,10 @@ export const getWeeklyReview = () =>
 export const generateWeeklyReview = () =>
   apiFetch(`${BASE_URL}/meals/weekly-review`, { method: 'POST' })
 
+/** `{nudge}`: true when a meal of the last 7 days is newer than the latest weekly analysis (or there is none). */
+export const getWeeklyReviewStatus = () =>
+  apiFetch(`${BASE_URL}/meals/weekly-review/status`)
+
 // ---------------------------------------------------------------------------
 // Preferences
 // ---------------------------------------------------------------------------

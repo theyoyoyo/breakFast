@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { getWeeklyReview, generateWeeklyReview } from '../services/api'
+import { getWeeklyReview, generateWeeklyReview, getWeeklyReviewStatus } from '../services/api'
+import ConfirmDialog from './ui/confirm-dialog'
 import * as s from './WeeklySummary.styles'
 
 export default function WeeklySummary({ onBack }) {
@@ -7,18 +8,23 @@ export default function WeeklySummary({ onBack }) {
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState(null)
+  // The server's word: a meal of the last 7 days is newer than the latest analysis (or there is none)
+  const [nudge, setNudge] = useState(false)
+  // The pop-up when there is no meal in the last 7 days to analyze
+  const [noMeals, setNoMeals] = useState(false)
 
   // Load cached review on mount
   useEffect(() => {
     getWeeklyReview()
       .then(setReview)
       .catch((err) => {
-        if (!err?.message?.includes('404')) {
+        if (err?.status !== 404) {
           setError('Failed to load weekly review.')
         }
         // 404 = no review yet, that's fine
       })
       .finally(() => setLoading(false))
+    getWeeklyReviewStatus().then((r) => setNudge(Boolean(r?.nudge))).catch(() => {})
   }, [])
 
   const handleGenerate = async () => {
@@ -27,10 +33,11 @@ export default function WeeklySummary({ onBack }) {
     try {
       const data = await generateWeeklyReview()
       setReview(data)
+      setNudge(false)
     } catch (err) {
-      if (err?.message?.includes('404')) {
-        setError('No meals logged in the last 7 days.')
-      } else if (err?.message?.includes('503')) {
+      if (err?.status === 422) {
+        setNoMeals(true)
+      } else if (err?.status === 503) {
         setError('AI is currently unavailable. Try again later.')
       } else {
         setError('Failed to generate weekly review.')
@@ -39,6 +46,8 @@ export default function WeeklySummary({ onBack }) {
       setGenerating(false)
     }
   }
+
+  const nudgeNote = nudge && !generating && <span role="status" style={s.empty}>Get your weekly analysis!</span>
 
   return (
     <div style={s.container}>
@@ -72,6 +81,7 @@ export default function WeeklySummary({ onBack }) {
               </div>
             )}
 
+            {nudgeNote}
             <div style={s.reviewActions}>
               {review.week_key && (
                 <span style={s.weekLabel}>{review.week_key}</span>
@@ -94,6 +104,7 @@ export default function WeeklySummary({ onBack }) {
         )}
 
         {/* Analyze button — shown when no review exists or after loading */}
+        {!loading && !review && nudgeNote}
         {!loading && !review && (
           <button
             style={{ ...s.refreshBtn, alignSelf: 'center', marginTop: 8 }}
@@ -108,6 +119,16 @@ export default function WeeklySummary({ onBack }) {
           <span style={s.empty}>Analyzing your week…</span>
         )}
       </div>
+
+      <ConfirmDialog
+        open={noMeals}
+        notice
+        title="No meals this week"
+        message="No meals logged in the last 7 days, so there is nothing to analyze yet. Log a breakfast with Today I ate first."
+        confirmLabel="OK"
+        onConfirm={() => setNoMeals(false)}
+        onCancel={() => setNoMeals(false)}
+      />
     </div>
   )
 }

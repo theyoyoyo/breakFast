@@ -9,6 +9,7 @@ import {
   getPreferences, setPreference,
   analyzeMeal,
   getRemovedSuggestionCount, bringBackRemovedSuggestions,
+  getWeeklyReviewStatus,
 } from '../services/api'
 import WeeklySummary from './WeeklySummary'
 import KitchenSettings from './KitchenSettings'
@@ -98,12 +99,20 @@ export default function SettingsPanel({ visible }) {
   const [askDeleteOld, setAskDeleteOld] = useState(false)
   const [oldMealsNote, setOldMealsNote] = useState(null)
 
+  // "Get your weekly analysis!" on the Weekly Summary button: the server says when a meal is newer than the analysis
+  const [weeklyNudge, setWeeklyNudge] = useState(false)
+
   const loadRemovedCount = () => {
     getRemovedSuggestionCount().then(r => setRemovedCount(r.count)).catch(() => {})
   }
 
+  const loadWeeklyNudge = () => {
+    getWeeklyReviewStatus().then(r => setWeeklyNudge(Boolean(r?.nudge))).catch(() => {})
+  }
+
   const load = async () => {
     loadRemovedCount() // on its own, so a failure here doesn't fail the whole page
+    loadWeeklyNudge()
     try {
       setError(null)
       const [r, prof, supps, rules, m, prefs] = await Promise.all([
@@ -482,7 +491,7 @@ export default function SettingsPanel({ visible }) {
 
   // --- Weekly Summary sub-page ---
   if (view === 'weekly') {
-    return <WeeklySummary onBack={() => setView('settings')} />
+    return <WeeklySummary onBack={() => { setView('settings'); loadWeeklyNudge() }} />
   }
 
   // --- Kitchen sub-page ---
@@ -1015,6 +1024,11 @@ export default function SettingsPanel({ visible }) {
         <div style={s.section}>
           <button style={s.healthRulesBtn} onClick={() => setView('weekly')}>
             Weekly Summary →
+            {weeklyNudge && (
+              <span className="mt-1 block text-xs font-semibold normal-case tracking-normal">
+                Get your weekly analysis!
+              </span>
+            )}
           </button>
         </div>
 
