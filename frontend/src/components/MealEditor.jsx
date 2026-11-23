@@ -302,8 +302,11 @@ export default function MealEditor({
         return (!isNaN(num) && num > 0) ? Math.round(num * 100) / 100 : 1
       }
       const finalMenu = items.map(item => {
-        if (isSimpleItem(item)) return { ...item, amount: toAmount(item.amount) }
-        return { ...item, ingredients: (item.ingredients || []).map(sub => ({ ...sub, amount: toAmount(sub.amount) })) }
+        const kept = { ...item }
+        delete kept._food
+        if (!currentMethod(item)) delete kept.method
+        if (isSimpleItem(item)) return { ...kept, amount: toAmount(item.amount) }
+        return { ...kept, ingredients: (item.ingredients || []).map(sub => ({ ...sub, amount: toAmount(sub.amount) })) }
       })
       return { ...meal, meal_name: name, menu_name: name, menu: finalMenu, menu_items: finalMenu, prep_time_min: finalPrepTime, obtained: keptObtained }
     } else {
@@ -332,7 +335,7 @@ export default function MealEditor({
     ? items
         .map(item => ({
           dish: item.name,
-          method: typeof item.method === 'string' ? item.method.trim() : '',
+          method: currentMethod(item),
           serveWith: servedWith(item, items),
           notes: (item.ingredients || []).filter(sub => typeof sub.prep === 'string' && sub.prep.trim()),
           swaps: isSimpleItem(item) ? [] : (item.ingredients || []).filter(sub => replacedName(sub)),
@@ -624,9 +627,31 @@ function initItems(meal, menuMode) {
     return (meal?.menu || []).map(item => ({
       ...item,
       ingredients: (item.ingredients || []).map(s => ({ ...s })),
+      // The food the method was written for, so an edit that changes it drops the method (#268)
+      _food: foodOf(item),
     }))
   }
   return (meal?.ingredients || []).map(normalizeItem)
+}
+
+/**
+ * The food an item is made of, for its method (#268): a simple item's name, or a dish's ingredient names,
+ * in any order and any case. Amounts, units and prep words aren't part of it, and neither is a dish's name.
+ */
+function foodOf(item) {
+  const norm = (n) => String(n ?? '').trim().toLowerCase()
+  if (isSimpleItem(item)) return norm(item.name)
+  return (item.ingredients || []).map(sub => norm(sub.name)).sort().join('|')
+}
+
+/**
+ * An item's method while it still fits its food; '' once an edit added, removed or renamed the food it
+ * was written for, since the line may name food that isn't there and the prep plan would follow it (#268).
+ */
+function currentMethod(item) {
+  const method = typeof item?.method === 'string' ? item.method.trim() : ''
+  if (!method || (item._food !== undefined && foodOf(item) !== item._food)) return ''
+  return method
 }
 
 /**

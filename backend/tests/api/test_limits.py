@@ -404,11 +404,10 @@ def _unbounded(schema: dict, where: str, components: dict, seen: tuple = ()) -> 
 
 def test_every_request_field_has_a_limit():
     """Every body, path and query field of every route has a limit, so a new field without one fails here."""
-    from fastapi.openapi.utils import get_openapi
-
     from main import app
 
-    spec = get_openapi(title="check", version="1", routes=app.routes)
+    # The app's own schema, built from every route on any FastAPI (a route walk is checked in test_route_table.py)
+    spec = app.openapi()
     components = spec.get("components", {}).get("schemas", {})
     found = []
     for path, operations in spec["paths"].items():
