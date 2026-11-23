@@ -1,5 +1,6 @@
 """Tests for the model picker's settings file (#240): read on each call, again only when it changed."""
 
+import inspect
 import json
 import logging
 import os
@@ -127,7 +128,8 @@ def test_atomic_save(tmp_path):
     path.write_text("old", encoding="utf-8")
     with patch("services.model_settings.os.replace", wraps=os.replace) as replace:
         write_model_settings(path, {"chat": ("c:4b", None), "tr": ("t:4b", False)})
-    source, target = replace.call_args.args
+    sent = inspect.signature(os.replace).bind(*replace.call_args.args, **replace.call_args.kwargs).arguments
+    source, target = sent["src"], sent["dst"]
     assert str(target) == str(path) and str(source) != str(path)
     assert json.loads(path.read_text(encoding="utf-8")) == {"chat": {"model": "c:4b"}, "tr": {"model": "t:4b", "think": False}}
     assert [p.name for p in tmp_path.iterdir()] == ["model_settings.json"]

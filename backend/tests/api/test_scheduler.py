@@ -1,9 +1,10 @@
 """Integration tests for the /scheduler endpoints."""
 
+import inspect
 import json
 from unittest.mock import patch
 
-from services.llm import FALLBACK_LYRICS, LLMUnavailableError
+from services.llm import FALLBACK_LYRICS, LLMUnavailableError, stream_response
 
 
 def _mock_stream(text):
@@ -11,6 +12,12 @@ def _mock_stream(text):
     async def stream(*args, **kwargs):
         yield text
     return stream
+
+
+def _sent(llm, name):
+    """The argument `name` of the planner's last LLM call, by name however the router passed it."""
+    call = llm.call_args
+    return inspect.signature(stream_response).bind(*call.args, **call.kwargs).arguments[name]
 
 
 async def test_plan_no_steps(client):
@@ -53,7 +60,7 @@ async def test_plan_from_menu_without_steps(client):
     assert data["makespan_min"] == 10
     assert [s["task"] for s in data["timeline"]] == ["Sauté the peppers", "Stir in 2 eggs and cook"]
     assert data["formatted"].startswith("⏱ Plan (10 min)\n  0:00  — Menemen: Sauté the peppers\n")
-    user_message = llm.call_args.args[2]
+    user_message = _sent(llm, "user_message")
     assert "Menemen: Egg (2 pcs)" in user_message
 
 
@@ -66,7 +73,7 @@ async def test_plan_keeps_only_the_users_appliances(client):
     )
     with patch("routers.scheduler.stream_response", side_effect=_mock_stream(reply)) as llm:
         r = await client.post("/scheduler/plan", json={"meal_name": "Toast", "menu": MENEMEN_MENU})
-    system_prompt = llm.call_args.args[0]
+    system_prompt = _sent(llm, "system_prompt")
     assert "Stove" in system_prompt and "Air Fryer" not in system_prompt
     assert r.json()["formatted"].splitlines()[1] == "  0:00  — Toast: Toast 2 slices of bread (3 min)"
 
