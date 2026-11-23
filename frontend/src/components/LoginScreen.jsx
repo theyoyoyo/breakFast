@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 import { login, NetworkError, LoginLimitError } from '../services/api'
 import * as s from './LoginScreen.styles'
 import Logo from './Logo'
@@ -21,6 +22,8 @@ function errorMessage(err) {
 export default function LoginScreen({ onLogin, note = '' }) {
   const [name, setName] = useState('demo')
   const [pin, setPin] = useState('')
+  // Our own show/hide button: the browser's built-in one hides once the field loses focus with text in it
+  const [showPin, setShowPin] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -47,7 +50,7 @@ export default function LoginScreen({ onLogin, note = '' }) {
     <div style={s.container}>
       <Logo withName height={56} />
       <form style={s.form} onSubmit={handleSubmit}>
-        {note && <div style={s.note}>{note}</div>}
+        {note && <div style={s.note} role="status">{note}</div>}
         <input
           style={s.input}
           type="text"
@@ -56,14 +59,27 @@ export default function LoginScreen({ onLogin, note = '' }) {
           onChange={(e) => setName(e.target.value)}
           autoFocus
         />
-        <input
-          style={s.input}
-          type="password"
-          placeholder="PIN"
-          value={pin}
-          onChange={(e) => setPin(e.target.value)}
-          inputMode="numeric"
-        />
+        <div style={s.pinField}>
+          <input
+            style={{ ...s.input, ...s.pinInput }}
+            className="bf-pin"
+            type={showPin ? 'text' : 'password'}
+            placeholder="PIN"
+            value={pin}
+            onChange={(e) => setPin(e.target.value)}
+            inputMode="numeric"
+            autoComplete="current-password"
+          />
+          <button
+            type="button"
+            style={s.revealBtn}
+            onClick={() => setShowPin(v => !v)}
+            aria-label={showPin ? 'Hide PIN' : 'Show PIN'}
+            aria-pressed={showPin}
+          >
+            {showPin ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
+        </div>
         <button
           style={{ ...s.btn, opacity: loading ? 0.5 : 1 }}
           type="submit"
