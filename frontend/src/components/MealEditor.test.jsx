@@ -157,7 +157,7 @@ describe('MealEditor fridge check', () => {
     const onMissingChange = vi.fn()
     render(<MealEditor meal={MEAL} menuMode checkFridge onMissingChange={onMissingChange} />)
     await waitFor(() => expect(onMissingChange).toHaveBeenLastCalledWith(['Olives']))
-    fireEvent.click(screen.getAllByTitle('Delete')[1]) // dish row first, then Olives
+    fireEvent.click(screen.getAllByTitle('Delete')[1]) // the eggs: the dish's own delete comes first // dish row first, then Olives
     await waitFor(() => expect(onMissingChange).toHaveBeenLastCalledWith([]))
     expect(checkMissingIngredients).toHaveBeenLastCalledWith({ menu: [expect.objectContaining({ name: 'Menemen' })] })
   })
@@ -409,6 +409,44 @@ describe('MealEditor prep words', () => {
     }))
   })
 
+  // Removing a dish ingredient drops the method written for it, from the info panel and the saved meal (#268)
+  it('drops a dish method once an ingredient is removed', () => {
+    const onSave = vi.fn()
+    render(<MealEditor meal={METHOD_MEAL} menuMode onSave={onSave} />)
+    fireEvent.click(screen.getByText('▶ Ingredients'))
+    fireEvent.click(screen.getAllByTitle('Delete')[1]) // the eggs: the dish's own delete comes first
+    // With the method gone the dish has nothing left to explain, so the info button goes too
+    expect(screen.queryByTitle('Preparation details')).toBeNull()
+    fireEvent.click(screen.getByText('Save'))
+    const dish = onSave.mock.lastCall[0].menu[0]
+    expect(dish.ingredients.map(sub => sub.name)).toEqual(['Bread'])
+    expect(dish).not.toHaveProperty('method')
+  })
+
+  // Adding a dish ingredient drops the method too, since it wasn't written with that food (#268)
+  it('drops a dish method once an ingredient is added', () => {
+    const onSave = vi.fn()
+    render(<MealEditor meal={METHOD_MEAL} menuMode onSave={onSave} />)
+    fireEvent.click(screen.getByText('▶ Ingredients'))
+    fireEvent.change(screen.getByPlaceholderText('Add ingredient…'), { target: { value: 'Butter' } })
+    fireEvent.keyDown(screen.getByPlaceholderText('Add ingredient…'), { key: 'Enter' })
+    fireEvent.click(screen.getByText('Save'))
+    const dish = onSave.mock.lastCall[0].menu[0]
+    expect(dish.ingredients.map(sub => sub.name)).toEqual(['Eggs', 'Bread', 'Butter'])
+    expect(dish).not.toHaveProperty('method')
+  })
+
+  // A saved meal carries no editor bookkeeping, and an unchanged dish keeps its method (#268)
+  it('saves an unchanged method and nothing of its own', () => {
+    const onSave = vi.fn()
+    render(<MealEditor meal={METHOD_MEAL} menuMode onSave={onSave} />)
+    fireEvent.click(screen.getByText('Save'))
+    const [dish, olives] = onSave.mock.lastCall[0].menu
+    expect(dish.method).toBe('Hard-boil the eggs, peel, slice into the bread')
+    expect(dish).not.toHaveProperty('_food')
+    expect(olives).not.toHaveProperty('_food')
+  })
+
   const PAIRED_MEAL = {
     menu_name: 'Green morning',
     menu: [
@@ -526,7 +564,7 @@ describe('MealEditor replaced ingredients', () => {
     fireEvent.click(screen.getAllByText('▲')[1]) // Eggs, Feta, then Olives
     fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'tbsp' } })
     fireEvent.click(screen.getAllByText('▲')[2])
-    fireEvent.click(screen.getAllByTitle('Delete')[1]) // the dish's trash first, then Eggs
+    fireEvent.click(screen.getAllByTitle('Delete')[1]) // the eggs: the dish's own delete comes first // the dish's trash first, then Eggs
     const expected = [{ name: 'Feta', amount: 51, unit: 'tbsp', replaces: 'Salmon' }]
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
       menu: [expect.objectContaining({ ingredients: expected }), expect.anything()],
