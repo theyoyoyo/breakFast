@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -55,19 +55,63 @@ app = FastAPI(
 
 
 
+REQUEST_TOO_LARGE = "Request too large"
+
+
+class BodyTooLarge(HTTPException):
+    """A body that passed the size limit while it arrived. An HTTPException, so the route that
+    reads the body answers 413 with it instead of a parsing error."""
+
+    def __init__(self):
+        super().__init__(status_code=413, detail=REQUEST_TOO_LARGE)
+
+
 class BodySizeLimit:
-    """Refuse a request whose declared body is over the size limit (413), before it is read."""
+    """Refuse a request whose body is over the size limit (413). A declared length over it is
+    refused before anything is read; a body without one (chunked) is counted as it arrives and
+    refused once it passes the limit, so nothing past the limit is kept."""
 
     def __init__(self, app):
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] == "http":
-            declared = dict(scope["headers"]).get(b"content-length", b"0")
-            if not declared.isdigit() or int(declared) > MAX_BODY_BYTES:
-                await JSONResponse({"detail": "Request too large"}, status_code=413)(scope, receive, send)
-                return
-        await self.app(scope, receive, send)
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        declared = dict(scope["headers"]).get(b"content-length")
+        if declared is not None and (not declared.isdigit() or int(declared) > MAX_BODY_BYTES):
+            await self._refuse(scope, receive, send)
+            return
+
+        received = 0
+        started = False
+
+        async def counted_receive():
+            nonlocal received
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > MAX_BODY_BYTES:
+                    raise BodyTooLarge()
+            return message
+
+        async def tracked_send(message):
+            nonlocal started
+            if message["type"] == "http.response.start":
+                started = True
+            await send(message)
+
+        try:
+            await self.app(scope, counted_receive, tracked_send)
+        except BodyTooLarge:
+            # Read outside a route (a middleware): answer here, unless a reply has begun
+            if started:
+                raise
+            await self._refuse(scope, receive, send)
+
+    @staticmethod
+    async def _refuse(scope, receive, send):
+        await JSONResponse({"detail": REQUEST_TOO_LARGE}, status_code=413)(scope, receive, send)
 
 
 @app.exception_handler(RequestValidationError)

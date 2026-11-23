@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from auth import require_user
 from database import get_db
 from models.ingredient import INGREDIENT_GROUPS, Ingredient, IngredientCreate, IngredientUpdate
-from models.limits import BULK_ITEMS_MAX, SizedDict
+from models.limits import BULK_ITEMS_MAX, Id, SizedDict
 from services.fridge import find_missing_ingredients
 from services.ingredient_groups import remember, resolve_groups
 
@@ -69,7 +69,7 @@ async def add_ingredient(body: IngredientCreate, user_id: int = Depends(require_
 
 
 @router.patch("/{ingredient_id}", response_model=Ingredient)
-async def update_ingredient(ingredient_id: int, body: IngredientUpdate, user_id: int = Depends(require_user)):
+async def update_ingredient(ingredient_id: Id, body: IngredientUpdate, user_id: int = Depends(require_user)):
     """Update an ingredient's name, expiry date, and/or group."""
     _validate_group(body.group_name)
 
@@ -122,7 +122,7 @@ async def update_ingredient(ingredient_id: int, body: IngredientUpdate, user_id:
 
 
 @router.delete("/{ingredient_id}", status_code=204)
-async def delete_ingredient(ingredient_id: int, user_id: int = Depends(require_user)):
+async def delete_ingredient(ingredient_id: Id, user_id: int = Depends(require_user)):
     async with get_db() as db:
         await db.execute(
             "DELETE FROM ingredient_inventory WHERE id = ? AND user_id = ?",
@@ -187,9 +187,9 @@ async def get_expired_ingredients(user_id: int = Depends(require_user)):
 
 
 class ExpiredActionRequest(BaseModel):
-    delete_ids: list[int] = Field(default=[], max_length=BULK_ITEMS_MAX)
-    keep_ids: list[int] = Field(default=[], max_length=BULK_ITEMS_MAX)
-    shopping_ids: list[int] = Field(default=[], max_length=BULK_ITEMS_MAX)
+    delete_ids: list[Id] = Field(default=[], max_length=BULK_ITEMS_MAX)
+    keep_ids: list[Id] = Field(default=[], max_length=BULK_ITEMS_MAX)
+    shopping_ids: list[Id] = Field(default=[], max_length=BULK_ITEMS_MAX)
 
 
 @router.post("/expired/action", status_code=200)

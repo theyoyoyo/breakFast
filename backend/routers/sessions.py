@@ -10,14 +10,14 @@ import json
 import uuid
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
-from pydantic import BaseModel, StrictBool, StrictInt
+from pydantic import BaseModel, StrictBool
 
 from auth import require_user
 from database import get_db
 from db_helpers import owns_session, parse_json_field
-from models.limits import SESSION_ID_MAX, MessageContent, SizedDict
+from models.limits import Id, MessageContent, SessionId, SizedDict, StrictId
 from services import chat_sync
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
@@ -38,7 +38,7 @@ class MessageUpdate(BaseModel):
 
 class SelectedIn(BaseModel):
     """The selected meal card's message id, or null for none (strict: "1" or true isn't an id)."""
-    message_id: StrictInt | None = None
+    message_id: StrictId | None = None
 
 
 @router.post("/")
@@ -96,7 +96,7 @@ async def get_active_session(user_id: int = Depends(require_user)):
 
 
 @router.delete("/{session_id}")
-async def delete_session(session_id: str, user_id: int = Depends(require_user)):
+async def delete_session(session_id: SessionId, user_id: int = Depends(require_user)):
     """Delete a session and its messages. Returns 204."""
     async with get_db() as db:
         await db.execute(
@@ -116,7 +116,7 @@ async def delete_session(session_id: str, user_id: int = Depends(require_user)):
 
 
 @router.get("/{session_id}/messages")
-async def get_messages(session_id: str, user_id: int = Depends(require_user)):
+async def get_messages(session_id: SessionId, user_id: int = Depends(require_user)):
     """Get all messages for a session. The id lets a meal card edit update its message;
     `ate_draft` is the card's saved "Today I ate" version, or null; `selected` marks the
     meal card selected for today."""
@@ -145,7 +145,7 @@ async def get_messages(session_id: str, user_id: int = Depends(require_user)):
 @router.post("/{session_id}/messages")
 async def save_message(
     body: MessageIn,
-    session_id: str = Path(max_length=SESSION_ID_MAX),
+    session_id: SessionId,
     user_id: int = Depends(require_user),
 ):
     """Save a message to a session (meals sent to chat, analysis and prep plan results).
@@ -173,7 +173,7 @@ async def save_message(
 
 
 @router.put("/{session_id}/messages/{message_id}")
-async def update_message(session_id: str, message_id: int, body: MessageUpdate, user_id: int = Depends(require_user)):
+async def update_message(session_id: SessionId, message_id: Id, body: MessageUpdate, user_id: int = Depends(require_user)):
     """Change a message: `content` replaces its text (a meal card edit rewrites the message's
     meal block), `ate_draft` stores the card's "Today I ate" version (null clears it).
     Only the fields sent change; the last save wins."""
@@ -199,7 +199,7 @@ async def update_message(session_id: str, message_id: int, body: MessageUpdate, 
 
 
 @router.put("/{session_id}/selected")
-async def select_message(session_id: str, body: SelectedIn, user_id: int = Depends(require_user)):
+async def select_message(session_id: SessionId, body: SelectedIn, user_id: int = Depends(require_user)):
     """Select a meal card for today (`message_id`), or none (null). The user's devices follow."""
     message_id = body.message_id
     async with get_db() as db:

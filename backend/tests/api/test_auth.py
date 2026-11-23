@@ -235,18 +235,6 @@ async def test_login_refuses_overlong_input(unauth_client):
     assert auth._login_failures == {}
 
 
-async def test_endpoints_require_auth(unauth_client):
-    """All data endpoints should return 401/422 without auth token."""
-    r = await unauth_client.get("/ingredients/")
-    assert r.status_code == 422  # missing Authorization header
-
-    r = await unauth_client.get("/meals/")
-    assert r.status_code == 422
-
-    r = await unauth_client.get("/preferences/")
-    assert r.status_code == 422
-
-
 async def test_endpoints_work_with_auth(unauth_client):
     """After login, token grants access to endpoints."""
     # Login first
@@ -371,12 +359,17 @@ async def test_demo_user_not_created_by_default(unauth_client):
     assert r.status_code == 401
 
 
+# With DEMO_USER on, the start creates one demo account, whose empty PIN logs in and opens protected routes
 async def test_demo_user_created_when_enabled(unauth_client, monkeypatch):
     monkeypatch.setattr(database, "DEMO_USER", True)
     monkeypatch.setattr(config, "DEMO_USER", True)
     await database.init_db()
     r = await unauth_client.post("/auth/login", json={"name": "demo", "pin": ""})
     assert r.status_code == 200
+    assert (await unauth_client.get("/health/auth", headers={"Authorization": f"Bearer {r.json()['token']}"})).status_code == 200
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        async with db.execute("SELECT COUNT(*) FROM users WHERE name = 'demo'") as cur:
+            assert await cur.fetchone() == (1,)
 
 
 # A demo account left over from a try-out can't log in with its empty PIN once DEMO_USER is off

@@ -67,16 +67,16 @@ const PHONE_REPLY = { id: 2, role: 'assistant', content: 'Fresh reply from the p
 const MEAL = { id: 7, menu_name: 'Test Breakfast', menu: [{ name: 'Olives', amount: 5, unit: 'pcs', ingredients: [] }] }
 const MEAL_MSG = { id: 3, role: 'assistant', content: 'Try this.\n\n```json\n' + JSON.stringify(MEAL) + '\n```' }
 
-// Fake chat sockets: each records the callbacks it was created with and its event listeners
+// Fake chat sockets: each records the handlers it was created with and its event listeners
 let sockets
 function lastSocket() {
   return sockets[sockets.length - 1]
 }
 function pushSessionUpdated(sessionId) {
-  act(() => lastSocket().callbacks[6](sessionId))
+  act(() => lastSocket().handlers.onSessionUpdated(sessionId))
 }
 function pushNotice(notice) {
-  act(() => lastSocket().callbacks[7](notice))
+  act(() => lastSocket().handlers.onNotice(notice))
 }
 
 function setVisibility(state) {
@@ -94,14 +94,14 @@ describe('ChatInterface sync', () => {
     vi.clearAllMocks()
     Element.prototype.scrollIntoView = vi.fn()
     sockets = []
-    createChatSocket.mockImplementation((...callbacks) => {
+    createChatSocket.mockImplementation((handlers) => {
       const listeners = {}
       const ws = {
         readyState: WebSocket.OPEN,
         send: vi.fn(),
         close: vi.fn(),
         addEventListener: vi.fn((type, fn) => { listeners[type] = fn }),
-        callbacks,
+        handlers,
         listeners,
       }
       sockets.push(ws)
@@ -132,10 +132,10 @@ describe('ChatInterface sync', () => {
   // A push for the chat on screen reloads it; a push for another chat only refreshes Back / Next
   it('reloads on session_updated for the open chat only', async () => {
     await renderChat()
-    const listCalls = listSessions.mock.calls.length
+    listSessions.mockClear()
 
     pushSessionUpdated('another-session')
-    await waitFor(() => expect(listSessions.mock.calls.length).toBe(listCalls + 1))
+    await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(1))
     expect(getSessionMessages).toHaveBeenCalledTimes(1)
 
     pushSessionUpdated('s1')
@@ -161,7 +161,7 @@ describe('ChatInterface sync', () => {
     expect(lastSocket().send).toHaveBeenCalled()
 
     pushSessionUpdated('s1')
-    act(() => lastSocket().callbacks[0]('Half an ans'))
+    act(() => lastSocket().handlers.onToken('Half an ans'))
     await screen.findByText('Half an ans')
     expect(getSessionMessages).toHaveBeenCalledTimes(1)
     expect(screen.getByText('What now?')).toBeInTheDocument()
@@ -172,7 +172,7 @@ describe('ChatInterface sync', () => {
       { id: 5, role: 'assistant', content: 'Half an answer' },
       PHONE_REPLY,
     ])
-    act(() => lastSocket().callbacks[1]('Half an answer', 5))
+    act(() => lastSocket().handlers.onDone('Half an answer', 5))
     await screen.findByText('Fresh reply from the phone')
     expect(getSessionMessages).toHaveBeenCalledTimes(2)
     expect(screen.getByText('What now?')).toBeInTheDocument()
@@ -182,7 +182,7 @@ describe('ChatInterface sync', () => {
   // A socket the phone closed in the background reconnects as soon as the page is back, then reloads on open
   it('reconnects at once when the page returns after its socket closed', async () => {
     await renderChat()
-    act(() => lastSocket().callbacks[4]()) // onClose
+    act(() => lastSocket().handlers.onClose())
     expect(sockets).toHaveLength(1)
 
     setVisibility('visible')
@@ -201,10 +201,8 @@ describe('ChatInterface sync', () => {
 
     await screen.findByText('Card: Edited Breakfast')
     expect(updateSessionMessage).toHaveBeenCalledTimes(1)
-    const [sessionId, messageId, content] = updateSessionMessage.mock.calls[0]
-    expect([sessionId, messageId]).toEqual(['s1', 3])
-    expect(content.startsWith('Try this.\n\n```json\n')).toBe(true)
-    expect(JSON.parse(content.match(/```json\s*([\s\S]*?)\s*```/)[1]).menu_name).toBe('Edited Breakfast')
+    expect(updateSessionMessage).toHaveBeenCalledWith('s1', 3, expect.stringMatching(/^Try this\.\n\n```json\n/))
+    expect(updateSessionMessage).toHaveBeenCalledWith('s1', 3, expect.stringContaining('"menu_name":"Edited Breakfast"'))
   })
 
   // A pill marked on another device shows up in the 💊 list open in "Today I ate" on a supplements push
@@ -251,9 +249,9 @@ describe('ChatInterface sync', () => {
   // Coming back to the page reloads the 💊 list too, in case a push was missed in the background
   it('reloads the 💊 list when the page becomes visible again', async () => {
     await renderChat()
-    const calls = getTodaySupplements.mock.calls.length
+    getTodaySupplements.mockClear()
     setVisibility('visible')
-    await waitFor(() => expect(getTodaySupplements.mock.calls.length).toBe(calls + 1))
+    await waitFor(() => expect(getTodaySupplements).toHaveBeenCalledTimes(1))
   })
 
   // A notice that isn't about the chat is passed to the rest of the app as one window event
@@ -286,8 +284,7 @@ describe('ChatInterface sync', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(screen.queryByText('Today I ate')).toBeNull())
     expect(saveAteDraft).toHaveBeenCalledTimes(1)
-    const [sessionId, messageId, meal] = saveAteDraft.mock.calls[0]
-    expect([sessionId, messageId, meal.menu]).toEqual(['s1', 3, []])
+    expect(saveAteDraft).toHaveBeenCalledWith('s1', 3, expect.objectContaining({ menu: [] }))
 
     fireEvent.click(screen.getByTitle('Today I ate...'))
     await screen.findByText('Today I ate')
@@ -380,14 +377,14 @@ describe('ChatInterface ended session', () => {
     vi.clearAllMocks()
     Element.prototype.scrollIntoView = vi.fn()
     sockets = []
-    createChatSocket.mockImplementation((...callbacks) => {
+    createChatSocket.mockImplementation((handlers) => {
       const listeners = {}
       const ws = {
         readyState: WebSocket.CONNECTING,
         send: vi.fn(),
         close: vi.fn(),
         addEventListener: vi.fn((type, fn) => { listeners[type] = fn }),
-        callbacks,
+        handlers,
         listeners,
       }
       sockets.push(ws)
@@ -405,7 +402,7 @@ describe('ChatInterface ended session', () => {
   // Close the last socket, let the session check answer, then run every pending reconnect timer
   async function closeAndWait() {
     vi.useFakeTimers()
-    act(() => lastSocket().callbacks[4]()) // onClose
+    act(() => lastSocket().handlers.onClose())
     await act(async () => { await Promise.resolve() })
     act(() => { vi.advanceTimersByTime(60000) })
   }
@@ -452,7 +449,7 @@ describe('ChatInterface ended session', () => {
     const { unmount } = render(<ChatInterface visible />)
     await screen.findByText('Hello')
     vi.useFakeTimers()
-    act(() => lastSocket().callbacks[4]()) // onClose
+    act(() => lastSocket().handlers.onClose())
     unmount()
     await act(async () => { answer({}) })
     expect(vi.getTimerCount()).toBe(0)

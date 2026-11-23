@@ -218,6 +218,7 @@ break FAST is built for a trusted home network (LAN or Tailscale), not the open 
 - Session tokens are random 256-bit values kept in memory, so everyone logs in again after a server restart.
 - Tokens travel only in headers, never in URLs, so they stay out of logs: REST calls send them in `Authorization`, and the chat WebSocket in `Sec-WebSocket-Protocol`.
 - Logging out ends the session on the server as well as on the device, so its token can't be used again. Each device has its own session, so the user's other devices stay logged in.
+- Every request has size limits: text, lists, numbers and whole bodies are bounded, and a request over a limit is refused before it reaches the database or the model.
 - Do not expose port 8000 to the public internet. Use Tailscale for remote access.
 
 ---

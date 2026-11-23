@@ -97,6 +97,6 @@ describe('MealBlock readiness', () => {
     fireEvent.click(await screen.findByText('Test Breakfast'))
     fireEvent.click(await screen.findByTitle(/favorite/i))
     await waitFor(() => expect(addFavorite).toHaveBeenCalled())
-    expect(addFavorite.mock.calls[0][0].emoji).toBe('🥯')
+    expect(addFavorite).toHaveBeenCalledWith(expect.objectContaining({ emoji: '🥯' }))
   })
 })

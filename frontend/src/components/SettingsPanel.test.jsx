@@ -268,10 +268,10 @@ describe('SettingsPanel', () => {
     api.deleteOldMeals.mockRejectedValue(new Error('500'))
     render(<SettingsPanel visible />)
     expect(await screen.findByRole('button', { name: /Meal History \(1\)/ })).toBeInTheDocument()
-    const loads = api.getMeals.mock.calls.length
+    api.getMeals.mockClear()
     fireEvent.click(screen.getByRole('button', { name: /Delete meals older than one month/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     expect(await screen.findByText('Failed to delete old meals')).toBeInTheDocument()
-    expect(api.getMeals.mock.calls.length).toBe(loads)
+    expect(api.getMeals).not.toHaveBeenCalled()
   })
 })

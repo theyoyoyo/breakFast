@@ -69,7 +69,6 @@ async def test_chat_stream_sends_num_ctx(monkeypatch, temperature, expected):
 
 # OLLAMA_NUM_CTX from the environment replaces the 8192 default
 def test_num_ctx_env_var_overrides_default(monkeypatch):
-    monkeypatch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: False)  # a local .env can't interfere
     try:
         monkeypatch.delenv("OLLAMA_NUM_CTX", raising=False)
         assert importlib.reload(config).OLLAMA_NUM_CTX == 8192
@@ -104,7 +103,6 @@ async def test_calls_send_think_only_when_set(monkeypatch, think, expected):
 # OLLAMA_THINK reads true or false in any case; anything else leaves it unset
 @pytest.mark.parametrize("value, expected", [("", None), ("true", True), ("False", False), ("maybe", None)])
 def test_think_env_var(monkeypatch, value, expected):
-    monkeypatch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: False)
     try:
         monkeypatch.setenv("OLLAMA_THINK", value)
         assert importlib.reload(config).OLLAMA_THINK is expected
@@ -115,7 +113,6 @@ def test_think_env_var(monkeypatch, value, expected):
 
 # With no model set, the default model runs with thinking off unless OLLAMA_THINK says otherwise
 def test_default_model_thinks_off(monkeypatch):
-    monkeypatch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: False)
     try:
         monkeypatch.delenv("OLLAMA_MODEL", raising=False)
         assert importlib.reload(config).OLLAMA_MODEL == config.DEFAULT_MODEL
@@ -132,7 +129,6 @@ def test_default_model_thinks_off(monkeypatch):
 
 # OLLAMA_MODEL_<KEY> gives a task or reply language its own model, with its own OLLAMA_THINK_<KEY> (#192)
 def test_routes_env_vars(monkeypatch):
-    monkeypatch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: False)
     try:
         monkeypatch.setenv("OLLAMA_MODEL_SHOPPING", "gemma4:e2b-it-q4_K_M")
         monkeypatch.setenv("OLLAMA_THINK_SHOPPING", "true")
@@ -193,7 +189,6 @@ async def test_stream_response_routes_the_task(monkeypatch):
 
 # Both calls wait OLLAMA_TIMEOUT seconds for Ollama, 150 by default and set from the environment
 async def test_calls_wait_the_timeout(monkeypatch):
-    monkeypatch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: False)
     try:
         monkeypatch.delenv("OLLAMA_TIMEOUT", raising=False)
         assert importlib.reload(config).OLLAMA_TIMEOUT == 150

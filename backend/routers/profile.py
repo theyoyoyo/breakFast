@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from auth import require_user
 from database import get_db
-from models.limits import Name, Note, ShortText
+from models.limits import Age, HeightCm, Id, Name, Note, ShortText, WeightKg
 from services import chat_sync
 from services.context import TAKEN_TODAY_SQL
 
@@ -27,10 +27,10 @@ SUPPLEMENTS_UPDATED = {"type": "supplements_updated"}
 # ---------------------------------------------------------------------------
 
 class ProfileIn(BaseModel):
-    age: int | None = None
+    age: Age | None = None
     gender: ShortText | None = None
-    height_cm: int | None = None
-    weight_kg: float | None = None
+    height_cm: HeightCm | None = None
+    weight_kg: WeightKg | None = None
     activity_level: ShortText | None = None
     country: ShortText | None = None  # only shapes "in season" in prompts
 
@@ -39,37 +39,23 @@ class ProfileIn(BaseModel):
     def country_blank_is_none(cls, v):
         return (v.strip() or None) if v else None
 
-    @field_validator("age")
-    @classmethod
-    def age_positive(cls, v):
-        if v is not None and v < 1:
-            raise ValueError("age must be a positive integer")
-        return v
 
-    @field_validator("height_cm")
-    @classmethod
-    def height_positive(cls, v):
-        if v is not None and v < 1:
-            raise ValueError("height_cm must be a positive integer")
-        return v
-
-    @field_validator("weight_kg")
-    @classmethod
-    def weight_positive(cls, v):
-        if v is not None and v <= 0:
-            raise ValueError("weight_kg must be positive")
-        return v
-
-
-class ProfileOut(ProfileIn):
+class ProfileOut(BaseModel):
+    """The stored profile as it is: rows saved before the ranges still read."""
     id: int
+    age: int | None = None
+    gender: str | None = None
+    height_cm: int | None = None
+    weight_kg: float | None = None
+    activity_level: str | None = None
+    country: str | None = None
     updated_at: str
 
 
 class SupplementIn(BaseModel):
     name: Name
     contents: Note = ""
-    frequency: str = Field(default="daily", pattern="^(daily|sometimes)$")
+    frequency: ShortText = Field(default="daily", pattern="^(daily|sometimes)$")
 
 
 class SupplementOut(BaseModel):
@@ -157,7 +143,7 @@ async def create_supplement(body: SupplementIn, user_id: int = Depends(require_u
 
 
 @router.put("/supplements/{supp_id}", response_model=SupplementOut)
-async def update_supplement(supp_id: int, body: SupplementIn, user_id: int = Depends(require_user)):
+async def update_supplement(supp_id: Id, body: SupplementIn, user_id: int = Depends(require_user)):
     async with get_db() as db:
         try:
             await db.execute(
@@ -183,7 +169,7 @@ async def update_supplement(supp_id: int, body: SupplementIn, user_id: int = Dep
 
 
 @router.delete("/supplements/{supp_id}", status_code=204)
-async def delete_supplement(supp_id: int, user_id: int = Depends(require_user)):
+async def delete_supplement(supp_id: Id, user_id: int = Depends(require_user)):
     async with get_db() as db:
         # Also delete daily log entries
         await db.execute(
@@ -223,7 +209,7 @@ async def get_today_supplements(user_id: int = Depends(require_user)):
 
 @router.post("/supplements/{supp_id}/toggle")
 async def toggle_supplement_today(
-    supp_id: int,
+    supp_id: Id,
     body: SupplementToggle,
     user_id: int = Depends(require_user),
 ):

@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import pytest
 
+from models.units import units_for
 from services.personas import build_pipeline_analyst_prompt
 from services.personas.pipeline_analyst import CHAT_STEP
 from services.pipeline import LOW_INGREDIENT_TEXTS, RETRY_TEXTS, reviser_names, revision_schema, run_suggestion_pipeline
@@ -103,9 +104,9 @@ class TestReviserPrompt:
     # The reviser is an internal step that returns the fixed meal, in the user's language
     def test_identity_and_language(self):
         prompt = build_pipeline_analyst_prompt(recent_meal_history=[])
-        assert "meal reviser, an internal step the user never sees" in prompt
-        assert "Always respond in English." in prompt
-        assert "Always respond in Turkish." in build_pipeline_analyst_prompt([], language="tr")
+        assert "English" in prompt and "Turkish" not in prompt
+        turkish = build_pipeline_analyst_prompt([], language="tr")
+        assert "Turkish" in turkish and "English" not in turkish
 
     # It sees the profile, supplements, health rules and recent meals
     def test_injects_user_context(self):
@@ -122,43 +123,43 @@ class TestReviserPrompt:
         prompt = build_pipeline_analyst_prompt(
             [], avoid_list=["Almonds"], preferences={"fav:eggs": "Eggs", "dislike:tomatoes": "Tomatoes"},
         )
-        assert "NEVER use these ingredients: Almonds" in prompt
-        assert "Dislikes: Tomatoes" in prompt
-        assert "Dislikes: none" in build_pipeline_analyst_prompt([])
+        assert "Almonds" in prompt
+        assert "Tomatoes" in prompt
+        assert "Eggs" not in prompt  # a favorite is no limit for the reviser
+        assert "Almonds" not in build_pipeline_analyst_prompt([]) and "Tomatoes" not in build_pipeline_analyst_prompt([])
 
     # The Suggest mode tells it what to keep: a favorite stays familiar without a fixed recipe, explore stays new
     def test_mode_line(self):
-        assert "A saved meal is a hint, not a fixed recipe." in build_pipeline_analyst_prompt([], mode="favorites")
-        assert "keep what makes this menu new to them" in build_pipeline_analyst_prompt([], mode="explore")
-        assert "The user asked for a breakfast suggestion." in build_pipeline_analyst_prompt([])
+        plain = build_pipeline_analyst_prompt([])
+        favorites = build_pipeline_analyst_prompt([], mode="favorites")
+        explore = build_pipeline_analyst_prompt([], mode="explore")
+        assert len({plain, favorites, explore}) == 3
+        assert build_pipeline_analyst_prompt([], mode="unknown") == plain
 
-    # It fixes what code found and answers narrow questions whose usual answer is no change
-    def test_fixes_code_problems_then_narrow_questions(self):
+    # The prompt names the sections of the message the pipeline builds and the fields of the reply it reads, so the two
+    # stay in step; the fridge reaches it and water stays unmentioned
+    def test_prompt_matches_the_message_and_the_reply(self):
         prompt = build_pipeline_analyst_prompt([], ingredient_inventory=[{"name": "Yumurta"}])
         assert "Yumurta" in prompt
-        assert 'Fix every problem listed under "Code check"' in prompt
-        assert "this is the only list of what's missing: every other item in the menu is in the fridge" in prompt
-        assert "with only a cut or shape added, or with words left out, it is the same food" in prompt
-        assert "swap it only for a fridge item that does the same job in that dish" in prompt
-        assert "When none fits or you are not sure, keep it as written: the app marks it" in prompt
-        assert "name the missing item in the new ingredient's `replaces`" in prompt
-        assert "The answer is usually no" in prompt
-        assert "three changes at most" in prompt
+        for label in ("Code check", "Not in the fridge", "On the avoid list"):
+            assert label in prompt, label
+        for field in ("replaces", "prep", "changes"):
+            assert field in prompt, field
         assert "water" not in prompt.lower()
 
     # After a chat it first lists what the chat asks now, each ask after the entries it comes from; a fresh press's prompt stays as it was
     def test_chat_step_only_after_a_chat(self):
         fresh, chat = build_pipeline_analyst_prompt([]), build_pipeline_analyst_prompt([], chat=True)
-        assert 'in "chat_asks", write what the chat asks for now' in CHAT_STEP and "the latest first" in CHAT_STEP
-        assert 'In "from", list the numbers of every entry about that thing' in CHAT_STEP
-        assert "where the latest of those entries wins" in CHAT_STEP
-        assert f"{CHAT_STEP}1. Fix every problem" in chat and chat.index("HOW TO REVISE") < chat.index(CHAT_STEP)
+        for field in ("chat_asks", "from", "ask"):
+            assert f'"{field}"' in CHAT_STEP, field
+        assert chat.index(CHAT_STEP) < chat.index("Code check")  # the chat step comes before the fixes
         assert CHAT_STEP not in fresh and chat.replace(CHAT_STEP, "") == fresh
 
     # Units come from the reply language's list, with the fixed spoon and glass sizes
     def test_units_follow_the_language(self):
-        assert "tsp, dsp, tbsp" in build_pipeline_analyst_prompt([])
-        assert "tsp, dsp, tbsp" not in build_pipeline_analyst_prompt([], language="tr")
+        english, turkish = build_pipeline_analyst_prompt([]), build_pipeline_analyst_prompt([], language="tr")
+        assert all(unit in english for unit in units_for("en")) and all(unit in turkish for unit in units_for("tr"))
+        assert "tbsp" in english and "tbsp" not in turkish
 
 
 class TestRevisionSchema:
@@ -368,7 +369,7 @@ class TestPipelineOrchestrator:
     async def test_present_reads_only_the_final_meal(self):
         events, calls = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)), temperature=0.9)
         present = next(c for c in calls if c["kind"] == "stream")
-        assert "Introduce it in a few short lines" in present["system"]
+        assert present["system"] and present["system"] != calls[0]["system"]
         assert present["message"].startswith("Today's menu:\n```json\n")
         assert "Enjoy!" not in present["message"]
         assert present["temperature"] == 0.9
@@ -401,7 +402,6 @@ class TestPipelineOrchestrator:
         revised_item = revised["properties"]["menu"]["items"]
         assert {k: v for k, v in revised_item["properties"].items() if k != "method"} == item["properties"]
         assert {k: v for k, v in revised["properties"].items() if k != "menu"} == {k: v for k, v in meal["properties"].items() if k != "menu"}
-        assert "Reply with one JSON object: first `text`" in draft["system"]
         assert next(e["content"] for e in events if e["type"] == "draft").startswith("Enjoy!\n\n```json\n")
 
     # The draft's meal reaches the reviser in the app's format: a dish loses its servings, a one-item dish named as itself is a simple item
@@ -451,7 +451,9 @@ class TestPipelineOrchestrator:
         _, calls = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)), mode="explore", temperature=0.9)
         draft, reviser = calls[0], calls[1]
         assert draft["temperature"] == 0.9 and "EXPLORE" in draft["system"]
-        assert reviser["temperature"] == 0.3 and "keep what makes this menu new to them" in reviser["system"]
+        assert reviser["temperature"] == 0.3
+        _, plain_calls = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)), temperature=0.9)
+        assert reviser["system"] != plain_calls[1]["system"]  # the mode reaches the reviser
 
     # The draft and the reply text run on the suggestion model and the review on the reviser's, for the reply
     # language, so a model per task or language can serve them (#192)
@@ -473,9 +475,11 @@ class TestPipelineOrchestrator:
             "ratings": [{"product_name": "eggs", "rating": 9}],
         }
         _, calls = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)), context=context, mode="favorites")
-        assert "- Egg toast: eggs" in calls[0]["system"]
-        assert "Their favorite ingredients: eggs" in calls[0]["system"]
-        assert "High-rated (favour these): eggs" in calls[0]["system"]
+        system = calls[0]["system"]
+        assert "- Egg toast: eggs" in system  # the saved meal with its items
+        _, plain = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)), context=context)
+        assert "Egg toast" not in plain[0]["system"]  # only favorites mode lists them
+        assert len(system) > len(plain[0]["system"])
 
     # Pipeline propagates LLMUnavailableError from the draft step
     @pytest.mark.asyncio

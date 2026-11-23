@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 
 from auth import require_user
 from database import get_db
-from models.limits import INGREDIENTS_MAX, MealName, SizedItem
+from models.limits import INGREDIENTS_MAX, Id, MealName, SizedItem
 from services.context import load_analyst_context
 from services.knowledge import format_ingredient_item
 from services.llm import LLMUnavailableError, lyric_cycler, stream_response
@@ -30,7 +30,7 @@ router = APIRouter(prefix="/analyst", tags=["analyst"])
 class AnalyzeRequest(BaseModel):
     meal_name: MealName
     ingredients: list[SizedItem] = Field(max_length=INGREDIENTS_MAX)
-    meal_id: int | None = None
+    meal_id: Id | None = None
 
 
 class AnalyzeResponse(BaseModel):

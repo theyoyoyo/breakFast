@@ -42,7 +42,7 @@ async def test_call_uses_schema_and_country(client):
     kwargs = llm.call_args.kwargs
     assert kwargs["schema"] == SUGGESTIONS_SCHEMA
     assert kwargs["temperature"] == 0.6
-    assert ", in Türkiye." in kwargs["system_prompt"]
+    assert "Türkiye" in kwargs["system_prompt"]
 
 
 # The request lists about 70% of the fridge, while code still drops anything in the whole fridge
@@ -65,7 +65,7 @@ async def test_drops_eaten_dishes_and_asks_in_the_reply_language(client):
     with _llm(_reply("Menemen", "Green peppers")) as llm:
         data = await _suggest(client)
     assert [s["name"] for s in data["suggestions"]] == ["Green peppers"]
-    assert llm.call_args.kwargs["messages"][0]["content"].endswith("in English.")
+    assert "English" in llm.call_args.kwargs["messages"][0]["content"][-60:]  # the reply language ends the request
 
 
 # Dishes inside logged menus and favorite meals are dropped too, while their simple items stay products

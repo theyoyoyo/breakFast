@@ -407,24 +407,28 @@ export const getSchedule = (meal_name, steps, ingredients, meal_id = null, menu 
  * ("bearer", then the token), the one header a page can set on a WebSocket, so it stays
  * out of the URL. Without a stored token the socket sends "bearer" alone, which the
  * server refuses (an empty subprotocol would throw).
- * onDone gets the reply and its saved message id (a reply refused because its chat was deleted has none); onSessionUpdated gets the id of a
- * session another device (or a REST save) changed; onNotice gets any other notice
- * ({ type: 'supplements_updated' }, …) for the rest of the app.
+ * The handlers come by name, each optional: onToken gets a reply's next chunk; onDone gets the
+ * reply and its saved message id (a reply refused because its chat was deleted has none);
+ * onMealLogged gets a suggested meal; onProgress a pipeline step; onSessionUpdated the id of a
+ * session another device (or a REST save) changed; onNotice any other notice
+ * ({ type: 'supplements_updated' }, …) for the rest of the app; onError and onClose the socket's own.
  */
-export function createChatSocket(onToken, onDone, onMealLogged, onError, onClose, onProgress, onSessionUpdated, onNotice) {
+export function createChatSocket({
+  onToken, onDone, onMealLogged, onError, onClose, onProgress, onSessionUpdated, onNotice,
+} = {}) {
   const token = getToken()
   const ws = new WebSocket(`${WS_URL}/chat`, token ? ['bearer', token] : ['bearer'])
 
   ws.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data)
-      if (msg.type === 'token') onToken(msg.content)
-      else if (msg.type === 'done') onDone(msg.content, msg.message_id)
-      else if (msg.type === 'meal_logged') onMealLogged(msg.meal)
+      if (msg.type === 'token') onToken?.(msg.content)
+      else if (msg.type === 'done') onDone?.(msg.content, msg.message_id)
+      else if (msg.type === 'meal_logged') onMealLogged?.(msg.meal)
       else if (msg.type === 'progress') onProgress?.(msg.step)
       else if (msg.type === 'session_updated') onSessionUpdated?.(msg.session_id)
       // The server refused the reply (its chat was deleted meanwhile): shown as the reply, so the chat stops waiting
-      else if (msg.type === 'error') onDone(msg.message)
+      else if (msg.type === 'error') onDone?.(msg.message)
       else if (msg.type) onNotice?.(msg)
     } catch {
       // ignore unparseable frames
