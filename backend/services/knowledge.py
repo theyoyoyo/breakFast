@@ -114,6 +114,14 @@ def format_user_profile(profile: dict | None) -> str:
     return "\n".join(f"- {p}" for p in parts) if parts else "Not provided yet. Use general healthy adult defaults."
 
 
+def _taken_today(s: dict) -> bool:
+    """Today's state: the stored mark if the row has one, else daily taken and occasional not."""
+    taken = s.get("taken_today")
+    if taken is None:
+        return s.get("frequency", "daily") == "daily"
+    return bool(taken)
+
+
 def format_supplements(supplements: list[dict] | None) -> str:
     """Full supplement list with frequency and taken-today status — for analyst use."""
     if not supplements:
@@ -123,10 +131,12 @@ def format_supplements(supplements: list[dict] | None) -> str:
         freq = s.get("frequency", "daily")
         name = s.get("name", "")
         contents = s.get("contents", "")
-        taken_today = s.get("taken_today")
+        taken = _taken_today(s)
         status = ""
         if freq == "sometimes":
-            status = " [taken today]" if taken_today else " [NOT taken today]"
+            status = " [taken today]" if taken else " [NOT taken today]"
+        elif not taken:
+            status = " [NOT taken today]"  # a daily one the user skipped today
         lines.append(f"- {name} ({freq}){status}")
         if contents:
             lines.append(f"  Contents: {contents}")
@@ -136,7 +146,7 @@ def format_supplements(supplements: list[dict] | None) -> str:
 def format_supplements_taken(supplements: list[dict] | None) -> str:
     """Only supplements active today — for meal planner use.
 
-    Includes daily supplements always, and 'sometimes' supplements only if
+    Includes daily supplements unless skipped today, and 'sometimes' supplements only if
     taken today. Returns name + contents so the LLM knows what nutrients
     are already covered without any scheduling logic.
     """
@@ -144,9 +154,7 @@ def format_supplements_taken(supplements: list[dict] | None) -> str:
         return "None taken today."
     lines = []
     for s in supplements:
-        freq = s.get("frequency", "daily")
-        taken_today = s.get("taken_today")
-        if freq != "daily" and not taken_today:
+        if not _taken_today(s):
             continue  # skip not-taken-today
         name = s.get("name", "")
         contents = s.get("contents", "")

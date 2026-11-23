@@ -15,6 +15,7 @@ from auth import require_user
 from database import get_db
 from models.limits import Name, Note, ShortText
 from services import chat_sync
+from services.context import TAKEN_TODAY_SQL
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -198,17 +199,17 @@ async def delete_supplement(supp_id: int, user_id: int = Depends(require_user)):
 
 
 # ---------------------------------------------------------------------------
-# Supplement daily toggle (for "sometimes" supplements)
+# Supplement daily toggle: a daily one can be skipped today, an occasional one taken
 # ---------------------------------------------------------------------------
 
 @router.get("/supplements/today", response_model=list[dict])
 async def get_today_supplements(user_id: int = Depends(require_user)):
-    """List all supplements with their taken_today status."""
+    """List all supplements with today's state: daily ones taken and occasional ones not, unless marked today."""
     today = date_type.today().isoformat()
     async with get_db() as db:
         async with db.execute(
-            """
-            SELECT s.*, COALESCE(l.taken, 0) AS taken_today
+            f"""
+            SELECT s.*, {TAKEN_TODAY_SQL} AS taken_today
             FROM user_supplements s
             LEFT JOIN supplement_daily_log l
                 ON l.supplement_id = s.id AND l.user_id = s.user_id AND l.date = ?
@@ -226,22 +227,28 @@ async def toggle_supplement_today(
     body: SupplementToggle,
     user_id: int = Depends(require_user),
 ):
-    """Toggle a supplement's taken status for today. A supplement that isn't the user's own gets 404."""
+    """Mark a supplement taken or not for today. A supplement that isn't the user's own gets 404.
+
+    Only a mark that differs from the supplement's usual state is stored (a daily one skipped, an
+    occasional one taken); a mark back to the usual state removes the row.
+    """
     today = date_type.today().isoformat()
     async with get_db() as db:
         async with db.execute(
-            "SELECT 1 FROM user_supplements WHERE id = ? AND user_id = ?", (supp_id, user_id)
+            "SELECT frequency FROM user_supplements WHERE id = ? AND user_id = ?", (supp_id, user_id)
         ) as cur:
-            if not await cur.fetchone():
+            row = await cur.fetchone()
+            if not row:
                 raise HTTPException(status_code=404, detail="Supplement not found")
-        if body.taken:
+        usual = row["frequency"] == "daily"
+        if body.taken != usual:
             await db.execute(
                 """
                 INSERT INTO supplement_daily_log (user_id, supplement_id, date, taken)
-                VALUES (?, ?, ?, 1)
-                ON CONFLICT(user_id, supplement_id, date) DO UPDATE SET taken = 1
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(user_id, supplement_id, date) DO UPDATE SET taken = excluded.taken
                 """,
-                (user_id, supp_id, today),
+                (user_id, supp_id, today, int(body.taken)),
             )
         else:
             await db.execute(

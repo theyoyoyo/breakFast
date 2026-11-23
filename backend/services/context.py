@@ -101,11 +101,16 @@ async def fetch_profile(db, user_id: int) -> dict | None:
         return dict(row) if row else None
 
 
+# Today's state of a supplement (`s`) with its log row for today (`l`, LEFT JOIN): a row is a mark the
+# user made today (taken or skipped); without one, a daily supplement is taken and an occasional one isn't.
+TAKEN_TODAY_SQL = "CASE WHEN l.taken IS NULL THEN (s.frequency = 'daily') ELSE l.taken END"
+
+
 async def fetch_supplements(db, user_id: int) -> list[dict]:
     today = date_type.today().isoformat()
     async with db.execute(
-        """
-        SELECT s.name, s.contents, s.frequency, COALESCE(l.taken, 0) AS taken_today
+        f"""
+        SELECT s.name, s.contents, s.frequency, {TAKEN_TODAY_SQL} AS taken_today
         FROM user_supplements s
         LEFT JOIN supplement_daily_log l
             ON l.supplement_id = s.id AND l.user_id = s.user_id AND l.date = ?

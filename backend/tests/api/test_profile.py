@@ -255,3 +255,21 @@ async def test_toggle_supplement_not_own_gets_404(client, db, whose):
 
     async with db.execute("SELECT COUNT(*) FROM supplement_daily_log") as cur:
         assert (await cur.fetchone())[0] == 0
+
+
+# A daily supplement starts as taken, can be skipped for today, and a mark back removes the stored row
+async def test_daily_supplement_can_be_skipped_today(client, db):
+    r = await client.post("/profile/supplements", json={"name": "Vitamin D", "frequency": "daily"})
+    sid = r.json()["id"]
+
+    async def state():
+        r = await client.get("/profile/supplements/today")
+        return next(s for s in r.json() if s["id"] == sid)["taken_today"]
+
+    assert await state() == 1
+    await client.post(f"/profile/supplements/{sid}/toggle", json={"taken": False})
+    assert await state() == 0
+    await client.post(f"/profile/supplements/{sid}/toggle", json={"taken": True})
+    assert await state() == 1
+    async with db.execute("SELECT COUNT(*) FROM supplement_daily_log") as cur:
+        assert (await cur.fetchone())[0] == 0
