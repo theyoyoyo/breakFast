@@ -7,10 +7,12 @@ from models.limits import (
     INGREDIENTS_MAX,
     MENU_ITEMS_MAX,
     STEPS_MAX,
+    Amount,
     Emoji,
     MealName,
     Name,
     Note,
+    PrepMinutes,
     SizedDict,
     SizedItem,
     SizedList,
@@ -35,7 +37,7 @@ def with_emoji(meal: dict) -> dict:
 
 class MealIngredient(BaseModel):
     name: Name
-    quantity: float
+    quantity: Amount
     unit: Name
 
 
@@ -44,7 +46,7 @@ class MealLog(BaseModel):
     description: Optional[Note] = None
     ingredients: Optional[List[Union[MealIngredient, Note]]] = Field(default=None, max_length=INGREDIENTS_MAX)
     steps: Optional[List[Note]] = Field(default=None, max_length=STEPS_MAX)
-    prep_time_min: Optional[int] = None
+    prep_time_min: Optional[PrepMinutes] = None
     nutrition_note: Optional[Note] = None
     schedule: Optional[SizedDict] = None
     menu_items: Optional[SizedList] = Field(default=None, max_length=MENU_ITEMS_MAX)  # new multi-item menu format
@@ -58,7 +60,7 @@ class FavoriteIn(BaseModel):
     description: Optional[Note] = None
     ingredients: Optional[List[SizedItem]] = Field(default=None, max_length=INGREDIENTS_MAX)
     steps: Optional[List[Note]] = Field(default=None, max_length=STEPS_MAX)
-    prep_time_min: Optional[int] = None
+    prep_time_min: Optional[PrepMinutes] = None
     nutrition_note: Optional[Note] = None
     menu_items: Optional[SizedList] = Field(default=None, max_length=MENU_ITEMS_MAX)
     menu: Optional[SizedList] = Field(default=None, max_length=MENU_ITEMS_MAX)

@@ -59,7 +59,7 @@ async def add_favorite_ingredient(
 
 @router.delete("/{ingredient_name}")
 async def remove_favorite_ingredient(
-    ingredient_name: str,
+    ingredient_name: Name,
     user_id: int = Depends(require_user),
 ):
     async with get_db() as db:

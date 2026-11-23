@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from auth import require_user
 from database import get_db
-from models.limits import Name
+from models.limits import Id, Name
 
 router = APIRouter(prefix="/ratings", tags=["ratings"])
 
@@ -62,7 +62,7 @@ async def create_rating(body: RatingIn, user_id: int = Depends(require_user)):
 
 
 @router.put("/{rating_id}", response_model=RatingOut)
-async def update_rating(rating_id: int, body: RatingUpdate, user_id: int = Depends(require_user)):
+async def update_rating(rating_id: Id, body: RatingUpdate, user_id: int = Depends(require_user)):
     async with get_db() as db:
         await db.execute(
             """
@@ -83,7 +83,7 @@ async def update_rating(rating_id: int, body: RatingUpdate, user_id: int = Depen
 
 
 @router.delete("/{rating_id}", status_code=204)
-async def delete_rating(rating_id: int, user_id: int = Depends(require_user)):
+async def delete_rating(rating_id: Id, user_id: int = Depends(require_user)):
     async with get_db() as db:
         cursor = await db.execute(
             "DELETE FROM product_ratings WHERE id = ? AND user_id = ?",

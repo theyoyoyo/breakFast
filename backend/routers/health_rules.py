@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from auth import require_user
 from database import get_db
-from models.limits import Text
+from models.limits import Id, Text
 
 router = APIRouter(prefix="/health-rules", tags=["health-rules"])
 
@@ -58,7 +58,7 @@ async def create_health_rule(body: HealthRuleIn, user_id: int = Depends(require_
 
 
 @router.put("/{rule_id}", response_model=HealthRuleOut)
-async def update_health_rule(rule_id: int, body: HealthRuleUpdate, user_id: int = Depends(require_user)):
+async def update_health_rule(rule_id: Id, body: HealthRuleUpdate, user_id: int = Depends(require_user)):
     async with get_db() as db:
         updates, params = [], []
         if body.rule_text is not None:
@@ -87,7 +87,7 @@ async def update_health_rule(rule_id: int, body: HealthRuleUpdate, user_id: int 
 
 
 @router.delete("/{rule_id}", status_code=204)
-async def delete_health_rule(rule_id: int, user_id: int = Depends(require_user)):
+async def delete_health_rule(rule_id: Id, user_id: int = Depends(require_user)):
     async with get_db() as db:
         cursor = await db.execute(
             "DELETE FROM health_rules WHERE id = ? AND user_id = ?",

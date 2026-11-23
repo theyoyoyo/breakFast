@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from auth import require_user
 from database import get_db
 from db_helpers import row_to_meal, serialize_json_field
-from models.limits import MEALS_LIMIT_DEFAULT, MEALS_LIMIT_MAX
+from models.limits import MEALS_LIMIT_DEFAULT, MEALS_LIMIT_MAX, Id
 from models.meal import Meal, MealLog
 from services.context import fetch_health_rules, fetch_preferences, fetch_profile, fetch_supplements
 from services.insights import PATTERN_DAYS
@@ -159,7 +159,7 @@ async def generate_weekly_review(user_id: int = Depends(require_user)):
 
 
 @router.get("/{meal_id}", response_model=Meal)
-async def get_meal(meal_id: int, user_id: int = Depends(require_user)):
+async def get_meal(meal_id: Id, user_id: int = Depends(require_user)):
     async with get_db() as db:
         async with db.execute(
             "SELECT * FROM meal_history WHERE id = ? AND user_id = ?",
@@ -212,7 +212,7 @@ async def delete_old_meals(user_id: int = Depends(require_user)):
 
 
 @router.put("/{meal_id}", response_model=Meal)
-async def update_meal(meal_id: int, body: MealLog, user_id: int = Depends(require_user)):
+async def update_meal(meal_id: Id, body: MealLog, user_id: int = Depends(require_user)):
     """Update a meal's details. Clears cached analysis and schedule since content may have changed."""
     async with get_db() as db:
         cursor = await db.execute(
@@ -246,7 +246,7 @@ async def update_meal(meal_id: int, body: MealLog, user_id: int = Depends(requir
 
 
 @router.delete("/{meal_id}", status_code=204)
-async def delete_meal(meal_id: int, user_id: int = Depends(require_user)):
+async def delete_meal(meal_id: Id, user_id: int = Depends(require_user)):
     """Delete a single meal from history."""
     async with get_db() as db:
         cursor = await db.execute(
