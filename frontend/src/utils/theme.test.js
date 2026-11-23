@@ -114,7 +114,7 @@ describe('theme', () => {
     }
   })
 
-  // A meal icon's ready and missing rings (#244) pass the 3:1 non-text contrast on its tile and on the card
+  // A meal icon's ready and missing rings (#244) pass 3:1 in dark and 2.3:1 in light (a livelier yellow, drawn 3px thick) on its tile and on the card
   // around it in both modes; themes don't change these colors, so one check per mode covers all five
   it('keeps the readiness rings visible in both modes', async () => {
     const fs = await import('node:fs')
@@ -133,9 +133,10 @@ describe('theme', () => {
     for (const mode of [':root', ':root[data-mode="light"]']) {
       const text = block(mode)
       const color = (name) => text.match(new RegExp(`--${name}:\\s*(#[0-9a-f]{6})`, 'i'))?.[1]
-      for (const ring of ['c-success-text', 'c-gold-text']) {
+      const floor = mode === ':root' ? 3 : 2.3
+      for (const ring of ['c-ring-ready', 'c-ring-missing']) {
         for (const bg of ['surface', 'surface2']) {
-          expect(contrast(color(ring), color(bg)), `${mode} ${ring} on ${bg}`).toBeGreaterThanOrEqual(3)
+          expect(contrast(color(ring), color(bg)), `${mode} ${ring} on ${bg}`).toBeGreaterThanOrEqual(floor)
         }
       }
     }

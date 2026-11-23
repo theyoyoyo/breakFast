@@ -82,11 +82,11 @@ describe('MealBlock readiness', () => {
     render(<MealBlock meal={MEAL} />)
     const ready = await screen.findByTitle('Ready — everything is in your fridge')
     expect(ready.style.background).toBe('var(--surface)')
-    expect(ready.style.border).toBe('2px solid var(--c-success-text)')
+    expect(ready.style.border).toBe('var(--ring-w) solid var(--c-ring-ready)')
     render(<MealBlock meal={MEAL} fridgeCheckKey={1} />)
     const missing = await screen.findByTitle('Not ready — missing: Olives')
     expect(missing.style.background).toBe('var(--surface)')
-    expect(missing.style.border).toBe('2px solid var(--c-gold-text)')
+    expect(missing.style.border).toBe('var(--ring-w) solid var(--c-ring-missing)')
   })
 
   // Saving a card to Favorites copies its icon
