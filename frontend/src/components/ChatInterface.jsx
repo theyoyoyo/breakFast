@@ -110,42 +110,6 @@ function keepUnchangedBlocks(prev, next) {
   return kept
 }
 
-// Template meal for demo/preview without LLM
-const DEMO_MEAL = {
-  menu_name: 'Classic Spread Breakfast',
-  meal_name: 'Classic Spread Breakfast',
-  description: 'A rich, balanced Turkish breakfast — menemen, fresh cheese, and olives.',
-  menu: [
-    {
-      name: 'Menemen',
-      ingredients: [
-        { name: 'Egg', amount: 2, unit: 'pcs' },
-        { name: 'Tomato', amount: 1, unit: 'pcs' },
-        { name: 'Green pepper', amount: 1, unit: 'pcs' },
-        { name: 'Olive oil', amount: 1, unit: 'tbsp' },
-      ],
-    },
-    { name: 'White cheese', amount: 50, unit: 'g', ingredients: [] },
-    { name: 'Olives', amount: 6, unit: 'pcs', ingredients: [] },
-    { name: 'Cucumber', amount: 1, unit: 'pcs', ingredients: [] },
-    { name: 'Bread', amount: 3, unit: 'slice', ingredients: [] },
-    { name: 'Honey', amount: 1, unit: 'tbsp', ingredients: [] },
-  ],
-  prep_time_min: 12,
-  nutrition_note: 'Rich in protein, calcium, and healthy fats.',
-}
-
-// Demo schedule output — shows what the scheduler produces for the demo meal
-const DEMO_SCHEDULE = `📋 Classic Spread Breakfast — Prep Plan
-
-⏱ Plan (12 min)
-  0:00  — Menemen: Chop 1 green pepper and 1 tomato
-         ↳ Heat 1 tbsp olive oil in the pan
-         ↳ Cook the pepper until soft (3 min) [Stove]
-         ↳ Add the tomato and simmer (4 min) [Stove]
-         ↳ Stir in 2 eggs until just set
-  0:12  — Ready! ✓`
-
 export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref) {
   const [messages, setMessages] = useState([WELCOME_MSG])
   const [input, setInput] = useState('')
@@ -183,7 +147,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
   const analyzeAbortRef = useRef(null)
   const { isListening, startListening, stopListening, supported: voiceSupported } = useVoice()
 
-  // Inject a meal into chat (used by demo and favorites send-to-chat)
+  // Inject a meal into chat (used by favorites send-to-chat)
   const injectMealToChat = useCallback((meal, introText) => {
     // Normalize: map menu_items → menu so MealBlock renders correctly
     const normalized = normalizeMeal({
@@ -218,13 +182,6 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
 
   // Expose methods to parent via ref
   useImperativeHandle(ref, () => ({
-    injectDemoMeal: () => {
-      const introText = "Here's a nice classic spread breakfast for you! 🫕\n\nA balanced Turkish breakfast with fresh, wholesome ingredients."
-      injectMealToChat(DEMO_MEAL, introText)
-    },
-    injectDemoSchedule: () => {
-      appendSavedMessage(DEMO_SCHEDULE)
-    },
     injectFavoriteMeal: (meal) => {
       const introText = `⭐ From favorites: ${meal.meal_name}\n\n${meal.description || 'Enjoy!'}`
       injectMealToChat(meal, introText)
