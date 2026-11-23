@@ -1,17 +1,18 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { getFavorites, deleteFavorite, updateFavorite } from '../services/api'
 import { formatIngredient, localizeUnit } from '../utils/ingredients'
-import { emojiFor } from '../utils/emoji'
+import { mealEmoji } from '../utils/emoji'
 import { useMealReadiness } from '../hooks/useMealReadiness'
 import { useLanguage } from '../hooks/useLanguage'
 import MealEditor from './MealEditor'
 import ReadinessIcon from './ReadinessIcon'
+import EmojiPicker from './EmojiPicker'
 import * as s from './FavoritesPanel.styles'
 
-// A favorite's icon with the same fridge-readiness badge as chat cards
+// A favorite's icon (its saved one, else one from its id) with the same fridge-readiness badge as chat cards
 function FavoriteIcon({ fav, checkKey }) {
   const { readiness, stillMissing } = useMealReadiness(fav, checkKey)
-  return <ReadinessIcon emoji={emojiFor(fav.id)} readiness={readiness} stillMissing={stillMissing} />
+  return <ReadinessIcon emoji={mealEmoji(fav, fav.id)} readiness={readiness} stillMissing={stillMissing} />
 }
 
 function Header() {
@@ -28,6 +29,8 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
   const [editingId, setEditingId] = useState(null)
   // Set when Save tried another favorite's name; the editor stays open for a new one
   const [nameTaken, setNameTaken] = useState(false)
+  // The icon picked in the open editor (set when it opens), saved with the editor's Save (#244)
+  const [editEmoji, setEditEmoji] = useState(null)
   const language = useLanguage()
 
   // One meal object per edit, so a re-render (like the taken-name note) keeps the editor's edits
@@ -56,18 +59,19 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
   }
 
   const handleSendToChat = (fav) => {
-    // Map menu_items → menu so ChatInterface renders dishes correctly
-    const meal = { ...fav, menu: fav.menu_items || fav.menu || undefined }
+    // Map menu_items → menu so ChatInterface renders dishes correctly; the card shows the favorite's icon
+    const meal = { ...fav, menu: fav.menu_items || fav.menu || undefined, emoji: mealEmoji(fav, fav.id) }
     onSendToChat?.(meal)
   }
 
   const handleEditorSave = async (updated) => {
+    const saved = { ...updated, emoji: editEmoji || updated.emoji }
     try {
       await updateFavorite(editingId, {
-        ...updated,
-        menu_items: updated.menu || updated.menu_items || null,
+        ...saved,
+        menu_items: saved.menu || saved.menu_items || null,
       })
-      setFavorites(prev => prev.map(f => f.id === editingId ? { ...f, ...updated } : f))
+      setFavorites(prev => prev.map(f => f.id === editingId ? { ...f, ...saved } : f))
     } catch (err) {
       if (err?.status === 409) {
         setNameTaken(true)
@@ -133,7 +137,7 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
                     <button style={s.sendBtn} onClick={() => handleSendToChat(fav)} title="Send to chat as suggestion">
                       🫕 Send to Chat
                     </button>
-                    <button style={s.editBtn} onClick={() => setEditingId(fav.id)} title="Edit this favorite">
+                    <button style={s.editBtn} onClick={() => { setEditingId(fav.id); setEditEmoji(mealEmoji(fav, fav.id)) }} title="Edit this favorite">
                       ✏️ Edit
                     </button>
                     <button style={s.removeBtn} onClick={() => handleRemove(fav.id)} title="Remove from favorites">
@@ -146,6 +150,7 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
               {editing && (
                 <div style={s.overlay} onClick={(e) => { if (e.target === e.currentTarget) setEditingId(null) }}>
                   <div style={s.overlayPanel}>
+                    <EmojiPicker value={editEmoji} onChange={setEditEmoji} />
                     <MealEditor
                       meal={editingMeal}
                       onSave={handleEditorSave}

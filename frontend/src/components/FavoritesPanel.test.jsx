@@ -7,6 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import FavoritesPanel from './FavoritesPanel'
+import { emojiFor } from '../utils/emoji'
 import { getFavorites, checkMissingIngredients, updateFavorite } from '../services/api'
 
 vi.mock('../services/api', () => ({
@@ -56,5 +57,36 @@ describe('FavoritesPanel readiness', () => {
     expect(await screen.findByText('Another favorite already has this name. Pick a new one to save.')).toBeInTheDocument()
     expect(screen.getByDisplayValue('Menemen Plate')).toBeInTheDocument()
     expect(updateFavorite.mock.calls[0][0]).toBe(2)
+  })
+
+  // A favorite shows its saved icon, and an older one without an icon the one from its id
+  it('shows a saved icon or the id-based one', async () => {
+    getFavorites.mockResolvedValue([{ ...FAVORITES[0], emoji: '🥯' }, FAVORITES[1]])
+    render(<FavoritesPanel visible />)
+    expect((await screen.findByText('Menemen Plate')).previousSibling).toHaveTextContent('🥯')
+    expect(screen.getByText('Avocado Toast').previousSibling).toHaveTextContent(emojiFor(2))
+  })
+
+  // The editor's picker offers the app's icons and Save sends the picked one with the edit
+  it('changes the icon in the editor', async () => {
+    updateFavorite.mockResolvedValue({ status: 'ok' })
+    render(<FavoritesPanel visible />)
+    fireEvent.click(await screen.findByText('Avocado Toast'))
+    fireEvent.click(screen.getByText('✏️ Edit'))
+    fireEvent.click(screen.getByTitle("Change this favorite's icon"))
+    fireEvent.click(screen.getByRole('button', { name: 'Icon 🧇' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await vi.waitFor(() => expect(updateFavorite).toHaveBeenCalled())
+    expect(updateFavorite.mock.calls[0][1].emoji).toBe('🧇')
+    expect((await screen.findByText('Avocado Toast')).previousSibling).toHaveTextContent('🧇')
+  })
+
+  // A favorite sent to chat carries its icon, the id-based one for an older favorite
+  it('sends its icon to chat', async () => {
+    const onSendToChat = vi.fn()
+    render(<FavoritesPanel visible onSendToChat={onSendToChat} />)
+    fireEvent.click(await screen.findByText('Avocado Toast'))
+    fireEvent.click(screen.getByText('🫕 Send to Chat'))
+    expect(onSendToChat.mock.calls[0][0].emoji).toBe(emojiFor(2))
   })
 })

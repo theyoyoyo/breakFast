@@ -44,6 +44,13 @@ describe('menuKey', () => {
     expect(menuKey(frittata({ ...feta, replaces: 'Salmon' }))).toBe(menuKey(frittata(feta)))
   })
 
+  // A meal's icon isn't food: a changed icon keeps the gold star match (#244)
+  it('ignores the icon', () => {
+    const meal = { menu: [{ name: 'Olives', amount: 10, unit: 'pcs', ingredients: [] }] }
+    expect(menuKey({ ...meal, emoji: '🥐' })).toBe(menuKey({ ...meal, emoji: '🧇' }))
+    expect(menuKey({ ...meal, emoji: '🥐' })).toBe(menuKey(meal))
+  })
+
   // An old flat meal compares like a menu of simple items, and an item with no amount counts as one
   it('reads flat ingredients and missing amounts like the editor does', () => {
     expect(menuKey({ ingredients: [{ name: 'Egg', quantity: 2, unit: 'pcs' }] }))
