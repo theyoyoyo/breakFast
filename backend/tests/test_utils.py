@@ -10,25 +10,30 @@ def test_fractions_in_the_json_block_become_decimals():
     assert extract_json_block('```json\n{"amount": 1/4, "n": 3/0}\n```') is None  # 3/0 stays invalid
 
 
+# The JSON in a json code block is read from the text around it
 def test_extracts_valid_json_block():
     text = 'Here is the result:\n```json\n{"meal_name": "Eggs"}\n```\nEnjoy!'
     assert extract_json_block(text) == {"meal_name": "Eggs"}
 
 
+# Text without a JSON block gives None
 def test_returns_none_when_no_block():
     assert extract_json_block("No JSON here at all.") is None
 
 
+# A block that isn't valid JSON gives None instead of raising
 def test_returns_none_on_invalid_json():
     assert extract_json_block("```json\n{bad json}\n```") is None
 
 
+# A block whose JSON spans several lines is read whole
 def test_handles_multiline_json():
     text = '```json\n{\n  "meal_name": "Toast",\n  "prep_time_min": 5\n}\n```'
     result = extract_json_block(text)
     assert result == {"meal_name": "Toast", "prep_time_min": 5}
 
 
+# Text before and after the block doesn't change what is read
 def test_ignores_text_outside_block():
     text = "Some intro.\n```json\n{\"key\": \"value\"}\n```\nSome outro."
     assert extract_json_block(text) == {"key": "value"}
@@ -43,17 +48,20 @@ def test_handles_nested_objects_and_arrays():
     assert result["ingredients"][0]["name"] == "Peynir"
 
 
+# A file inside the build folder resolves to its full path
 def test_resolve_static_file_inside_root(tmp_path):
     (tmp_path / "assets").mkdir()
     (tmp_path / "assets" / "app.js").write_text("js")
     assert resolve_static_file(tmp_path, "assets/app.js") == (tmp_path / "assets" / "app.js").resolve()
 
 
+# A missing file, or the folder itself, resolves to None
 def test_resolve_static_file_missing_returns_none(tmp_path):
     assert resolve_static_file(tmp_path, "nope.js") is None
     assert resolve_static_file(tmp_path, "") is None  # directory, not a file
 
 
+# A path that leaves the build folder, by .. or as an absolute path, resolves to None
 def test_resolve_static_file_blocks_traversal(tmp_path):
     root = tmp_path / "dist"
     root.mkdir()
@@ -63,6 +71,7 @@ def test_resolve_static_file_blocks_traversal(tmp_path):
     assert resolve_static_file(root, str(tmp_path / "secret.db")) is None  # absolute path
 
 
+# A path with a null byte or far too long resolves to None instead of raising
 def test_resolve_static_file_malformed_paths_return_none(tmp_path):
     assert resolve_static_file(tmp_path, "a\x00b") is None
     assert resolve_static_file(tmp_path, "x" * 5000) is None

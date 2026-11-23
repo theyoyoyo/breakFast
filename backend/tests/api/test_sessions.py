@@ -9,6 +9,7 @@ import pytest
 from tests.chat_socket import open_chat
 
 
+# A new chat session gets a UUID as its id
 async def test_create_session(client):
     r = await client.post("/sessions/")
     assert r.status_code == 200
@@ -36,6 +37,7 @@ async def test_get_active_session_returns_latest(client):
     assert r.json()["id"] == sid2
 
 
+# The user's sessions are all listed
 async def test_list_sessions(client):
     await client.post("/sessions/")
     await client.post("/sessions/")
@@ -46,6 +48,7 @@ async def test_list_sessions(client):
     assert len(sessions) >= 2
 
 
+# A new session has no messages
 async def test_get_messages_empty(client):
     r = await client.post("/sessions/")
     sid = r.json()["session_id"]

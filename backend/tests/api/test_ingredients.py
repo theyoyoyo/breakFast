@@ -2,12 +2,14 @@
 
 
 
+# A new user's fridge is empty
 async def test_list_empty_on_fresh_db(client):
     r = await client.get("/ingredients/")
     assert r.status_code == 200
     assert r.json() == []
 
 
+# An item added without a date is stored with its name, an id and no expiry
 async def test_add_ingredient(client):
     r = await client.post("/ingredients/", json={"name": "eggs"})
     assert r.status_code == 201
@@ -17,6 +19,7 @@ async def test_add_ingredient(client):
     assert "id" in data
 
 
+# An item added with an expiry date keeps that date
 async def test_add_ingredient_with_expiry(client):
     r = await client.post("/ingredients/", json={"name": "yogurt", "expiry_date": "2026-04-01"})
     assert r.status_code == 201
@@ -25,6 +28,7 @@ async def test_add_ingredient_with_expiry(client):
     assert data["expiry_date"] == "2026-04-01"
 
 
+# Adding a name already in the fridge updates its expiry instead of adding a second row
 async def test_add_same_name_upserts(client):
     await client.post("/ingredients/", json={"name": "milk"})
     r = await client.post("/ingredients/", json={"name": "milk", "expiry_date": "2026-04-05"})
@@ -36,6 +40,7 @@ async def test_add_same_name_upserts(client):
     assert milks[0]["expiry_date"] == "2026-04-05"
 
 
+# A deleted item is gone from the fridge list
 async def test_delete_ingredient(client):
     created = (await client.post("/ingredients/", json={"name": "cheese"})).json()
     r = await client.delete(f"/ingredients/{created['id']}")

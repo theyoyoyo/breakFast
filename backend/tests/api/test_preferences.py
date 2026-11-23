@@ -1,12 +1,14 @@
 """Integration tests for the /preferences endpoints (key-value prefs and habits)."""
 
 
+# A new user has no preferences
 async def test_list_preferences_empty(client):
     r = await client.get("/preferences/")
     assert r.status_code == 200
     assert r.json() == []
 
 
+# A preference is saved under its key with its value
 async def test_set_and_get_preference(client):
     r = await client.put("/preferences/fav:eggs", json={"value": "eggs"})
     assert r.status_code == 200
@@ -15,6 +17,7 @@ async def test_set_and_get_preference(client):
     assert data["value"] == "eggs"
 
 
+# Setting a key again replaces its value instead of adding a second row
 async def test_set_preference_is_idempotent(client):
     await client.put("/preferences/fav:toast", json={"value": "toast"})
     await client.put("/preferences/fav:toast", json={"value": "TOAST"})
@@ -24,6 +27,7 @@ async def test_set_preference_is_idempotent(client):
     assert matches[0]["value"] == "TOAST"
 
 
+# A deleted preference is gone from the list
 async def test_delete_preference(client):
     await client.put("/preferences/dislike:mushrooms", json={"value": "mushrooms"})
     r = await client.delete("/preferences/dislike:mushrooms")
@@ -32,6 +36,7 @@ async def test_delete_preference(client):
     assert "dislike:mushrooms" not in keys
 
 
+# An avoid-list item is saved like any other preference, under its avoid: key
 async def test_set_avoid_preference(client):
     r = await client.put("/preferences/avoid:shellfish", json={"value": "shellfish"})
     assert r.status_code == 200
@@ -40,6 +45,7 @@ async def test_set_avoid_preference(client):
     assert data["value"] == "shellfish"
 
 
+# An avoid-list item can be deleted by its key
 async def test_delete_avoid_preference(client):
     await client.put("/preferences/avoid:peanuts", json={"value": "peanuts"})
     r = await client.delete("/preferences/avoid:peanuts")
@@ -48,6 +54,7 @@ async def test_delete_avoid_preference(client):
     assert "avoid:peanuts" not in keys
 
 
+# Likes, dislikes and the avoid list are kept side by side
 async def test_avoid_coexists_with_fav_and_dislike(client):
     await client.put("/preferences/fav:eggs", json={"value": "eggs"})
     await client.put("/preferences/dislike:olives", json={"value": "olives"})
@@ -59,12 +66,14 @@ async def test_avoid_coexists_with_fav_and_dislike(client):
     assert "avoid:gluten" in keys
 
 
+# A new user has no habits
 async def test_list_habits_empty(client):
     r = await client.get("/preferences/habits")
     assert r.status_code == 200
     assert r.json() == []
 
 
+# A habit the user adds is saved as stated, with an id
 async def test_add_and_list_habit(client):
     r = await client.post("/preferences/habits", json={"description": "eat breakfast before 9am"})
     assert r.status_code == 201
@@ -74,6 +83,7 @@ async def test_add_and_list_habit(client):
     assert "id" in habit
 
 
+# A deleted habit is gone from the list
 async def test_delete_habit(client):
     habit = (await client.post("/preferences/habits", json={"description": "avoid sugar"})).json()
     r = await client.delete(f"/preferences/habits/{habit['id']}")
