@@ -1,7 +1,7 @@
 # Monthly dependency updates (#258, #261): minor and patch updates of an ecosystem come as one
 # grouped pull request and each major update as its own, so one breaking upgrade can't hold
-# back the rest. A new release waits 7 days before it is proposed (majors 30, where supported);
-# security updates aren't delayed by this.
+# back the rest. A new release waits 30 days before it is proposed; security updates aren't
+# delayed by this.
 version: 2
 updates:
   # The workflows' actions, pinned to a commit with the version in a comment.
@@ -10,7 +10,7 @@ updates:
     schedule:
       interval: monthly
     cooldown:
-      default-days: 7
+      default-days: 30
     open-pull-requests-limit: 5
     groups:
       actions:
@@ -23,8 +23,7 @@ updates:
     schedule:
       interval: monthly
     cooldown:
-      default-days: 7
-      semver-major-days: 30
+      default-days: 30
     open-pull-requests-limit: 5
     groups:
       pip:
@@ -37,8 +36,7 @@ updates:
     schedule:
       interval: monthly
     cooldown:
-      default-days: 7
-      semver-major-days: 30
+      default-days: 30
     open-pull-requests-limit: 5
     groups:
       npm:
