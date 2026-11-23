@@ -53,7 +53,6 @@ def _close_code(app, url="/chat", subprotocols=None) -> int | None:
 
 
 # The socket opens with the token in its header and answers "bearer", which a browser needs to keep it open
-@pytest.mark.asyncio
 async def test_websocket_opens_with_token_in_header(ws_setup):
     app, token, _ = ws_setup
     from starlette.testclient import TestClient
@@ -63,28 +62,24 @@ async def test_websocket_opens_with_token_in_header(ws_setup):
 
 
 # A socket without a token is refused
-@pytest.mark.asyncio
 async def test_websocket_rejects_missing_token(ws_setup):
     app, _, _ = ws_setup
     assert _close_code(app) == 4001
 
 
 # A socket with an unknown token is refused
-@pytest.mark.asyncio
 async def test_websocket_rejects_invalid_token(ws_setup):
     app, _, _ = ws_setup
     assert _close_code(app, subprotocols=["bearer", "invalid_token_xxx"]) == 4001
 
 
 # A valid token in the URL no longer opens the socket, so a token can't end up in a URL by mistake
-@pytest.mark.asyncio
 async def test_websocket_rejects_token_in_url(ws_setup):
     app, token, _ = ws_setup
     assert _close_code(app, url=f"/chat?token={token}") == 4001
 
 
 # Only "bearer" followed by the token opens the socket; any other header shape is refused, even with a valid token
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "protocols",
     [["TOKEN"], ["bearer"], ["TOKEN", "bearer"], ["bearer", "TOKEN", "extra"], ["Bearer", "TOKEN"]],
@@ -95,7 +90,6 @@ async def test_websocket_rejects_other_header_shapes(ws_setup, protocols):
     assert _close_code(app, subprotocols=sent) == 4001
 
 
-@pytest.mark.asyncio
 async def test_websocket_accepts_valid_token(ws_setup):
     """WebSocket with valid token should connect and accept messages."""
     app, token, _ = ws_setup
@@ -124,7 +118,6 @@ async def test_websocket_accepts_valid_token(ws_setup):
             assert msg["content"] in FALLBACK_LYRICS
 
 
-@pytest.mark.asyncio
 async def test_websocket_handles_generic_exception(ws_setup):
     """WebSocket should return fallback message on unexpected exceptions (not crash)."""
     app, token, _ = ws_setup
@@ -150,7 +143,6 @@ async def test_websocket_handles_generic_exception(ws_setup):
             assert msg["content"] in FALLBACK_LYRICS
 
 
-@pytest.mark.asyncio
 async def test_websocket_build_chat_prompt_no_mock(ws_setup):
     """WebSocket should work with the real build_chat_prompt."""
     app, token, _ = ws_setup
@@ -177,7 +169,6 @@ async def test_websocket_build_chat_prompt_no_mock(ws_setup):
             assert msg["content"] in FALLBACK_LYRICS
 
 
-@pytest.mark.asyncio
 async def test_websocket_suggest_type_uses_pipeline(ws_setup):
     """WebSocket with type=suggest should route through the suggestion pipeline."""
     app, token, _ = ws_setup
@@ -210,7 +201,6 @@ async def test_websocket_suggest_type_uses_pipeline(ws_setup):
             assert len(progress_msgs) >= 1
 
 
-@pytest.mark.asyncio
 async def test_websocket_suggest_with_mode_passes_mode(ws_setup):
     """WebSocket with type=suggest and mode=favorites should pass mode to pipeline."""
     app, token, _ = ws_setup
@@ -241,7 +231,6 @@ async def test_websocket_suggest_with_mode_passes_mode(ws_setup):
             assert call_kwargs.kwargs.get("mode") == "favorites"
 
 
-@pytest.mark.asyncio
 async def test_save_suggestion_defaults_unit_by_language(ws_setup):
     """A simple menu item saved without a unit gets the count unit of the reply language."""
     _, _, user_id = ws_setup
@@ -283,7 +272,6 @@ async def test_save_message_touches_only_own_session(ws_setup):
 
 
 # A crashing chat reply is logged with its traceback, and the user still gets a lyric
-@pytest.mark.asyncio
 async def test_websocket_logs_chat_reply_crash(ws_setup, caplog):
     app, token, _ = ws_setup
     from unittest.mock import patch
@@ -308,7 +296,6 @@ async def test_websocket_logs_chat_reply_crash(ws_setup, caplog):
 
 
 # A crashing suggestion pipeline is logged with its traceback, and the user is told it failed and to press Suggest again
-@pytest.mark.asyncio
 async def test_websocket_logs_suggestion_crash(ws_setup, caplog):
     app, token, _ = ws_setup
     from unittest.mock import patch
@@ -332,7 +319,6 @@ async def test_websocket_logs_suggestion_crash(ws_setup, caplog):
 
 
 # A Suggest press whose pipeline says nothing gets the retry text, while Ollama being unreachable still gets a lyric
-@pytest.mark.asyncio
 async def test_websocket_suggest_empty_or_unreachable(ws_setup):
     app, token, _ = ws_setup
     from unittest.mock import patch
@@ -363,7 +349,6 @@ async def test_websocket_suggest_empty_or_unreachable(ws_setup):
     assert replies[1]["type"] == "done" and replies[1]["content"] in FALLBACK_LYRICS
 
 
-@pytest.mark.asyncio
 async def test_websocket_suggest_reads_the_chat_from_the_session(ws_setup):
     """A Suggest press gives the pipeline the chat block the server builds from the session, not what the client sends."""
     app, token, user_id = ws_setup
@@ -398,7 +383,6 @@ async def test_websocket_suggest_reads_the_chat_from_the_session(ws_setup):
 
 # A chat reply never becomes a meal card: the chat persona sees an earlier card as one line, its reply loses
 # any meal block before it's sent and saved (no meal update), and a reply that was only a block points to Suggest
-@pytest.mark.asyncio
 async def test_chat_reply_never_becomes_a_meal_card(ws_setup):
     app, token, user_id = ws_setup
     from unittest.mock import patch
@@ -458,7 +442,6 @@ async def test_chat_reply_never_becomes_a_meal_card(ws_setup):
 
 
 # Two messages and their replies saved in the same second reach the chat persona as message 1, reply 1, message 2, reply 2
-@pytest.mark.asyncio
 async def test_chat_history_keeps_each_message_before_its_reply(ws_setup):
     app, token, user_id = ws_setup
     from unittest.mock import patch
@@ -493,7 +476,6 @@ async def test_chat_history_keeps_each_message_before_its_reply(ws_setup):
 
 
 # A session with more than 20 messages gives the chat persona its newest 20, in chat order
-@pytest.mark.asyncio
 async def test_chat_history_is_the_newest_20_messages(ws_setup):
     _, _, user_id = ws_setup
     from routers.chat import _load_session_history
@@ -515,7 +497,6 @@ async def test_chat_history_is_the_newest_20_messages(ws_setup):
 
 
 # A frame that is valid JSON but not an object (123, "hi", [1]) is read as plain text and the socket stays open
-@pytest.mark.asyncio
 @pytest.mark.parametrize("frame", ["123", '"hi"', "[1]"])
 async def test_chat_frame_that_is_not_an_object_is_plain_text(ws_setup, frame):
     app, token, _ = ws_setup
@@ -542,7 +523,6 @@ async def test_chat_frame_that_is_not_an_object_is_plain_text(ws_setup, frame):
 
 
 # A message that isn't a string, or a session id, type or mode that isn't, is ignored and the next message still gets its reply
-@pytest.mark.asyncio
 @pytest.mark.parametrize("frame", [
     {"message": 5},
     {"message": ["a"]},
@@ -594,7 +574,6 @@ async def _saved_rows() -> dict:
 
 
 # Switching the socket to a session that isn't the caller's is ignored, so the next message goes to the caller's own session
-@pytest.mark.asyncio
 async def test_switching_to_a_session_not_the_callers_is_ignored(ws_setup):
     app, token, user_id = ws_setup
     from unittest.mock import patch
@@ -620,7 +599,6 @@ async def test_switching_to_a_session_not_the_callers_is_ignored(ws_setup):
 
 
 # A session deleted while its Suggest reply is made gets the error, and neither the messages nor the suggestion are saved
-@pytest.mark.asyncio
 async def test_session_deleted_during_a_reply_saves_nothing(ws_setup):
     app, token, user_id = ws_setup
     from unittest.mock import patch
@@ -648,7 +626,6 @@ async def test_session_deleted_during_a_reply_saves_nothing(ws_setup):
     assert await _saved_rows() == {"messages": [], "suggestions": []}
 
 
-@pytest.mark.asyncio
 async def test_websocket_too_long_message_gets_a_note_and_is_not_saved(ws_setup):
     """A typed message over the length limit gets a short note, never reaches the model and isn't saved, and a long one within it is answered."""
     app, token, user_id = ws_setup
@@ -684,7 +661,6 @@ async def test_websocket_too_long_message_gets_a_note_and_is_not_saved(ws_setup)
     assert saved == [long_message.strip(), "Sure."]
 
 
-@pytest.mark.asyncio
 async def test_websocket_oversized_frame_gets_a_note_and_is_not_saved(ws_setup):
     """A socket frame over the size limit gets the too-long note in the reply language, reaches no model and isn't saved."""
     app, token, user_id = ws_setup

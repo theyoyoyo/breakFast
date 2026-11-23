@@ -36,6 +36,7 @@ async def test_user_tables_cover_schema(tmp_path, monkeypatch):
     assert set(manage.USER_TABLES) == await _tables_with_user_id(db_path)
 
 
+# Deleting a user removes their rows and leaves another user's account and rows alone
 async def test_delete_user_removes_user_data(tmp_path, monkeypatch):
     db_path = str(tmp_path / "test.db")
     monkeypatch.setattr(database, "DATABASE_PATH", db_path)

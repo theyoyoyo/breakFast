@@ -34,6 +34,7 @@ const MEAL = {
 describe('MealEditor fridge check', () => {
   beforeEach(() => { vi.mocked(checkMissingIngredients).mockReset() })
 
+  // The fridge check's missing names get a yellow underline and reach the caller; a dish without missing items stays plain
   it('underlines simple items that are not in the fridge and reports them', async () => {
     checkMissingIngredients.mockResolvedValue({ missing: ['Olives'] })
     const onMissingChange = vi.fn()
@@ -45,6 +46,7 @@ describe('MealEditor fridge check', () => {
     expect(screen.getByText('Menemen')).not.toHaveAttribute('title')
   })
 
+  // Callers such as "Today I ate" wait for the first answer, so an empty list before it would enable Confirm too early
   it('reports nothing before the first check answers', async () => {
     checkMissingIngredients.mockResolvedValue({ missing: [] })
     const onMissingChange = vi.fn()
@@ -53,6 +55,7 @@ describe('MealEditor fridge check', () => {
     await waitFor(() => expect(onMissingChange).toHaveBeenCalledWith([]))
   })
 
+  // A tap toggles an item between missing and obtained, and the caller hears the new missing list each time
   it('marks a missing item as obtained on tap, and back on a second tap', async () => {
     checkMissingIngredients.mockResolvedValue({ missing: ['Olives'] })
     const onMissingChange = vi.fn()
@@ -66,6 +69,7 @@ describe('MealEditor fridge check', () => {
     await waitFor(() => expect(onMissingChange).toHaveBeenLastCalledWith(['Olives']))
   })
 
+  // A dish with a missing ingredient is marked on its name, and the mark changes once that ingredient is obtained
   it('gives a dish a dotted mark that turns green once its missing sub-ingredients are obtained', async () => {
     checkMissingIngredients.mockResolvedValue({ missing: ['Avocado'] })
     render(<MealEditor meal={MEAL} menuMode checkFridge />)
@@ -78,6 +82,7 @@ describe('MealEditor fridge check', () => {
     expect(screen.getByText('Menemen')).toHaveAttribute('title', 'Missing ingredients are marked as obtained — tap to undo')
   })
 
+  // Marks saved with a chat card come back when the editor opens, and Save keeps them
   it('starts with marks the meal already carries, and saves them', async () => {
     checkMissingIngredients.mockResolvedValue({ missing: ['Olives'] })
     const onSave = vi.fn()
@@ -127,6 +132,7 @@ describe('MealEditor fridge check', () => {
     expect(screen.getByText('Yumurta')).toBeInTheDocument()
   })
 
+  // Favorites are templates: the underline shows what to buy, but nothing there can be marked as obtained
   it('only underlines missing items in templates (favorites), with no tap to mark', async () => {
     checkMissingIngredients.mockResolvedValue({ missing: ['Olives'] })
     const onMissingChange = vi.fn()
@@ -145,6 +151,7 @@ describe('MealEditor fridge check', () => {
     expect(onMissingChange).toHaveBeenLastCalledWith(['Olives'])
   })
 
+  // Removing the missing item runs the fridge check again on the edited menu, and the mark goes with it
   it('checks again after an edit and clears the mark once the item is removed', async () => {
     checkMissingIngredients.mockResolvedValueOnce({ missing: ['Olives'] }).mockResolvedValue({ missing: [] })
     const onMissingChange = vi.fn()
@@ -155,6 +162,7 @@ describe('MealEditor fridge check', () => {
     expect(checkMissingIngredients).toHaveBeenLastCalledWith({ menu: [expect.objectContaining({ name: 'Menemen' })] })
   })
 
+  // Editors that don't show readiness (meal history, plain views) make no fridge request
   it('does not call the backend unless checkFridge is on', async () => {
     render(<MealEditor meal={MEAL} menuMode />)
     await new Promise(resolve => setTimeout(resolve, 400))
@@ -317,6 +325,7 @@ describe('MealEditor prep words', () => {
     ] }],
   }
 
+  // Prep words appear in the info panel only, so item names stay exactly the fridge names the check compares
   it('shows the prep words per dish behind the info button, not on the item names', async () => {
     checkMissingIngredients.mockResolvedValue({ missing: ['Banana'] })
     render(<MealEditor meal={PREP_MEAL} menuMode checkFridge />)
@@ -331,6 +340,7 @@ describe('MealEditor prep words', () => {
     await waitFor(() => expect(screen.getByText('Banana')).toHaveAttribute('title', MISSING))
   })
 
+  // A changed amount keeps each ingredient's prep words, and a meal without any shows no info button
   it('keeps prep words through edits, and has no info button when there are none', () => {
     const onChange = vi.fn()
     const { unmount } = render(<MealEditor meal={PREP_MEAL} menuMode onChange={onChange} />)
@@ -358,6 +368,7 @@ describe('MealEditor prep words', () => {
     ],
   }
 
+  // A dish's method alone is enough to show the info panel
   it('shows a dish method behind the info button, also when no ingredient has prep words', () => {
     render(<MealEditor meal={METHOD_MEAL} menuMode />)
     expect(screen.queryByText('Hard-boil the eggs, peel, slice into the bread')).toBeNull()
@@ -366,6 +377,7 @@ describe('MealEditor prep words', () => {
     expect(screen.getByText('Hard-boil the eggs, peel, slice into the bread')).toBeInTheDocument()
   })
 
+  // A simple item that is cut or cooked shows its method in the info panel, and an edit keeps it
   it('shows a simple item method behind the info button and keeps it through edits', () => {
     const onChange = vi.fn()
     const meal = { menu_name: 'Bowls', menu: [
@@ -383,6 +395,7 @@ describe('MealEditor prep words', () => {
     }))
   })
 
+  // Changing an ingredient's amount doesn't drop the dish's method, which the prep plan needs
   it('keeps a dish method through edits', () => {
     const onChange = vi.fn()
     render(<MealEditor meal={METHOD_MEAL} menuMode onChange={onChange} />)
@@ -508,6 +521,7 @@ describe('MealEditor units', () => {
     ],
   }
 
+  // Stored Turkish units show in English by default, and a unit off the list keeps its own name
   it('shows known units and the dropdown in English by default', () => {
     render(<MealEditor meal={UNIT_MEAL} menuMode />)
     const [olives, powder] = screen.getAllByRole('combobox')
@@ -517,6 +531,7 @@ describe('MealEditor units', () => {
     expect(powder).toHaveValue('scoop')
   })
 
+  // An open editor follows a language switch without reopening
   it('switches the dropdowns to Turkish when the language changes', () => {
     render(<MealEditor meal={UNIT_MEAL} menuMode />)
     act(() => { applyLanguage('tr') })
@@ -525,6 +540,7 @@ describe('MealEditor units', () => {
     expect(within(olives).getAllByRole('option').map(o => o.value)).toContain('yemek kaşığı')
   })
 
+  // Sizes in ml help while picking, but the closed box keeps the short unit so rows stay narrow
   it('shows spoon and glass sizes in the open list only, the box keeps the plain unit', () => {
     const meal = { menu_name: 'Test', menu: [{ name: 'Honey', amount: 1, unit: 'yemek kaşığı', ingredients: [] }] }
     render(<MealEditor meal={meal} menuMode />)
@@ -544,6 +560,7 @@ describe('MealEditor units', () => {
     expect(widths()).toEqual(['9ch', '9ch'])
   })
 
+  // Showing a unit in another language doesn't rewrite it: only the unit the user picks changes on save
   it('saves stored units as written and a picked unit as picked', () => {
     const onSave = vi.fn()
     render(<MealEditor meal={UNIT_MEAL} menuMode onSave={onSave} />)

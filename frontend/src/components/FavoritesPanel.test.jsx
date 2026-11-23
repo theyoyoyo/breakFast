@@ -30,6 +30,7 @@ describe('FavoritesPanel readiness', () => {
       Promise.resolve({ missing: meal.menu.some(i => i.name === 'Avocado') ? ['Avocado'] : [] }))
   })
 
+  // Each saved meal is checked against the fridge with its own menu, and its badge says ready or what is missing
   it('shows a ready badge or the missing items on each favorite', async () => {
     render(<FavoritesPanel visible />)
     expect(await screen.findByTitle('Ready — everything is in your fridge')).toBeInTheDocument()

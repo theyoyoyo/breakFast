@@ -46,6 +46,7 @@ async def unauth_client(tmp_path, monkeypatch):
         yield ac
 
 
+# The right name and PIN log in and return a token with the user's name
 async def test_login_success(unauth_client):
     r = await unauth_client.post("/auth/login", json={"name": "Alice", "pin": "1234"})
     assert r.status_code == 200
@@ -55,11 +56,13 @@ async def test_login_success(unauth_client):
     assert data["user"]["is_admin"] == 1
 
 
+# A wrong PIN for a known name is refused with 401
 async def test_login_wrong_pin(unauth_client):
     r = await unauth_client.post("/auth/login", json={"name": "Alice", "pin": "9999"})
     assert r.status_code == 401
 
 
+# A name with no account is refused with 401, like a wrong PIN
 async def test_login_unknown_user(unauth_client):
     r = await unauth_client.post("/auth/login", json={"name": "Nobody", "pin": "1234"})
     assert r.status_code == 401
@@ -354,6 +357,7 @@ async def test_user_data_isolation(tmp_path, monkeypatch):
         assert len(r.json()) == 0
 
 
+# Without DEMO_USER there is no demo account, so its empty PIN doesn't log in
 async def test_demo_user_not_created_by_default(unauth_client):
     r = await unauth_client.post("/auth/login", json={"name": "demo", "pin": ""})
     assert r.status_code == 401

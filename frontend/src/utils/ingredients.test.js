@@ -61,18 +61,21 @@ describe('menuKey', () => {
 })
 
 describe('normalizeMeal', () => {
+  // A dish the model sent without ingredients or an amount becomes one simple item, counted once
   it('turns a dish with no ingredients and no amount into a simple item', () => {
     const meal = normalizeMeal({ menu_name: 'Breakfast', menu: [{ name: 'Ayran', ingredients: [] }] })
     expect(meal.menu[0]).toEqual({ name: 'Ayran', amount: 1, unit: 'pcs', ingredients: [] })
     expect(meal.ingredients).toEqual([{ name: 'Ayran', quantity: 1, unit: 'pcs' }])
   })
 
+  // The count unit a missing unit gets follows the AI language
   it('gives items without a unit the Turkish count unit in Turkish mode', () => {
     applyLanguage('tr')
     const meal = normalizeMeal({ menu_name: 'Kahvaltı', menu: [{ name: 'Ayran', ingredients: [] }] })
     expect(meal.menu[0].unit).toBe('adet')
   })
 
+  // Well-formed dishes and simple items pass through unchanged, with the flat ingredient list built from them
   it('keeps real dishes and simple items as they are', () => {
     const menemen = { name: 'Menemen', ingredients: [{ name: 'Egg', amount: 2, unit: 'adet' }] }
     const cheese = { name: 'Cheese', amount: 50, unit: 'g', ingredients: [] }
@@ -89,6 +92,7 @@ describe('normalizeMeal', () => {
     expect(meal.menu[0].ingredients).toEqual([feta])
   })
 
+  // Meals saved before the menu format keep their flat ingredient list and get no menu
   it('leaves old flat-format meals without a menu', () => {
     const meal = normalizeMeal({ meal_name: 'Toast', ingredients: [{ name: 'Bread' }] })
     expect(meal.menu).toBeUndefined()
@@ -97,12 +101,14 @@ describe('normalizeMeal', () => {
 })
 
 describe('units', () => {
+  // Every English unit has a Turkish match, and pcs is the first English unit
   it('has one English and one Turkish list that match 1-1, English by default', () => {
     expect(unitsFor('en')).toHaveLength(unitsFor('tr').length)
     expect(unitsFor()[0]).toBe('pcs')
     expect(countUnit('tr')).toBe('adet')
   })
 
+  // Known units are translated either way; a unit off the list, such as cup, is shown as written
   it('shows known units in the given language and unknown ones as written', () => {
     expect(localizeUnit('adet', 'en')).toBe('pcs')
     expect(localizeUnit('tbsp', 'tr')).toBe('yemek kaşığı')
@@ -112,12 +118,14 @@ describe('units', () => {
     expect(localizeUnit('cup', 'tr')).toBe('cup')
   })
 
+  // Old and plural spellings are read as the listed unit they mean
   it('treats other spellings of a listed unit (old "gr", plurals) as that unit', () => {
     expect(localizeUnit('gr', 'en')).toBe('g')
     expect(localizeUnit('Slices', 'tr')).toBe('dilim')
     expect(localizeUnit('pieces', 'en')).toBe('pcs')
   })
 
+  // Only spoons and glasses get their ml size, in English and in Turkish
   it('adds the fixed size to spoons and glasses in either language, nothing to other units', () => {
     expect(unitWithSize('tbsp')).toBe('tbsp (15 ml)')
     expect(unitWithSize('su bardağı')).toBe('su bardağı (200 ml)')
@@ -125,12 +133,14 @@ describe('units', () => {
     expect(unitWithSize('scoop')).toBe('scoop')
   })
 
+  // An ingredient line shows its unit in the current language, whichever language it was stored in
   it('formats an ingredient with its unit in the current language', () => {
     expect(formatIngredient({ name: 'Egg', quantity: 2, unit: 'adet' })).toBe('2 pcs Egg')
     applyLanguage('tr')
     expect(formatIngredient({ name: 'Egg', quantity: 2, unit: 'pcs' })).toBe('2 adet Egg')
   })
 
+  // The smart default unit comes from keywords in either language and is shown in the current one
   it('guesses units from English and Turkish names, in the current language', () => {
     expect(getSmartUnit('Olive oil')).toBe('tbsp')
     expect(getSmartUnit('Garlic')).toBe('clove')
@@ -142,6 +152,7 @@ describe('units', () => {
     expect(getSmartUnit('Muz')).toBe('adet')
   })
 
+  // A unit remembered for a name is shown in whichever language is current
   it('shows a remembered unit in the current language', () => {
     rememberUnit('Yumurta', 'adet')
     expect(resolveUnit('Yumurta')).toBe('pcs')

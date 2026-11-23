@@ -221,7 +221,6 @@ class TestRevisionSchema:
 
 class TestPipelineOrchestrator:
     # The final meal gets one icon from the app's list on the server, so every device shows the same one
-    @pytest.mark.asyncio
     async def test_final_meal_gets_an_emoji(self):
         from models.meal import BREAKFAST_EMOJIS
         events, calls = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)))
@@ -229,14 +228,12 @@ class TestPipelineOrchestrator:
         assert all("emoji" not in c["message"] for c in calls)
 
     # A meal that already has an icon keeps it
-    @pytest.mark.asyncio
     async def test_meal_keeps_its_emoji(self):
         from models.meal import with_emoji
         assert with_emoji({"menu_name": "Eggs", "emoji": "🥯"})["emoji"] == "🥯"
         assert with_emoji({"menu_name": "Eggs", "emoji": ""})["emoji"]
 
     # The events come in order: drafting, the draft, analyzing, the review, finalizing, then the text
-    @pytest.mark.asyncio
     async def test_event_order(self):
         events, _ = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS), ["Bigger portion"]))
         kinds = [e.get("step", e["type"]) for e in events]
@@ -244,7 +241,6 @@ class TestPipelineOrchestrator:
         assert [e["content"] for e in events if e["type"] == "review"] == ["- Bigger portion"]
 
     # The reply is the present step's text, then the revised meal in a json block
-    @pytest.mark.asyncio
     async def test_reply_is_text_then_revised_meal(self):
         bigger = _meal({"name": "eggs", "amount": 3, "unit": "pcs"})
         events, _ = await _run(_draft(_meal(EGGS)), _revision(bigger))
@@ -253,7 +249,6 @@ class TestPipelineOrchestrator:
         assert extract_json_block(final)["menu"][0]["ingredients"][0]["amount"] == 3
 
     # The reviser gets the draft's meal as JSON and what code found in it: fridge misses, avoid hits and units
-    @pytest.mark.asyncio
     async def test_reviser_gets_draft_meal_and_code_check(self):
         draft = _meal(
             EGGS, {"name": "Salt", "amount": 1, "unit": "pinch"},
@@ -271,7 +266,6 @@ class TestPipelineOrchestrator:
         assert review.startswith("- CODE CHECK: Not in the fridge: Salt, Shellfish")
 
     # After a chat the block ends the draft's and the reviser's messages, and the review lists the asks first
-    @pytest.mark.asyncio
     async def test_chat_reaches_the_draft_and_the_reviser(self):
         block = "THE CHAT SO FAR\n\n- User (latest message): I only have 10 minutes."
         asks = [{"from": [2, 4], "ask": "Simit is fine again"}, {"from": [], "ask": "Ready in 10 minutes"}, {"from": [3], "ask": " "}]
@@ -289,7 +283,6 @@ class TestPipelineOrchestrator:
         assert fresh[0]["message"] == "Suggest" and CHAT_STEP not in fresh[1]["system"]
 
     # A clean draft tells the reviser that code found nothing
-    @pytest.mark.asyncio
     async def test_code_check_silent_when_clean(self):
         events, calls = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)))
         assert [c for c in calls if c["kind"] == "json"][1]["message"].endswith("Code check:\n- Nothing found.")
@@ -297,7 +290,6 @@ class TestPipelineOrchestrator:
 
     # The revised meal reaches the app's format: a dish loses its servings, a simple item keeps its method
     # (how it's readied, #156), and empty methods and prep words are left out
-    @pytest.mark.asyncio
     async def test_revised_meal_is_cleaned(self):
         revised = _meal({"name": "eggs", "amount": 2, "unit": "pcs", "prep": ""})
         revised["menu"][0].update({"amount": 1, "unit": "pcs", "method": "Boil for 8 minutes"})
@@ -313,7 +305,6 @@ class TestPipelineOrchestrator:
     # A swap's mark stays only when it's true (#148): feta stands in for the missing salmon. A mark naming an item the
     # draft had in the fridge, one on an ingredient the fridge lacks, one whose item is still in the dish, and an
     # empty one are dropped
-    @pytest.mark.asyncio
     async def test_only_true_swaps_keep_their_mark(self):
         context = {**SAMPLE_CONTEXT, "ingredients": [{"name": "eggs"}, {"name": "Feta"}, {"name": "Milk"}]}
         draft = _meal(EGGS, {"name": "Salmon", "amount": 50, "unit": "g"}, {"name": "Chives", "amount": 1, "unit": "tbsp"})
@@ -329,7 +320,6 @@ class TestPipelineOrchestrator:
         assert "replaces" not in ingredients[0]
 
     # A "dish" made of one item named as itself (Banana: Banana) is that item on its own, and keeps its method
-    @pytest.mark.asyncio
     async def test_self_named_dish_becomes_a_simple_item(self):
         revised = _meal(EGGS)
         revised["menu"].append({
@@ -342,14 +332,12 @@ class TestPipelineOrchestrator:
         assert banana == {"ingredients": [], "name": "Banana", "method": "Peel and slice", "amount": 100, "unit": "g"}
 
     # A revised meal with more fridge or unit problems than the draft loses to the draft's meal
-    @pytest.mark.asyncio
     async def test_falls_back_to_draft_when_revision_is_worse(self):
         worse = _meal({"name": "Poached eggs", "amount": 2, "unit": "pcs"})
         events, _ = await _run(_draft(_meal(EGGS)), _revision(worse))
         assert _without_emoji(extract_json_block(_final(events))) == _meal(EGGS)
 
     # A revised meal with a new avoid-list item loses to the draft, even when the draft has more fridge misses
-    @pytest.mark.asyncio
     async def test_falls_back_to_draft_when_revision_adds_an_avoided_item(self):
         draft = _meal({"name": "Toast", "amount": 1, "unit": "pcs"}, {"name": "Jam", "amount": 1, "unit": "tbsp"})
         allergen = _meal({"name": "Shellfish", "amount": 100, "unit": "g"})
@@ -357,7 +345,6 @@ class TestPipelineOrchestrator:
         assert _without_emoji(extract_json_block(_final(events))) == draft
 
     # A revision that can't be read, or a reviser that fails, leaves the draft's meal
-    @pytest.mark.asyncio
     async def test_unreadable_or_failed_revision_keeps_draft_meal(self):
         from services.llm import LLMUnavailableError
         for revision in ("not json", json.dumps({"changes": []}), LLMUnavailableError("down")):
@@ -365,7 +352,6 @@ class TestPipelineOrchestrator:
             assert _without_emoji(extract_json_block(_final(events))) == _meal(EGGS)
 
     # The present step reads only the final meal, not the draft's text, and the mode's temperature
-    @pytest.mark.asyncio
     async def test_present_reads_only_the_final_meal(self):
         events, calls = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)), temperature=0.9)
         present = next(c for c in calls if c["kind"] == "stream")
@@ -375,13 +361,11 @@ class TestPipelineOrchestrator:
         assert present["temperature"] == 0.9
 
     # When the present step fails, code writes the text from the menu name and description
-    @pytest.mark.asyncio
     async def test_code_text_when_present_fails(self):
         events, _ = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)), present=RuntimeError("down"))
         assert _final(events).startswith("**Eggs**\n\nWarm eggs.\n\n```json\n")
 
     # A fenced block in the present step's text is dropped, so the meal is the reply's only json block
-    @pytest.mark.asyncio
     async def test_present_text_keeps_no_code_block(self):
         other = 'Enjoy!\n```json\n{"menu": []}\n```'
         events, _ = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)), present=other)
@@ -390,7 +374,6 @@ class TestPipelineOrchestrator:
         assert _without_emoji(extract_json_block(final)) == _meal(EGGS)
 
     # The draft is a structured call: its text first, then the meal in the reviser's shape without a method
-    @pytest.mark.asyncio
     async def test_draft_is_called_with_its_schema(self):
         events, calls = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)), temperature=0.9)
         draft = calls[0]
@@ -405,7 +388,6 @@ class TestPipelineOrchestrator:
         assert next(e["content"] for e in events if e["type"] == "draft").startswith("Enjoy!\n\n```json\n")
 
     # The draft's meal reaches the reviser in the app's format: a dish loses its servings, a one-item dish named as itself is a simple item
-    @pytest.mark.asyncio
     async def test_draft_meal_is_cleaned_for_the_reviser(self):
         drafted = _meal({**EGGS, "prep": " "})
         drafted["menu"][0].update(amount=1, unit="pcs")
@@ -418,7 +400,6 @@ class TestPipelineOrchestrator:
         ]
 
     # An empty menu is the fridge-too-small note: its text is sent as it is, without a review and with no meal block
-    @pytest.mark.asyncio
     async def test_empty_menu_sends_the_note(self):
         note = "Your fridge has only tea and salt. Add a few items in the Fridge tab."
         events, calls = await _run(_draft({**_meal(EGGS), "menu": []}, text=note), _revision(_meal(EGGS)))
@@ -427,7 +408,6 @@ class TestPipelineOrchestrator:
         assert next(e["content"] for e in events if e["type"] == "review") == "- No meal in the draft, so nothing to revise."
 
     # An empty menu without a note gets code's low-ingredients text in the reply language, not the retry text
-    @pytest.mark.asyncio
     async def test_empty_menu_without_a_note_says_ingredients_are_low(self):
         empty = _draft({**_meal(EGGS), "menu": []}, text=" ")
         events, calls = await _run(empty, _revision(_meal(EGGS)))
@@ -436,7 +416,6 @@ class TestPipelineOrchestrator:
         assert _final(events) == LOW_INGREDIENT_TEXTS["tr"]
 
     # A draft reply that can't be read ends with the retry text in the reply language, with no meal block
-    @pytest.mark.asyncio
     async def test_unreadable_draft_gets_the_retry_text(self):
         for reply in ('{"text": "Enjoy!", "meal": {"menu": [', "[]", '{"text": "Enjoy!", "meal": {"menu": "eggs"}}'):
             events, calls = await _run(reply, _revision(_meal(EGGS)))
@@ -446,7 +425,6 @@ class TestPipelineOrchestrator:
         assert _final(events) == RETRY_TEXTS["tr"]
 
     # The draft runs at the mode's temperature with the mode block, and the reviser cool with the mode line
-    @pytest.mark.asyncio
     async def test_passes_temperature_and_mode(self):
         _, calls = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)), mode="explore", temperature=0.9)
         draft, reviser = calls[0], calls[1]
@@ -457,7 +435,6 @@ class TestPipelineOrchestrator:
 
     # The draft and the reply text run on the suggestion model and the review on the reviser's, for the reply
     # language, so a model per task or language can serve them (#192)
-    @pytest.mark.asyncio
     async def test_calls_name_their_task_and_language(self):
         _, calls = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)), context={**SAMPLE_CONTEXT, "language": "tr"})
         assert [c["route"] for c in calls] == [
@@ -466,7 +443,6 @@ class TestPipelineOrchestrator:
         ]
 
     # Favorites mode's draft prompt lists the context's saved meals, staples and ratings
-    @pytest.mark.asyncio
     async def test_favorites_mode_gets_taste_hints(self):
         context = {
             **SAMPLE_CONTEXT,
@@ -482,7 +458,6 @@ class TestPipelineOrchestrator:
         assert len(system) > len(plain[0]["system"])
 
     # Pipeline propagates LLMUnavailableError from the draft step
-    @pytest.mark.asyncio
     async def test_propagates_llm_error(self):
         from services.llm import LLMUnavailableError
         with pytest.raises(LLMUnavailableError):

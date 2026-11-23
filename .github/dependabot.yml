@@ -1,0 +1,33 @@
+# Weekly dependency updates, one pull request per kind (#258): every update of a kind is
+# grouped, so a week brings at most three pull requests for CI to check.
+version: 2
+updates:
+  # The workflows' actions, pinned to a commit with the version in a comment.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # backend/requirements.txt and requirements-dev.txt.
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      pip:
+        patterns: ["*"]
+
+  # frontend/package.json and its lock file.
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      npm:
+        patterns: ["*"]

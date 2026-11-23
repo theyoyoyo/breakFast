@@ -878,7 +878,8 @@ async def test_chat_once_sends_the_typed_messages_in_turn():
     calls = []
 
     async def fake_stream(system_prompt, history, message, temperature=None, **_):
-        calls.append((system_prompt, [dict(h) for h in history], message, temperature))
+        calls.append({"system": system_prompt, "history": [dict(h) for h in history],
+                      "message": message, "temperature": temperature})
         yield f"reply {len(calls)}"
 
     scenario = chat_scenario("en", "pressed")
@@ -889,15 +890,15 @@ async def test_chat_once_sends_the_typed_messages_in_turn():
     assert list(replies) == ["chat", *CHAT_MESSAGES]
     assert replies["chat"] == "\n".join(typed) and replies["allowed"] == "reply 4"
     # Each message carries the app's note, as the server sends it, while the history keeps the words alone
-    assert [message for _, _, message, _ in calls] == [build_chat_message(t, "en") for t in typed]
-    assert [h["content"] for h in calls[-1][1] if h["role"] == "user"][-1] == typed[2]
-    assert {temperature for *_, temperature in calls} == {None}
+    assert [c["message"] for c in calls] == [build_chat_message(t, "en") for t in typed]
+    assert [h["content"] for h in calls[-1]["history"] if h["role"] == "user"][-1] == typed[2]
+    assert {c["temperature"] for c in calls} == {None}
     assert len(sent) == 1 and "breakfast assistant" in next(iter(sent))
     # The first message comes after the first press; the last has the whole chat before it
-    first_history, last_history = calls[0][1], calls[-1][1]
+    first_history, last_history = calls[0]["history"], calls[-1]["history"]
     assert first_history == chat_history(chat_rows(scenario["chat"][:1], None))
     assert first_history[1]["content"].startswith("A breakfast for you.\n\nMenu shown: Breakfast plate.")
-    assert not any("```" in h["content"] for _, history, _, _ in calls for h in history)
+    assert not any("```" in h["content"] for c in calls for h in c["history"])
     assert len(last_history) == 2 * 2 + 3 * 2  # both presses, and the three typed messages before it with their replies
     assert last_history[-1] == {"role": "assistant", "content": "reply 3"}
 

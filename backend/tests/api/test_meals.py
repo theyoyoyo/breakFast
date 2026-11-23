@@ -22,12 +22,14 @@ STRUCTURED_MEAL = {
 }
 
 
+# A new user's meal history is empty
 async def test_list_meals_empty(client):
     r = await client.get("/meals/")
     assert r.status_code == 200
     assert r.json() == []
 
 
+# A logged meal comes back with its name, ingredients, steps, an id and no rating yet
 async def test_log_meal(client):
     r = await client.post("/meals/", json=SAMPLE_MEAL)
     assert r.status_code == 201

@@ -11,10 +11,12 @@ describe('theme', () => {
     delete document.documentElement.dataset.theme
   })
 
+  // The theme list's order is the order Settings shows, with the default first
   it('offers five themes in color-wheel order, orange first', () => {
     expect(THEMES.map(t => t.key)).toEqual(['orange', 'green', 'teal', 'blue', 'purple'])
   })
 
+  // Each non-default theme has its own CSS block, so picking it changes the colors
   it('has a stylesheet block for every theme except the default', async () => {
     const fs = await import('node:fs')
     const path = await import('node:path')
@@ -156,12 +158,14 @@ describe('theme', () => {
     }
   })
 
+  // Applying a theme sets it on the page and caches it on the device
   it('sets data-theme for purple and green and remembers the choice', () => {
     expect(applyTheme('purple')).toBe('purple')
     expect(document.documentElement.dataset.theme).toBe('purple')
     expect(storedTheme()).toBe('purple')
   })
 
+  // The default theme removes data-theme, so the plain :root colors apply
   it('uses the default stylesheet for orange (no data-theme)', () => {
     applyTheme('green')
     applyTheme('orange')
@@ -169,6 +173,7 @@ describe('theme', () => {
     expect(storedTheme()).toBe('orange')
   })
 
+  // An unknown theme, given or cached, resets to orange
   it('falls back to orange for missing or unknown values', () => {
     expect(storedTheme()).toBe('orange')
     expect(applyTheme(undefined)).toBe('orange')

@@ -23,7 +23,6 @@ from services.llm import (
 )
 
 
-@pytest.mark.asyncio
 async def test_check_llm_availability_ollama_up():
     """When Ollama responds 200, availability is True."""
     mock_response = AsyncMock()
@@ -40,7 +39,6 @@ async def test_check_llm_availability_ollama_up():
         assert result is True
 
 
-@pytest.mark.asyncio
 async def test_check_llm_availability_ollama_down():
     """When Ollama is unreachable, availability is False."""
     with patch("services.llm.httpx.AsyncClient") as mock_client_cls:
@@ -54,7 +52,6 @@ async def test_check_llm_availability_ollama_down():
         assert result is False
 
 
-@pytest.mark.asyncio
 async def test_chat_stream_raises_when_llm_unavailable():
     """When LLM is unavailable, chat_stream raises LLMUnavailableError."""
     with patch("services.llm.check_llm_availability", return_value=False):
@@ -64,7 +61,6 @@ async def test_chat_stream_raises_when_llm_unavailable():
         assert str(exc_info.value) == LLM_UNAVAILABLE_MESSAGE
 
 
-@pytest.mark.asyncio
 async def test_fallback_message_content():
     """Fallback message is the expected Turkish string (first lyric line)."""
     assert LLM_UNAVAILABLE_MESSAGE == "Benim aklım ocakta kaldı~"
@@ -100,7 +96,6 @@ def test_fallback_lyrics_has_12_lines():
     assert len(FALLBACK_LYRICS) == 12
 
 
-@pytest.mark.asyncio
 async def test_chat_json_sends_schema_as_format():
     """chat_json asks Ollama for one non-streamed reply shaped by the schema and returns its text."""
     from unittest.mock import MagicMock
@@ -127,7 +122,6 @@ async def test_chat_json_sends_schema_as_format():
     assert payload["options"] == {"num_ctx": OLLAMA_NUM_CTX, "temperature": 0.6}
 
 
-@pytest.mark.asyncio
 async def test_chat_json_raises_when_llm_unavailable():
     """chat_json raises LLMUnavailableError so callers can fall back to a lyric."""
     from services.llm import chat_json

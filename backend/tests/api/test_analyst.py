@@ -10,8 +10,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from unittest.mock import patch
 
-import pytest
-
 MOCK_ANALYSIS = (
     "Bu kahvaltı protein açısından zengin.\n\n"
     "```json\n"
@@ -29,7 +27,6 @@ def _mock_stream_factory(response_text):
 
 
 # Verifies endpoint returns 200 with mocked LLM response
-@pytest.mark.asyncio
 async def test_analyze_meal_success(client):
     with patch("routers.analyst.stream_response", side_effect=_mock_stream_factory(MOCK_ANALYSIS)):
         r = await client.post("/analyst/analyze", json={
@@ -45,7 +42,6 @@ async def test_analyze_meal_success(client):
 
 
 # Accepts structured ingredients with quantity and unit
-@pytest.mark.asyncio
 async def test_analyze_structured_ingredients(client):
     with patch("routers.analyst.stream_response", side_effect=_mock_stream_factory(MOCK_ANALYSIS)):
         r = await client.post("/analyst/analyze", json={
@@ -61,7 +57,6 @@ async def test_analyze_structured_ingredients(client):
 
 
 # Caches analysis result when meal_id is provided
-@pytest.mark.asyncio
 async def test_analyze_caches_result(client):
     meal = (await client.post("/meals/", json={
         "meal_name": "Toast",
@@ -84,7 +79,6 @@ async def test_analyze_caches_result(client):
 
 
 # Returns cached result on second call without hitting LLM
-@pytest.mark.asyncio
 async def test_analyze_returns_cached(client):
     meal = (await client.post("/meals/", json={
         "meal_name": "Toast",
@@ -110,7 +104,6 @@ async def test_analyze_returns_cached(client):
 
 
 # Updating a meal clears the cache, next analysis recalculates
-@pytest.mark.asyncio
 async def test_update_clears_cache_then_reanalyze(client):
     meal = (await client.post("/meals/", json={
         "meal_name": "Toast",
@@ -148,7 +141,6 @@ async def test_update_clears_cache_then_reanalyze(client):
 
 
 # Verifies endpoint handles LLM unavailability gracefully
-@pytest.mark.asyncio
 async def test_analyze_meal_llm_unavailable(client):
     from services.llm import LLMUnavailableError
 
@@ -169,14 +161,12 @@ async def test_analyze_meal_llm_unavailable(client):
 
 
 # Verifies endpoint validates request body
-@pytest.mark.asyncio
 async def test_analyze_meal_missing_fields(client):
     r = await client.post("/analyst/analyze", json={})
     assert r.status_code == 422
 
 
 # Verifies empty ingredients list is handled
-@pytest.mark.asyncio
 async def test_analyze_meal_empty_ingredients(client):
     with patch("routers.analyst.stream_response", side_effect=_mock_stream_factory("Analiz tamamlandı.")):
         r = await client.post("/analyst/analyze", json={
@@ -189,7 +179,6 @@ async def test_analyze_meal_empty_ingredients(client):
 
 
 # Analysis without meal_id works but doesn't cache
-@pytest.mark.asyncio
 async def test_analyze_without_meal_id_no_cache(client):
     with patch("routers.analyst.stream_response", side_effect=_mock_stream_factory(MOCK_ANALYSIS)):
         r = await client.post("/analyst/analyze", json={

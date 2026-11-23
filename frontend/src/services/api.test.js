@@ -35,11 +35,13 @@ beforeEach(() => {
 
 
 describe('apiFetch error handling', () => {
+  // An error status reaches the caller as a thrown error with the status in it
   it('throws on non-2xx responses', async () => {
     vi.stubGlobal('fetch', mockFetch(404, { detail: 'Not found' }))
     await expect(getIngredients()).rejects.toThrow('API error 404')
   })
 
+  // A 204 reply has no body to parse, so the call resolves with nothing
   it('returns undefined for 204 No Content', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 204 }))
     const result = await deleteIngredient(1)
@@ -207,6 +209,7 @@ describe('logout', () => {
 
 
 describe('ingredient API', () => {
+  // REST calls carry the token in the Authorization header, never in the URL
   it('GET /ingredients/ calls the right URL with auth header', async () => {
     const stub = mockFetch(200, [])
     vi.stubGlobal('fetch', stub)
@@ -221,6 +224,7 @@ describe('ingredient API', () => {
     )
   })
 
+  // Adding an item sends its name, expiry date and group as one JSON body
   it('POST /ingredients/ sends the ingredient payload', async () => {
     const stub = mockFetch(201, { id: 1, name: 'eggs' })
     vi.stubGlobal('fetch', stub)
@@ -234,6 +238,7 @@ describe('ingredient API', () => {
 
 
 describe('preference API', () => {
+  // The preference key travels encoded in the path, and the body carries only the value
   it('PUT /preferences/{key} sends only the value in the body', async () => {
     const stub = mockFetch(200, { key: 'fav:eggs', value: 'eggs' })
     vi.stubGlobal('fetch', stub)

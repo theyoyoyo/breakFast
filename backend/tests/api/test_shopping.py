@@ -2,12 +2,14 @@
 
 
 
+# A new user's shopping list is empty
 async def test_list_empty_on_fresh_db(client):
     r = await client.get("/shopping/")
     assert r.status_code == 200
     assert r.json() == []
 
 
+# An item added to the shopping list comes back with its name and an id
 async def test_add_item(client):
     r = await client.post("/shopping/", json={"item_name": "eggs"})
     assert r.status_code == 201
@@ -16,6 +18,7 @@ async def test_add_item(client):
     assert "id" in data
 
 
+# Adding an item already on the list keeps one row
 async def test_add_duplicate_ignored(client):
     await client.post("/shopping/", json={"item_name": "milk"})
     r = await client.post("/shopping/", json={"item_name": "milk"})
@@ -26,6 +29,7 @@ async def test_add_duplicate_ignored(client):
     assert len(milks) == 1
 
 
+# A deleted item is gone from the shopping list
 async def test_delete_item(client):
     created = (await client.post("/shopping/", json={"item_name": "cheese"})).json()
     r = await client.delete(f"/shopping/{created['id']}")
@@ -34,6 +38,7 @@ async def test_delete_item(client):
     assert all(i["id"] != created["id"] for i in listed)
 
 
+# A bulk add puts every item on the list and says how many it added
 async def test_bulk_add(client):
     payload = [{"item_name": "tomato"}, {"item_name": "onion"}]
     r = await client.post("/shopping/bulk", json=payload)
@@ -43,6 +48,7 @@ async def test_bulk_add(client):
     assert "tomato" in names and "onion" in names
 
 
+# A bulk add skips an item that is already on the list
 async def test_bulk_add_skips_duplicates(client):
     await client.post("/shopping/", json={"item_name": "butter"})
     payload = [{"item_name": "butter"}, {"item_name": "cream"}]
@@ -53,12 +59,14 @@ async def test_bulk_add_skips_duplicates(client):
     assert len(butters) == 1
 
 
+# Buying nothing is accepted and reports zero items bought
 async def test_bought_empty_ids(client):
     r = await client.post("/shopping/bought", json={"ids": []})
     assert r.status_code == 200
     assert r.json() == {"bought": 0}
 
 
+# Bought items move from the shopping list into the fridge
 async def test_bought_adds_to_ingredients_and_removes_from_list(client):
     # Add items to shopping list
     item1 = (await client.post("/shopping/", json={"item_name": "yogurt"})).json()
@@ -80,6 +88,7 @@ async def test_bought_adds_to_ingredients_and_removes_from_list(client):
     assert "bread" in names
 
 
+# A bought item's best before date reaches its fridge item
 async def test_bought_with_expiry_dates(client):
     item = (await client.post("/shopping/", json={"item_name": "milk"})).json()
 
@@ -95,6 +104,7 @@ async def test_bought_with_expiry_dates(client):
     assert milk["expiry_date"] == "2026-04-15"
 
 
+# Buying an item already in the fridge updates its expiry instead of adding a second row
 async def test_bought_upserts_existing_ingredient(client):
     # Add an ingredient first
     await client.post("/ingredients/", json={"name": "eggs"})

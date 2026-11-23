@@ -6,12 +6,14 @@ import pytest
 # Profile CRUD
 # ---------------------------------------------------------------------------
 
+# A new user has no profile yet, so the endpoint returns null
 async def test_get_profile_returns_none_initially(client):
     r = await client.get("/profile/")
     assert r.status_code == 200
     assert r.json() is None
 
 
+# The first save creates the profile with every field given
 async def test_upsert_profile_creates(client):
     body = {"age": 30, "gender": "male", "height_cm": 180, "weight_kg": 80.5, "activity_level": "moderate"}
     r = await client.put("/profile/", json=body)
@@ -24,6 +26,7 @@ async def test_upsert_profile_creates(client):
     assert data["activity_level"] == "moderate"
 
 
+# A second save updates the existing profile
 async def test_upsert_profile_updates(client):
     await client.put("/profile/", json={"age": 25, "gender": "female"})
     r = await client.put("/profile/", json={"age": 26, "gender": "female", "height_cm": 165})
@@ -33,6 +36,7 @@ async def test_upsert_profile_updates(client):
     assert data["height_cm"] == 165
 
 
+# The saved profile is what a later read returns
 async def test_get_profile_returns_saved(client):
     await client.put("/profile/", json={"age": 40, "weight_kg": 75})
     r = await client.get("/profile/")
@@ -42,6 +46,7 @@ async def test_get_profile_returns_saved(client):
     assert data["weight_kg"] == 75
 
 
+# A save with only some fields leaves the others empty
 async def test_upsert_profile_partial_fields(client):
     r = await client.put("/profile/", json={"age": 28})
     assert r.status_code == 200
@@ -95,12 +100,14 @@ async def test_country_too_long_rejected(client):
 # Supplements CRUD
 # ---------------------------------------------------------------------------
 
+# A new user has no supplements
 async def test_list_supplements_empty(client):
     r = await client.get("/profile/supplements")
     assert r.status_code == 200
     assert r.json() == []
 
 
+# A new supplement is saved with its name, contents, frequency and an id
 async def test_create_supplement(client):
     r = await client.post("/profile/supplements", json={"name": "Vitamin D", "contents": "1000 IU", "frequency": "daily"})
     assert r.status_code == 201
@@ -111,6 +118,7 @@ async def test_create_supplement(client):
     assert "id" in data
 
 
+# A supplement given only a name gets empty contents and a daily frequency
 async def test_create_supplement_defaults(client):
     r = await client.post("/profile/supplements", json={"name": "Omega-3"})
     assert r.status_code == 201
@@ -119,17 +127,20 @@ async def test_create_supplement_defaults(client):
     assert data["frequency"] == "daily"
 
 
+# A second supplement with the same name is refused with 409
 async def test_duplicate_supplement_returns_409(client):
     await client.post("/profile/supplements", json={"name": "Zinc"})
     r = await client.post("/profile/supplements", json={"name": "Zinc"})
     assert r.status_code == 409
 
 
+# A frequency outside the allowed values is refused with 422
 async def test_invalid_frequency_returns_422(client):
     r = await client.post("/profile/supplements", json={"name": "X", "frequency": "weekly"})
     assert r.status_code == 422
 
 
+# An edit changes a supplement's name and frequency
 async def test_update_supplement(client):
     r = await client.post("/profile/supplements", json={"name": "Magnesium", "frequency": "daily"})
     sid = r.json()["id"]
@@ -147,11 +158,13 @@ async def test_rename_to_existing_supplement_returns_409(client):
     assert r.status_code == 409
 
 
+# Editing a supplement that doesn't exist gets 404
 async def test_update_nonexistent_returns_404(client):
     r = await client.put("/profile/supplements/9999", json={"name": "X", "contents": "", "frequency": "daily"})
     assert r.status_code == 404
 
 
+# A deleted supplement is gone from the list
 async def test_delete_supplement(client):
     r = await client.post("/profile/supplements", json={"name": "Iron"})
     sid = r.json()["id"]
@@ -162,6 +175,7 @@ async def test_delete_supplement(client):
     assert all(s["name"] != "Iron" for s in listed.json())
 
 
+# Supplements are listed in name order
 async def test_list_supplements_ordered_by_name(client):
     await client.post("/profile/supplements", json={"name": "Zinc"})
     await client.post("/profile/supplements", json={"name": "Biotin"})
@@ -175,6 +189,7 @@ async def test_list_supplements_ordered_by_name(client):
 # Daily toggle
 # ---------------------------------------------------------------------------
 
+# Today's list shows a supplement as not taken until it is marked taken
 async def test_today_supplements_with_taken_status(client):
     r = await client.post("/profile/supplements", json={"name": "Vitamin C", "frequency": "sometimes"})
     sid = r.json()["id"]
@@ -198,6 +213,7 @@ async def test_today_supplements_with_taken_status(client):
     assert vitc["taken_today"] == 0
 
 
+# Marking a pill taken twice is not an error and leaves it taken
 async def test_toggle_idempotent(client):
     r = await client.post("/profile/supplements", json={"name": "B12", "frequency": "sometimes"})
     sid = r.json()["id"]
@@ -209,6 +225,7 @@ async def test_toggle_idempotent(client):
     assert r2.json()["taken"] is True
 
 
+# A supplement marked taken today and then deleted is gone from today's list
 async def test_delete_supplement_also_deletes_log(client):
     r = await client.post("/profile/supplements", json={"name": "Probiotic", "frequency": "sometimes"})
     sid = r.json()["id"]

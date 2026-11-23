@@ -15,7 +15,6 @@ from contextlib import ExitStack
 from unittest.mock import patch
 
 import aiosqlite
-import pytest
 import pytest_asyncio
 from fastapi import WebSocketDisconnect
 from starlette.testclient import TestClient
@@ -82,7 +81,6 @@ def _pushes(received, kind="session_updated"):
 
 
 # The user's other socket is told about the saved reply, without its tokens; the socket that asked isn't told.
-@pytest.mark.asyncio
 async def test_second_socket_gets_session_updated_after_reply(sync_setup):
     app, users = sync_setup
     token, _, session_id = users["ada"]
@@ -102,7 +100,6 @@ async def test_second_socket_gets_session_updated_after_reply(sync_setup):
 
 
 # A reply in one user's chat never reaches another user's socket.
-@pytest.mark.asyncio
 async def test_other_users_socket_gets_nothing(sync_setup):
     app, users = sync_setup
     ada_token, _, ada_session = users["ada"]
@@ -115,7 +112,6 @@ async def test_other_users_socket_gets_nothing(sync_setup):
 
 
 # A message saved over REST tells every socket of that user, and no other user's.
-@pytest.mark.asyncio
 async def test_rest_save_notifies_users_sockets(sync_setup):
     app, users = sync_setup
     ada_token, _, ada_session = users["ada"]
@@ -135,7 +131,6 @@ async def test_rest_save_notifies_users_sockets(sync_setup):
 
 
 # PUT rewrites the user's own message and tells their sockets; another user's message is out of reach.
-@pytest.mark.asyncio
 async def test_message_edit_replaces_content_and_notifies(sync_setup):
     app, users = sync_setup
     ada_token, _, ada_session = users["ada"]
@@ -163,7 +158,6 @@ async def test_message_edit_replaces_content_and_notifies(sync_setup):
 
 # A card's "Today I ate" version is stored on its message, comes back with the messages and pushes
 # to the user's sockets; a later card edit keeps it, and another user can't write it.
-@pytest.mark.asyncio
 async def test_ate_draft_saved_on_message_and_pushed(sync_setup):
     app, users = sync_setup
     ada_token, _, ada_session = users["ada"]
@@ -191,7 +185,6 @@ async def test_ate_draft_saved_on_message_and_pushed(sync_setup):
 
 
 # A message update with nothing to change, or a draft that isn't a meal object, is refused
-@pytest.mark.asyncio
 async def test_message_update_validates_body(sync_setup):
     app, users = sync_setup
     ada_token, _, ada_session = users["ada"]
@@ -206,7 +199,6 @@ async def test_message_update_validates_body(sync_setup):
 
 # The selected meal card is stored on the session, marked in the messages and pushed; null clears it,
 # and another user's session or a message from another session can't be selected.
-@pytest.mark.asyncio
 async def test_selected_card_saved_and_pushed(sync_setup):
     app, users = sync_setup
     ada_token, _, ada_session = users["ada"]
@@ -236,7 +228,6 @@ async def test_selected_card_saved_and_pushed(sync_setup):
 
 
 # A meal sent to chat with select: true becomes the selected card
-@pytest.mark.asyncio
 async def test_saved_message_can_be_selected(sync_setup):
     app, users = sync_setup
     ada_token, _, ada_session = users["ada"]
@@ -249,7 +240,6 @@ async def test_saved_message_can_be_selected(sync_setup):
 
 
 # A new suggestion with a meal block becomes the selected card, so the user's other devices select it too
-@pytest.mark.asyncio
 async def test_suggestion_becomes_selected_card(sync_setup):
     app, users = sync_setup
     ada_token, _, ada_session = users["ada"]
@@ -269,7 +259,6 @@ async def test_suggestion_becomes_selected_card(sync_setup):
 
 
 # Marking a pill and every supplement change in Settings tell the user's sockets, and no other user's.
-@pytest.mark.asyncio
 async def test_supplement_changes_notify_users_sockets(sync_setup):
     app, users = sync_setup
     ada_token, _, _ = users["ada"]
@@ -289,7 +278,6 @@ async def test_supplement_changes_notify_users_sockets(sync_setup):
 
 
 # A shopping suggestions change, or bringing back removed suggestions, tells the user's sockets, and no other user's.
-@pytest.mark.asyncio
 async def test_shopping_suggestions_change_notifies_users_sockets(sync_setup):
     app, users = sync_setup
     ada_token, _, _ = users["ada"]
@@ -339,7 +327,6 @@ class _RecordingSocket:
 
 
 # A device dropping mid-reply doesn't stop the reply: it is saved whole and the user's other socket is told.
-@pytest.mark.asyncio
 async def test_reply_is_saved_when_socket_drops_mid_stream(sync_setup):
     _, users = sync_setup
     token, user_id, session_id = users["ada"]
@@ -361,7 +348,6 @@ async def test_reply_is_saved_when_socket_drops_mid_stream(sync_setup):
 
 
 # A socket that can't be sent to is dropped from the registry; the user's working socket still gets the push.
-@pytest.mark.asyncio
 async def test_notify_forgets_a_socket_that_fails():
     class Broken:
         async def send_json(self, data):

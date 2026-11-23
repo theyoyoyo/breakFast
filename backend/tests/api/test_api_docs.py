@@ -25,7 +25,6 @@ async def _statuses(app):
         return [(await ac.get(p)).status_code for p in DOC_PATHS]
 
 
-@pytest.mark.asyncio
 async def test_docs_routes_are_off_by_default(client, restore_main, monkeypatch):
     """With API_DOCS off, /docs, /redoc and /openapi.json all return 404."""
     import config
@@ -35,7 +34,6 @@ async def test_docs_routes_are_off_by_default(client, restore_main, monkeypatch)
     assert await _statuses(app) == [404, 404, 404]
 
 
-@pytest.mark.asyncio
 async def test_docs_routes_are_served_when_enabled(client, restore_main, monkeypatch):
     """With API_DOCS on, /docs, /redoc and /openapi.json all return 200."""
     import config
