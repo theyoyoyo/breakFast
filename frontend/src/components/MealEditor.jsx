@@ -272,10 +272,10 @@ export default function MealEditor({
 
   // ── Prep time ────────────────────────────────────────────────────────────
 
+  // Digits only, up to 999; empty stays allowed while typing
   const handlePrepTimeChange = (val) => {
     if (val === '') { setPrepTime(''); return }
-    const num = parseInt(val, 10)
-    if (!isNaN(num) && num >= 0 && num <= 999) setPrepTime(num)
+    if (/^\d{1,3}$/.test(val)) setPrepTime(parseInt(val, 10))
   }
 
   // ── Build + Save ─────────────────────────────────────────────────────────
@@ -287,12 +287,14 @@ export default function MealEditor({
     const names = new Set(items.flatMap(item => [item.name, ...(item.ingredients || []).map(sub => sub.name)]).map(key))
     const keptObtained = [...obtained].filter(n => names.has(n))
     if (menuMode) {
+      // A typed amount is text until its box loses focus; the meal always carries a number
+      const toAmount = (val) => {
+        const num = parseFloat(val)
+        return (!isNaN(num) && num > 0) ? Math.round(num * 100) / 100 : 1
+      }
       const finalMenu = items.map(item => {
-        if (isSimpleItem(item)) {
-          const num = parseFloat(item.amount)
-          return { ...item, amount: (!isNaN(num) && num > 0) ? Math.round(num * 100) / 100 : 1 }
-        }
-        return item
+        if (isSimpleItem(item)) return { ...item, amount: toAmount(item.amount) }
+        return { ...item, ingredients: (item.ingredients || []).map(sub => ({ ...sub, amount: toAmount(sub.amount) })) }
       })
       return { ...meal, meal_name: name, menu_name: name, menu: finalMenu, menu_items: finalMenu, prep_time_min: finalPrepTime, obtained: keptObtained }
     } else {
@@ -394,6 +396,7 @@ export default function MealEditor({
                 style={s.prepTimeInput}
                 type="text"
                 inputMode="numeric"
+                aria-label="Prep time in minutes"
                 value={prepTime}
                 onChange={(e) => handlePrepTimeChange(e.target.value)}
                 placeholder="—"
@@ -499,6 +502,7 @@ export default function MealEditor({
                       style={s.qtyInput}
                       type="text"
                       inputMode="decimal"
+                      aria-label={`Amount of ${item.name}`}
                       value={menuMode ? (item.amount ?? 1) : item.quantity}
                       onChange={(e) => handleQtyChange(idx, e.target.value)}
                       onBlur={() => handleQtyBlur(idx)}
@@ -524,6 +528,7 @@ export default function MealEditor({
                           style={s.qtyInput}
                           type="text"
                           inputMode="decimal"
+                          aria-label={`Amount of ${sub.name}`}
                           value={sub.amount ?? 1}
                           onChange={(e) => handleSubQtyChange(idx, si, e.target.value)}
                           onBlur={() => handleSubQtyBlur(idx, si)}
