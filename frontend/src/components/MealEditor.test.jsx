@@ -730,3 +730,31 @@ describe('MealEditor editing', () => {
     expect(onSave).not.toHaveBeenCalled()
   })
 })
+
+describe('MealEditor number boxes', () => {
+  beforeEach(() => { vi.mocked(checkMissingIngredients).mockReset() })
+
+  // The prep time box takes digits only: a typed letter is refused and the number stays as it was
+  it('refuses letters in the prep time', () => {
+    render(<MealEditor meal={{ ...MEAL, prep_time_min: 15 }} menuMode />)
+    const prep = screen.getByLabelText('Prep time in minutes')
+    fireEvent.change(prep, { target: { value: '2x' } })
+    expect(prep).toHaveValue('15')
+    fireEvent.change(prep, { target: { value: '' } })
+    expect(prep).toHaveValue('')
+    fireEvent.change(prep, { target: { value: '20' } })
+    expect(prep).toHaveValue('20')
+  })
+
+  // A dish ingredient's typed amount reaches the live meal as a number before the box loses focus
+  it('reports a typed dish ingredient amount as a number', () => {
+    const onChange = vi.fn()
+    render(<MealEditor meal={MEAL} menuMode onChange={onChange} />)
+    fireEvent.click(screen.getByText('Menemen'))
+    fireEvent.change(screen.getByLabelText('Amount of Yumurta'), { target: { value: '200' } })
+    const eggs = () => onChange.mock.lastCall[0].menu[0].ingredients[0]
+    expect(eggs()).toMatchObject({ name: 'Yumurta', amount: 200 })
+    fireEvent.change(screen.getByLabelText('Amount of Yumurta'), { target: { value: '' } })
+    expect(eggs()).toMatchObject({ name: 'Yumurta', amount: 1 })
+  })
+})

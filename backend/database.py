@@ -657,11 +657,12 @@ async def init_db() -> None:
 
         # Opt-in "demo" user with an empty PIN (DEMO_USER=true) for local try-outs.
         # Runs after the migrations; a newly created demo account gets a starter fridge.
+        # It's a normal user: one an earlier version made an admin loses the flag here.
         if DEMO_USER:
             cur = await db.execute(
                 """
                 INSERT OR IGNORE INTO users (name, pin_hash, is_admin)
-                VALUES (?, ?, 1)
+                VALUES (?, ?, 0)
                 """,
                 ("demo", hash_pin("")),
             )
@@ -670,5 +671,7 @@ async def init_db() -> None:
                     "INSERT INTO ingredient_inventory (user_id, name, group_name) VALUES (?, ?, ?)",
                     [(cur.lastrowid, name, group) for name, group in DEMO_FRIDGE],
                 )
+            else:
+                await db.execute("UPDATE users SET is_admin = 0 WHERE name = 'demo' AND is_admin = 1")
 
         await db.commit()

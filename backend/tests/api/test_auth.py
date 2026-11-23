@@ -394,3 +394,10 @@ async def test_demo_user_gets_starter_fridge_once(unauth_client, monkeypatch):
     assert items["Olive oil"] == "🫙 Pantry"
     assert items["Butter"] == "🐄 Animal Products"
 
+
+
+# The signed-in check answers without the account's internal id, like every other reply
+async def test_health_auth_reply_has_no_id(client):
+    r = await client.get("/health/auth")
+    assert r.status_code == 200
+    assert r.json() == {"status": "ok"}

@@ -157,8 +157,8 @@ async def health():
 
 
 @app.get("/health/auth")
-async def health_auth(user_id: int = Depends(require_user)):
-    return {"status": "ok", "user_id": user_id}
+async def health_auth(_user_id: int = Depends(require_user)):
+    return {"status": "ok"}
 
 
 # ---------------------------------------------------------------------------
