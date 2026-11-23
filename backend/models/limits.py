@@ -45,6 +45,9 @@ WEIGHT_KG_MAX = 1_000
 
 # --- Whole request ---
 MAX_BODY_BYTES = 2 * 1024 * 1024  # counted as it arrives, declared length or not
+# One chat socket frame, in characters, refused before it is read: a typed message at its
+# limit fits many times over, even with every character escaped in the frame's JSON
+CHAT_FRAME_MAX = 8 * CHAT_MESSAGE_MAX
 
 # --- Queries ---
 MEALS_LIMIT_DEFAULT = 50

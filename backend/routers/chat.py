@@ -15,7 +15,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from auth import SOCKET_AUTH_PROTOCOL, get_user_id_from_token, socket_token
 from database import get_db
 from db_helpers import owns_session
-from models.limits import CHAT_MESSAGE_MAX, SESSION_ID_MAX
+from models.limits import CHAT_FRAME_MAX, CHAT_MESSAGE_MAX, SESSION_ID_MAX
 from models.units import count_unit
 from services import chat_sync
 from services.chat_block import CHAT_SUGGEST_TEXTS, chat_history, drop_meal_block, load_chat_block
@@ -34,7 +34,8 @@ SUGGEST_TEMPERATURES = {
     "explore": 0.9,
 }
 
-# The reply to a typed message over the length limit; nothing is saved or sent to the model
+# The reply to a typed message over the length limit, or a socket frame over its size limit
+# (refused before it is read); nothing is saved or sent to the model
 TOO_LONG_TEXTS = {
     "en": "That message is too long for me to read. Could you send a shorter one?",
     "tr": "Bu mesaj okuyamayacağım kadar uzun. Daha kısa bir mesaj gönderebilir misin?",
@@ -152,9 +153,22 @@ async def chat_endpoint(websocket: WebSocket):
         except WebSocketDisconnect:
             client_live = False
 
+    async def send_too_long() -> None:
+        """Tell this device its message was too long, in the user's reply language."""
+        nonlocal cached_context
+        if cached_context is None:
+            async with get_db() as db:
+                cached_context = await load_chat_context(db, user_id)
+        await send_live({"type": "done", "content": in_language(TOO_LONG_TEXTS, cached_context.get("language", "en"))})
+
     try:
         while True:
             raw = await websocket.receive_text()
+            if len(raw) > CHAT_FRAME_MAX:
+                await send_too_long()
+                if not client_live:
+                    break
+                continue
             try:
                 payload = json.loads(raw)
             except json.JSONDecodeError:
@@ -221,7 +235,7 @@ async def chat_endpoint(websocket: WebSocket):
                     cached_context = await load_chat_context(db, user_id)
 
             if len(user_message) > CHAT_MESSAGE_MAX:
-                await send_live({"type": "done", "content": in_language(TOO_LONG_TEXTS, cached_context.get("language", "en"))})
+                await send_too_long()
                 if not client_live:
                     break
                 continue
