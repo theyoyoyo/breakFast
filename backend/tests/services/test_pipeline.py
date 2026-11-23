@@ -206,6 +206,15 @@ class TestRevisionSchema:
         plain = revision_schema("en", names=["Eggs"])["properties"]["meal"]["properties"]["menu"]["items"]
         assert "replaces" not in plain["properties"]["ingredients"]["items"]["properties"]
 
+    # An item's serve_with (#263) comes after its method and names one of the draft's items or none (the empty
+    # option, so the reviser can leave it out); with no item names the shape has no serve_with
+    def test_serve_with_names_the_drafts_items(self):
+        item = revision_schema("en", items=["Omelette", "Tahini dressing"])["properties"]["meal"]["properties"]["menu"]["items"]
+        assert item["properties"]["serve_with"] == {"type": "string", "enum": ["", "Omelette", "Tahini dressing"]}
+        assert list(item["properties"]) == ["ingredients", "name", "method", "serve_with", "amount", "unit"]
+        assert "serve_with" in item["required"]
+        assert "serve_with" not in revision_schema("en")["properties"]["meal"]["properties"]["menu"]["items"]["properties"]
+
     # The reviser's names are the fridge's first, then the draft's own and water, one spelling each
     def test_reviser_names(self):
         draft = _meal({"name": "eggs", "amount": 2, "unit": "pcs"}, {"name": "Salmon", "amount": 50, "unit": "g"})
@@ -261,7 +270,7 @@ class TestPipelineOrchestrator:
         assert "- On the avoid list: Shellfish" in reviser["message"]
         assert "- Units the app can't show: cup" in reviser["message"]
         names = ["eggs", "Salt", "Shellfish", "Water"]
-        assert reviser["schema"] == revision_schema("en", names=names, missing=["Salt", "Shellfish"])
+        assert reviser["schema"] == revision_schema("en", names=names, missing=["Salt", "Shellfish"], items=["Boiled eggs"])
         review = next(e["content"] for e in events if e["type"] == "review")
         assert review.startswith("- CODE CHECK: Not in the fridge: Salt, Shellfish")
 
@@ -274,7 +283,8 @@ class TestPipelineOrchestrator:
         draft, reviser, present = calls
         assert draft["message"] == f"Suggest\n\n{block}"
         assert reviser["message"].endswith(f"Code check:\n- Nothing found.\n\n{block}")
-        assert reviser["schema"] == revision_schema("en", chat=True, names=["eggs", "Water"]) and CHAT_STEP in reviser["system"]
+        schema = revision_schema("en", chat=True, names=["eggs", "Water"], items=["Boiled eggs"])
+        assert reviser["schema"] == schema and CHAT_STEP in reviser["system"]
         assert "THE CHAT SO FAR" not in present["message"] + present["system"]
         review = next(e["content"] for e in events if e["type"] == "review")
         assert review == "- CHAT ASKS: Simit is fine again (from #2, #4)\n- CHAT ASKS: Ready in 10 minutes\n- Shorter prep"
@@ -301,6 +311,46 @@ class TestPipelineOrchestrator:
                         "method": "Boil for 8 minutes"}
         assert readied == {"ingredients": [], "name": "eggs", "method": "Fry in the pan", "amount": 1, "unit": "pcs"}
         assert served == {"ingredients": [], "name": "eggs", "amount": 1, "unit": "pcs"}
+
+    # A pairing stays only when it names another item of the final menu (#263), written as that item's name; one
+    # naming an item the review moved or renamed, one naming the item itself, and an empty one are dropped
+    async def test_serve_with_kept_only_for_another_menu_item(self):
+        context = {**SAMPLE_CONTEXT, "ingredients": [{"name": "eggs"}, {"name": "Tahini"}, {"name": "Honey"}]}
+        revised = _meal(EGGS)
+        revised["menu"] += [
+            {"name": "Tahini dressing", "serve_with": "boiled eggs", "ingredients": [{"name": "Tahini", "amount": 1, "unit": "tbsp"}]},
+            {"name": "Honey", "amount": 1, "unit": "tsp", "ingredients": [], "serve_with": "Pancakes"},
+            {"name": "Tahini", "amount": 1, "unit": "tsp", "ingredients": [], "serve_with": "Tahini"},
+        ]
+        revised["menu"][0]["serve_with"] = ""
+        events, _ = await _run(_draft(_meal(EGGS)), _revision(revised), context=context)
+        menu = extract_json_block(_final(events))["menu"]
+        assert [item.get("serve_with") for item in menu] == [None, "Boiled eggs", None, None]
+        assert "serve_with" not in menu[0]
+
+    # A pairing follows its partner through the review (#263): to a renamed partner it names the new name, to a
+    # partner left out it goes too, and so does what's served with it in turn; one naming the item's own old name
+    # is cleared and the item kept
+    async def test_serve_with_follows_renames_and_drops(self):
+        fridge = [{"name": n} for n in ("Bread", "Pumpkin puree", "Eggs", "Tahini", "Honey", "Cinnamon")]
+        context = {**SAMPLE_CONTEXT, "ingredients": fridge}
+
+        def dish(name, *food, serve_with=None):
+            item = {"name": name, "ingredients": [{"name": f, "amount": 1, "unit": "tbsp"} for f in food]}
+            return {**item, "serve_with": serve_with} if serve_with else item
+
+        draft = {**_meal(), "menu": [dish("Toast", "Bread"), dish("Spread", "Pumpkin puree"), dish("Omelette", "Eggs"),
+                                     dish("Dressing", "Tahini"), dish("Cinnamon sugar", "Cinnamon")]}
+        revised = {**_meal(), "menu": [
+            dish("Pumpkin toast", "Bread"), dish("Spread", "Pumpkin puree", serve_with="Toast"),
+            dish("Tahini drizzle", "Tahini", serve_with="Omelette"), dish("Honey", "Honey", serve_with="Dressing"),
+            dish("Cinnamon dust", "Cinnamon", serve_with="Cinnamon sugar"),
+        ]}
+        events, _ = await _run(_draft(draft), _revision(revised), context=context)
+        menu = extract_json_block(_final(events))["menu"]
+        assert [(i["name"], i.get("serve_with")) for i in menu] == [
+            ("Pumpkin toast", None), ("Spread", "Pumpkin toast"), ("Cinnamon dust", None),
+        ]
 
     # A swap's mark stays only when it's true (#148): feta stands in for the missing salmon. A mark naming an item the
     # draft had in the fridge, one on an ingredient the fridge lacks, one whose item is still in the dish, and an
@@ -336,6 +386,15 @@ class TestPipelineOrchestrator:
         worse = _meal({"name": "Poached eggs", "amount": 2, "unit": "pcs"})
         events, _ = await _run(_draft(_meal(EGGS)), _revision(worse))
         assert _without_emoji(extract_json_block(_final(events))) == _meal(EGGS)
+
+    # A review that moves an item into a dish or leaves one out (#263) is kept: fewer menu items isn't a worse result
+    async def test_revision_with_fewer_items_is_kept(self):
+        context = {**SAMPLE_CONTEXT, "ingredients": [{"name": "eggs"}, {"name": "Salt"}]}
+        draft = _meal(EGGS)
+        draft["menu"].append({"name": "Salt", "amount": 1, "unit": "pinch", "ingredients": []})
+        for revised in (_meal(EGGS, {"name": "Salt", "amount": 1, "unit": "pinch"}), _meal(EGGS)):
+            events, _ = await _run(_draft(draft), _revision(revised), context=context)
+            assert _without_emoji(extract_json_block(_final(events))) == revised
 
     # A revised meal with a new avoid-list item loses to the draft, even when the draft has more fridge misses
     async def test_falls_back_to_draft_when_revision_adds_an_avoided_item(self):

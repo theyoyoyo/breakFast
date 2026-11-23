@@ -36,7 +36,8 @@ PLAN_CASES are menus for the prep plan test, shaped the way the Prep Plan button
 REVIEW_CASES are fixed drafts with items the fridge lacks, sent to the reviser alone (#148): a
 missing dish ingredient another fridge item can replace, one nothing replaces, a fridge item
 written with a cut on either side (big_fridge keeps "Turkey slices"), a favorite's fridge item
-the review must keep, and prep words to fix (#176).
+the review must keep, prep words to fix (#176), and items nobody eats on their own, served alone
+beside the food they go with (#263).
 """
 
 import random
@@ -492,6 +493,8 @@ _SERVER_MENU = [
 #   the air fryer, so it gets steps (#156).
 # - avocado, avocado_oven: the server menu with toast (#160), once in a home kitchen and once with an Oven
 #   and no Toaster, so toasting may use either.
+# - paired: a server menu once its review paired a spread and a dressing with the dishes they're served on or
+#   with (serve_with, #263), so the plan input names each pairing.
 PLAN_CASES = {
     "boiled": {
         "language": "en",
@@ -576,21 +579,44 @@ PLAN_CASES = {
         "meal_name": "Green morning",
         "menu": _SERVER_MENU,
     },
+    "paired": {
+        "language": "en",
+        "kitchen_appliances": _kitchen(),
+        "meal_name": "Pine nut morning",
+        "menu": [
+            _dish("Avocado and Pine Nut Toast", "Toast the bread, top with the avocado and the toasted pine nuts",
+                  ("Bread", 2, "slice"), ("Avocado", 1, "pcs", "sliced"), ("Pine nuts", 1, "tbsp", "lightly toasted")),
+            {**_dish("Pumpkin Puree Spread", "Spread on the toast", ("Pumpkin puree", 3, "tbsp")),
+             "serve_with": "Avocado and Pine Nut Toast"},
+            _dish("Chard and Chia Seed Omelette", "Whisk the eggs with the chia seeds, wilt the chard in the pan, pour the eggs over and fold",
+                  ("Eggs", 2, "pcs"), ("Chard", 1, "handful", "chopped"), ("Chia seeds", 1, "tbsp"), ("Olive oil", 1, "tsp")),
+            {**_dish("Tahini Dressing", "Mix the tahini with the oat milk", ("Tahini", 1, "tbsp"), ("Oat milk", 2, "tbsp")),
+             "serve_with": "Chard and Chia Seed Omelette"},
+            _served("Banana", 1, "pcs"),
+        ],
+    },
 }
 
 
-def _review(sample: str, name: str, minutes: int, *menu: dict, may_keep: tuple = ()) -> dict:
+def _review(
+    sample: str, name: str, minutes: int, *menu: dict, may_keep: tuple = (), lone: tuple = (), stocked: dict | None = None,
+) -> dict:
     """A review case: the sample's user, in the Suggest mode they usually press, and a draft meal in
     the app's format, the way the pipeline hands it to the reviser. `may_keep` names missing items
     the review may keep as written although they contain a fridge name, so they count as still
-    missing, not renamed (#176)."""
+    missing, not renamed (#176). `lone` names the draft's items nobody eats on their own, which the
+    review moves into a dish, pairs with the item they're served with or on (`serve_with`), or leaves
+    out when they go with nothing (#263). `stocked` adds items to the sample's fridge for this case, by group."""
     for item in menu:
         if not item.get("method"):  # the draft writes no methods; the reviser does
             item.pop("method", None)
+    sample_user = SAMPLES[sample]
     return {
-        **SAMPLES[sample],
+        **sample_user,
+        "ingredients": sample_user["ingredients"] + _fridge(stocked or {}),
         "sample": sample,
         "may_keep": list(may_keep),
+        "lone": list(lone),
         "draft": {"menu": list(menu), "menu_name": name, "description": f"{name} from the fridge.", "prep_time_min": minutes},
     }
 
@@ -627,4 +653,24 @@ REVIEW_CASES = {
                               ("Spinach", 1, "handful", "mixed")),
                         _dish("Jam toast", "", ("Whole wheat bread", 2, "slice"), ("Strawberry jam", 1, "tbsp", "toasted")),
                         _served("Coffee", 1, "glass"), may_keep=("Egg whites", "Smoked cheddar")),
+    # A seasoning served as a menu item of its own beside the dish it flavors, the way a server menu listed cinnamon
+    # (#263); everything is in the fridge, so the code check finds nothing and only the review's own question is left
+    "cinnamon": _review("en", "Oat morning", 10,
+                        _dish("Banana oatmeal", "", ("Oats", 0.5, "glass"), ("Milk", 1, "glass"),
+                              ("Banana", 1, "pcs", "sliced"), ("Honey", 1, "tsp")),
+                        _served("Cinnamon", 1, "tsp"), _served("Tea", 1, "tea glass"), lone=("Cinnamon",)),
+    # A server menu (#263) that listed a spread, a dressing and cinnamon as items of their own beside the toast, the
+    # omelette and a banana; the fridge has everything, so only the review's own question is left
+    "paired": _review("en", "Pine nut morning", 20,
+                      _dish("Avocado and Pine Nut Toast", "", ("Bread", 2, "slice"), ("Avocado", 1, "pcs", "sliced"),
+                            ("Pine nuts", 1, "tbsp", "lightly toasted"), ("Oat milk", 2, "tbsp", "as a dressing or dip")),
+                      _dish("Pumpkin Puree Spread", "", ("Pumpkin puree", 3, "tbsp")),
+                      _dish("Chard and Chia Seed Omelette", "", ("Eggs", 2, "pcs"), ("Chard", 1, "handful", "chopped"),
+                            ("Chia seeds", 1, "tbsp"), ("Olive oil", 1, "tsp")),
+                      _served("Banana", 1, "pcs"),
+                      _dish("Tahini Dressing", "", ("Tahini", 1, "tbsp"), ("Oat milk", 2, "tbsp")),
+                      _served("Cinnamon", 1, "tsp"),
+                      lone=("Pumpkin Puree Spread", "Tahini Dressing", "Cinnamon"),
+                      stocked={"🥬 Produce": ["Avocado", "Chard"], "🥜 Nuts & Seeds": ["Pine nuts", "Chia seeds"],
+                               "🌱 Plant-Based": ["Oat milk"], "🫙 Pantry": ["Pumpkin puree"]}),
 }

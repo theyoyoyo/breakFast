@@ -408,6 +408,56 @@ describe('MealEditor prep words', () => {
       }), expect.anything()],
     }))
   })
+
+  const PAIRED_MEAL = {
+    menu_name: 'Green morning',
+    menu: [
+      { name: 'Omelette', ingredients: [{ name: 'Eggs', amount: 2, unit: 'pcs' }] },
+      { name: 'Tahini dressing', serve_with: 'Omelette', ingredients: [{ name: 'Tahini', amount: 1, unit: 'tbsp' }] },
+    ],
+  }
+
+  // An item served with another one names that item in the info panel, under the paired item only (#263)
+  it('shows the item a paired item is served with behind the info button', () => {
+    render(<MealEditor meal={PAIRED_MEAL} menuMode />)
+    fireEvent.click(screen.getByTitle('Preparation details'))
+    expect(screen.getByText('Tahini dressing', { selector: 'div' }).parentElement).toHaveTextContent(/Omelette/)
+    expect(screen.queryByText('Omelette', { selector: 'div' })).toBeNull()
+  })
+
+  // An edit keeps the item a paired item is served with, like its method (#263)
+  it('keeps the paired item through edits', () => {
+    const onChange = vi.fn()
+    render(<MealEditor meal={PAIRED_MEAL} menuMode onChange={onChange} />)
+    fireEvent.click(screen.getAllByText('▶ Ingredients')[1])
+    fireEvent.click(screen.getAllByText('▲')[0])
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      menu: [expect.anything(), expect.objectContaining({
+        serve_with: 'Omelette', ingredients: [expect.objectContaining({ name: 'Tahini', amount: 2 })],
+      })],
+    }))
+  })
+
+  // Deleting an item clears the pairings that name it and keeps the paired items (#263)
+  it('keeps a paired item and clears its pairing when its partner is deleted', () => {
+    const onChange = vi.fn()
+    render(<MealEditor meal={PAIRED_MEAL} menuMode onChange={onChange} />)
+    fireEvent.click(screen.getAllByTitle('Delete')[0])
+    const { menu } = onChange.mock.lastCall[0]
+    expect(menu.map(item => item.name)).toEqual(['Tahini dressing'])
+    expect(menu[0]).not.toHaveProperty('serve_with')
+    expect(screen.queryByTitle('Preparation details')).toBeNull()
+  })
+
+  // A pairing that names no other item of the menu shows nothing, so the info button stays hidden (#263)
+  it('shows no pairing that names no other menu item', () => {
+    const meal = { menu_name: 'Plate', menu: [
+      { name: 'Honey', amount: 1, unit: 'tsp', serve_with: 'Pancakes', ingredients: [] },
+      { name: 'Olives', amount: 10, unit: 'pcs', serve_with: 'Olives', ingredients: [] },
+    ] }
+    render(<MealEditor meal={meal} menuMode />)
+    expect(screen.queryByTitle('Preparation details')).toBeNull()
+  })
 })
 
 describe('MealEditor replaced ingredients', () => {

@@ -96,11 +96,17 @@ can get it.
    - Does an item work against a [TOP PRIORITY] health rule?
    - Is an item on the dislikes list?
    - Is a portion far from a normal breakfast portion for this user?
+   - Is a menu item, a dish or not, something people don't eat on its own? Then it goes with the \
+food it belongs to: move it into the ingredients of the dish it goes in, or keep it and pair it \
+with the item it is served with or on (step 4); leave it out only when it goes with nothing on the \
+menu.
    Change something only for a clear yes, three changes at most.
 3. Keep everything else as drafted: the same dishes, names, items and amounts.
 4. Give each item a `method`, so the prep plan readies it as meant: a dish's main steps in one \
 short line, how a simple item is cut or cooked when it is, and an empty method for a simple item \
-served as it is.
+served as it is. Then its `serve_with`: for an item people don't eat on its own, the menu item it \
+is served with or on, since the app otherwise serves and plans it as food of its own; empty for \
+every other item.
 5. In "changes", write one short line per change (what and why). Leave it empty when nothing \
 needed changing.
 
