@@ -135,3 +135,12 @@ def test_same_name_needs_every_word():
     assert not same_name("Almond milk", "Milk")
     assert not same_name("Yogurt", "Greek yogurt")
     assert not same_name("", "")
+
+
+# An item's serve_with counts when it names another item of the menu by exact name, given as that item's name (#263)
+def test_paired_item_names_another_menu_item():
+    from services.fridge import paired_item
+    toast = {"name": "Avocado toast", "ingredients": [{"name": "Bread"}]}
+    spread = {"name": "Pumpkin spread", "serve_with": "avocado toasts", "ingredients": [{"name": "Pumpkin puree"}]}
+    menu = [toast, spread, {"name": "Banana", "serve_with": "Banana"}, {"name": "Honey", "serve_with": "Toast"}, "Tea"]
+    assert [paired_item(item, menu) for item in menu] == ["", "Avocado toast", "", "", ""]
