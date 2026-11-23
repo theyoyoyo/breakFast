@@ -130,7 +130,7 @@ Open <http://localhost:5173> and log in with the name and PIN you created.
 ollama pull gemma4:e4b-it-qat
 ```
 
-To use another model, pull it and set `OLLAMA_MODEL` in `.env`. Without Ollama the app still runs; AI features answer with the lyric fallback.
+To use another model, pull it and set `OLLAMA_MODEL` in `.env`; a task or reply language can have its own (`OLLAMA_MODEL_<KEY>`), or pick them on the server with `python -m tools.model_picker`, which needs no restart (see [Choosing models](docs/SETUPALL.md#choosing-models-admin-optional)). Without Ollama the app still runs; AI features answer with the lyric fallback.
 
 ### Just trying it out?
 
@@ -200,7 +200,7 @@ All backend settings are environment variables, documented in [`.env.example`](.
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server |
 | `OLLAMA_MODEL` | `gemma4:e4b-it-qat` | Model for every persona, unless a task or language has its own |
 | `OLLAMA_THINK` | none (`false` for the default model) | Ollama's think field for every call without its own |
-| `OLLAMA_MODEL_<TASK or LANGUAGE>` | none | A model for one task (`SHOPPING`, `PLAN`, …) or reply language (`TR`), with `OLLAMA_THINK_<KEY>` |
+| `OLLAMA_MODEL_<TASK or LANGUAGE>` | none | A model for one task (`SHOPPING`, `PLAN`, …) or reply language (`TR`), with `OLLAMA_THINK_<KEY>`; the model picker's `backend/model_settings.json` wins over it |
 | `DATABASE_PATH` | `./breakFAST.db` | SQLite file, relative to `backend/` whatever folder the backend or the CLI starts from; the start prints its full path |
 | `CORS_ORIGINS` | `*` | Comma-separated allowed origins |
 | `SERVE_FRONTEND` | `false` | Serve `frontend/dist` from FastAPI |

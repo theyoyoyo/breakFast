@@ -125,11 +125,19 @@ fit and every reply gets much slower. Then, on the Ollama server:
 
 2. Quit Ollama from the tray icon, start it again, and check `ollama ps` once more.
 
-### A model per task or language (optional)
+### Choosing models (admin, optional)
 
-One model serves every call by default. A task or a reply language can have its own
-model in `.env`, with its own think value (unset uses `OLLAMA_THINK`); pull it too
-(`ollama pull <model>`):
+- **Default:** with nothing set, every call uses `gemma4:e4b-it-qat` with thinking off.
+- **One model for everything:** set `OLLAMA_MODEL` in `.env` (and `OLLAMA_THINK=true`
+  or `false` if that model can think; unset sends no think field).
+- **A model per task:** `OLLAMA_MODEL_<TASK>`, with its own `OLLAMA_THINK_<TASK>` (unset
+  uses `OLLAMA_THINK`). The tasks are `CHAT`, `SUGGESTION` (the draft and the reply
+  text), `REVIEW`, `ANALYST`, `SHOPPING`, `PLAN` and `WEEKLY`.
+- **A model per reply language:** `OLLAMA_MODEL_EN` or `OLLAMA_MODEL_TR`, with
+  `OLLAMA_THINK_EN` / `OLLAMA_THINK_TR`.
+- **Order:** a call uses its reply language's model, else its task's, else
+  `OLLAMA_MODEL`. Pull every model you name (`ollama pull <model>`), and restart the
+  backend after editing `.env`.
 
 ```
 OLLAMA_MODEL_SHOPPING=gemma4:e2b-it-q4_K_M
@@ -138,17 +146,30 @@ OLLAMA_MODEL_TR=gemma4:e2b-it-q4_K_M
 OLLAMA_THINK_TR=true
 ```
 
-The tasks are `CHAT`, `SUGGESTION` (the draft and the reply text), `REVIEW`, `ANALYST`,
-`SHOPPING`, `PLAN` and `WEEKLY`, and the languages `EN` and `TR`. A call uses its reply
-language's model, else its task's, else `OLLAMA_MODEL`. `docs/MODEL_TESTS.md` has the
-models chosen per task.
+`docs/MODEL_TESTS.md` has the models chosen per task.
 
-Two models that don't fit the GPU together can't both stay loaded, so Ollama reloads one
-at every switch, and the first call after a switch waits for the load. On a 6 GB laptop
-GPU, a switch between `gemma4:e4b-it-qat` and `gemma4:e2b-it-q4_K_M` took about 13 s
-either way (Ollama's `load_duration`, with the app's context length). With the example
-above, an English user's shopping press waits that long, and so does their next call; a
-Turkish user's calls all go to one model, so only a switch between users costs a load.
+**GPU memory:** two models that don't fit the GPU together can't both stay loaded, so
+Ollama reloads one at every switch, and the first call after a switch waits for the
+load. On a 6 GB laptop GPU, a switch between `gemma4:e4b-it-qat` and
+`gemma4:e2b-it-q4_K_M` took about 13 s either way (Ollama's `load_duration`, with the
+app's context length). With the example above, an English user's shopping press waits
+that long, and so does their next call; a Turkish user's calls all go to one model, so
+only a switch between users costs a load.
+
+**Model picker (no restart):** on the server, from `backend\`:
+
+```
+python -m tools.model_picker
+```
+
+Open <http://127.0.0.1:8765> on the server (or through a tunnel, e.g.
+`ssh -L 8765:127.0.0.1:8765 <server>`; `--port` picks another port). It lists Ollama's
+models in a dropdown per task and reply language, with a think switch for the models
+that can think, and Save writes `backend\model_settings.json` (git-ignored). The backend
+reads that file on its next Ollama call, so a change applies from the next request with
+no restart; a key chosen there wins over its `.env` line, and "default (.env)" leaves
+`.env` in charge. Delete the file to go back to `.env` alone. The picker listens on
+127.0.0.1 only; stop it (Ctrl+C) when you're done.
 
 ---
 
