@@ -32,7 +32,7 @@ Multiple users share one instance, each fully isolated. Auth is a name and a PIN
 |---|---|
 | Frontend | React PWA (Vite), Tailwind CSS v4 (no base reset yet) beside inline style objects |
 | Backend | Python / FastAPI |
-| Local LLM | Ollama + Qwen 2.5 7B (`OLLAMA_MODEL`), 8192-token context (`OLLAMA_NUM_CTX`) |
+| Local LLM | Ollama + Gemma 4 E4B (`gemma4:e4b-it-qat`, `OLLAMA_MODEL`, thinking off), a model per task or reply language optional (`OLLAMA_MODEL_<KEY>`), 8192-token context (`OLLAMA_NUM_CTX`) |
 | LLM Fallback | Song lyric cycling |
 | Database | SQLite (aiosqlite) |
 | Voice | Web Speech API |
@@ -148,7 +148,9 @@ All in `backend/services/personas/`. Prompts are in English; the response langua
 - **Date and country**: today's date and the optional Country from Settings → Profile (`user_profiles.country`, list in `utils/countries.js` with ISO 3166-1 alpha-2 codes) go into the shopping and suggestion prompts (`format_today`), so "in season" means something. The selector lists "Germany (DE)" and shows only "DE" once chosen; the saved value is the name. The profile text the analysts read leaves the country out.
 - **Context length**: every Ollama call sends the same `num_ctx` (`OLLAMA_NUM_CTX`, 8192 by default, `_options` in `services/llm.py`). Chat history is about 6000 tokens and Ollama's own 4096 drops the oldest messages silently; one value for all calls keeps Ollama from reloading the model. The KV cache fits a 6 GB GPU (`docs/SETUPALL.md`, Step 1).
 - **Timeout**: every Ollama call waits up to `OLLAMA_TIMEOUT` seconds (150 by default, `config.py`) to connect and between a reply's bytes. A JSON reply comes all at once, so a model that thinks first must finish within it (raised from 120 for the model tests, #178).
-- **Thinking**: `OLLAMA_THINK` (`true` or `false`, `config.py`) sends Ollama's `think` field with every call (`_think` in `services/llm.py`); unset sends none, so each model keeps its own default, since Ollama refuses the field for a model that can't think. Candidate models and how to compare them: `docs/MODEL_TESTS.md` (`tools/model_battery.py` runs the same prompt tests for one model, `prompt_check.py --model` and `--think` for one test; with `--data` a test writes its inputs and the model's outputs to `tools/runs/models/`, and `tools/compare_runs.py` builds a blind A/B page from them, #178).
+- **Thinking**: `OLLAMA_THINK` (`true` or `false`, `config.py`) sends Ollama's `think` field with every call that has no think value of its own (below); unset sends none, so each model keeps its own default, since Ollama refuses the field for a model that can't think, except the default model (`DEFAULT_MODEL`), which runs with thinking off (`DEFAULT_THINK`).
+- **A model per task or language** (#192): `OLLAMA_MODEL_<KEY>` with its own `OLLAMA_THINK_<KEY>` gives a task (`MODEL_TASKS` in `config.py`: chat, suggestion for the draft and the reply text, review, analyst, shopping, plan, weekly) or a reply language (en, tr) its own model. A call uses its language's model, else its task's, else `OLLAMA_MODEL`, and that model's own think value, else `OLLAMA_THINK`, else the default above (`model_for` in `services/llm.py`, resolved once when a call starts); every call site names its task and language. The model picker's file comes first (below), then `.env`, then the default. Two models that don't fit the GPU together reload at each switch (`docs/SETUPALL.md`). Candidate models and how to compare them: `docs/MODEL_TESTS.md` (`tools/model_battery.py` runs the same prompt tests for one model, `prompt_check.py --model` and `--think` for one test; the prompt test runs on the app's picks and labels the run with them, unless `--model` gives one model for every call; with `--data`, which needs `--model`, a test writes its inputs and the model's outputs to `tools/runs/models/`, and `tools/compare_runs.py` builds a blind A/B page from them, #178).
+- **Model picker** (#240): `python -m tools.model_picker` (from `backend/`) serves one page on 127.0.0.1 only (`--port`, 8765 by default; no other address) with a dropdown per task and reply language from Ollama's `/api/tags`, each with "default (.env)", and a think switch (default / on / off) only for models whose `/api/show` capabilities list `thinking`. Save checks the body against that list (fixed 422 messages, no echo), refuses a non-local Host or Origin (403), and writes `backend/model_settings.json` (git-ignored, `MODEL_SETTINGS_PATH` in `config.py`) atomically. `routes()` in `services/llm.py` reads it on each call, parsing again only when its modified time changes (`services/model_settings.py`), so no restart: a key it sets replaces that key's `.env` route whole (an entry without think falls back to `OLLAMA_THINK`), a missing file means none, and a broken or invalid one keeps the last good settings with a warning. Tests point it at a temp folder (`conftest.py`), and `prompt_check.py --model` reads no file.
 - **CORS**: configurable via `CORS_ORIGINS` env var (comma-separated).
 - **Request limits**: every text field and list a request carries has a length limit, a free-form meal (menu, "Today I ate" version) a size limit, a whole request body one too (413), and `GET /meals?limit=` a maximum. They are named constants in `models/limits.py` with the field types built on them (`Name`, `Text`, `Note`, `SizedList`…), far above real use: they stop abuse and mistakes, so a long chat message, a big bulk shopping list and a long menu still work. Change a number there, nowhere else, and give a new request field one of those types. A request over a limit gets 422; a typed chat message over its limit gets a short note in the reply language (`TOO_LONG_TEXTS` in `routers/chat.py`), reaches no model and isn't saved. Request bodies are typed (favorites and session messages included: `FavoriteIn` in `models/meal.py` ignores the editor's extra fields).
 - **Refusals and error replies**: a request the server refuses for its content gets 422 everywhere (an unknown group, a blank name, nothing to update), with a fixed message. A validation reply says where and why (`loc`, `msg`) without sending the input back (`validation_error` in `main.py`). An error reply never carries an exception's text: that goes to the server log, and the user gets a fixed message (`SUGGESTIONS_FAILED`) or a lyric. Replies leave out the account's internal id.
@@ -199,6 +201,7 @@ breakFAST/
 ├── backend/
 │   ├── main.py                      ← FastAPI entry, lifespan init_db, body size limit, validation replies
 │   ├── config.py                    ← settings read from `.env` (Ollama, CORS, demo user…)
+│   ├── model_settings.json          ← the model picker's choices (git-ignored, on the server only)
 │   ├── utils.py                     ← JSON block reader, static file paths
 │   ├── requirements.txt             ← backend dependencies
 │   ├── requirements-dev.txt         ← test dependencies
@@ -213,6 +216,7 @@ breakFAST/
 │   │   ├── prompt_check.py          ← prompt test: real pipeline vs Ollama, replies scored in code
 │   │   ├── prompt_samples.py        ← sample users (English and Turkish fridges) for it
 │   │   ├── model_battery.py         ← the same prompt tests for one model and think setting
+│   │   ├── model_picker.py          ← page on 127.0.0.1 to pick each task's and language's model (writes model_settings.json)
 │   │   └── compare_runs.py          ← blind A/B page of two models' test data + every model tried
 │   ├── routers/
 │   │   ├── chat.py                  ← WebSocket /chat
@@ -239,6 +243,7 @@ breakFAST/
 │   │   ├── insights.py              ← behavioral pattern extraction
 │   │   ├── fridge.py                ← exact name matching (same_name): fridge check, avoid hits
 │   │   ├── ingredient_groups.py     ← a new item's group: the user's pick, then the food list, then Other
+│   │   ├── model_settings.py        ← the model picker's file: parse, atomic write, re-read when it changes
 │   │   ├── shopping.py              ← shopping reply schema, parser + dedupe (+ items removed in the last 7 days)
 │   │   ├── chat_sync.py             ← open chat sockets per user: session_updated + small notices
 │   │   ├── chat_block.py            ← the chat a Suggest press reads (typed messages + meal cards, latest marked); the chat persona's history, meal blocks dropped from its replies

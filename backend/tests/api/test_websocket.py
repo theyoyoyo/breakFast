@@ -296,7 +296,8 @@ async def test_websocket_logs_chat_reply_crash(ws_setup, caplog):
         raise RuntimeError("chat boom")
         yield
 
-    with patch("routers.chat.build_chat_prompt", return_value="test prompt"),          patch("routers.chat.stream_response", mock_stream_crash):
+    with patch("routers.chat.build_chat_prompt", return_value="test prompt"), \
+         patch("routers.chat.stream_response", mock_stream_crash):
         with open_chat(TestClient(app), token) as ws:
             ws.send_text(json.dumps({"message": "hello"}))
             msg = ws.receive_json()
@@ -419,7 +420,7 @@ async def test_chat_reply_never_becomes_a_meal_card(ws_setup):
     histories, messages = [], []
     replies = iter(["Quick one!\n\n```json\n" + json.dumps(card) + "\n```", "```json\n" + json.dumps(card) + "\n```"])
 
-    async def mock_stream(system_prompt, history, message, temperature=None):
+    async def mock_stream(system_prompt, history, message, temperature=None, **_):
         histories.append(history)
         messages.append(message)
         yield next(replies)
@@ -477,7 +478,7 @@ async def test_chat_history_keeps_each_message_before_its_reply(ws_setup):
 
     histories = []
 
-    async def mock_stream(system_prompt, history, message, temperature=None):
+    async def mock_stream(system_prompt, history, message, temperature=None, **_):
         histories.append(history)
         yield "Sounds good."
 
@@ -524,11 +525,12 @@ async def test_chat_frame_that_is_not_an_object_is_plain_text(ws_setup, frame):
 
     seen = []
 
-    async def mock_stream(system_prompt, history, message, temperature=None):
+    async def mock_stream(system_prompt, history, message, temperature=None, **_):
         seen.append(message)
         yield "Reply."
 
-    with patch("routers.chat.build_chat_prompt", return_value="test prompt"),          patch("routers.chat.stream_response", mock_stream):
+    with patch("routers.chat.build_chat_prompt", return_value="test prompt"), \
+         patch("routers.chat.stream_response", mock_stream):
         with open_chat(TestClient(app), token) as ws:
             for text in (frame, "Next one"):
                 ws.send_text(text)
@@ -553,10 +555,11 @@ async def test_chat_frame_with_a_value_of_the_wrong_type_is_ignored(ws_setup, fr
 
     from starlette.testclient import TestClient
 
-    async def mock_stream(system_prompt, history, message, temperature=None):
+    async def mock_stream(system_prompt, history, message, temperature=None, **_):
         yield "Reply."
 
-    with patch("routers.chat.build_chat_prompt", return_value="test prompt"),          patch("routers.chat.stream_response", mock_stream):
+    with patch("routers.chat.build_chat_prompt", return_value="test prompt"), \
+         patch("routers.chat.stream_response", mock_stream):
         with open_chat(TestClient(app), token) as ws:
             ws.send_text(json.dumps(frame))
             if "message" in frame and isinstance(frame["message"], str):
@@ -600,7 +603,7 @@ async def test_switching_to_a_session_not_the_callers_is_ignored(ws_setup):
 
     await _two_users_sessions(user_id)
 
-    async def mock_stream(system_prompt, history, message, temperature=None):
+    async def mock_stream(system_prompt, history, message, temperature=None, **_):
         yield "Reply."
 
     with patch("routers.chat.build_chat_prompt", return_value="test prompt"), \

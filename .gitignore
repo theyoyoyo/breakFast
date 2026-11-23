@@ -35,6 +35,9 @@ workbox-*.js
 # Logs
 *.log
 
+# The model picker's choices on this server (backend/tools/model_picker.py)
+backend/model_settings.json
+
 # Prompt test replies (backend/tools/prompt_check.py)
 backend/tools/runs/
 

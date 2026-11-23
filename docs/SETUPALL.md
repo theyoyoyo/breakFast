@@ -3,7 +3,7 @@
 This guide walks you through setting up the break FAST server on a fresh Windows
 machine from scratch. By the end, you'll have:
 
-- Ollama running locally with Qwen 2.5 7B
+- Ollama running locally with Gemma 4 E4B
 - The FastAPI backend serving the API
 - The React frontend built and served statically by FastAPI
 - A test user you can log in with
@@ -48,10 +48,10 @@ Make sure these are installed before starting. If any are missing, install them 
 
    You should see something like `ollama version 0.x.x`.
 
-4. **Pull the Qwen 2.5 7B model** — this is the brain of the app. It's ~4.7 GB:
+4. **Pull the Gemma 4 E4B model** — this is the brain of the app. It's ~6 GB:
 
    ```
-   ollama pull qwen2.5:7b
+   ollama pull gemma4:e4b-it-qat
    ```
 
    This will take a while depending on your internet speed. Let it finish completely.
@@ -59,7 +59,7 @@ Make sure these are installed before starting. If any are missing, install them 
 5. **Verify the model works:**
 
    ```
-   ollama run qwen2.5:7b "Say good morning"
+   ollama run gemma4:e4b-it-qat "Say good morning"
    ```
 
    You should get a short greeting back — this confirms the model is
@@ -72,7 +72,7 @@ Make sure these are installed before starting. If any are missing, install them 
    ```
 
    (If you don't have curl, open `http://localhost:11434/api/tags` in your browser.)
-   You should see JSON listing `qwen2.5:7b` in the models array.
+   You should see JSON listing `gemma4:e4b-it-qat` in the models array.
 
 > **GPU note:** Ollama automatically detects NVIDIA GPUs and uses them. If you have a
 > laptop GPU, it will use it — no extra configuration needed. You can verify with
@@ -82,7 +82,7 @@ Make sure these are installed before starting. If any are missing, install them 
 
 The backend sends the same context length with every call: `OLLAMA_NUM_CTX` in `.env`,
 8192 tokens by default. Ollama's own default is 4096, and the app needs more. Measured
-on qwen2.5:7b:
+on qwen2.5:7b, the earlier default:
 
 | Call | Tokens |
 |---|---|
@@ -97,9 +97,9 @@ At 4096, Ollama drops the oldest chat messages without saying so, and a bigger f
 a longer history pushes the refine step over too. Every call uses the same value because
 Ollama reloads the model whenever it changes.
 
-The context costs GPU memory: for qwen2.5:7b the KV cache takes about 57 KB per token,
-so about 0.46 GB at 8192, and the model uses about 5.5–5.7 GB in total. That fits a 6 GB
-GPU. To check, run one Suggest and then:
+The context costs GPU memory. On a 6 GB GPU, `gemma4:e4b-it-qat` ran fully on the GPU at 8192 in
+the model tests (`docs/MODEL_TESTS.md`), and so did qwen2.5:7b (a KV cache of about 57 KB
+per token, 0.46 GB at 8192, about 5.5–5.7 GB in all). To check, run one Suggest and then:
 
 ```
 ollama ps
@@ -124,6 +124,52 @@ fit and every reply gets much slower. Then, on the Ollama server:
    for the model with its 8192 context on a 6 GB GPU.
 
 2. Quit Ollama from the tray icon, start it again, and check `ollama ps` once more.
+
+### Choosing models (admin, optional)
+
+- **Default:** with nothing set, every call uses `gemma4:e4b-it-qat` with thinking off.
+- **One model for everything:** set `OLLAMA_MODEL` in `.env` (and `OLLAMA_THINK=true`
+  or `false` if that model can think; unset sends no think field).
+- **A model per task:** `OLLAMA_MODEL_<TASK>`, with its own `OLLAMA_THINK_<TASK>` (unset
+  uses `OLLAMA_THINK`). The tasks are `CHAT`, `SUGGESTION` (the draft and the reply
+  text), `REVIEW`, `ANALYST`, `SHOPPING`, `PLAN` and `WEEKLY`.
+- **A model per reply language:** `OLLAMA_MODEL_EN` or `OLLAMA_MODEL_TR`, with
+  `OLLAMA_THINK_EN` / `OLLAMA_THINK_TR`.
+- **Order:** a call uses its reply language's model, else its task's, else
+  `OLLAMA_MODEL`. Pull every model you name (`ollama pull <model>`), and restart the
+  backend after editing `.env`.
+
+```
+OLLAMA_MODEL_SHOPPING=gemma4:e2b-it-q4_K_M
+OLLAMA_THINK_SHOPPING=true
+OLLAMA_MODEL_TR=gemma4:e2b-it-q4_K_M
+OLLAMA_THINK_TR=true
+```
+
+`docs/MODEL_TESTS.md` has the models chosen per task.
+
+**GPU memory:** two models that don't fit the GPU together can't both stay loaded, so
+Ollama reloads one at every switch, and the first call after a switch waits for the
+load. On a 6 GB laptop GPU, a switch between `gemma4:e4b-it-qat` and
+`gemma4:e2b-it-q4_K_M` took about 13 s either way (Ollama's `load_duration`, with the
+app's context length). With the example above, an English user's shopping press waits
+that long, and so does their next call; a Turkish user's calls all go to one model, so
+only a switch between users costs a load.
+
+**Model picker (no restart):** on the server, from `backend\`:
+
+```
+python -m tools.model_picker
+```
+
+Open <http://127.0.0.1:8765> on the server (or through a tunnel, e.g.
+`ssh -L 8765:127.0.0.1:8765 <server>`; `--port` picks another port). It lists Ollama's
+models in a dropdown per task and reply language, with a think switch for the models
+that can think, and Save writes `backend\model_settings.json` (git-ignored). The backend
+reads that file on its next Ollama call, so a change applies from the next request with
+no restart; a key chosen there wins over its `.env` line, and "default (.env)" leaves
+`.env` in charge. Delete the file to go back to `.env` alone. The picker listens on
+127.0.0.1 only; stop it (Ctrl+C) when you're done.
 
 ---
 
@@ -155,7 +201,8 @@ containing `backend/`, `frontend/`, `CLAUDE.md`, etc.).
    ```
    # Ollama — these should be correct out of the box
    OLLAMA_BASE_URL=http://localhost:11434
-   OLLAMA_MODEL=qwen2.5:7b
+   OLLAMA_MODEL=gemma4:e4b-it-qat
+   OLLAMA_THINK=false
    # Context length, see Step 1 (Context length and GPU memory)
    OLLAMA_NUM_CTX=8192
 
@@ -343,7 +390,7 @@ response streamed word-by-word (English by default; switch to Turkish in Setting
 - The chat persona prompt is working
 
 If you see a song lyric instead of a real response, it means Ollama is not reachable.
-Go back to Step 1 and verify `ollama run qwen2.5:7b` works.
+Go back to Step 1 and verify `ollama run gemma4:e4b-it-qat` works.
 
 ### 8.3 — Test the Fridge tab
 
@@ -450,7 +497,7 @@ This means Ollama is unreachable. Check:
    Start menu or run `ollama serve` in a terminal.
 2. Can the backend reach it? `curl http://localhost:11434/api/tags` should return
    JSON with the model list.
-3. Is the model pulled? `ollama list` should show `qwen2.5:7b`.
+3. Is the model pulled? `ollama list` should show `gemma4:e4b-it-qat` (and any model a task or language has of its own).
 
 ### Suggest button shows progress but then gives a weird/short response
 
@@ -643,7 +690,7 @@ reachable from your other devices.
 
 ### C.3 — Run the prompt test (development PC)
 
-1. Check the connection; it should list `qwen2.5:7b`:
+1. Check the connection; it should list `gemma4:e4b-it-qat`:
 
    ```
    curl http://100.x.x.x:11434/api/tags
@@ -697,7 +744,7 @@ minute, a `--draft` run about 15 seconds.
 | Backup DB | `cd backend && python manage.py backup-db` (safe while the server runs) |
 | Check Ollama | `ollama list` |
 | Model fits the GPU | `ollama ps` shows `100% GPU` |
-| Test Ollama | `ollama run qwen2.5:7b "Good morning"` |
+| Test Ollama | `ollama run gemma4:e4b-it-qat "Good morning"` |
 | Prompt test (dev PC) | `cd backend && python -m tools.prompt_check --url http://100.x.x.x:11434` |
 | Health check | `curl http://localhost:8000/health` |
 | Logs | Check the terminal where uvicorn is running |

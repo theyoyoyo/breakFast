@@ -56,18 +56,18 @@ async def _run(draft, revision, present="A warm start.", context=SAMPLE_CONTEXT,
     structured calls, the present step streams. Returns the events and every model call."""
     calls = []
 
-    async def fake_stream(system_prompt, history, message, temperature=None):
-        calls.append({"kind": "stream", "system": system_prompt, "message": message, "temperature": temperature})
+    async def fake_stream(system_prompt, history, message, temperature=None, **route):
+        calls.append({"kind": "stream", "system": system_prompt, "message": message, "temperature": temperature, "route": route})
         if isinstance(present, Exception):
             raise present
         for char in present:
             yield char
 
-    async def fake_chat_json(system_prompt, messages, schema, temperature=None):
+    async def fake_chat_json(system_prompt, messages, schema, temperature=None, **route):
         reply = revision if any(c["kind"] == "json" for c in calls) else draft
         calls.append({
             "kind": "json", "system": system_prompt, "message": messages[0]["content"],
-            "temperature": temperature, "schema": schema,
+            "temperature": temperature, "schema": schema, "route": route,
         })
         if isinstance(reply, Exception):
             raise reply
@@ -432,6 +432,16 @@ class TestPipelineOrchestrator:
         draft, reviser = calls[0], calls[1]
         assert draft["temperature"] == 0.9 and "EXPLORE" in draft["system"]
         assert reviser["temperature"] == 0.3 and "keep what makes this menu new to them" in reviser["system"]
+
+    # The draft and the reply text run on the suggestion model and the review on the reviser's, for the reply
+    # language, so a model per task or language can serve them (#192)
+    @pytest.mark.asyncio
+    async def test_calls_name_their_task_and_language(self):
+        _, calls = await _run(_draft(_meal(EGGS)), _revision(_meal(EGGS)), context={**SAMPLE_CONTEXT, "language": "tr"})
+        assert [c["route"] for c in calls] == [
+            {"task": "suggestion", "language": "tr"}, {"task": "review", "language": "tr"},
+            {"task": "suggestion", "language": "tr"},
+        ]
 
     # Favorites mode's draft prompt lists the context's saved meals, staples and ratings
     @pytest.mark.asyncio

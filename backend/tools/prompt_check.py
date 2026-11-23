@@ -782,6 +782,8 @@ async def shop_once(sample: dict, sent: dict) -> dict:
             messages=[{"role": "user", "content": shopping_request(sample["language"], shown, fridge)}],
             schema=SUGGESTIONS_SCHEMA,
             temperature=SHOPPING_TEMPERATURE,
+            task="shopping",
+            language=sample["language"],
         )
         items = parse_suggestions(replies[stage]) or []
         shown += [i["name"] for i in new_suggestions(items, known + shown, _dishes(sample))]
@@ -794,7 +796,9 @@ async def plan_once(case: dict, sent: dict) -> dict:
     prompt = build_scheduler_prompt(name, [], "", kitchen_appliances=case["kitchen_appliances"], language=language)
     message = build_scheduler_user_message(name, [], "", menu=case["menu"], language=language)
     sent.setdefault(prompt, None)
-    chunks = [c async for c in llm.stream_response(prompt, [], message, temperature=PLAN_TEMPERATURE)]
+    chunks = [c async for c in llm.stream_response(
+        prompt, [], message, temperature=PLAN_TEMPERATURE, task="plan", language=language,
+    )]
     return {"request": message, "plan": "".join(chunks)}
 
 
@@ -841,7 +845,7 @@ async def chat_once(sample: dict, mode: str | None, scenario: dict, sent: dict) 
             history += chat_history(chat_rows([entry], mode))
             continue
         message = build_chat_message(entry["content"], sample["language"])
-        reply = "".join([c async for c in llm.stream_response(prompt, history, message)])
+        reply = "".join([c async for c in llm.stream_response(prompt, history, message, task="chat", language=sample["language"])])
         replies[next(kinds)] = reply
         history += [entry, {"role": "assistant", "content": reply}]
     return replies
@@ -853,14 +857,14 @@ def recording_prompts(into: dict):
     structured call (the reviser); dict keys keep first-use order."""
     send, send_json = pipeline.stream_response, pipeline.chat_json
 
-    async def record(system_prompt, history, message, temperature=None):
+    async def record(system_prompt, history, message, **options):
         into.setdefault(system_prompt, None)
-        async for chunk in send(system_prompt, history, message, temperature=temperature):
+        async for chunk in send(system_prompt, history, message, **options):
             yield chunk
 
-    async def record_json(system_prompt, messages, schema, temperature=None):
+    async def record_json(system_prompt, messages, schema, **options):
         into.setdefault(system_prompt, None)
-        return await send_json(system_prompt=system_prompt, messages=messages, schema=schema, temperature=temperature)
+        return await send_json(system_prompt=system_prompt, messages=messages, schema=schema, **options)
 
     pipeline.stream_response, pipeline.chat_json = record, record_json
     try:
@@ -1226,10 +1230,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
              "(chat or pressed, default: chat)",
     )
     parser.add_argument("--draft", action="store_true", help="stop each run after the draft")
-    parser.add_argument("--model", help="Ollama model to test (default: OLLAMA_MODEL)")
+    parser.add_argument(
+        "--model",
+        help="Ollama model for every call (default: the app's, OLLAMA_MODEL with each task's and language's own, #192)",
+    )
     parser.add_argument(
         "--think", choices=["on", "off"],
-        help="send Ollama's think field on every call (default: OLLAMA_THINK, unset sends none)",
+        help="send Ollama's think field to that model (default: OLLAMA_THINK; unset sends none, off for the default model)",
     )
     parser.add_argument(
         "--data", action="store_true",
@@ -1262,9 +1269,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
-def _think_label() -> str:
-    """How the test sets Ollama's think field, for the header."""
-    return "" if llm.OLLAMA_THINK is None else f" (think {'on' if llm.OLLAMA_THINK else 'off'})"
+def _think_label(think: bool | None) -> str:
+    """How a model gets Ollama's think field, for the header."""
+    return "" if think is None else f" (think {'on' if think else 'off'})"
+
+
+def model_label() -> str:
+    """The models the test runs on, as the app picks them: OLLAMA_MODEL with its think setting, then each
+    model a task or reply language has of its own, with the keys that use it (#192)."""
+    by_model: dict[str, list[str]] = {}
+    for key in llm.routes():
+        model, think = llm.model_for(task=key, language=key)  # a key is a task or a language
+        by_model.setdefault(model + _think_label(think), []).append(key)
+    model, think = llm.model_for()
+    return "; ".join([model + _think_label(think)] + [f"{', '.join(k)}: {m}" for m, k in by_model.items()])
 
 
 async def main(argv: list[str] | None = None) -> int:
@@ -1273,10 +1291,16 @@ async def main(argv: list[str] | None = None) -> int:
         print("\n".join(history_lines(load_history())))
         return 0
     llm.OLLAMA_BASE_URL = args.url  # llm reads it on every call, so every persona uses this server
-    if args.model:
-        llm.OLLAMA_MODEL = args.model
+    if args.model:  # one model for every call, whatever the app's tasks and languages (or the picker) use
+        llm.OLLAMA_MODEL, llm.OLLAMA_ROUTES, llm.MODEL_SETTINGS_PATH = args.model, {}, None
     if args.think:
         llm.OLLAMA_THINK = args.think == "on"
+    if args.data and llm.routes():
+        print("--data saves one model's outputs: give it --model, since tasks or languages here have their own.")
+        return 2
+    # A test on the app's own picks compares with earlier tests on the same picks
+    model = llm.OLLAMA_MODEL if not llm.routes() else model_label()
+    think = llm.model_for()[1]  # what OLLAMA_MODEL gets: OLLAMA_THINK, else the default model's own
     if not await llm.check_llm_availability():
         print(f"Ollama isn't reachable at {args.url}. See docs/SETUPALL.md, BONUS C.")
         return 1
@@ -1284,7 +1308,7 @@ async def main(argv: list[str] | None = None) -> int:
     mode, prompt, commit = args.mode or "usual", prompt_id(), _commit()
     diff = _git("diff", "HEAD", "--", *PROMPT_SOURCES)
     header = (
-        f"Prompt {prompt} · commit {commit} · {llm.OLLAMA_MODEL}{_think_label()} at {args.url} · {args.persona} · "
+        f"Prompt {prompt} · commit {commit} · {model_label()} at {args.url} · {args.persona} · "
         f"mode {mode} · "
         f"{args.runs} runs per sample" + (f" · scenario {args.scenario}" if args.scenario != "fresh" else "")
         + (" · draft only" if args.draft else "") + (f' · "{args.note}"' if args.note else "")
@@ -1293,12 +1317,12 @@ async def main(argv: list[str] | None = None) -> int:
     records, prompts = await run(args.samples, args.runs, args.mode, args.draft, args.persona, args.scenarios)
     results = stage_results(records, args.persona)
     report = summarize(records, args.persona) + "\n\n" + "\n".join(
-        compare(results, load_history(), mode, args.persona, llm.OLLAMA_MODEL, llm.OLLAMA_THINK)
+        compare(results, load_history(), mode, args.persona, model, think)
     )
     log = save_log(records, prompts, header, report, diff)
     if args.data and records:
         meta = {
-            "model": llm.OLLAMA_MODEL, "think": llm.OLLAMA_THINK, "date": f"{datetime.now():%Y-%m-%d %H:%M}",
+            "model": llm.OLLAMA_MODEL, "think": think, "date": f"{datetime.now():%Y-%m-%d %H:%M}",
             "prompt": prompt, "commit": commit, "scenario": args.scenario, "mode": args.mode, "runs": args.runs,
             "note": args.note, "log": log.name, "gpu": await gpu_share(llm.OLLAMA_MODEL),
         }
@@ -1307,7 +1331,7 @@ async def main(argv: list[str] | None = None) -> int:
     if results:
         entry = {
             "date": f"{datetime.now():%Y-%m-%d %H:%M}", "prompt": prompt, "commit": commit,
-            "model": llm.OLLAMA_MODEL, "think": llm.OLLAMA_THINK,
+            "model": model, "think": think,
             "persona": args.persona, "mode": mode, "scenario": args.scenario, "checks": CHECKS,
             "draft_only": args.draft, "runs": args.runs, "note": args.note, "log": log.name, "results": results,
         }

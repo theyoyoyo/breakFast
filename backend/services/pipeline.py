@@ -317,6 +317,8 @@ async def revise(
             messages=[{"role": "user", "content": _with_chat(_revision_message(draft_meal, problems), chat_block)}],
             schema=schema,
             temperature=REVISE_TEMPERATURE,
+            task="review",
+            language=language,
         )
         asks, changes, revised_meal = _parse_revision(reply)
         if revised_meal is None:
@@ -380,6 +382,8 @@ async def run_suggestion_pipeline(
         messages=[{"role": "user", "content": _with_chat(user_message, chat_block)}],
         schema=draft_schema(language),
         temperature=temperature,
+        task="suggestion",
+        language=language,
     )
     draft = _parse_draft(reply)
     if draft is None:
@@ -426,7 +430,9 @@ async def run_suggestion_pipeline(
     try:
         chunks = []
         present_message = f"Today's menu:\n```json\n{json.dumps(meal, ensure_ascii=False, indent=2)}\n```"
-        async for chunk in stream_response(build_present_prompt(language), [], present_message, temperature=temperature):
+        async for chunk in stream_response(
+            build_present_prompt(language), [], present_message, temperature=temperature, task="suggestion", language=language,
+        ):
             chunks.append(chunk)
         text = _FENCED_RE.sub("", "".join(chunks)).strip()
     except Exception:

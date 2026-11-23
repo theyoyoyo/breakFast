@@ -86,7 +86,7 @@ async def get_schedule(body: ScheduleRequest, user_id: int = Depends(require_use
     # Collect full LLM response
     full_response = []
     try:
-        async for chunk in stream_response(system_prompt, [], user_message, temperature=0.3):
+        async for chunk in stream_response(system_prompt, [], user_message, temperature=0.3, task="plan", language=language):
             full_response.append(chunk)
     except LLMUnavailableError:
         return ScheduleResponse(
