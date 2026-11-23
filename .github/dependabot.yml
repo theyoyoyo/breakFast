@@ -57,3 +57,6 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "@eslint/js"
         update-types: ["version-update:semver-major"]
+      # opentype.js 2 writes NaN into the outlined wordmark (npm run icons): stay on 1.x.
+      - dependency-name: "opentype.js"
+        update-types: ["version-update:semver-major"]

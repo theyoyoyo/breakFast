@@ -26,7 +26,7 @@ describe('ConfirmPrompt', () => {
   // A delete's action button is red, any other action uses the theme color
   it('makes a delete red', () => {
     const { rerender } = render(<ConfirmPrompt label="x" message="?" confirmLabel="Delete" danger onConfirm={() => {}} onCancel={() => {}} />)
-    expect(screen.getByRole('button', { name: 'Delete' })).toHaveStyle({ background: dangerBtn.background })
+    expect(screen.getByRole('button', { name: 'Delete' }).style.background).toBe(dangerBtn.background)
     rerender(<ConfirmPrompt label="x" message="?" confirmLabel="Allow" onConfirm={() => {}} onCancel={() => {}} />)
     expect(screen.getByRole('button', { name: 'Allow' }).style.background).toBe(confirmBtn.background)
     expect(confirmBtn.background).toBe('var(--secondary)')
