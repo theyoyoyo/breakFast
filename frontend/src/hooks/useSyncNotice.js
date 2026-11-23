@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 
 // App-wide sync notices. The chat socket is open while the app is (every tab stays mounted),
 // so ChatInterface passes the server's small notices ({ type: 'supplements_updated' }, …)
@@ -14,7 +14,10 @@ export function emitSyncNotice(notice) {
 /** Call `handler(notice)` on every notice whose type is `types` (a string or a list). */
 export function useSyncNotice(types, handler) {
   const handlerRef = useRef(handler)
-  handlerRef.current = handler
+  // The latest handler, set after each render (not during it) and before any effect can emit a notice.
+  useLayoutEffect(() => {
+    handlerRef.current = handler
+  })
   const key = [].concat(types).join(' ')
   useEffect(() => {
     const wanted = new Set(key.split(' '))

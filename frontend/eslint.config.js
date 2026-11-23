@@ -1,5 +1,5 @@
 // Lint rules for the frontend (#220): ESLint's, React's and the hooks' recommended sets.
-// `npm run lint` checks every file; CI checks only the files a pull request changes.
+// `npm run lint` checks every file, in CI too (#258).
 import js from '@eslint/js'
 import react from 'eslint-plugin-react'
 import reactHooks from 'eslint-plugin-react-hooks'
@@ -25,8 +25,8 @@ export default [
     rules: {
       'react/prop-types': 'off',
       // Panels load their data with setState inside an effect. Rewriting that changes when and how
-      // often they load, so it waits for the UI redesign: a warning until the full lint pass (#220),
-      // then back to an error.
+      // often they load, so it waits for the UI redesign: a warning until then, and CI's
+      // --max-warnings (.github/workflows/ci.yml) keeps new ones out.
       'react-hooks/set-state-in-effect': 'warn',
     },
   },
@@ -36,8 +36,8 @@ export default [
     languageOptions: { globals: { ...globals.vitest, ...globals.node } },
   },
   {
-    // Build config runs in Node.
-    files: ['*.config.js'],
+    // Build config and the icon scripts (npm run icons) run in Node.
+    files: ['*.config.js', 'scripts/**/*.mjs'],
     languageOptions: { globals: { ...globals.node } },
   },
 ]
