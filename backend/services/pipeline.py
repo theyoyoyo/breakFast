@@ -35,7 +35,14 @@ from typing import AsyncGenerator
 
 from models.meal import with_emoji
 from models.units import units_for, unknown_units
-from services.fridge import find_avoided, find_missing_ingredients, in_fridge, meal_ingredient_names, same_name
+from services.fridge import (
+    find_avoided,
+    find_missing_ingredients,
+    in_fridge,
+    meal_ingredient_names,
+    paired_item,
+    same_name,
+)
 from services.llm import chat_json, stream_response
 from services.personas import build_pipeline_analyst_prompt, build_present_prompt, build_suggestion_prompt
 
@@ -63,7 +70,9 @@ def in_language(texts: dict, language: str) -> str:
     return texts.get(language, texts["en"])
 
 
-def _meal_schema(language: str, method: bool = True, names: list[str] | None = None, missing: list[str] = ()) -> dict:
+def _meal_schema(
+    language: str, method: bool = True, names: list[str] | None = None, missing: list[str] = (), items: list[str] = (),
+) -> dict:
     """The meal the draft and the reviser both return, one shape so the two stay the same. Each
     menu item lists its ingredients before its name, so a dish's name is written after what goes
     in, and every item has a numeric amount in the app's units (a dish's servings, which code
@@ -73,7 +82,10 @@ def _meal_schema(language: str, method: bool = True, names: list[str] | None = N
 
     For the reviser, `names` limits a dish ingredient's name to these (reviser_names), and
     `missing`, the draft's items the fridge lacks, are what an optional `replaces` may name. Item
-    names stay free, since a dish may need a new name after a swap."""
+    names stay free, since a dish may need a new name after a swap. `items`, the draft's item names,
+    are what an item's `serve_with` may name: the item it's served with or on, empty for none (#263).
+    A closed list keeps out typos and made-up names; code follows a partner the review renamed
+    (resolve_pairs)."""
     units = units_for(language)
     ingredient = {
         "type": "object",
@@ -90,6 +102,8 @@ def _meal_schema(language: str, method: bool = True, names: list[str] | None = N
     fields = {"ingredients": {"type": "array", "items": ingredient}, "name": {"type": "string"}}
     if method:
         fields["method"] = {"type": "string"}
+    if items:
+        fields["serve_with"] = {"type": "string", "enum": ["", *items]}
     fields |= {"amount": {"type": "number"}, "unit": {"type": "string", "enum": units}}
     item = {"type": "object", "properties": fields, "required": list(fields)}
     return {
@@ -112,9 +126,12 @@ def draft_schema(language: str) -> dict:
     return {"type": "object", "properties": properties, "required": list(properties)}
 
 
-def revision_schema(language: str, chat: bool = False, names: list[str] | None = None, missing: list[str] = ()) -> dict:
+def revision_schema(
+    language: str, chat: bool = False, names: list[str] | None = None, missing: list[str] = (), items: list[str] = (),
+) -> dict:
     """The reviser's reply: its changes first, then the meal (the draft's shape, with methods, its
-    ingredient names limited to `names` and an optional `replaces` naming one of `missing`).
+    ingredient names limited to `names`, an optional `replaces` naming one of `missing`, and a
+    `serve_with` naming one of `items` or none).
     After a chat it starts with `chat_asks`, what the chat asks for now, so it holds the meal
     against each ask. Each ask lists the chat entries it comes from before its words, so a later
     message is read together with the earlier one it changes (one general shape, no field per kind
@@ -127,7 +144,7 @@ def revision_schema(language: str, chat: bool = False, names: list[str] | None =
     properties = {"chat_asks": {"type": "array", "items": ask}} if chat else {}
     properties |= {
         "changes": {"type": "array", "items": {"type": "string"}},
-        "meal": _meal_schema(language, names=names, missing=missing),
+        "meal": _meal_schema(language, names=names, missing=missing, items=items),
     }
     return {"type": "object", "properties": properties, "required": list(properties)}
 
@@ -166,6 +183,51 @@ def _check_swaps(meal: dict, missing: list[str], inventory: list[dict]) -> dict:
                 and not any(same_name(old, n) for n in dish)
             ):
                 ingredient["replaces"] = old
+    return meal
+
+
+def _named(name: str, items: list[dict]) -> dict | None:
+    return next((i for i in items if same_name(name, str(i.get("name", "")))), None)
+
+
+def _food(item: dict) -> list[str]:
+    return meal_ingredient_names({"menu": [item]})
+
+
+def _renamed(drafted: dict, menu: list[dict], draft_menu: list[dict]) -> dict | None:
+    """The final item a draft item became under a new name: among the items whose name no draft item
+    has (renamed or new), the one sharing the most food with it; None when none shares any."""
+    food = _food(drafted)
+    shared = [
+        (sum(any(same_name(f, g) for g in _food(i)) for f in food), i) for i in menu
+        if _named(str(i.get("name", "")), draft_menu) is None
+    ]
+    best = max(shared, key=lambda pair: pair[0], default=(0, None))
+    return best[1] if best[0] else None
+
+
+def resolve_pairs(meal: dict, draft_meal: dict) -> dict:
+    """An item's `serve_with` after the review (#263), against the final menu: written as the name of
+    the item it names there; when that item was renamed (the schema lists the draft's names), as its new
+    name (_renamed). When the item it names is gone from the menu (left out, or moved into a dish), the
+    paired item goes with it, and so does anything served with that one in turn. Any other pairing that
+    names no other item (empty, the item itself, under its old name too) is cleared and the item kept."""
+    menu = [i for i in meal["menu"] if isinstance(i, dict)]
+    draft_menu = [i for i in draft_meal.get("menu") or [] if isinstance(i, dict)]
+    gone = []
+    for item in menu:
+        target = str(item.pop("serve_with", "") or "").strip()
+        partner = _named(target, menu) if target else None
+        drafted = _named(target, draft_menu) if target and partner is None else None
+        if drafted is not None:
+            partner = _renamed(drafted, menu, draft_menu)
+            if partner is None:
+                gone.append(item)
+        if partner is not None and partner is not item:
+            item["serve_with"] = str(partner["name"])
+    while gone:
+        meal["menu"] = [i for i in meal["menu"] if not any(i is g for g in gone)]
+        gone = [i for i in meal["menu"] if isinstance(i, dict) and i.get("serve_with") and not paired_item(i, meal["menu"])]
     return meal
 
 
@@ -261,6 +323,9 @@ def _parse_draft(reply: str) -> tuple[str, dict | None] | None:
     menu = meal.get("menu") if isinstance(meal, dict) else None
     if not isinstance(menu, list):
         return None
+    for item in menu:  # the draft pairs nothing; the reviser does (#263)
+        if isinstance(item, dict):
+            item.pop("serve_with", None)
     return text, _clean_meal(meal) if menu else None
 
 
@@ -291,7 +356,8 @@ async def revise(
     """Step 2 on its own, so the prompt test can send the reviser a fixed draft: code checks the
     draft's meal, and the reviser returns the fixed meal through revision_schema, its ingredient
     names limited to the fridge's and the draft's own (reviser_names). Code keeps an ingredient's
-    `replaces` only when it's true (_check_swaps). Returns the code check's lines, what the reviser
+    `replaces` only when it's true (_check_swaps) and reads each item's `serve_with` against the final
+    menu (resolve_pairs). Returns the code check's lines, what the reviser
     read in the chat, its changes and its meal (None when the meal can't be read or the call fails)."""
     language = context.get("language", "en")
     reviser_prompt = build_pipeline_analyst_prompt(
@@ -308,8 +374,11 @@ async def revise(
     )
     problems = _code_check(draft_meal, context)
     missing = find_missing_ingredients(draft_meal, context["ingredients"])
+    drafted = dict.fromkeys(str(i.get("name") or "").strip() for i in draft_meal["menu"] if isinstance(i, dict))
+    items = [n for n in drafted if n]
     schema = revision_schema(
         language, chat=bool(chat_block), names=reviser_names(draft_meal, context["ingredients"], language), missing=missing,
+        items=items,
     )
     asks, changes, revised_meal = [], [], None
     try:
@@ -328,7 +397,8 @@ async def revise(
         logging.exception("Suggestion reviser failed; the draft's meal is used")
     if revised_meal is not None:
         _check_swaps(revised_meal, missing, context["ingredients"])
-    return problems, asks, changes, revised_meal
+        resolve_pairs(revised_meal, draft_meal)
+    return problems, asks, changes, revised_meal if revised_meal and revised_meal["menu"] else None
 
 
 async def run_suggestion_pipeline(

@@ -9,6 +9,7 @@ All scheduling math (interleaving dishes, backward timing) is handled by our cod
 """
 
 from models.units import localize_unit
+from services.fridge import paired_item
 
 # The appliances the prompt offers when the user has none enabled
 DEFAULT_APPLIANCES = ["Stove", "Air Fryer", "Toaster", "Oven"]
@@ -77,16 +78,20 @@ def format_menu(menu: list, language: str = "en") -> str:
     """One line per menu item: dishes with their method and ingredients
     ('Egg sandwich (hard-boil the eggs, peel, slice into the bread): Egg (2 pcs), …'), a simple
     item with a method the same way, as a dish of itself ('Sweet potato (peel, cube and roast):
-    Sweet potato (300 g)', #156), and the others with their amount, marked as served as they are."""
+    Sweet potato (300 g)', #156), and the others with their amount, marked as served as they are.
+    An item served with or on another one says so after its method ('Tahini dressing (mix; serve
+    with Omelette): …', '- Honey (1 tsp), served as it is with Pancakes', #263)."""
     lines = []
     for item in menu:
         method = str(item.get("method") or "").strip().rstrip(".") if isinstance(item, dict) else ""
         subs = (item.get("ingredients") or ([item] if method else [])) if isinstance(item, dict) else None
+        paired = paired_item(item, menu)
         if subs:
-            name = f"{item.get('name', '?')} ({method})" if method else item.get("name", "?")
+            details = "; ".join(v for v in (method, f"serve with {paired}" if paired else "") if v)
+            name = f"{item.get('name', '?')} ({details})" if details else item.get("name", "?")
             lines.append(f"- {name}: {', '.join(_with_amount(s, language) for s in subs)}")
         else:
-            lines.append(f"- {_with_amount(item, language)}, served as it is")
+            lines.append(f"- {_with_amount(item, language)}, served as it is" + (f" with {paired}" if paired else ""))
     return "\n".join(lines)
 
 

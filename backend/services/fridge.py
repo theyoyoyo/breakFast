@@ -106,3 +106,12 @@ def find_avoided(meal: dict | None, avoid_list: list[str]) -> list[str]:
     dishes = [i.get("name", "") for i in meal.get("menu") or [] if isinstance(i, dict) and i.get("ingredients")]
     names = dict.fromkeys(n for n in dishes + meal_ingredient_names(meal) if n)
     return [n for n in names if any(same_name(n, a) for a in avoid_list)]
+
+
+def paired_item(item, menu: list) -> str:
+    """The menu item an item is served with or on (its `serve_with`, #263), as that item's name is
+    written, when it is another item of this menu (same_name); empty otherwise, since a review or an
+    edit may have renamed, moved or removed it."""
+    target = str(item.get("serve_with") or "").strip() if isinstance(item, dict) else ""
+    others = (str(o.get("name") or "") for o in menu if isinstance(o, dict) and o is not item)
+    return next((o for o in others if target and same_name(target, o)), "")

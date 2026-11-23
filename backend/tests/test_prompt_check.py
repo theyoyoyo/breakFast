@@ -780,7 +780,8 @@ def test_review_case_may_keep_a_part():
 
 
 # A review run sends the case's draft and code check to the reviser in the case user's mode, and returns the draft,
-# the review lines and the revised meal; every case's draft has an item the fridge lacks
+# the review lines and the revised meal; every case's draft has something to fix, an item the fridge lacks or one
+# nobody eats on its own
 async def test_review_once_sends_the_draft():
     calls = []
 
@@ -796,8 +797,51 @@ async def test_review_once_sends_the_draft():
     assert replies["draft"].startswith("Pancake morning\n\n```json") and replies["final"].startswith("Pancake morning")
     assert "Blueberries" in replies["final"]
     for case in REVIEW_CASES.values():
-        assert find_missing_ingredients(case["draft"], case["ingredients"])
+        assert find_missing_ingredients(case["draft"], case["ingredients"]) or case["lone"]
         assert all("method" not in item for item in case["draft"]["menu"])
+
+
+# The cinnamon case serves a fridge item alone that nobody eats on its own (#263): still a menu item of its own it's
+# flagged, with a method too; moved into the oatmeal, served with it or left out it's clean, and the note says where
+def test_review_flags_a_lone_item_still_alone():
+    case = REVIEW_CASES["cinnamon"]
+    draft = pipeline._meal_reply("", case["draft"])
+    assert case["lone"] == ["Cinnamon"] and not find_missing_ingredients(case["draft"], case["ingredients"])
+    oats = [{"name": n, "amount": 1, "unit": "pcs"} for n in ("Oats", "Milk", "Banana", "Honey")]
+    tea = {"name": "Tea", "amount": 1, "unit": "tea glass", "ingredients": []}
+    def oatmeal(*extra):
+        return {"name": "Banana oatmeal", "method": "Simmer the oats in the milk", "ingredients": [*oats, *extra]}
+    cinnamon = {"name": "Cinnamon", "amount": 1, "unit": "tsp", "ingredients": []}
+    alone = check_review(_reply(oatmeal(), cinnamon, tea), case, draft)
+    assert alone["issues"]["alone"] == ["Cinnamon"]
+    moved = check_review(_reply(oatmeal({"name": "Cinnamon", "amount": 1, "unit": "tsp"}), tea), case, draft)
+    assert is_clean(moved) and moved["note"] == "Cinnamon: in Banana oatmeal"
+    served = check_review(_reply(oatmeal(), {**cinnamon, "method": "Sprinkle over the oatmeal"}, tea), case, draft)
+    assert served["issues"]["alone"] == ["Cinnamon"] and served["note"] == "simple items: Cinnamon: Sprinkle over the oatmeal"
+    paired = check_review(_reply(oatmeal(), {**cinnamon, "serve_with": "banana oatmeal"}, tea), case, draft)
+    assert is_clean(paired) and "Cinnamon → Banana oatmeal" in paired["note"]
+    unpaired = check_review(_reply(oatmeal(), {**cinnamon, "serve_with": "Pancakes"}, tea), case, draft)
+    assert unpaired["issues"]["alone"] == ["Cinnamon"] and "→" not in unpaired.get("note", "")
+    left_out = check_review(_reply(oatmeal(), tea), case, draft)
+    assert is_clean(left_out) and left_out["note"] == "dropped: Cinnamon"
+    assert REVIEW_CASES["pancakes"]["lone"] == [] and "alone" in PERSONAS["review"]["problems"]
+
+
+# The paired case is a server menu with three items nobody eats on their own beside a fridge that has everything
+# (#263): a dish among them still alone is flagged under its new name too, and paired, moved or left out it's clean
+def test_review_flags_a_lone_dish_until_it_is_paired():
+    case = REVIEW_CASES["paired"]
+    draft = pipeline._meal_reply("", case["draft"])
+    assert len(case["lone"]) == 3 and not find_missing_ingredients(case["draft"], case["ingredients"])
+    toast, spread, omelette, banana, dressing, _ = (dict(i) for i in case["draft"]["menu"])
+    sauce = {**dressing, "name": "Tahini sauce"}
+    alone = check_review(_reply(toast, {**spread, "serve_with": toast["name"]}, omelette, banana, sauce), case, draft)
+    assert alone["issues"]["alone"] == ["Tahini sauce"]
+    paired = check_review(_reply(toast, {**spread, "serve_with": toast["name"]}, omelette, banana,
+                                 {**dressing, "serve_with": omelette["name"]}), case, draft)
+    assert is_clean(paired) and "Tahini Dressing → Chard and Chia Seed Omelette" in paired["note"]
+    moved = {**omelette, "ingredients": [*omelette["ingredients"], *dressing["ingredients"]]}
+    assert is_clean(check_review(_reply(toast, {**spread, "serve_with": toast["name"]}, moved, banana), case, draft))
 
 
 # A review run's log keeps the draft it sent, which isn't scored, under its own title beside the scored final

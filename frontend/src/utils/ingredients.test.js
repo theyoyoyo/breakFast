@@ -44,6 +44,13 @@ describe('menuKey', () => {
     expect(menuKey(frittata({ ...feta, replaces: 'Salmon' }))).toBe(menuKey(frittata(feta)))
   })
 
+  // The item an item is served with isn't food: a pairing keeps the gold star match (#263)
+  it('ignores the item an item is served with', () => {
+    const honey = { name: 'Honey', amount: 1, unit: 'tsp', ingredients: [] }
+    const pancakes = { name: 'Pancakes', ingredients: [{ name: 'Flour', amount: 1, unit: 'glass' }] }
+    expect(menuKey({ menu: [pancakes, { ...honey, serve_with: 'Pancakes' }] })).toBe(menuKey({ menu: [pancakes, honey] }))
+  })
+
   // A meal's icon isn't food: a changed icon keeps the gold star match (#244)
   it('ignores the icon', () => {
     const meal = { menu: [{ name: 'Olives', amount: 10, unit: 'pcs', ingredients: [] }] }
