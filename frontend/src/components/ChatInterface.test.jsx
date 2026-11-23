@@ -132,10 +132,10 @@ describe('ChatInterface sync', () => {
   // A push for the chat on screen reloads it; a push for another chat only refreshes Back / Next
   it('reloads on session_updated for the open chat only', async () => {
     await renderChat()
-    const listCalls = listSessions.mock.calls.length
+    listSessions.mockClear()
 
     pushSessionUpdated('another-session')
-    await waitFor(() => expect(listSessions.mock.calls.length).toBe(listCalls + 1))
+    await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(1))
     expect(getSessionMessages).toHaveBeenCalledTimes(1)
 
     pushSessionUpdated('s1')
@@ -201,10 +201,8 @@ describe('ChatInterface sync', () => {
 
     await screen.findByText('Card: Edited Breakfast')
     expect(updateSessionMessage).toHaveBeenCalledTimes(1)
-    const [sessionId, messageId, content] = updateSessionMessage.mock.calls[0]
-    expect([sessionId, messageId]).toEqual(['s1', 3])
-    expect(content.startsWith('Try this.\n\n```json\n')).toBe(true)
-    expect(JSON.parse(content.match(/```json\s*([\s\S]*?)\s*```/)[1]).menu_name).toBe('Edited Breakfast')
+    expect(updateSessionMessage).toHaveBeenCalledWith('s1', 3, expect.stringMatching(/^Try this\.\n\n```json\n/))
+    expect(updateSessionMessage).toHaveBeenCalledWith('s1', 3, expect.stringContaining('"menu_name":"Edited Breakfast"'))
   })
 
   // A pill marked on another device shows up in the 💊 list open in "Today I ate" on a supplements push
@@ -251,9 +249,9 @@ describe('ChatInterface sync', () => {
   // Coming back to the page reloads the 💊 list too, in case a push was missed in the background
   it('reloads the 💊 list when the page becomes visible again', async () => {
     await renderChat()
-    const calls = getTodaySupplements.mock.calls.length
+    getTodaySupplements.mockClear()
     setVisibility('visible')
-    await waitFor(() => expect(getTodaySupplements.mock.calls.length).toBe(calls + 1))
+    await waitFor(() => expect(getTodaySupplements).toHaveBeenCalledTimes(1))
   })
 
   // A notice that isn't about the chat is passed to the rest of the app as one window event
@@ -286,8 +284,7 @@ describe('ChatInterface sync', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(screen.queryByText('Today I ate')).toBeNull())
     expect(saveAteDraft).toHaveBeenCalledTimes(1)
-    const [sessionId, messageId, meal] = saveAteDraft.mock.calls[0]
-    expect([sessionId, messageId, meal.menu]).toEqual(['s1', 3, []])
+    expect(saveAteDraft).toHaveBeenCalledWith('s1', 3, expect.objectContaining({ menu: [] }))
 
     fireEvent.click(screen.getByTitle('Today I ate...'))
     await screen.findByText('Today I ate')

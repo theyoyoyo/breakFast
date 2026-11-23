@@ -34,7 +34,7 @@ describe('FavoritesPanel readiness', () => {
     render(<FavoritesPanel visible />)
     expect(await screen.findByTitle('Ready — everything is in your fridge')).toBeInTheDocument()
     expect(await screen.findByTitle('Not ready — missing: Avocado')).toBeInTheDocument()
-    expect(checkMissingIngredients.mock.calls[0][0].menu).toEqual(FAVORITES[0].menu_items)
+    expect(checkMissingIngredients).toHaveBeenCalledWith(expect.objectContaining({ menu: FAVORITES[0].menu_items }))
   })
 
   // Each favorite shows its id next to its name, and the header names the tab
@@ -56,7 +56,7 @@ describe('FavoritesPanel readiness', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(await screen.findByText('Another favorite already has this name. Pick a new one to save.')).toBeInTheDocument()
     expect(screen.getByDisplayValue('Menemen Plate')).toBeInTheDocument()
-    expect(updateFavorite.mock.calls[0][0]).toBe(2)
+    expect(updateFavorite).toHaveBeenCalledWith(2, expect.objectContaining({ meal_name: 'Menemen Plate' }))
   })
 
   // A favorite shows its saved icon, and an older one without an icon the one from its id
@@ -77,7 +77,7 @@ describe('FavoritesPanel readiness', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Icon 🧇' }))
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await vi.waitFor(() => expect(updateFavorite).toHaveBeenCalled())
-    expect(updateFavorite.mock.calls[0][1].emoji).toBe('🧇')
+    expect(updateFavorite).toHaveBeenCalledWith(2, expect.objectContaining({ emoji: '🧇' }))
     expect((await screen.findByText('Avocado Toast')).previousSibling).toHaveTextContent('🧇')
   })
 
@@ -87,6 +87,6 @@ describe('FavoritesPanel readiness', () => {
     render(<FavoritesPanel visible onSendToChat={onSendToChat} />)
     fireEvent.click(await screen.findByText('Avocado Toast'))
     fireEvent.click(screen.getByText('🫕 Send to Chat'))
-    expect(onSendToChat.mock.calls[0][0].emoji).toBe(emojiFor(2))
+    expect(onSendToChat).toHaveBeenCalledWith(expect.objectContaining({ emoji: emojiFor(2) }))
   })
 })

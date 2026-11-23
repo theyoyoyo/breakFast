@@ -82,7 +82,7 @@ describe('MealEditor fridge check', () => {
     render(<MealEditor meal={{ ...MEAL, obtained: ['Olives'] }} menuMode checkFridge onSave={onSave} />)
     expect(await screen.findByTitle(OBTAINED)).toHaveTextContent('Olives')
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    expect(onSave.mock.calls[0][0].obtained).toEqual(['Olives'])
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ obtained: ['Olives'] }))
   })
 
   // A tap on a dish's name marks all of its missing items (name included) and a second tap unmarks
@@ -150,8 +150,7 @@ describe('MealEditor fridge check', () => {
     await waitFor(() => expect(onMissingChange).toHaveBeenLastCalledWith(['Olives']))
     fireEvent.click(screen.getAllByTitle('Delete')[1]) // dish row first, then Olives
     await waitFor(() => expect(onMissingChange).toHaveBeenLastCalledWith([]))
-    const lastMeal = checkMissingIngredients.mock.calls.at(-1)[0]
-    expect(lastMeal.menu.map(item => item.name)).toEqual(['Menemen'])
+    expect(checkMissingIngredients).toHaveBeenLastCalledWith({ menu: [expect.objectContaining({ name: 'Menemen' })] })
   })
 
   it('does not call the backend unless checkFridge is on', async () => {
@@ -232,7 +231,7 @@ describe('MealEditor header', () => {
     await waitFor(() => expect(star).toBeEnabled()) // once the favorites are loaded
     fireEvent.click(star)
     await waitFor(() => expect(star).toHaveAttribute('aria-pressed', 'true'))
-    expect(onFavorite.mock.calls[0][0].menu_name).toBe('Test Breakfast')
+    expect(onFavorite).toHaveBeenCalledWith(expect.objectContaining({ menu_name: 'Test Breakfast' }))
     expect(star).toHaveAccessibleName('Remove from favorites')
     fireEvent.click(star)
     await waitFor(() => expect(star).toHaveAttribute('aria-pressed', 'false'))
@@ -281,7 +280,7 @@ describe('MealEditor header', () => {
     expect(screen.queryByText(/is already in Favorites/)).toBeNull()
     fireEvent.click(star)
     await waitFor(() => expect(star).toHaveAttribute('aria-pressed', 'true'))
-    expect(onFavorite.mock.calls[0][0].menu_name).toBe('Test Breakfast 2')
+    expect(onFavorite).toHaveBeenCalledWith(expect.objectContaining({ menu_name: 'Test Breakfast 2' }))
   })
 
   // The server's refusal (another device took the name meanwhile) shows the same note
@@ -335,8 +334,12 @@ describe('MealEditor prep words', () => {
     const { unmount } = render(<MealEditor meal={PREP_MEAL} menuMode onChange={onChange} />)
     fireEvent.click(screen.getByText('▶ Ingredients'))
     fireEvent.click(screen.getAllByText('▲')[0])
-    const oats = onChange.mock.lastCall[0].menu[0].ingredients[0]
-    expect(oats).toMatchObject({ name: 'Oats', amount: 2, prep: 'rolled' })
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      menu: [expect.objectContaining({ ingredients: [
+        expect.objectContaining({ name: 'Oats', amount: 2, prep: 'rolled' }),
+        expect.objectContaining({ name: 'Banana', prep: 'sliced' }),
+      ] })],
+    }))
     unmount()
     render(<MealEditor meal={MEAL} menuMode />)
     expect(screen.queryByTitle('Preparation details')).toBeNull()
@@ -373,7 +376,9 @@ describe('MealEditor prep words', () => {
     expect(screen.getByText('Peel, cube and roast')).toBeInTheDocument()
     expect(screen.queryByText('Olives', { selector: 'div' })).toBeNull()
     fireEvent.click(screen.getAllByText('▲')[0])
-    expect(onChange.mock.lastCall[0].menu[0]).toMatchObject({ name: 'Sweet potato', method: 'Peel, cube and roast' })
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      menu: [expect.objectContaining({ name: 'Sweet potato', amount: 301, method: 'Peel, cube and roast' }), expect.anything()],
+    }))
   })
 
   it('keeps a dish method through edits', () => {
@@ -381,9 +386,12 @@ describe('MealEditor prep words', () => {
     render(<MealEditor meal={METHOD_MEAL} menuMode onChange={onChange} />)
     fireEvent.click(screen.getByText('▶ Ingredients'))
     fireEvent.click(screen.getAllByText('▲')[0])
-    const dish = onChange.mock.lastCall[0].menu[0]
-    expect(dish.method).toBe('Hard-boil the eggs, peel, slice into the bread')
-    expect(dish.ingredients[0]).toMatchObject({ name: 'Eggs', amount: 3 })
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      menu: [expect.objectContaining({
+        method: 'Hard-boil the eggs, peel, slice into the bread',
+        ingredients: [expect.objectContaining({ name: 'Eggs', amount: 3 }), expect.objectContaining({ name: 'Bread' })],
+      }), expect.anything()],
+    }))
   })
 })
 
@@ -455,11 +463,13 @@ describe('MealEditor replaced ingredients', () => {
     fireEvent.click(screen.getAllByText('▲')[2])
     fireEvent.click(screen.getAllByTitle('Delete')[1]) // the dish's trash first, then Eggs
     const expected = [{ name: 'Feta', amount: 51, unit: 'tbsp', replaces: 'Salmon' }]
-    expect(onChange.mock.lastCall[0].menu[0].ingredients).toEqual(expected)
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      menu: [expect.objectContaining({ ingredients: expected }), expect.anything()],
+    }))
     expect(screen.getByRole('img', { name: 'Instead of Salmon' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    expect(onSave.mock.calls[0][0].menu[0].ingredients).toEqual(expected)
-    expect(onSave.mock.calls[0][0].menu_items[0].ingredients).toEqual(expected)
+    const dish = expect.objectContaining({ name: 'Frittata', ingredients: expected })
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ menu: [dish, expect.anything()], menu_items: [dish, expect.anything()] }))
   })
 
   // The editor changes a row's name by deleting it and adding another, and the new row has no replaces (no ✱, no ℹ️ line)
@@ -471,9 +481,15 @@ describe('MealEditor replaced ingredients', () => {
     const add = screen.getByPlaceholderText('Add ingredient…')
     fireEvent.change(add, { target: { value: 'Halloumi' } })
     fireEvent.keyDown(add, { key: 'Enter' })
-    const subs = onChange.mock.lastCall[0].menu[0].ingredients
-    expect(subs.map(sub => sub.name)).toEqual(['Eggs', 'Halloumi'])
-    expect(subs.some(sub => 'replaces' in sub)).toBe(false)
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      menu: [expect.objectContaining({ ingredients: [
+        { name: 'Eggs', amount: 3, unit: 'pcs' },
+        expect.objectContaining({ name: 'Halloumi' }),
+      ] }), expect.anything()],
+    }))
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      menu: [expect.objectContaining({ ingredients: [expect.anything(), expect.not.objectContaining({ replaces: expect.anything() })] }), expect.anything()],
+    }))
     expect(screen.queryByText('✱')).toBeNull()
     expect(screen.queryByTitle('Preparation details')).toBeNull()
   })
@@ -531,6 +547,8 @@ describe('MealEditor units', () => {
     render(<MealEditor meal={UNIT_MEAL} menuMode onSave={onSave} />)
     fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'tbsp' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    expect(onSave.mock.calls[0][0].menu.map(item => item.unit)).toEqual(['adet', 'tbsp'])
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      menu: [expect.objectContaining({ unit: 'adet' }), expect.objectContaining({ unit: 'tbsp' })],
+    }))
   })
 })

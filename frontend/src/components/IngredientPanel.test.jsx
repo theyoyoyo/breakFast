@@ -33,7 +33,6 @@ const KIWI = { name: 'Kiwi', reason: 'In season', checked: false }
 const OATS = { name: 'Rolled oats', reason: 'Fiber', checked: true }
 
 const checkboxFor = (name) => screen.getByRole('checkbox', { name: new RegExp(name) })
-const lastSaved = () => api.saveSuggestionList.mock.calls.at(-1)
 
 const header = () => screen.getByRole('button', { name: /^Suggestions \(/ })
 
@@ -60,7 +59,7 @@ describe('IngredientPanel shopping suggestions', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Suggest Shopping/ }))
     expect(await screen.findByText('Salmon')).toBeInTheDocument()
     expect(screen.queryByText(/No new items/)).toBeNull()
-    expect(lastSaved()).toEqual([[SALMON], []])
+    expect(api.saveSuggestionList).toHaveBeenLastCalledWith([SALMON], [])
   })
 
   it('says so when nothing new came back', async () => {
@@ -78,7 +77,7 @@ describe('IngredientPanel shopping suggestions', () => {
     fireEvent.click(screen.getByRole('button', { name: /Suggest More/ }))
     expect(await screen.findByText('Rolled oats')).toBeInTheDocument()
     expect(api.getShoppingSuggestions).toHaveBeenCalledWith(['Salmon', 'Kiwi'])
-    expect(lastSaved()).toEqual([[SALMON, KIWI, OATS], []])
+    expect(api.saveSuggestionList).toHaveBeenLastCalledWith([SALMON, KIWI, OATS], [])
     expect(checkboxFor('Kiwi')).not.toBeChecked()
   })
 
@@ -87,7 +86,7 @@ describe('IngredientPanel shopping suggestions', () => {
     await renderWithList([SALMON, KIWI, OATS])
     fireEvent.click(screen.getByRole('button', { name: /Send to List \(2\)/ }))
     await waitFor(() => expect(api.addShoppingItemsBulk).toHaveBeenCalledWith(['Salmon', 'Rolled oats']))
-    await waitFor(() => expect(lastSaved()).toEqual([[KIWI], []]))
+    await waitFor(() => expect(api.saveSuggestionList).toHaveBeenLastCalledWith([KIWI], []))
     expect(screen.getByText('Kiwi')).toBeInTheDocument()
     expect(screen.queryByText('Salmon')).toBeNull()
   })
@@ -96,7 +95,7 @@ describe('IngredientPanel shopping suggestions', () => {
   it('removes one item with ×', async () => {
     await renderWithList([SALMON, KIWI])
     fireEvent.click(screen.getByRole('button', { name: 'Remove Salmon' }))
-    expect(lastSaved()).toEqual([[KIWI], ['Salmon']])
+    expect(api.saveSuggestionList).toHaveBeenLastCalledWith([KIWI], ['Salmon'])
     expect(screen.queryByText('Salmon')).toBeNull()
     expect(screen.getByText('Kiwi')).toBeInTheDocument()
   })
@@ -105,7 +104,7 @@ describe('IngredientPanel shopping suggestions', () => {
   it('saves a check change', async () => {
     await renderWithList([SALMON, KIWI])
     fireEvent.click(checkboxFor('Kiwi'))
-    expect(lastSaved()).toEqual([[SALMON, { ...KIWI, checked: true }], []])
+    expect(api.saveSuggestionList).toHaveBeenLastCalledWith([SALMON, { ...KIWI, checked: true }], [])
   })
 
   // The list starts collapsed: only the header with the count shows
@@ -135,9 +134,9 @@ describe('IngredientPanel shopping suggestions', () => {
   it('checks and unchecks every item with one button', async () => {
     await renderWithList([SALMON, KIWI])
     fireEvent.click(screen.getByRole('button', { name: 'Select all' }))
-    expect(lastSaved()).toEqual([[SALMON, { ...KIWI, checked: true }], []])
+    expect(api.saveSuggestionList).toHaveBeenLastCalledWith([SALMON, { ...KIWI, checked: true }], [])
     fireEvent.click(screen.getByRole('button', { name: 'Unselect all' }))
-    expect(lastSaved()).toEqual([[{ ...SALMON, checked: false }, KIWI], []])
+    expect(api.saveSuggestionList).toHaveBeenLastCalledWith([{ ...SALMON, checked: false }, KIWI], [])
     expect(header()).toHaveAttribute('aria-expanded', 'true') // the helpers don't toggle the list
   })
 
@@ -150,7 +149,7 @@ describe('IngredientPanel shopping suggestions', () => {
     expect(api.saveSuggestionList).not.toHaveBeenCalled()
     expect(header()).toHaveAttribute('aria-expanded', 'true') // the trash doesn't toggle the list
     fireEvent.click(within(prompt).getByRole('button', { name: 'Delete' }))
-    expect(lastSaved()).toEqual([[], []])
+    expect(api.saveSuggestionList).toHaveBeenLastCalledWith([], [])
     expect(await screen.findByRole('button', { name: /Suggest Shopping/ })).toBeInTheDocument()
   })
 
