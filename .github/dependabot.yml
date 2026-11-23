@@ -1,5 +1,6 @@
-# Weekly dependency updates, one pull request per kind (#258): every update of a kind is
-# grouped, so a week brings at most three pull requests for CI to check.
+# Weekly dependency updates (#258, #261): minor and patch updates of an ecosystem come as one
+# grouped pull request, and each major update as its own pull request, so one breaking
+# upgrade can't hold back the rest.
 version: 2
 updates:
   # The workflows' actions, pinned to a commit with the version in a comment.
@@ -7,27 +8,45 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 5
     groups:
       actions:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   # backend/requirements.txt and requirements-dev.txt.
   - package-ecosystem: pip
     directory: /backend
     schedule:
       interval: weekly
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 5
     groups:
       pip:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   # frontend/package.json and its lock file.
   - package-ecosystem: npm
     directory: /frontend
     schedule:
       interval: weekly
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 5
     groups:
       npm:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      # Major updates of these wait for the UI redesign (React) and for eslint-plugin-react's
+      # ESLint 10 support (ESLint); minor and patch updates still come.
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@eslint/js"
+        update-types: ["version-update:semver-major"]
