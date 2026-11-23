@@ -1,5 +1,9 @@
+import supp1 from '../assets/chat/supplements@1x.webp'
+import supp2 from '../assets/chat/supplements@2x.webp'
+import supp3 from '../assets/chat/supplements@3x.webp'
+
 /**
- * Today's supplements in "Today I ate": a 💊 button that reveals them as chips below it.
+ * Today's supplements in "Today I ate": a button (the capsule and tablet) that reveals them as chips below it.
  * Daily ones start ticked and occasional ones not (the server sends today's state as taken_today);
  * a tap flips one and the caller saves it at once. The caller owns `open`, so a tap elsewhere in
  * the panel can close the list while Confirm keeps it (see DecidePanel).
@@ -15,13 +19,19 @@ export default function TodaySupplements({ open, onOpenChange, supplements, onTo
     <div ref={containerRef} className="absolute right-0 top-1/2 -translate-y-1/2">
       <button
         type="button"
-        className={`flex h-10 w-10 items-center justify-center rounded-full border-0 p-0 text-2xl leading-none transition-transform active:scale-[0.92] ${open ? 'bg-surface-2' : 'bg-transparent'}`}
+        className={`flex items-center justify-center border-0 bg-transparent p-0 transition-transform active:scale-[0.92] ${open ? 'scale-110' : ''}`}
         onClick={() => onOpenChange(!open)}
         title="Supplements"
         aria-label="Supplements"
         aria-expanded={open}
       >
-        💊
+        <img
+          src={supp1}
+          srcSet={`${supp1} 1x, ${supp2} 2x, ${supp3} 3x`}
+          alt=""
+          className="block h-10 w-auto drop-shadow-sm"
+          draggable={false}
+        />
       </button>
       {open && (
         <div
