@@ -486,3 +486,22 @@ async def test_version_3_gets_favorite_emoji(db_path):
     assert "emoji" in _columns(db_path)["favorite_meals"]
     assert _query(db_path, "SELECT meal_name, emoji FROM favorite_meals") == [("Plate", None)]
     assert _query(db_path, "PRAGMA user_version") == [(LATEST,)]
+
+
+# A demo account created at the start with DEMO_USER on is a normal user, not an admin
+async def test_new_demo_user_is_not_admin(db_path, monkeypatch):
+    monkeypatch.setattr(database, "DEMO_USER", True)
+    await database.init_db()
+    assert _query(db_path, "SELECT is_admin FROM users WHERE name = 'demo'") == [(0,)]
+
+
+# A demo account left as an admin by an earlier version loses the flag at the next start
+async def test_existing_demo_user_loses_admin(db_path, monkeypatch):
+    await database.init_db()
+    with closing(sqlite3.connect(db_path)) as db:
+        db.execute("INSERT INTO users (name, pin_hash, is_admin) VALUES ('demo', 'x', 1), ('Alice', 'x', 1)")
+        db.commit()
+
+    monkeypatch.setattr(database, "DEMO_USER", True)
+    await database.init_db()
+    assert _query(db_path, "SELECT name, is_admin FROM users ORDER BY name") == [("Alice", 1), ("demo", 0)]
