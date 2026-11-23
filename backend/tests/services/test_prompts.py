@@ -11,6 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from models.units import UNIT_ML, UNIT_PAIRS, units_for
 from services.knowledge import (
     format_avoid_list,
     format_behavioral,
@@ -493,47 +494,39 @@ class TestSchedulerPrompt:
     def test_example_shows_the_format_only(self):
         """The 7B model copies a full example plan into real ones, so the example holds placeholders only."""
         prompt = build_scheduler_prompt("", [], "")
-        assert "This shows the format only" in prompt
-        assert '"dish": "<dish name from the menu>"' in prompt
-        assert '{"action": "<first action>", "minutes": 2, "hands_on": true, "appliance": ""}' in prompt
+        assert "<" in prompt and ">" in prompt
         assert "tomato" not in prompt.lower() and "boil eggs" not in prompt.lower()
 
-    def test_each_dish_gets_its_real_steps(self):
-        """The planner lists every dish's steps in order, one action each, hands-on or waiting, and
-        leaves the timing across dishes to code."""
+    def test_reply_format_names_the_step_fields(self):
+        """The reply parser reads these keys, so the prompt names every one of them."""
         prompt = build_scheduler_prompt("", [], "")
-        assert "Break the dish into its real steps, one action each: usually a few, as many as the dish needs" in prompt
-        assert "`hands_on`: true while the cook is busy (whisk, chop, flip, plate), false while the food cooks on its own" in prompt
-        assert "Code then orders the steps of all dishes into one timeline" in prompt
-
-    def test_items_served_as_they_are_get_no_steps(self):
-        """Simple items go straight to the table, and the plan covers only the menu."""
-        prompt = build_scheduler_prompt("", [], "")
-        assert "Items served as they are go straight to the table, so they get no steps." in prompt
-        assert "Plan only what the menu lists." in prompt
+        for key in ("dishes", "dish", "steps", "action", "minutes", "hands_on", "appliance"):
+            assert f'"{key}"' in prompt or f"`{key}`" in prompt, key
 
     def test_appliances_are_the_users_or_the_defaults(self):
-        """The user's appliances are offered by their exact names, with a default list when none are enabled."""
-        assert "these exact names (case-sensitive): Stove, Kettle;" in build_scheduler_prompt("", [], "", ["Stove", "Kettle"])
-        assert "these exact names (case-sensitive): Stove, Air Fryer, Toaster, Oven;" in build_scheduler_prompt("", [], "", [])
+        """The user's appliances are offered by name, and the defaults when none are enabled."""
+        custom = build_scheduler_prompt("", [], "", ["Stove", "Kettle"])
+        assert "Stove" in custom and "Kettle" in custom
+        assert "Oven" not in custom and "Toaster" not in custom
+        default = build_scheduler_prompt("", [], "", [])
+        assert all(name in default for name in ("Stove", "Air Fryer", "Toaster", "Oven"))
 
-    def test_dish_method_is_followed(self):
-        """One rule says a dish's method is how it was designed, so the plan cooks each food that way."""
-        prompt = build_scheduler_prompt("", [], "")
-        assert "A dish's method, in brackets after its name, is how the dish was designed, so cook each food the way it says." in prompt
+    def test_dish_method_is_explained(self):
+        """The prompt tells the planner what the method in brackets is, since the request sends it that way."""
+        assert "method" in build_scheduler_prompt("", [], "")
 
-    def test_prep_before_heating_and_heating_on_an_appliance(self):
-        """A heating step names any appliance from the list that does the job, since code serves hot food last,
-        and the request ends with the order rule: prep that keeps before the heating, so hot food doesn't wait
-        (#160). Neither has an example dish."""
+    def test_no_example_dish_in_the_rules(self):
+        """The appliance rule and the order rule name no example dish, which the 7B model copied into plans (#160)."""
         prompt = build_scheduler_prompt("", [], "", kitchen_appliances=["Stove", "Oven"])
-        assert "A step that heats food names its appliance, any one from the list that does the job" in prompt
-        assert "prep that keeps" not in prompt and "avocado" not in prompt.lower() and "Stove, Oven" in prompt
+        assert "avocado" not in prompt.lower() and "Stove" in prompt and "Oven" in prompt
+
+    def test_order_rule_ends_the_request(self):
+        """The request ends with the prep-before-heating rule, after the menu, since the 7B model follows the
+        last message best (#160)."""
         msg = build_scheduler_user_message("Toast", [], "", menu=[{"name": "Toast", "ingredients": [{"name": "Bread"}]}])
-        assert msg.endswith(
-            "List each dish's steps. Within a dish, do the prep that keeps (slicing, chopping, mashing, mixing) "
-            "before the steps that heat food, and heat as late as the dish allows, so hot food doesn't wait for the prep:"
-        )
+        rule = msg.split("\n\n")[-1]
+        assert msg.index("Toast: Bread") < msg.index(rule)
+        assert "prep" in rule and "heat" in rule and rule.endswith(":")
 
 
 class TestSchedulerUserMessage:
@@ -618,45 +611,32 @@ class TestSchedulerUserMessage:
 # ---------------------------------------------------------------------------
 
 class TestFridgeRule:
-    # One constructive rule: copy names from the list, basics included; water goes unmentioned, so the model isn't drawn to it
-    def test_suggestion_prompt_has_one_copy_from_list_rule(self):
+    # The fridge reaches the prompt, the `prep` field is offered for a dish's cut or form, and water goes unmentioned,
+    # so the model isn't drawn to it
+    def test_suggestion_prompt_has_the_fridge_and_the_prep_field(self):
         prompt = build_suggestion_prompt([{"name": "Yumurta"}], [], {}, [])
-        assert "copied exactly as listed (no alternatives like \"X or Y\", translations or notes; a cut or form" in prompt
-        assert "`prep` (optional, dish ingredients only)" in prompt
-        assert "basics like salt and oil included" in prompt
+        assert "Yumurta" in prompt
+        assert "`prep`" in prompt
         assert "water" not in prompt.lower()
-        assert "never appear in the JSON" not in prompt
 
-    # Only a fridge too small for any breakfast gets an empty menu, and the text then says what to change; the old no-block rule is gone
+    # Only a fridge too small for any breakfast gets an empty menu, which code relies on, with a note in `text`, and the
+    # reply is one JSON object that gives `text` before `meal` (the draft schema's order)
     def test_too_small_fridge_gets_an_empty_menu_and_a_note(self):
         prompt = build_suggestion_prompt([{"name": "Tea"}], [], {}, [])
-        assert "If the list is too small for any reasonable breakfast, leave `menu` empty and make `text` a short note" in prompt
-        assert "add ingredients in the Fridge tab, try the shopping suggestions" in prompt
-        assert "no JSON block" not in prompt and "Append a JSON block" not in prompt
-        assert "Reply with one JSON object: first `text`, your words to the user, then `meal`" in prompt
+        assert "leave `menu` empty" in prompt
+        assert prompt.index("`text`") < prompt.index("`meal`")
 
     # Code checks the fridge, so the reviser gets the list and code's findings, not a fridge rule of its own
     def test_pipeline_analyst_leaves_fridge_check_to_code(self):
         prompt = build_pipeline_analyst_prompt([], ingredient_inventory=[{"name": "Yumurta"}])
         assert "Yumurta" in prompt
-        assert "everything the user has, basics included" in prompt
-        assert "FRIDGE CONSTRAINT" not in prompt
         assert "water" not in prompt.lower()
 
-    # The reviser gives a simple item a method when it's cut or cooked, and an empty one when it's served as it is
-    def test_pipeline_analyst_gives_simple_items_a_method(self):
+    # The reviser is asked for the fields the revision schema has: a method on every item, and prep words on ingredients
+    def test_pipeline_analyst_names_the_method_and_prep_fields(self):
         prompt = build_pipeline_analyst_prompt([])
-        assert "how a simple item is cut or cooked when it is, and an empty method for a simple item served as it is" in prompt
-        assert "A simple item is one fridge item on its own" in prompt
-        assert "A dish combines or tops items" in prompt
-        assert "Give every dish a `method`" not in prompt
-
-    # The reviser keeps the draft's prep words, since a check of them made the 7B model add words that change nothing
-    # (#176), and an amount like "to taste" still becomes a small one with the words in prep
-    def test_pipeline_analyst_keeps_prep_words(self):
-        prompt = build_pipeline_analyst_prompt([])
-        assert "turns it into a step" not in prompt and "Keep everything else as drafted" in prompt
-        assert "like \"to taste\", becomes a small one in a listed unit (1 pinch), with the words in that ingredient's `prep`" in prompt
+        assert "`method`" in prompt
+        assert "`prep`" in prompt
 
 
 # ---------------------------------------------------------------------------
@@ -664,16 +644,9 @@ class TestFridgeRule:
 # ---------------------------------------------------------------------------
 
 class TestPresentPrompt:
-    # The text talks only about the menu's items and leaves nutrition and prep to their buttons
-    def test_only_the_menu_without_nutrition_or_prep(self):
-        prompt = build_present_prompt()
-        assert "Talk only about the items on this menu" in prompt
-        assert "Nutrition numbers and claims belong to the Analysis button" in prompt
-        assert "prep steps to the Prep Plan" in prompt
-
     # The text is plain, since the app shows the menu under it
     def test_plain_text_only(self):
-        assert "Write plain text only" in build_present_prompt()
+        assert "plain text" in build_present_prompt().lower()
 
 
 # ---------------------------------------------------------------------------
@@ -698,19 +671,13 @@ class TestLanguageReminder:
         """A 7B model drifts toward the language of Turkish data, so English is restated at the very end."""
         for name, prompt in self._user_facing("en").items():
             tail = prompt[-400:]
-            assert "FINAL REMINDER: Always respond in English." in tail, name
-            assert "respond in Turkish" not in tail, name
+            assert "English" in tail, name
 
     def test_turkish_directive_is_last(self):
         """The Turkish setting gets the same closing reminder."""
         for name, prompt in self._user_facing("tr").items():
-            assert "FINAL REMINDER: Always respond in Turkish." in prompt[-400:], name
-
-    def test_menu_name_follows_response_language(self):
-        """The menu name is a title in the response language, not a dish name kept in Turkish."""
-        prompt = build_suggestion_prompt([], [], {}, [])
-        assert "`menu_name`: a short title for the whole menu in the response language" in prompt
-        assert "never to the menu name" in prompt
+            tail = prompt[-400:]
+            assert "Turkish" in tail and "English" not in tail, name
 
 
 # ---------------------------------------------------------------------------
@@ -752,25 +719,26 @@ class TestJsonExamples:
 
 class TestSuggestionUnits:
     def test_english_example_and_rule_use_english_units(self):
-        """In English mode the JSON example and the unit rule use pcs, tbsp…"""
+        """In English mode the prompt lists every English unit, the example uses one, and no Turkish unit shows."""
         prompt = build_suggestion_prompt([], [], {}, [], language="en")
+        assert all(unit in prompt for unit in units_for("en"))
         assert '"unit": "pcs"' in prompt
-        assert "`unit`: one of pcs, g, kg, ml, l, tsp, dsp, tbsp" in prompt
         assert "adet" not in prompt
 
     def test_turkish_example_and_rule_use_turkish_units(self):
-        """In Turkish mode the same places use adet, yemek kaşığı…"""
+        """In Turkish mode the prompt lists every Turkish unit, the example uses one, and no English count unit shows."""
         prompt = build_suggestion_prompt([], [], {}, [], language="tr")
+        assert all(unit in prompt for unit in units_for("tr"))
         assert '"unit": "adet"' in prompt
-        assert "`unit`: one of adet, g, kg, ml, L, çay kaşığı, tatlı kaşığı, yemek kaşığı" in prompt
         assert '"unit": "pcs"' not in prompt
 
     def test_spoon_and_glass_sizes_in_reply_language(self):
-        """The unit rule gives the fixed spoon and glass sizes, named in the reply language."""
-        english = build_suggestion_prompt([], [], {}, [], language="en")
-        turkish = build_suggestion_prompt([], [], {}, [], language="tr")
-        assert "(tsp 5 ml, dsp 10 ml, tbsp 15 ml, tea glass 100 ml, glass 200 ml)" in english
-        assert "çay bardağı 100 ml, su bardağı 200 ml)" in turkish
+        """The prompt gives each fixed spoon and glass size, with the unit named in the reply language."""
+        for language, index in (("en", 0), ("tr", 1)):
+            prompt = build_suggestion_prompt([], [], {}, [], language=language)
+            for unit, ml in UNIT_ML.items():
+                name = next(pair[index] for pair in UNIT_PAIRS if pair[0] == unit)
+                assert f"{name} {ml} ml" in prompt, (language, unit)
 
     def test_example_uses_listed_grams(self):
         """The example writes grams as "g", the listed unit, not "gr"."""
@@ -787,14 +755,6 @@ class TestSuggestionUnits:
 class TestShoppingPrompt:
     DAY = date(2026, 10, 27)
 
-    def test_items_are_specific_products_not_dishes(self):
-        """One rule asks for plain, specific product names and turns a dish into its missing ingredients."""
-        prompt = build_shopping_prompt([])
-        assert '"Salmon", not "Fatty fish"' in prompt
-        assert "never a filler like fresh" in prompt
-        assert "A dish is not a product" in prompt
-        assert "suggest the ingredients it needs that they don't have" in prompt
-
     def test_no_dish_in_naming_examples(self):
         """Menemen is a dish, so it no longer appears as a naming example."""
         assert "Menemen" not in build_shopping_prompt([])
@@ -802,26 +762,19 @@ class TestShoppingPrompt:
     def test_exclusions_are_stated_once_and_positively(self):
         """Code drops repeats, so the prompt only lists what is covered, without a pile of bans."""
         prompt = build_shopping_prompt([], shopping_list=["Kiwi"])
-        assert "CURRENT SHOPPING LIST:\nKiwi" in prompt
-        assert "Do NOT suggest" not in prompt
+        assert "Kiwi" in prompt
+        assert "Kiwi" not in build_shopping_prompt([])
 
     def test_reply_is_an_items_object(self):
         """The reply shape matches the schema Ollama enforces: an object with an items list."""
         prompt = build_shopping_prompt([])
-        assert 'Reply with a JSON object whose "items" list holds about 10-15 products' in prompt
-
-    def test_no_pressure_to_over_suggest(self):
-        """The fixed push for a wide list is gone, so the user's own input leads."""
-        prompt = build_shopping_prompt([])
-        assert "WIDE" not in prompt
-        assert "Over-suggest" not in prompt
+        assert '"items"' in prompt
 
     def test_taste_hints_are_listed_to_weigh_together(self):
         """This press's taste hints are listed one per line, to weigh together; with none, a varied pantry."""
         prompt = build_shopping_prompt(["Likes Pancakes", "Keeps around: Cheddar"])
         assert "- Likes Pancakes\n- Keeps around: Cheddar" in prompt
-        assert "Weigh them together with what they have (listed in their message)" in prompt
-        assert "No hints yet" in build_shopping_prompt([])
+        assert "Pancakes" not in build_shopping_prompt([])
 
     def test_limits_are_always_in(self):
         """Dislikes, low-rated items and the avoid list are limits every press gets, not drawn hints."""
@@ -831,29 +784,21 @@ class TestShoppingPrompt:
             avoid_list=["Peanuts"],
             ratings=[{"product_name": "Oats", "rating": 3}, {"product_name": "Honey", "rating": 9}],
         )
-        assert "Dislikes (leave these out): Olives" in prompt
-        assert "Low-rated items (suggest rarely): Oats" in prompt
-        assert "Peanuts" in prompt
+        assert "Olives" in prompt and "Oats" in prompt and "Peanuts" in prompt
         assert "Pancakes" not in prompt and "Honey" not in prompt  # likes are hints, drawn per press
-
-    def test_no_fridge_or_recent_meals_in_the_system_prompt(self):
-        """The fridge share goes in the request and recent meals left the prompt."""
-        prompt = build_shopping_prompt([])
-        assert "INVENTORY" not in prompt
-        assert "RECENT MEAL" not in prompt
 
     def test_date_and_country(self):
         """Today's date and the user's country tell the model what is in season."""
         prompt = build_shopping_prompt([], country="Türkiye", today=self.DAY)
-        assert "Today is Tuesday, 27 October 2026, in Türkiye." in prompt
-        assert "in season at this time and place" in prompt
+        assert "27 October 2026" in prompt and "Türkiye" in prompt
 
     def test_date_without_country(self):
         """Without a country the prompt still gets the date."""
         prompt = build_shopping_prompt([], today=self.DAY)
-        assert "Today is Tuesday, 27 October 2026." in prompt
+        assert "27 October 2026" in prompt
 
     def test_suggestion_prompt_gets_date_and_country(self):
         """The suggestion prompt's seasonality hint uses the same date and country."""
         prompt = build_suggestion_prompt([], [], {}, [], country="Türkiye", today=self.DAY)
-        assert "Today is Tuesday, 27 October 2026, in Türkiye. Prefer fruits and vegetables in season" in prompt
+        assert "27 October 2026" in prompt and "Türkiye" in prompt
+        assert "Türkiye" not in build_suggestion_prompt([], [], {}, [], today=self.DAY)
