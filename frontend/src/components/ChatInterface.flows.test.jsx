@@ -1,7 +1,8 @@
 /**
  * Tests for the main path through the chat: a typed message goes out on the socket and its reply
- * streams in, Stop keeps what came so far, an error frame shows as the reply, the chat's sessions
- * switch with Back / Next, start with New and go with Del; a Suggest press shows its progress and
+ * streams in, Stop keeps what came so far with a "Stopped" note (or nothing, when nothing came), an error
+ * frame shows as the reply, the chat's sessions switch with Back / Next, start with New and go with Del, one
+ * at a time however fast they're tapped; a Suggest press shows only its progress, on the user's side, and
  * then the meal card, selected, which a tap unselects and whose edits are saved with its message.
  * These tests check what the user sees and what reaches the server, not how it looks.
  * API calls and the chat socket are mocked — no real network calls are made.
@@ -185,7 +186,7 @@ describe('ChatInterface sending a message', () => {
 })
 
 describe('ChatInterface Stop', () => {
-  // Stop keeps what came so far, marked as stopped, and the late done of that reply adds nothing
+  // Stop keeps what came so far with a "Stopped" note under it, and the late done of that reply adds nothing
   it('keeps the partial reply and ignores its late done', async () => {
     await renderChat()
     type('Tell me a long story')
@@ -194,7 +195,8 @@ describe('ChatInterface Stop', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
 
     expect(screen.getByText('Once upon a time')).toBeInTheDocument()
-    expect(screen.getByText('[stopped]')).toBeInTheDocument()
+    expect(screen.getByText('Stopped')).toBeInTheDocument()
+    expect(screen.queryByText(/\[stopped\]/)).toBeNull()
     expect(screen.getByPlaceholderText(BOX)).toBeEnabled()
 
     serverSends('onToken', ', there was')
@@ -203,14 +205,50 @@ describe('ChatInterface Stop', () => {
     expect(screen.queryByText(/there was/)).toBeNull()
   })
 
-  // Stop before any token shows only the stopped mark
-  it('shows the stopped mark when no token came yet', async () => {
+  // Stop before any token leaves the chat as it was: the message stays, with no reply and no note
+  it('leaves no reply when nothing came yet', async () => {
     await renderChat()
     type('Quick one')
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
     fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
-    expect(screen.getByText('[stopped]')).toBeInTheDocument()
+    expect(screen.getByText('Quick one')).toBeInTheDocument()
+    expect(screen.queryByText('Stopped')).toBeNull()
+    expect(screen.queryByText(/\[stopped\]/)).toBeNull()
     expect(screen.queryByText('Thinking…')).toBeNull()
+  })
+
+  // Stop during a Suggest press shows nothing extra, and its late reply and meal never become a card
+  it('drops a stopped Suggest press and its late menu', async () => {
+    await renderChat()
+    fireEvent.click(screen.getByRole('button', { name: 'Suggest breakfast' }))
+    serverSends('onProgress', 'drafting')
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+    expect(screen.queryByText('Drafting…')).toBeNull()
+    expect(screen.queryByText('Stopped')).toBeNull()
+
+    serverSends('onDone', suggestionReply('A warm omelette with toast on the side.', OMELETTE_MENU), 12)
+    serverSends('onMealLogged', OMELETTE_MENU)
+    expect(screen.queryByText('A warm omelette with toast on the side.')).toBeNull()
+    expect(screen.queryByText('Sunday Omelette')).toBeNull()
+    expect(selectSessionMessage).not.toHaveBeenCalled()
+  })
+
+  // A message sent right after Stop waits for its own reply: the stopped one's late tokens and done don't answer it
+  it('does not answer a new message with the stopped reply', async () => {
+    await renderChat()
+    type('One')
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+    type('Two')
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    serverSends('onToken', 'Late words')
+    serverSends('onDone', 'Late words for One', 12)
+    expect(screen.queryByText(/Late words/)).toBeNull()
+    expect(screen.getByText('Thinking…')).toBeInTheDocument()
+
+    serverSends('onDone', 'Answer to Two', 14)
+    expect(screen.getByText('Answer to Two')).toBeInTheDocument()
   })
 
   // After a stopped reply's done, the next message streams its reply as usual
@@ -285,6 +323,89 @@ describe('ChatInterface sessions', () => {
   })
 })
 
+describe('ChatInterface session buttons one at a time', () => {
+  // Fast taps on Del with the only chat delete it once and start one fresh chat, with no Back or Next
+  it('deletes the only chat once on fast taps', async () => {
+    sessions = [{ id: 's2' }]
+    await renderChat()
+    const del = screen.getByRole('button', { name: /Del/ })
+    fireEvent.click(del)
+    fireEvent.click(del)
+    fireEvent.click(del)
+    await waitFor(() => expect(screen.getByRole('button', { name: /Del/ })).toBeEnabled())
+    expect(deleteSession).toHaveBeenCalledTimes(1)
+    expect(createSession).toHaveBeenCalledTimes(1)
+    expect(sessions).toEqual([{ id: 's3' }])
+    expect(screen.getByText(/Good morning!/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Back/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Next/ })).toBeNull()
+  })
+
+  // Fast taps on New start one new chat: Back leads to the chat before it, and there's no Next
+  it('starts one chat on fast taps of New', async () => {
+    await renderChat()
+    const newBtn = screen.getByRole('button', { name: /New/ })
+    fireEvent.click(newBtn)
+    fireEvent.click(newBtn)
+    fireEvent.click(newBtn)
+    await waitFor(() => expect(screen.getByRole('button', { name: /New/ })).toBeEnabled())
+    expect(createSession).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText('Hello')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Next/ })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: /Back/ }))
+    expect(await screen.findByText('Hello')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /Next/ })).toBeInTheDocument()
+  })
+
+  // New on a chat with nothing in it stays on that chat
+  it('stays on an empty chat when New is tapped', async () => {
+    await renderChat()
+    fireEvent.click(screen.getByRole('button', { name: /New/ }))
+    await waitFor(() => expect(screen.queryByText('Hello')).toBeNull())
+    await waitFor(() => expect(screen.getByRole('button', { name: /New/ })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: /New/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /New/ })).toBeEnabled())
+    expect(createSession).toHaveBeenCalledTimes(1)
+    expect(sessions).toHaveLength(3)
+  })
+
+  // While one session button runs, all four are off, and they come back once it's done
+  it('turns the session buttons off while one runs', async () => {
+    let answer
+    getSessionMessages.mockImplementation((id) => (id === 's1'
+      ? new Promise((resolve) => { answer = () => resolve(MESSAGES.s1) })
+      : Promise.resolve(MESSAGES[id] ?? [])))
+    await renderChat()
+    fireEvent.click(screen.getByRole('button', { name: /Back/ }))
+    expect(screen.getByRole('button', { name: /New/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Del/ })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: /Del/ }))
+    expect(deleteSession).not.toHaveBeenCalled()
+
+    await waitFor(() => expect(answer).toBeDefined())
+    await act(async () => answer())
+    expect(await screen.findByText('Older chat answer')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('button', { name: /New/ })).toBeEnabled())
+    expect(screen.getByRole('button', { name: /Del/ })).toBeEnabled()
+  })
+
+  // A reload pushed while a session button runs doesn't bring back the chat it left
+  it('keeps the new chat when a push for the old one arrives meanwhile', async () => {
+    let created
+    createSession.mockImplementation(() => new Promise((resolve) => {
+      created = () => { sessions = [{ id: 's3' }, ...sessions]; resolve({ session_id: 's3' }) }
+    }))
+    await renderChat()
+    fireEvent.click(screen.getByRole('button', { name: /New/ }))
+    serverSends('onSessionUpdated', 's2')
+    await act(async () => created())
+    await waitFor(() => expect(screen.getByRole('button', { name: /New/ })).toBeEnabled())
+    expect(screen.queryByText('Hello')).toBeNull()
+    expect(screen.getByText(/Good morning!/)).toBeInTheDocument()
+  })
+})
+
 describe('ChatInterface Suggest', () => {
   const REPLY = suggestionReply('A warm omelette with toast on the side.', OMELETTE_MENU)
 
@@ -302,8 +423,8 @@ describe('ChatInterface Suggest', () => {
     await renderChat()
     fireEvent.click(screen.getByRole('button', { name: 'Suggest breakfast' }))
     expect(socket.frames).toEqual([{ message: 'Suggest Breakfast', type: 'suggest', session_id: 's2' }])
-    expect(screen.getByText('Suggest Breakfast')).toBeInTheDocument()
-    expect(screen.getByText('Thinking…')).toBeInTheDocument()
+    expect(screen.queryByText('Suggest Breakfast')).toBeNull() // the button's text isn't a message on screen
+    expect(screen.getByText('Thinking…')).toHaveStyle({ alignSelf: 'flex-end' }) // on the user's side
     serverSends('onProgress', 'drafting')
     expect(screen.getByText('Drafting…')).toBeInTheDocument()
     serverSends('onProgress', 'analyzing')
@@ -324,6 +445,30 @@ describe('ChatInterface Suggest', () => {
     expect(screen.getByText('Veggie omelette, Toast, Olives')).toBeInTheDocument()
     expect(screen.getByTitle("Selected as today's meal — tap to unselect")).toBeInTheDocument()
     expect(onMealLogged).toHaveBeenCalledWith(expect.objectContaining({ menu_name: 'Sunday Omelette' }))
+  })
+
+  // The press's progress gives way to the card, and the button's text never shows
+  it('replaces the progress with the card', async () => {
+    await renderChat()
+    await suggestThrough()
+    expect(screen.queryByText('Drafting…')).toBeNull()
+    expect(screen.queryByText('Thinking…')).toBeNull()
+    expect(screen.queryByText('Suggest Breakfast')).toBeNull()
+  })
+
+  // A saved chat (a reload, another device) shows the card of each press but not the Suggest buttons' texts
+  it('hides saved Suggest presses but keeps typed messages and cards', async () => {
+    getActiveSession.mockResolvedValue({ id: 's9' })
+    sessions = [{ id: 's9' }]
+    getSessionMessages.mockResolvedValue([
+      { id: 1, role: 'user', content: 'Something with eggs' },
+      { id: 2, role: 'user', content: 'Suggest breakfast from my favorite meals' },
+      { id: 3, role: 'assistant', content: suggestionReply('A warm omelette with toast on the side.', OMELETTE_MENU) },
+    ])
+    render(<ChatInterface visible />)
+    expect(await screen.findByText('Sunday Omelette')).toBeInTheDocument()
+    expect(screen.getByText('Something with eggs')).toBeInTheDocument()
+    expect(screen.queryByText('Suggest breakfast from my favorite meals')).toBeNull()
   })
 
   // A tap on the selected card's box unselects it on every device, and another tap selects it again

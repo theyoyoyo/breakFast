@@ -50,11 +50,21 @@ export const bubble = (role) => ({
   wordBreak: 'break-word',
 })
 
-export const thinking = {
-  alignSelf: 'flex-start',
+// "Thinking…" or a step's progress: on the user's side for a Suggest press, which shows no message of its own
+export const thinking = (side) => ({
+  alignSelf: side === 'user' ? 'flex-end' : 'flex-start',
   color: 'var(--text-muted)',
   fontSize: 13,
   padding: '6px 4px',
+})
+
+// The small note under a reply stopped part way
+export const stoppedNote = {
+  alignSelf: 'flex-start',
+  color: 'var(--text-muted)',
+  fontSize: 11,
+  fontStyle: 'italic',
+  padding: '2px 6px',
 }
 
 export const connStatus = {
@@ -82,3 +92,6 @@ export const deleteSessionBtn = {
   fontSize: 12,
   whiteSpace: 'nowrap',
 }
+
+// Off while another session button runs
+export const sessionBtnState = (busy) => (busy ? { opacity: 0.5, cursor: 'default' } : {})
