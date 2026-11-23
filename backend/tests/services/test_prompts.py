@@ -42,9 +42,11 @@ from services.personas.chat import build_chat_message
 # ---------------------------------------------------------------------------
 
 class TestFormatters:
+    # An empty ingredient list reads as none listed yet
     def test_format_ingredients_empty(self):
         assert format_ingredients([]) == "none listed yet"
 
+    # Every ingredient name reaches the text
     def test_format_ingredients_with_data(self):
         items = [
             {"name": "eggs", "quantity": "6", "unit": "pcs"},
@@ -54,9 +56,11 @@ class TestFormatters:
         assert "eggs" in result
         assert "milk" in result
 
+    # An empty history reads as no history yet
     def test_format_history_empty(self):
         assert format_history([]) == "no history yet"
 
+    # The history keeps only the newest meals up to the limit
     def test_format_history_with_limit(self):
         meals = [{"meal_name": f"meal_{i}"} for i in range(10)]
         result = format_history(meals, limit=3)
@@ -65,16 +69,20 @@ class TestFormatters:
         assert "meal_2" in result
         assert "meal_3" not in result
 
+    # Empty preferences read as none set yet
     def test_format_preferences_empty(self):
         assert format_preferences({}) == "none set yet"
 
+    # Preferences reach the text
     def test_format_preferences_with_data(self):
         result = format_preferences({"favorite": "eggs"})
         assert "eggs" in result
 
+    # No habits read as none stated yet
     def test_format_habits_empty(self):
         assert format_habits([]) == "none stated yet"
 
+    # Every stated habit reaches the text
     def test_format_habits_with_data(self):
         result = format_habits(["early breakfast", "no sugar"])
         assert "early breakfast" in result
@@ -118,10 +126,12 @@ class TestFormatters:
         assert "peanuts" in result
         assert "NEVER" in result
 
+    # No behavioral patterns give no text at all
     def test_format_behavioral_empty(self):
         assert format_behavioral(None) == ""
         assert format_behavioral([]) == ""
 
+    # Every inferred pattern reaches the text
     def test_format_behavioral_with_data(self):
         result = format_behavioral(["eats eggs daily", "rarely has fruit"])
         assert "eats eggs daily" in result
@@ -131,6 +141,7 @@ class TestFormatters:
     def test_format_user_profile_empty(self):
         assert format_user_profile(None) == format_user_profile({}) != ""
 
+    # Every profile field reaches the text
     def test_format_user_profile_with_data(self):
         profile = {
             "age": 30, "gender": "erkek",
@@ -147,6 +158,7 @@ class TestFormatters:
     def test_format_supplements_empty(self):
         assert format_supplements(None) == format_supplements([]) != ""
 
+    # A daily supplement is listed with its frequency and contents
     def test_format_supplements_daily(self):
         supps = [{"name": "Vitamin D", "frequency": "daily", "contents": "1000IU D3"}]
         result = format_supplements(supps)
@@ -154,11 +166,13 @@ class TestFormatters:
         assert "daily" in result
         assert "1000IU D3" in result
 
+    # An occasional supplement taken today is marked as taken
     def test_format_supplements_sometimes_taken(self):
         supps = [{"name": "Omega-3", "frequency": "sometimes", "contents": "1000mg EPA/DHA", "taken_today": True}]
         result = format_supplements(supps)
         assert "taken today" in result
 
+    # An occasional supplement not taken today is marked as not taken
     def test_format_supplements_sometimes_not_taken(self):
         supps = [{"name": "Omega-3", "frequency": "sometimes", "contents": "", "taken_today": False}]
         result = format_supplements(supps)
@@ -200,6 +214,7 @@ class TestChatPrompt:
         assert isinstance(prompt, str)
         assert len(prompt) > 100
 
+    # The fridge items reach the chat prompt
     def test_includes_ingredients(self):
         prompt = build_chat_prompt(
             ingredient_inventory=[{"name": "peynir", "quantity": "200", "unit": "g"}],
@@ -209,6 +224,7 @@ class TestChatPrompt:
         )
         assert "peynir" in prompt
 
+    # Health rules from the database reach the chat prompt
     def test_includes_health_rules_from_db(self):
         prompt = build_chat_prompt(
             ingredient_inventory=[],
@@ -256,6 +272,7 @@ class TestChatPrompt:
         prompt = build_chat_prompt([], [], {}, [])
         assert format_avoid_list([]) in prompt
 
+    # Avoid list items reach the chat prompt with the ban
     def test_includes_avoid_list_with_items(self):
         prompt = build_chat_prompt([], [], {}, [], avoid_list=["shellfish", "peanuts"])
         assert "shellfish" in prompt
@@ -277,6 +294,7 @@ class TestChatPrompt:
 # ---------------------------------------------------------------------------
 
 class TestSuggestionPrompt:
+    # The suggestion template renders without a missing field
     def test_renders_without_error(self):
         prompt = build_suggestion_prompt([], [], {}, [])
         assert isinstance(prompt, str)
@@ -291,6 +309,7 @@ class TestSuggestionPrompt:
         assert "meal_4" not in prompt
         assert "meal_14" not in prompt
 
+    # Health rules reach the suggestion prompt
     def test_includes_health_rules(self):
         prompt = build_suggestion_prompt(
             [], [], {}, [],
@@ -298,11 +317,13 @@ class TestSuggestionPrompt:
         )
         assert "Limit sodium intake" in prompt
 
+    # The reply's JSON keys are in the suggestion prompt
     def test_json_block_present(self):
         prompt = build_suggestion_prompt([], [], {}, [])
         assert '"menu_name"' in prompt
         assert '"menu"' in prompt
 
+    # Inferred patterns reach the suggestion prompt
     def test_includes_behavioral_patterns(self):
         prompt = build_suggestion_prompt(
             [], [], {}, [],
@@ -428,6 +449,7 @@ class TestAnalystPrompt:
         prompt = build_analyst_prompt([], None, None, None)
         assert "English" in prompt and "Turkish" not in prompt
 
+    # The Turkish setting names Turkish in the analyst prompt
     def test_responds_in_turkish_when_set(self):
         prompt = build_analyst_prompt([], None, None, None, language="tr")
         assert "Turkish" in prompt and "English" not in prompt

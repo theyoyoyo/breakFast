@@ -64,7 +64,8 @@ async def test_plan_keeps_only_the_users_appliances(client):
     )
     with patch("routers.scheduler.stream_response", side_effect=_mock_stream(reply)) as llm:
         r = await client.post("/scheduler/plan", json={"meal_name": "Toast", "menu": MENEMEN_MENU})
-    assert "these exact names (case-sensitive): Stove;" in llm.call_args.args[0]
+    system_prompt = llm.call_args.args[0]
+    assert "Stove" in system_prompt and "Air Fryer" not in system_prompt
     assert r.json()["formatted"].splitlines()[1] == "  0:00  — Toast: Toast 2 slices of bread (3 min)"
 
 

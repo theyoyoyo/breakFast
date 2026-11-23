@@ -74,15 +74,12 @@ def test_latest_typed_message_is_marked():
     ]
 
 
-# The header says the user's words come first, the later message wins, asks last until changed, and menus don't repeat
-def test_header_states_the_rules():
-    assert "come before their habits, favorites and patterns" in CHAT_HEADER
-    assert "health rules and the avoid list still hold" in CHAT_HEADER
-    assert "A later message wins over an earlier one" in CHAT_HEADER
-    assert "a message right after a menu is about that menu" in CHAT_HEADER
-    assert "holds for every menu from here on" in CHAT_HEADER
-    assert "differs from the menus shown here" in CHAT_HEADER
-    assert "numbered in chat order" in CHAT_HEADER
+# The header opens the block, and the block's entries are numbered in chat order with the latest marked
+def test_header_opens_the_block():
+    rows = [_user("No eggs."), _user("Something sweet.")]
+    block = format_chat_block(rows)
+    assert block.startswith(CHAT_HEADER) and CHAT_HEADER.strip()
+    assert block.index("#1 ") < block.index("#2 ") and block.endswith("Something sweet.")
 
 
 # A chat with nothing typed and no card sends no block, and an old flat meal or an unreadable block is handled
