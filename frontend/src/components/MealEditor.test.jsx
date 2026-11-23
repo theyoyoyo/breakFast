@@ -3,7 +3,8 @@
  * and can be marked as obtained for the meal (yellow → green), a dish's all at once with a tap
  * on its name. Also the header (☆ filled when a favorite has the meal's name and food, a note
  * when another favorite has the name, prep time in min), the ✱ and ℹ️ line on a dish ingredient the
- * review put in for a missing one, and units that follow the AI language.
+ * review put in for a missing one, and units that follow the AI language. Editing: typed amounts,
+ * the ▲ / ▼ steppers and blur, new items and dishes, a dish's ingredients, the name and prep time.
  * The backend check is mocked — no real network calls are made.
  */
 
