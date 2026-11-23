@@ -5,8 +5,8 @@ All queries are scoped to the authenticated user.
 
 import asyncio
 import json
+import logging
 from datetime import date as dt_date
-from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -19,9 +19,21 @@ from models.meal import Meal, MealLog
 from services.context import fetch_health_rules, fetch_preferences, fetch_profile, fetch_supplements
 from services.insights import PATTERN_DAYS
 from services.knowledge import format_history_for_weekly_review
-from services.llm import LLMUnavailableError, lyric_cycler, stream_response
+from services.llm import LLMUnavailableError, chat_json, lyric_cycler
 from services.personas.weekly_analyst import build_weekly_analyst_prompt_with_meals
-from utils import extract_json_block
+from services.weekly import (
+    MEALS_IN_WINDOW,
+    WEEKLY_SCHEMA,
+    analysis_window,
+    fetch_recent_analysis,
+    needs_analysis,
+    parse_weekly_reply,
+    save_analysis,
+)
+
+# Fixed replies: a refusal for a week without meals, and a failed analysis (its cause goes to the log)
+NO_MEALS_THIS_WEEK = "No meals logged in the last 7 days"
+WEEKLY_REVIEW_FAILED = "Could not analyze the week. Please try again."
 
 router = APIRouter(prefix="/meals", tags=["meals"])
 
@@ -46,60 +58,57 @@ class WeeklyReviewResponse(BaseModel):
     cached: bool = False
 
 
+class WeeklyReviewStatus(BaseModel):
+    nudge: bool  # a meal of the last 7 days is newer than the latest analysis (or there is none)
+
+
 @router.get("/weekly-review", response_model=WeeklyReviewResponse)
 async def get_weekly_review(user_id: int = Depends(require_user)):
-    """Return the most recent cached weekly review for the current ISO week.
-
-    Returns 404 if no analysis has been run yet this week.
-    """
-    week_key = dt_date.today().strftime("%G-W%V")
+    """The latest weekly analysis when it ran in the last 7 days; 404 when there is none."""
     async with get_db() as db:
-        async with db.execute(
-            """
-            SELECT narrative, scores, created_at FROM weekly_summaries
-            WHERE user_id = ? AND week_key = ?
-            ORDER BY created_at DESC LIMIT 1
-            """,
-            (user_id, week_key),
-        ) as cur:
-            row = await cur.fetchone()
-
-    if not row:
+        analysis = await fetch_recent_analysis(db, user_id)
+    if not analysis:
         raise HTTPException(status_code=404, detail="No weekly review found for this week")
-
     return WeeklyReviewResponse(
-        narrative=row["narrative"],
-        scores=json.loads(row["scores"]),
-        week_key=week_key,
+        narrative=analysis["narrative"],
+        scores=json.loads(analysis["scores"]),
+        week_key=analysis["week_key"],
         cached=True,
     )
 
 
+@router.get("/weekly-review/status", response_model=WeeklyReviewStatus)
+async def get_weekly_review_status(user_id: int = Depends(require_user)):
+    """Whether the Weekly analysis button nudges: a meal was logged or changed in the last 7 days
+    after the latest analysis, or there is none."""
+    async with get_db() as db:
+        return WeeklyReviewStatus(nudge=await needs_analysis(db, user_id, dt_date.today()))
+
+
 @router.post("/weekly-review", response_model=WeeklyReviewResponse)
 async def generate_weekly_review(user_id: int = Depends(require_user)):
-    """Run the weekly analyst and save a new review entry for the current ISO week.
+    """Run the weekly analyst on the 7 days up to today and keep the analysis.
 
-    Always generates a fresh analysis — existing entries are kept (not overwritten).
+    It replaces any earlier analysis whose 7 days overlap its own. Without a meal in those days
+    there is nothing to analyze: 422. A lyric comes back, and nothing is kept, while Ollama is
+    unreachable.
     """
-    week_key = dt_date.today().strftime("%G-W%V")
-
-    # Fetch meals from the last 7 calendar days
     today = dt_date.today()
-    week_start = today - timedelta(days=6)
+    week_key = today.strftime("%G-W%V")
+    start, end = analysis_window(today)
     async with get_db() as db:
         async with db.execute(
-            """
+            f"""
             SELECT meal_name, ingredients, menu_items, nutrition_note, logged_at
-            FROM meal_history
-            WHERE user_id = ? AND date(logged_at) >= ? AND date(logged_at) <= ?
+            FROM meal_history WHERE {MEALS_IN_WINDOW}
             ORDER BY logged_at ASC
             """,
-            (user_id, week_start.isoformat(), today.isoformat()),
+            (user_id, start.isoformat(), end.isoformat()),
         ) as cur:
             meal_rows = [dict(r) for r in await cur.fetchall()]
 
     if not meal_rows:
-        raise HTTPException(status_code=404, detail="No meals found in the last 7 days")
+        raise HTTPException(status_code=422, detail=NO_MEALS_THIS_WEEK)
 
     # Load user context
     async with get_db() as db:
@@ -111,48 +120,39 @@ async def generate_weekly_review(user_id: int = Depends(require_user)):
         )
     language = prefs.get("response_language", "en")
 
-    weekly_meals_text = format_history_for_weekly_review(meal_rows)
     system_prompt = build_weekly_analyst_prompt_with_meals(
-        weekly_meals_text=weekly_meals_text,
+        weekly_meals_text=format_history_for_weekly_review(meal_rows),
         user_profile=profile,
         supplements=supplements,
         health_rules=health_rules,
         language=language,
     )
-
     user_message = "Please review this week's breakfasts and provide your assessment."
 
-    full_response = []
     try:
-        async for chunk in stream_response(system_prompt, [], user_message, temperature=0.3, task="weekly", language=language):
-            full_response.append(chunk)
+        reply = await chat_json(
+            system_prompt, [{"role": "user", "content": user_message}], WEEKLY_SCHEMA,
+            temperature=0.3, task="weekly", language=language,
+        )
     except LLMUnavailableError:
-        return WeeklyReviewResponse(
-            narrative=lyric_cycler.next(),
-            scores=[],
-            week_key=week_key,
-            cached=False,
-        )
+        return WeeklyReviewResponse(narrative=lyric_cycler.next(), scores=[], week_key=week_key, cached=False)
+    except Exception:
+        logging.exception("Weekly analyst call failed")
+        raise HTTPException(status_code=500, detail=WEEKLY_REVIEW_FAILED) from None
 
-    response_text = "".join(full_response)
-    data = extract_json_block(response_text)
-    if not data or "scores" not in data:
-        raise HTTPException(status_code=500, detail="Weekly analyst returned invalid JSON")
+    analysis = parse_weekly_reply(reply)
+    if analysis is None:
+        logging.warning("Weekly analyst reply could not be read: %r", reply[:500])
+        raise HTTPException(status_code=500, detail=WEEKLY_REVIEW_FAILED)
 
-    narrative = data.get("narrative", "")
-    scores = data.get("scores", [])
-
-    # Always insert a new row — history is preserved, latest retrieved by ORDER BY created_at DESC
     async with get_db() as db:
-        await db.execute(
-            "INSERT INTO weekly_summaries (user_id, week_key, narrative, scores) VALUES (?, ?, ?, ?)",
-            (user_id, week_key, narrative, json.dumps(scores, ensure_ascii=False)),
-        )
+        await save_analysis(db, user_id, analysis, start, end, week_key)
         await db.commit()
 
+    # The nutrient lists stay on the server: the suggestions read them, the review's text speaks for them
     return WeeklyReviewResponse(
-        narrative=narrative,
-        scores=scores,
+        narrative=analysis["narrative"],
+        scores=analysis["scores"],
         week_key=week_key,
         cached=False,
     )
@@ -221,7 +221,8 @@ async def update_meal(meal_id: Id, body: MealLog, user_id: int = Depends(require
             UPDATE meal_history SET
                 meal_name = ?, description = ?, ingredients = ?,
                 steps = ?, prep_time_min = ?, nutrition_note = ?,
-                cached_nutrition = NULL, schedule = NULL, menu_items = ?
+                cached_nutrition = NULL, schedule = NULL, menu_items = ?,
+                updated_at = datetime('now')
             WHERE id = ? AND user_id = ?
             """,
             (
