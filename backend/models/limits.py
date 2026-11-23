@@ -44,7 +44,7 @@ HEIGHT_CM_MAX = 300
 WEIGHT_KG_MAX = 1_000
 
 # --- Whole request ---
-MAX_BODY_BYTES = 2 * 1024 * 1024
+MAX_BODY_BYTES = 2 * 1024 * 1024  # counted as it arrives, declared length or not
 
 # --- Queries ---
 MEALS_LIMIT_DEFAULT = 50

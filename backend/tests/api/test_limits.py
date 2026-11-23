@@ -3,6 +3,7 @@
 The limits come from models/limits.py, so a test never repeats a number.
 """
 
+import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -191,6 +192,44 @@ async def test_request_body_over_limit_refused(client):
     r = await client.post("/shopping/", json={"item_name": "x" * (limits.MAX_BODY_BYTES + 1)})
     assert r.status_code == 413
     assert r.json() == {"detail": "Request too large"}
+
+
+async def _chunks(body: bytes, size: int = 64 * 1024):
+    """A body sent in pieces, without a declared length (chunked)."""
+    for start in range(0, len(body), size):
+        yield body[start:start + size]
+
+
+@pytest.mark.asyncio
+async def test_undeclared_body_over_limit_refused(client):
+    """A body sent without a declared length gets 413 once it passes the size limit, and nothing is saved."""
+    body = json.dumps({"item_name": "x" * (limits.MAX_BODY_BYTES + 1)}).encode()
+    r = await client.post("/shopping/", content=_chunks(body), headers={"Content-Type": "application/json"})
+    assert "content-length" not in {k.lower() for k in r.request.headers}
+    assert r.status_code == 413
+    assert r.json() == {"detail": "Request too large"}
+    assert (await client.get("/shopping/")).json() == []
+
+
+@pytest.mark.asyncio
+async def test_undeclared_body_under_limit_works(client):
+    """A body sent without a declared length, in several pieces, under the size limit is read as usual."""
+    items = [{"item_name": f"Item {i} " + "x" * 150} for i in range(limits.BULK_ITEMS_MAX)]
+    body = json.dumps(items).encode()
+    assert limits.MAX_BODY_BYTES > len(body) > 64 * 1024
+    r = await client.post("/shopping/bulk", content=_chunks(body), headers={"Content-Type": "application/json"})
+    assert "content-length" not in {k.lower() for k in r.request.headers}
+    assert r.status_code == 201
+    assert len((await client.get("/shopping/")).json()) == limits.BULK_ITEMS_MAX
+
+
+@pytest.mark.asyncio
+async def test_declared_length_that_is_not_a_number_refused(client):
+    """A declared body length that isn't a number gets 413."""
+    r = await client.post("/shopping/", content=b'{"item_name": "Milk"}', headers={
+        "Content-Type": "application/json", "Content-Length": "abc",
+    })
+    assert r.status_code == 413
 
 
 @pytest.mark.asyncio
