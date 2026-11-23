@@ -1278,7 +1278,7 @@ def model_label() -> str:
     """The models the test runs on, as the app picks them: OLLAMA_MODEL with its think setting, then each
     model a task or reply language has of its own, with the keys that use it (#192)."""
     by_model: dict[str, list[str]] = {}
-    for key in llm.OLLAMA_ROUTES:
+    for key in llm.routes():
         model, think = llm.model_for(task=key, language=key)  # a key is a task or a language
         by_model.setdefault(model + _think_label(think), []).append(key)
     model, think = llm.model_for()
@@ -1291,15 +1291,15 @@ async def main(argv: list[str] | None = None) -> int:
         print("\n".join(history_lines(load_history())))
         return 0
     llm.OLLAMA_BASE_URL = args.url  # llm reads it on every call, so every persona uses this server
-    if args.model:  # one model for every call, whatever the app's tasks and languages use
-        llm.OLLAMA_MODEL, llm.OLLAMA_ROUTES = args.model, {}
+    if args.model:  # one model for every call, whatever the app's tasks and languages (or the picker) use
+        llm.OLLAMA_MODEL, llm.OLLAMA_ROUTES, llm.MODEL_SETTINGS_PATH = args.model, {}, None
     if args.think:
         llm.OLLAMA_THINK = args.think == "on"
-    if args.data and llm.OLLAMA_ROUTES:
+    if args.data and llm.routes():
         print("--data saves one model's outputs: give it --model, since tasks or languages here have their own.")
         return 2
     # A test on the app's own picks compares with earlier tests on the same picks
-    model = llm.OLLAMA_MODEL if not llm.OLLAMA_ROUTES else model_label()
+    model = llm.OLLAMA_MODEL if not llm.routes() else model_label()
     think = llm.model_for()[1]  # what OLLAMA_MODEL gets: OLLAMA_THINK, else the default model's own
     if not await llm.check_llm_availability():
         print(f"Ollama isn't reachable at {args.url}. See docs/SETUPALL.md, BONUS C.")

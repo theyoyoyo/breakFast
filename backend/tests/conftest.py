@@ -32,6 +32,17 @@ def fast_pin_hashing(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def no_model_settings_file(tmp_path, monkeypatch):
+    """Point the model picker's settings file at an empty folder, so a real backend/model_settings.json
+    never changes which model a test's calls name."""
+    from services import llm
+    from services.model_settings import ModelSettingsFile
+
+    monkeypatch.setattr(llm, "MODEL_SETTINGS_PATH", tmp_path / "model_settings.json")
+    monkeypatch.setattr(llm, "_model_settings", ModelSettingsFile())
+
+
+@pytest.fixture(autouse=True)
 def no_login_failures():
     """Start every test with no failed logins counted (they live in memory, like the tokens)."""
     import auth

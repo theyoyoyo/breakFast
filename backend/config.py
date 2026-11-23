@@ -39,6 +39,9 @@ OLLAMA_ROUTES = {
     for key in MODEL_LANGUAGES + MODEL_TASKS
     if (model := os.getenv(f"OLLAMA_MODEL_{key.upper()}", "").strip())
 }
+# The model picker's choices (tools/model_picker.py, #240), git-ignored and read on each Ollama call:
+# a key set there wins over its OLLAMA_MODEL_<KEY> route (services/model_settings.py).
+MODEL_SETTINGS_PATH = Path(__file__).resolve().parent / "model_settings.json"
 
 
 def resolve_database_path(value: str) -> str:

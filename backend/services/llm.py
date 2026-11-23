@@ -12,6 +12,7 @@ import httpx
 from config import (
     DEFAULT_MODEL,
     DEFAULT_THINK,
+    MODEL_SETTINGS_PATH,
     OLLAMA_BASE_URL,
     OLLAMA_MODEL,
     OLLAMA_NUM_CTX,
@@ -19,6 +20,7 @@ from config import (
     OLLAMA_THINK,
     OLLAMA_TIMEOUT,
 )
+from services.model_settings import ModelSettingsFile
 
 FALLBACK_LYRICS = [
     "Benim aklım ocakta kaldı~",
@@ -72,11 +74,23 @@ async def check_llm_availability() -> bool:
         return False
 
 
+_model_settings = ModelSettingsFile()
+
+
+def routes() -> dict[str, tuple[str, bool | None]]:
+    """Each task's and reply language's own (model, think): the model picker's file (#240), read again
+    only when it changed, over `.env`'s OLLAMA_MODEL_<KEY> routes (#192). A key the file sets replaces
+    its `.env` route whole. MODEL_SETTINGS_PATH None reads no file (the prompt test's --model)."""
+    return {**OLLAMA_ROUTES, **_model_settings.routes(MODEL_SETTINGS_PATH)}
+
+
 def model_for(task: str | None = None, language: str | None = None) -> tuple[str, bool | None]:
     """The model and think value for a call (#192): its reply language's model, else its task's
-    (config.MODEL_TASKS), else OLLAMA_MODEL. The think value is that model's own OLLAMA_THINK_<KEY>,
-    else OLLAMA_THINK, else DEFAULT_THINK for the default model and none for any other. Read on every call."""
-    model, think = OLLAMA_ROUTES.get(language) or OLLAMA_ROUTES.get(task) or (OLLAMA_MODEL, None)
+    (config.MODEL_TASKS), else OLLAMA_MODEL, each from routes() (the picker's file, then `.env`). The think
+    value is that route's own, else OLLAMA_THINK, else DEFAULT_THINK for the default model and none for any
+    other. A call resolves it once when it starts, so a call in flight keeps its model."""
+    current = routes()
+    model, think = current.get(language) or current.get(task) or (OLLAMA_MODEL, None)
     if think is None:
         think = OLLAMA_THINK
     if think is None and model == DEFAULT_MODEL:
