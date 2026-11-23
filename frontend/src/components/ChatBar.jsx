@@ -25,16 +25,16 @@ export default function ChatBar({
   const showMic = voice.supported && (!typed || voice.listening)
 
   return (
-    <div className="flex items-center gap-1.5 border-t border-line bg-surface py-2.5 pl-2 pr-5">
+    <div className="flex items-center gap-1.5 border-t border-line bg-surface py-1.5 pl-2 pr-5">
       <button
         type="button"
-        className="-my-2 flex h-[60px] w-[58px] flex-none items-center justify-center border-0 bg-transparent p-0 transition-transform active:scale-[0.92] disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex h-[64px] w-[58px] flex-none items-center justify-center border-0 bg-transparent p-0 transition-transform active:scale-[0.92] disabled:cursor-not-allowed disabled:opacity-40"
         onClick={onTodayIAte}
         disabled={busy}
         title="Today I ate..."
         aria-label="Today I ate"
       >
-        <img src={ate1} srcSet={`${ate1} 1x, ${ate2} 2x, ${ate3} 3x`} alt="" className="block h-[70px] w-auto" draggable={false} />
+        <img src={ate1} srcSet={`${ate1} 1x, ${ate2} 2x, ${ate3} 3x`} alt="" className="block h-[66px] w-auto" draggable={false} />
       </button>
 
       <div className="flex min-w-0 flex-1 items-end rounded-3xl border border-line bg-surface-2 pl-3.5">
@@ -60,7 +60,7 @@ export default function ChatBar({
         )}
       </div>
 
-      <div className="relative -my-2 flex h-[60px] w-[122px] flex-none items-center justify-center">
+      <div className="relative flex h-[64px] w-[122px] flex-none items-center justify-center">
         {busy ? (
           <button type="button" className={`${PILL} bg-secondary`} onClick={onStop}>Stop</button>
         ) : typed ? (

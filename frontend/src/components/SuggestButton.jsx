@@ -112,7 +112,7 @@ export default function SuggestButton({ onSuggest, disabled }) {
           src={suggest1}
           srcSet={srcSet(suggest1, suggest2, suggest3)}
           alt=""
-          className={`pointer-events-none block h-[70px] w-auto ${dashKey ? 'motion-safe:animate-dash' : ''}`}
+          className={`pointer-events-none block h-[64px] w-auto ${dashKey ? 'motion-safe:animate-dash' : ''}`}
           draggable={false}
         />
       </button>
