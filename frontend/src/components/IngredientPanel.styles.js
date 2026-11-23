@@ -15,6 +15,7 @@ export const headerRow = {
 }
 
 export const headerBtns = {
+  marginLeft: 'auto',
   display: 'flex',
   gap: 6,
   alignItems: 'center',

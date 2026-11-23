@@ -11,7 +11,6 @@ import ShoppingListPanel from './ShoppingListPanel'
 import FavoriteIngredientsPanel from './FavoriteIngredientsPanel'
 import ConfirmPrompt from './ConfirmPrompt'
 import * as s from './IngredientPanel.styles'
-import Logo from './Logo'
 
 // ---------------------------------------------------------------------------
 // Fixed ingredient groups (mirrors backend INGREDIENT_GROUPS)
@@ -477,7 +476,6 @@ function IngredientPanel({ refreshTrigger, visible }) {
     <div style={s.container}>
       {/* Header with expired + add buttons */}
       <div style={s.headerRow}>
-        <Logo withName height={26} />
         <div style={s.headerBtns}>
           <button
             style={expiredCount > 0 ? s.headerExpiredBtn : s.headerExpiredBtnSafe}
@@ -506,7 +504,7 @@ function IngredientPanel({ refreshTrigger, visible }) {
             onClick={() => { setAddPanelOpen(!addPanelOpen); setError(null) }}
             title="Add ingredient"
           >
-            {addPanelOpen ? <X size={14} /> : <><Plus size={14} /> <span>Add Item</span></>}
+            {addPanelOpen ? <X size={14} /> : <><Plus size={14} /> <span>Add</span></>}
           </button>
         </div>
       </div>

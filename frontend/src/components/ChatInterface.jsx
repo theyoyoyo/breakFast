@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardR
 import { createChatSocket, checkAuth, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, saveSessionMessage, updateSessionMessage, saveAteDraft, selectSessionMessage, getTodaySupplements, toggleSupplement, analyzeMeal, getSchedule } from '../services/api'
 import { useVoice } from '../hooks/useVoice'
 import { emitSyncNotice, useSyncNotice } from '../hooks/useSyncNotice'
-import SuggestButton from './SuggestButton'
+import ChatBar from './ChatBar'
 import DecidePanel from './DecidePanel'
 import MealBlock from './MealBlock'
 import MarkdownText from './MarkdownText'
@@ -10,7 +10,6 @@ import PrepPlanText from './PrepPlanText'
 import { normalizeMeal } from '../utils/ingredients'
 import { isPrepPlan } from '../utils/prepPlan'
 import * as s from './ChatInterface.styles'
-import Logo from './Logo'
 
 const WELCOME_MSG = { role: 'assistant', content: "Good morning! Tell me what's in your fridge and I'll plan your breakfast." }
 
@@ -676,7 +675,6 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
   // Get the checked meal for DecidePanel (priority: checked block > null)
   const checkedMeal = checkedMealIdx !== null ? mealBlocks[checkedMealIdx] : null
 
-  const [suppMenuOpen, setSuppMenuOpen] = useState(false)
   const [decideOpen, setDecideOpen] = useState(false)
   // The card "Today I ate" opened from (its message index), kept while the panel is open
   const [decideIdx, setDecideIdx] = useState(null)
@@ -684,8 +682,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
 
   return (
     <div style={s.container}>
-      <div style={{ ...s.header, display: 'flex', alignItems: 'center' }}>
-        <Logo withName height={26} />
+      <div style={{ ...s.header, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
         {!connected && hasConnectedRef.current && (
           <span style={s.connStatus}> — reconnecting…</span>
         )}
@@ -754,6 +751,8 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
           meal={decideMeal}
           saved={decideIdx !== null ? messages[decideIdx]?.ateDraft ?? null : null}
           onSave={decideMeal ? (meal) => handleSaveAteDraft(decideIdx, meal) : undefined}
+          supplements={todaySupps}
+          onToggleSupplement={handleToggleSupplement}
           onClose={() => setDecideOpen(false)}
           onConfirm={() => {
             // Logged: the card is unselected and its saved version cleared, on every device
@@ -766,90 +765,21 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
         />
       )}
 
-      <div style={s.actionRow}>
-        <div style={s.actionStack}>
-          <div style={s.suppMenuWrapper}>
-            {suppMenuOpen && !decideOpen && (
-              <div style={s.suppMenu}>
-                <span style={s.suppMenuLabel}>Supplements</span>
-                {todaySupps.length === 0 ? (
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '4px 0' }}>
-                    None added — Settings → Supplements
-                  </span>
-                ) : todaySupps.map(sup => {
-                  const isDaily = sup.frequency === 'daily'
-                  const taken = isDaily || !!sup.taken_today
-                  return (
-                    <button
-                      key={sup.id}
-                      style={s.suppPill(taken, isDaily)}
-                      onClick={() => !isDaily && handleToggleSupplement(sup.id, !!sup.taken_today)}
-                      title={sup.contents || sup.name}
-                      disabled={isDaily}
-                    >
-                      {isDaily ? '⚡' : taken ? '✓' : '○'} {sup.name}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-            <button
-              style={s.suppToggleBtn(suppMenuOpen && !decideOpen)}
-              onClick={() => !decideOpen && setSuppMenuOpen(prev => !prev)}
-              disabled={decideOpen}
-              title="Supplements"
-            >
-              💊
-            </button>
-          </div>
-
-          <button
-            style={s.decideBtn(decideOpen)}
-            onClick={() => {
-              if (!decideOpen) {
-                setDecideIdx(checkedMeal ? checkedMealIdx : null)
-                setSuppMenuOpen(false)
-              }
-              setDecideOpen(prev => !prev)
-            }}
-            disabled={isBusy}
-            title="Today I ate..."
-          >
-            ✅
-          </button>
-        </div>
-
-        <SuggestButton onSuggest={handleSuggest} disabled={isBusy || decideOpen} />
-      </div>
-
-      <div style={s.inputRow}>
-        {voiceSupported && (
-          <button style={s.micBtn(isListening)} onClick={handleMic} title="Voice input">
-            {isListening ? '🔴' : '🎤'}
-          </button>
-        )}
-        <textarea
-          style={s.input}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="What are you craving?"
-          rows={1}
-          disabled={isBusy}
-        />
-        {isBusy ? (
-          <button style={s.stopBtn} onClick={handleStop}>
-            Stop
-          </button>
-        ) : (
-          <button
-            style={s.sendBtn}
-            onClick={() => sendMessage(input)}
-          >
-            Send
-          </button>
-        )}
-      </div>
+      <ChatBar
+        input={input}
+        onInputChange={setInput}
+        onKeyDown={handleKeyDown}
+        onSend={() => sendMessage(input)}
+        onStop={handleStop}
+        busy={isBusy}
+        onSuggest={handleSuggest}
+        suggestDisabled={isBusy || decideOpen}
+        onTodayIAte={() => {
+          if (!decideOpen) setDecideIdx(checkedMeal ? checkedMealIdx : null)
+          setDecideOpen(prev => !prev)
+        }}
+        voice={{ supported: voiceSupported, listening: isListening, onMic: handleMic }}
+      />
     </div>
   )
 })

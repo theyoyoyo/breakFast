@@ -1,4 +1,4 @@
-import { secondaryColor, colors, deleteBtn } from '../styles/common'
+import { deleteBtn } from '../styles/common'
 
 export const container = {
   display: 'flex',
@@ -50,49 +50,6 @@ export const bubble = (role) => ({
   wordBreak: 'break-word',
 })
 
-export const inputRow = {
-  display: 'flex',
-  gap: 8,
-  padding: '12px 16px',
-  borderTop: '1px solid var(--border)',
-  background: 'var(--surface)',
-}
-
-export const input = {
-  flex: 1,
-  background: 'var(--surface2)',
-  border: '1px solid var(--border)',
-  borderRadius: 24,
-  padding: '10px 16px',
-  color: 'var(--text)',
-  fontSize: 14,
-  outline: 'none',
-  resize: 'none',
-  minHeight: 42,
-  maxHeight: 120,
-}
-
-export const sendBtn = {
-  background: secondaryColor,
-  color: '#fff',
-  border: 'none',
-  borderRadius: 24,
-  padding: '10px 18px',
-  fontWeight: 600,
-  fontSize: 14,
-  transition: 'opacity 0.15s',
-}
-
-export const micBtn = (active) => ({
-  background: active ? 'var(--accent2)' : 'var(--surface2)',
-  color: 'var(--text)',
-  border: '1px solid var(--border)',
-  borderRadius: 24,
-  padding: '10px 14px',
-  fontSize: 16,
-  transition: 'background 0.15s',
-})
-
 export const thinking = {
   alignSelf: 'flex-start',
   color: 'var(--text-muted)',
@@ -106,113 +63,6 @@ export const connStatus = {
   color: 'var(--text-muted)',
 }
 
-export const suppMenuWrapper = {
-  position: 'relative',
-  alignSelf: 'flex-end',
-}
-
-export const suppToggleBtn = (active) => ({
-  background: active ? secondaryColor : 'var(--surface2)',
-  color: active ? '#fff' : 'var(--text)',
-  border: '1px solid var(--border)',
-  borderRadius: 20,
-  padding: '8px 16px',
-  fontSize: 28,
-  lineHeight: 1,
-  width: '100%',
-  cursor: 'pointer',
-  transition: 'background 0.15s, color 0.15s',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-})
-
-export const suppMenu = {
-  position: 'absolute',
-  bottom: '100%',
-  left: 0,
-  marginBottom: 6,
-  background: 'var(--surface)',
-  border: '1px solid var(--border)',
-  borderRadius: 12,
-  padding: '10px 12px',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 6,
-  minWidth: 180,
-  boxShadow: '0 -4px 16px rgba(0,0,0,0.2)',
-  zIndex: 10,
-}
-
-export const suppMenuLabel = {
-  fontSize: 11,
-  fontWeight: 700,
-  textTransform: 'uppercase',
-  textAlign: 'center',
-  color: 'var(--text-muted)',
-  marginBottom: 2,
-}
-
-export const suppPill = (taken, isDaily) => ({
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 4,
-  padding: '6px 12px',
-  borderRadius: 16,
-  fontSize: 12,
-  border: isDaily ? `1px solid ${colors.successBorder}` : '1px solid var(--border)',
-  background: isDaily ? colors.success : taken ? secondaryColor : 'var(--surface2)',
-  color: isDaily ? colors.successText : taken ? '#fff' : 'var(--text-muted)',
-  cursor: isDaily ? 'default' : 'pointer',
-  opacity: isDaily ? 0.85 : 1,
-  whiteSpace: 'nowrap',
-  transition: 'background 0.15s, color 0.15s',
-})
-
-export const actionRow = {
-  display: 'flex',
-  alignItems: 'flex-end',
-  justifyContent: 'space-between',
-  gap: 8,
-  padding: '6px 0 0',
-  background: 'var(--surface)',
-}
-
-export const actionStack = {
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'stretch',
-  gap: 6,
-  width: 80,
-}
-
-export const decideBtn = (active) => ({
-  background: active ? secondaryColor : 'var(--surface2)',
-  color: active ? '#fff' : 'var(--text)',
-  border: '1px solid var(--border)',
-  borderRadius: 20,
-  padding: '8px 16px',
-  fontSize: 48,
-  lineHeight: 1,
-  width: '100%',
-  cursor: 'pointer',
-  transition: 'background 0.15s, color 0.15s',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-})
-
-export const stopBtn = {
-  background: secondaryColor,
-  color: '#fff',
-  border: 'none',
-  borderRadius: 24,
-  padding: '10px 18px',
-  fontWeight: 600,
-  fontSize: 14,
-  transition: 'opacity 0.15s',
-}
-
 // Session buttons in the chat header (Back, Next, New) — accent colored; Delete is red
 export const newSessionBtn = {
   background: 'none',
@@ -222,7 +72,7 @@ export const newSessionBtn = {
   fontSize: 12,
   color: 'var(--accent)',
   cursor: 'pointer',
-  marginLeft: 'auto',
+  whiteSpace: 'nowrap',
 }
 
 export const deleteSessionBtn = {
@@ -230,5 +80,5 @@ export const deleteSessionBtn = {
   borderRadius: 8,
   padding: '4px 10px',
   fontSize: 12,
-  marginLeft: 'auto',
+  whiteSpace: 'nowrap',
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { MessageCircle, Refrigerator, SlidersHorizontal, Star, Settings, LogOut } from 'lucide-react'
 import ChatInterface from './components/ChatInterface'
 import IngredientPanel from './components/IngredientPanel'
@@ -6,6 +6,8 @@ import PreferencesPanel from './components/PreferencesPanel'
 import FavoritesPanel from './components/FavoritesPanel'
 import SettingsPanel from './components/SettingsPanel'
 import LoginScreen from './components/LoginScreen'
+import Logo from './components/Logo'
+import { LOCKUP, MARK_VIEWBOX } from './brand/brand'
 import { logout, checkAuth, getPreferences, onSessionEnded, NetworkError } from './services/api'
 import { applyTheme } from './utils/theme'
 import { applyAppearance } from './utils/appearance'
@@ -42,7 +44,8 @@ function getStoredAuth() {
   return null
 }
 
-function useIsNarrow(breakpoint = 540) {
+// Below this width the tabs show icons only (the app mark beside them takes some room)
+function useIsNarrow(breakpoint = 760) {
   const [narrow, setNarrow] = useState(() => window.innerWidth < breakpoint)
   useEffect(() => {
     const onResize = () => setNarrow(window.innerWidth < breakpoint)
@@ -50,6 +53,36 @@ function useIsNarrow(breakpoint = 540) {
     return () => window.removeEventListener('resize', onResize)
   }, [breakpoint])
   return narrow
+}
+
+const BRAND_HEIGHT = 22
+// How much wider the mark gets with the name beside it, at BRAND_HEIGHT
+const NAME_EXTRA = BRAND_HEIGHT * (LOCKUP.width / LOCKUP.height - Number(MARK_VIEWBOX.split(' ')[2]) / Number(MARK_VIEWBOX.split(' ')[3]))
+
+// Whether the app name fits beside the mark in the tab row: the row's free space, measured
+// whenever its width changes, against the room the name takes (the other items don't change width with it)
+function useNameFits(navRef, brandRef, shown) {
+  const [fits, setFits] = useState(false)
+  useLayoutEffect(() => {
+    const nav = navRef.current
+    if (!nav || typeof ResizeObserver === 'undefined') return
+    const measure = () => {
+      const style = getComputedStyle(nav)
+      const gap = parseFloat(style.columnGap) || 0
+      const items = [...nav.children]
+      const used = items.reduce((sum, el) => sum + (el === brandRef.current && fits ? el.offsetWidth - NAME_EXTRA : el.offsetWidth), 0)
+        + gap * (items.length - 1) + (parseFloat(getComputedStyle(brandRef.current).marginRight) || 0)
+      const free = nav.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - used
+      setFits(free >= NAME_EXTRA + 8)
+    }
+    measure()
+    // The row and each item in it: a tab that shows or hides its label changes the free space too
+    const observer = new ResizeObserver(measure)
+    observer.observe(nav)
+    for (const el of nav.children) if (el !== brandRef.current) observer.observe(el)
+    return () => observer.disconnect()
+  }, [navRef, brandRef, fits, shown])
+  return fits
 }
 
 export default function App() {
@@ -61,6 +94,10 @@ export default function App() {
   // The login screen says why it's back when the server refused the session
   const [sessionEnded, setSessionEnded] = useState(false)
   const narrow = useIsNarrow()
+  // The name beside the mark wherever the tab row has room for it
+  const navRef = useRef(null)
+  const brandRef = useRef(null)
+  const nameFits = useNameFits(navRef, brandRef, authChecked && !!auth)
 
   // A refused request already cleared the stored session: show the login with a note
   useEffect(() => onSessionEnded(() => {
@@ -156,7 +193,8 @@ export default function App() {
   return (
     <div style={s.app}>
       {offline && <div style={s.offlineBanner}>Backend unreachable — retrying...</div>}
-      <nav style={s.nav}>
+      <nav style={s.nav} ref={navRef}>
+        <span style={s.brand} ref={brandRef}><Logo withName={nameFits} height={BRAND_HEIGHT} /></span>
         {TABS.map(({ key, label, Icon }) => (
           <button
             key={key}

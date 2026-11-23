@@ -20,6 +20,7 @@ from services.knowledge import (
     format_ingredients,
     format_preferences,
     format_supplements,
+    format_supplements_taken,
     format_user_profile,
 )
 from services.personas import (
@@ -158,6 +159,25 @@ class TestFormatters:
         supps = [{"name": "Omega-3", "frequency": "sometimes", "contents": "", "taken_today": False}]
         result = format_supplements(supps)
         assert "NOT taken today" in result
+
+    # A daily supplement the user skipped today is marked as not taken, and one without a mark stays plain
+    def test_format_supplements_daily_skipped(self):
+        skipped = format_supplements([{"name": "Vitamin D", "frequency": "daily", "taken_today": 0}])
+        usual = format_supplements([{"name": "Vitamin D", "frequency": "daily", "taken_today": 1}])
+        assert "NOT taken today" in skipped
+        assert "taken today" not in usual
+
+    # The planner's list leaves out a daily supplement skipped today and keeps one taken as usual
+    def test_format_supplements_taken_follows_today(self):
+        supps = [
+            {"name": "Vitamin D", "frequency": "daily", "contents": "", "taken_today": 0},
+            {"name": "Iron", "frequency": "daily", "contents": ""},
+            {"name": "Omega-3", "frequency": "sometimes", "contents": "", "taken_today": 1},
+        ]
+        result = format_supplements_taken(supps)
+        assert "Vitamin D" not in result
+        assert "Iron" in result
+        assert "Omega-3" in result
 
 
 # ---------------------------------------------------------------------------

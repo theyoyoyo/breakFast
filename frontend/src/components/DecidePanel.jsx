@@ -3,6 +3,7 @@ import { getRatings, createRating, logMeal, addFavorite, deleteFavorite } from '
 import { countUnit } from '../utils/ingredients'
 import MealEditor from './MealEditor'
 import StarRating from './StarRating'
+import TodaySupplements from './TodaySupplements'
 import * as s from './DecidePanel.styles'
 
 /**
@@ -15,8 +16,10 @@ import * as s from './DecidePanel.styles'
  *               closes (no Save without it)
  *   onClose   — Close drops unsaved edits
  *   onConfirm — the meal was logged (with ratings, or with Skip on the rating step)
+ *   supplements, onToggleSupplement(id, takenNow) — today's supplements behind the 💊 button,
+ *               each tap saved at once
  */
-export default function DecidePanel({ meal, saved, onSave, onClose, onConfirm }) {
+export default function DecidePanel({ meal, saved, onSave, onClose, onConfirm, supplements = [], onToggleSupplement }) {
   // Phase: 'edit' = MealEditor open, 'rate' = star-rating unrated items
   const [phase, setPhase] = useState('edit')
   const [ratings, setRatings] = useState({})
@@ -34,6 +37,9 @@ export default function DecidePanel({ meal, saved, onSave, onClose, onConfirm })
   const [base, setBase] = useState(() => ({ meal: saved || meal, edited: !!saved }))
   // Save: 'idle' → 'saving' → closed, or 'error' (stays open to try again)
   const [saveState, setSaveState] = useState('idle')
+  // Today's supplements list: open until a tap elsewhere in the panel (Confirm keeps it open)
+  const [suppOpen, setSuppOpen] = useState(false)
+  const suppRef = useRef(null)
 
   // Load existing ratings to skip already-rated products in the rate phase
   useEffect(() => {
@@ -164,6 +170,13 @@ export default function DecidePanel({ meal, saved, onSave, onClose, onConfirm })
     if (e.target === e.currentTarget) onClose()
   }
 
+  // A tap anywhere in the panel except the supplements and Confirm closes the supplements list
+  const handlePanelClickCapture = (e) => {
+    if (!suppOpen || suppRef.current?.contains(e.target)) return
+    if (e.target.closest?.('[data-keeps-supplements]')) return
+    setSuppOpen(false)
+  }
+
   // ── Rate phase ────────────────────────────────────────────────────────────
 
   if (phase === 'rate') {
@@ -201,8 +214,17 @@ export default function DecidePanel({ meal, saved, onSave, onClose, onConfirm })
 
   return (
     <div style={s.overlay} onClick={handleOverlayClick}>
-      <div style={s.panel}>
-        <div style={s.panelHeader}>Today I ate</div>
+      <div style={s.panel} onClickCapture={handlePanelClickCapture}>
+        <div style={{ ...s.panelHeader, position: 'relative' }}>
+          Today I ate
+          <TodaySupplements
+            open={suppOpen}
+            onOpenChange={setSuppOpen}
+            supplements={supplements}
+            onToggle={(id, taken) => onToggleSupplement?.(id, taken)}
+            containerRef={suppRef}
+          />
+        </div>
         <MealEditor
           meal={editorMeal}
           onFavorite={handleFavorite}
@@ -227,6 +249,7 @@ export default function DecidePanel({ meal, saved, onSave, onClose, onConfirm })
                 </button>
               )}
               <button
+                data-keeps-supplements
                 style={missing?.length === 0 ? s.confirmBtn : s.confirmBtnBlocked}
                 onClick={() => handleProceedToRating(buildCurrentMeal())}
                 disabled={saving || missing?.length !== 0}

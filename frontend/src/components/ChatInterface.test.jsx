@@ -18,7 +18,7 @@ import MarkdownText from './MarkdownText'
 import { LYRIC_PLAN, OLD_PLAN, PLAN } from '../utils/prepPlan.fixtures'
 import {
   createChatSocket, checkAuth, getActiveSession, listSessions, getSessionMessages,
-  saveSessionMessage, updateSessionMessage, saveAteDraft, selectSessionMessage, analyzeMeal, getTodaySupplements,
+  saveSessionMessage, updateSessionMessage, saveAteDraft, selectSessionMessage, analyzeMeal, getTodaySupplements, toggleSupplement,
   checkMissingIngredients, getRatings, logMeal,
 } from '../services/api'
 import { SYNC_NOTICE_EVENT } from '../hooks/useSyncNotice'
@@ -207,17 +207,45 @@ describe('ChatInterface sync', () => {
     expect(JSON.parse(content.match(/```json\s*([\s\S]*?)\s*```/)[1]).menu_name).toBe('Edited Breakfast')
   })
 
-  // A pill marked on another device shows up in the open 💊 list on a supplements push
+  // A pill marked on another device shows up in the 💊 list open in "Today I ate" on a supplements push
   it('reloads the 💊 list on a supplements push', async () => {
     const MAGNESIUM = { id: 1, name: 'Magnesium', frequency: 'sometimes', taken_today: 0 }
     getTodaySupplements.mockResolvedValue([MAGNESIUM])
     await renderChat()
-    fireEvent.click(screen.getByTitle('Supplements'))
-    expect(await screen.findByText('○ Magnesium')).toBeInTheDocument()
+    fireEvent.click(screen.getByTitle('Today I ate...'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Supplements' }))
+    expect(await screen.findByRole('button', { name: 'Magnesium' })).toBeInTheDocument()
 
     getTodaySupplements.mockResolvedValue([{ ...MAGNESIUM, taken_today: 1 }])
     pushNotice({ type: 'supplements_updated' })
-    expect(await screen.findByText('✓ Magnesium')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: '✓ Magnesium' })).toBeInTheDocument()
+  })
+
+  // A tap on a ticked daily supplement skips it for today, shown at once and saved
+  it('skips a daily supplement from "Today I ate"', async () => {
+    getTodaySupplements.mockResolvedValue([{ id: 4, name: 'Vitamin D', frequency: 'daily', taken_today: 1 }])
+    toggleSupplement.mockResolvedValue({ status: 'ok', taken: false })
+    await renderChat()
+    fireEvent.click(screen.getByTitle('Today I ate...'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Supplements' }))
+    fireEvent.click(await screen.findByRole('button', { name: '✓ Vitamin D' }))
+    expect(await screen.findByRole('button', { name: 'Vitamin D' })).toHaveAttribute('aria-pressed', 'false')
+    expect(toggleSupplement).toHaveBeenCalledWith(4, false)
+  })
+
+  // With an empty box the bar shows Suggest; typing turns it into Send, and an empty box brings Suggest back
+  it('turns Suggest into Send while the box has text', async () => {
+    await renderChat()
+    const box = screen.getByPlaceholderText('What are you craving?')
+    expect(screen.getByRole('button', { name: 'Suggest breakfast' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Send' })).toBeNull()
+
+    fireEvent.change(box, { target: { value: 'eggs?' } })
+    expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Suggest breakfast' })).toBeNull()
+
+    fireEvent.change(box, { target: { value: '' } })
+    expect(screen.getByRole('button', { name: 'Suggest breakfast' })).toBeInTheDocument()
   })
 
   // Coming back to the page reloads the 💊 list too, in case a push was missed in the background
