@@ -10,7 +10,7 @@ import pytest
 import database
 from models.nutrients import NUTRIENTS
 from services.llm import LLMUnavailableError
-from services.weekly import WEEKLY_SCHEMA
+from services.weekly import WEEKLY_SCHEMA, week_of
 
 MEAL = {"meal_name": "Oats", "ingredients": [], "menu_items": [{"name": "Oats", "amount": 50, "unit": "g", "ingredients": []}]}
 
@@ -44,16 +44,17 @@ async def _user_id(db, name="testuser") -> int:
 
 
 async def _analysis(db, user_id, days_ago: int, narrative="Earlier", lacking=None, more=None):
-    """An analysis run `days_ago` days ago, covering the 7 days up to then."""
+    """An analysis run `days_ago` days ago (a minute earlier than now on that day), filed under the
+    calendar week it ran in and covering the 7 days up to then."""
     ran = date.today() - timedelta(days=days_ago)
     await db.execute(
         """
         INSERT INTO weekly_summaries
             (user_id, week_key, narrative, scores, created_at, period_start, period_end, lacking, more_than_enough)
-        VALUES (?, 'old', ?, '[]', datetime('now', ?), ?, ?, ?, ?)
+        VALUES (?, ?, ?, '[]', datetime('now', ?, '-1 minute'), ?, ?, ?, ?)
         """,
         (
-            user_id, narrative, f"-{days_ago} days",
+            user_id, week_of(ran), narrative, f"-{days_ago} days",
             (ran - timedelta(days=6)).isoformat(), ran.isoformat(),
             json.dumps(lacking or []), json.dumps(more or []),
         ),
@@ -134,14 +135,28 @@ async def test_unreachable_model_keeps_nothing(client, db):
 # Keeping analyses
 # ---------------------------------------------------------------------------
 
-# A new analysis replaces one whose 7 days overlap its own and keeps one whose days don't
-async def test_new_analysis_replaces_overlapping_keeps_others(client, db):
+# A new analysis replaces the one from the same calendar week, so the latest run of a week wins
+async def test_new_analysis_replaces_same_week(client, db):
     user_id = await _user_id(db)
-    await _analysis(db, user_id, days_ago=10, narrative="Two weeks ago")
-    await _analysis(db, user_id, days_ago=3, narrative="This week")
+    await _analysis(db, user_id, days_ago=0, narrative="Earlier today")
     await client.post("/meals/", json=MEAL)
     await _run(client)
-    assert await _narratives(db, user_id) == ["Two weeks ago", REPLY["narrative"]]
+    assert await _narratives(db, user_id) == [REPLY["narrative"]]
+    await _run(client, {**REPLY, "narrative": "Again today"})
+    assert await _narratives(db, user_id) == ["Again today"]
+
+
+# Daily runs keep one analysis per ended week: last week's and the week before's stay beside this week's
+async def test_previous_weeks_are_kept(client, db):
+    user_id = await _user_id(db)
+    await _analysis(db, user_id, days_ago=14, narrative="Two weeks ago")
+    await _analysis(db, user_id, days_ago=7, narrative="Last week")
+    await client.post("/meals/", json=MEAL)
+    await _run(client)
+    assert await _narratives(db, user_id) == ["Two weeks ago", "Last week", REPLY["narrative"]]
+    async with db.execute("SELECT week_key FROM weekly_summaries WHERE user_id = ? ORDER BY created_at", (user_id,)) as cur:
+        weeks = [r["week_key"] for r in await cur.fetchall()]
+    assert len(set(weeks)) == 3 and weeks[-1] == week_of(date.today())
 
 
 # Analyses older than six months are deleted, at a new analysis and at the server's start
@@ -163,7 +178,7 @@ async def test_analyses_stay_with_their_user(client, db):
     await db.execute("INSERT INTO users (name, pin_hash) VALUES ('other', 'x')")
     await db.commit()
     other = await _user_id(db, "other")
-    await _analysis(db, other, days_ago=1, narrative="Zed's week")
+    await _analysis(db, other, days_ago=0, narrative="Zed's week")  # the same week as this user's new one
     assert (await client.get("/meals/weekly-review")).status_code == 404
 
     await client.post("/meals/", json=MEAL)

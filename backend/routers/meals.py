@@ -29,6 +29,7 @@ from services.weekly import (
     needs_analysis,
     parse_weekly_reply,
     save_analysis,
+    week_of,
 )
 
 # Fixed replies: a refusal for a week without meals, and a failed analysis (its cause goes to the log)
@@ -89,12 +90,12 @@ async def get_weekly_review_status(user_id: int = Depends(require_user)):
 async def generate_weekly_review(user_id: int = Depends(require_user)):
     """Run the weekly analyst on the 7 days up to today and keep the analysis.
 
-    It replaces any earlier analysis whose 7 days overlap its own. Without a meal in those days
+    It replaces the analysis from the same calendar week, if any. Without a meal in those days
     there is nothing to analyze: 422. A lyric comes back, and nothing is kept, while Ollama is
     unreachable.
     """
     today = dt_date.today()
-    week_key = today.strftime("%G-W%V")
+    week_key = week_of(today)
     start, end = analysis_window(today)
     async with get_db() as db:
         async with db.execute(

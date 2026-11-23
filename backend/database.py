@@ -228,7 +228,8 @@ CREATE TABLE IF NOT EXISTS user_kitchen_appliances (
 );
 
 -- Weekly analyses, kept six months. Each covers the 7 days up to the day it ran
--- (period_start..period_end); a new one replaces any whose days overlap its own.
+-- (period_start..period_end) and is filed under the calendar week it ran in (week_key, its ISO
+-- week); a new one replaces only the one from the same week.
 CREATE TABLE IF NOT EXISTS weekly_summaries (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id    INTEGER NOT NULL REFERENCES users(id),

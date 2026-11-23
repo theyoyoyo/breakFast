@@ -1,9 +1,10 @@
 """
 The weekly analysis (#206): its reply schema and parser, and how analyses are kept.
 
-Each analysis covers the 7 days up to the day it ran. A new one replaces every earlier one whose
-days overlap its own and keeps the rest, so there is at most one per week; analyses older than
-six months are deleted. The suggestion draft and the reviser read the nutrients of the latest
+Each analysis covers the 7 days up to the day it ran and is filed under the calendar week it ran
+in (Monday to Sunday by the server's local date: its ISO week, `week_key`). A new one replaces
+only the one from the same week, so the latest run of a week wins and a week that has ended keeps
+its last one; analyses older than six months are deleted. The suggestion draft and the reviser read the nutrients of the latest
 one when it ran in the last 7 days; the nudge tells the user a new one has something to read.
 """
 
@@ -41,6 +42,11 @@ WEEKLY_SCHEMA = {
     },
     "required": ["narrative", "scores", "lacking", "more_than_enough"],
 }
+
+
+def week_of(day: date) -> str:
+    """The calendar week (Monday to Sunday) a day is in, as its ISO week: an analysis is filed under it."""
+    return day.strftime("%G-W%V")
 
 
 def analysis_window(today: date) -> tuple[date, date]:
@@ -85,10 +91,9 @@ async def delete_old_analyses(db, user_id: int | None = None) -> None:
 
 
 async def save_analysis(db, user_id: int, analysis: dict, start: date, end: date, week_key: str) -> None:
-    """Keep a new analysis: it replaces the user's analyses whose days overlap its own."""
+    """Keep a new analysis: it replaces the user's analysis from the same calendar week."""
     await db.execute(
-        "DELETE FROM weekly_summaries WHERE user_id = ? AND period_start <= ? AND period_end >= ?",
-        (user_id, end.isoformat(), start.isoformat()),
+        "DELETE FROM weekly_summaries WHERE user_id = ? AND week_key = ?", (user_id, week_key),
     )
     await delete_old_analyses(db, user_id)
     await db.execute(
