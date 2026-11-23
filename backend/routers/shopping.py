@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 
 from auth import require_user
 from database import get_db
-from models.limits import BULK_ITEMS_MAX, Name, Note, ShortText
+from models.limits import BULK_ITEMS_MAX, Id, Name, Note, ShortText
 from services import chat_sync
 from services.context import load_shopping_context
 from services.ingredient_groups import remember, resolve_groups
@@ -46,7 +46,7 @@ class ShoppingItemCreate(BaseModel):
 
 
 class BoughtRequest(BaseModel):
-    ids: list[int] = Field(max_length=BULK_ITEMS_MAX)
+    ids: list[Id] = Field(max_length=BULK_ITEMS_MAX)
     expiry_dates: Optional[dict[Name, ShortText]] = Field(default=None, max_length=BULK_ITEMS_MAX)  # {item_name: expiry_date}
 
 
@@ -113,7 +113,7 @@ async def clear_shopping(user_id: int = Depends(require_user)):
 
 
 @router.delete("/{item_id}", status_code=204)
-async def delete_shopping_item(item_id: int, user_id: int = Depends(require_user)):
+async def delete_shopping_item(item_id: Id, user_id: int = Depends(require_user)):
     async with get_db() as db:
         await db.execute(
             "DELETE FROM shopping_list WHERE id = ? AND user_id = ?",

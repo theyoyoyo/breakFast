@@ -682,3 +682,50 @@ async def test_websocket_too_long_message_gets_a_note_and_is_not_saved(ws_setup)
         async with db.execute("SELECT content FROM chat_messages WHERE user_id = ? ORDER BY id", (user_id,)) as cur:
             saved = [r[0] for r in await cur.fetchall()]
     assert saved == [long_message.strip(), "Sure."]
+
+
+@pytest.mark.asyncio
+async def test_websocket_oversized_frame_gets_a_note_and_is_not_saved(ws_setup):
+    """A socket frame over the size limit gets the too-long note in the reply language, reaches no model and isn't saved."""
+    app, token, user_id = ws_setup
+    from unittest.mock import patch
+
+    from starlette.testclient import TestClient
+
+    from models.limits import CHAT_FRAME_MAX
+    from routers.chat import TOO_LONG_TEXTS
+
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        await db.execute(
+            "INSERT INTO user_preferences (user_id, key, value) VALUES (?, 'response_language', 'tr')", (user_id,),
+        )
+        await db.commit()
+
+    seen = []
+
+    async def mock_stream(system_prompt, history, message, **kwargs):
+        seen.append(message)
+        yield "Tamam."
+
+    def mock_pipeline(**kwargs):
+        seen.append(kwargs)
+        raise AssertionError("the pipeline must not run")
+
+    # A short message padded past the frame limit: only the frame's size refuses it
+    oversized = json.dumps({"message": "Hello there", "session_id": "s1", "pad": "x" * CHAT_FRAME_MAX})
+    with patch("routers.chat.stream_response", mock_stream), patch("routers.chat.run_suggestion_pipeline", mock_pipeline):
+        with open_chat(TestClient(app), token) as ws:
+            ws.send_text(oversized)
+            assert ws.receive_json() == {"type": "done", "content": TOO_LONG_TEXTS["tr"]}
+            ws.send_text(json.dumps({"message": "Suggest", "type": "suggest", "session_id": "s1", "pad": "y" * CHAT_FRAME_MAX}))
+            assert ws.receive_json() == {"type": "done", "content": TOO_LONG_TEXTS["tr"]}
+            # The socket stays open, and a usual message is answered
+            ws.send_text(json.dumps({"message": "Hi", "session_id": "s1"}))
+            assert ws.receive_json() == {"type": "token", "content": "Tamam."}
+            assert ws.receive_json()["type"] == "done"
+    assert len(seen) == 1
+
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        async with db.execute("SELECT content FROM chat_messages WHERE user_id = ? ORDER BY id", (user_id,)) as cur:
+            saved = [r[0] for r in await cur.fetchall()]
+    assert saved == ["Hi", "Tamam."]

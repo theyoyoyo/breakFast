@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from auth import require_user
 from database import get_db
 from models.kitchen import DEFAULT_ENABLED_KEYS, KITCHEN_APPLIANCES, VALID_APPLIANCE_KEYS, KitchenToggle
+from models.limits import ApplianceKey
 
 router = APIRouter(prefix="/kitchen", tags=["kitchen"])
 
@@ -47,7 +48,7 @@ async def list_kitchen_appliances(user_id: int = Depends(require_user)):
 
 @router.put("/{appliance_key}")
 async def toggle_kitchen_appliance(
-    appliance_key: str,
+    appliance_key: ApplianceKey,
     body: KitchenToggle,
     user_id: int = Depends(require_user),
 ):

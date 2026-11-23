@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 
 from auth import require_user
 from database import get_db
-from models.limits import INGREDIENTS_MAX, MENU_ITEMS_MAX, STEPS_MAX, MealName, Note, SizedItem
+from models.limits import INGREDIENTS_MAX, MENU_ITEMS_MAX, STEPS_MAX, Id, MealName, Note, SizedItem
 from services.context import fetch_kitchen_appliances, fetch_preferences
 from services.knowledge import format_ingredient_item
 from services.llm import LLMUnavailableError, lyric_cycler, stream_response
@@ -31,7 +31,7 @@ class ScheduleRequest(BaseModel):
     steps: list[Note] = Field(default=[], max_length=STEPS_MAX)
     menu: list[SizedItem] = Field(default=[], max_length=MENU_ITEMS_MAX)
     ingredients: list[SizedItem] = Field(default=[], max_length=INGREDIENTS_MAX)
-    meal_id: int | None = None
+    meal_id: Id | None = None
 
 
 class ScheduleResponse(BaseModel):

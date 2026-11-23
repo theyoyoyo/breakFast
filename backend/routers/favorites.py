@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from auth import require_user
 from database import get_db
 from db_helpers import row_to_favorite
+from models.limits import Id
 from models.meal import FavoriteIn
 
 router = APIRouter(prefix="/favorites", tags=["favorites"])
@@ -76,7 +77,7 @@ async def add_favorite(meal: FavoriteIn, user_id: int = Depends(require_user)):
 
 
 @router.put("/{fav_id}")
-async def update_favorite(fav_id: int, meal: FavoriteIn, user_id: int = Depends(require_user)):
+async def update_favorite(fav_id: Id, meal: FavoriteIn, user_id: int = Depends(require_user)):
     ingredients = _json.dumps(meal.ingredients or [], ensure_ascii=False)
     steps = _json.dumps(meal.steps or [], ensure_ascii=False)
     menu_items = meal.menu_items or meal.menu
@@ -120,7 +121,7 @@ async def update_favorite(fav_id: int, meal: FavoriteIn, user_id: int = Depends(
 
 
 @router.delete("/{fav_id}")
-async def delete_favorite(fav_id: int, user_id: int = Depends(require_user)):
+async def delete_favorite(fav_id: Id, user_id: int = Depends(require_user)):
     async with get_db() as db:
         cur = await db.execute(
             "DELETE FROM favorite_meals WHERE id = ? AND user_id = ?",

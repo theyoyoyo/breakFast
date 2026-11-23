@@ -3,11 +3,11 @@
 All queries are scoped to the authenticated user.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException
 
 from auth import require_user
 from database import get_db
-from models.limits import PREFERENCE_KEY_MAX
+from models.limits import Id, PreferenceKey
 from models.preferences import Habit, HabitCreate, Preference, PreferenceSet
 
 router = APIRouter(prefix="/preferences", tags=["preferences"])
@@ -30,7 +30,7 @@ async def list_preferences(user_id: int = Depends(require_user)):
 @router.put("/{key}", response_model=Preference)
 async def set_preference(
     body: PreferenceSet,
-    key: str = Path(max_length=PREFERENCE_KEY_MAX),
+    key: PreferenceKey,
     user_id: int = Depends(require_user),
 ):
     """Upsert a preference. The key comes from the URL; body only carries the value."""
@@ -52,7 +52,7 @@ async def set_preference(
 
 
 @router.delete("/{key}", status_code=204)
-async def delete_preference(key: str, user_id: int = Depends(require_user)):
+async def delete_preference(key: PreferenceKey, user_id: int = Depends(require_user)):
     async with get_db() as db:
         cursor = await db.execute(
             "DELETE FROM user_preferences WHERE user_id = ? AND key = ?",
@@ -92,7 +92,7 @@ async def add_habit(body: HabitCreate, user_id: int = Depends(require_user)):
 
 
 @router.delete("/habits/{habit_id}", status_code=204)
-async def delete_habit(habit_id: int, user_id: int = Depends(require_user)):
+async def delete_habit(habit_id: Id, user_id: int = Depends(require_user)):
     async with get_db() as db:
         cursor = await db.execute(
             "DELETE FROM user_habits WHERE id = ? AND user_id = ?",
