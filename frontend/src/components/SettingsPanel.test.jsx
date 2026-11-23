@@ -41,6 +41,7 @@ describe('SettingsPanel', () => {
     api.deleteOldMeals.mockResolvedValue({})
   })
 
+  // A new supplement starts as Daily, so adding one takes only its name
   it('adds a supplement as Daily without asking for a frequency', async () => {
     render(<SettingsPanel visible />)
     const name = await screen.findByPlaceholderText('Supplement name…')
@@ -50,6 +51,7 @@ describe('SettingsPanel', () => {
     await waitFor(() => expect(api.createSupplement).toHaveBeenCalledWith('Vitamin D', '', 'daily'))
   })
 
+  // The stored frequency "sometimes" is shown to the user as Occasional
   it('labels occasional supplements "Occasional"', async () => {
     api.getSupplements.mockResolvedValue([ // Settings loads on mount and when shown
       { id: 1, name: 'Magnesium', contents: '', frequency: 'sometimes' },
@@ -81,11 +83,13 @@ describe('SettingsPanel', () => {
     expect(screen.queryByRole('img', { name: 'break FAST' })).toBeNull()
   })
 
+  // The toggle's label says what it changes: the weekly review going into suggestions
   it('names the weekly review toggle after what it does', async () => {
     render(<SettingsPanel visible />)
     expect(await screen.findByText('Weekly review in suggestions')).toBeInTheDocument()
   })
 
+  // The country picked in the profile goes to the server with the other profile fields
   it('saves the optional country with the profile', async () => {
     render(<SettingsPanel visible />)
     const country = await screen.findByLabelText('Country')
@@ -147,6 +151,7 @@ describe('SettingsPanel', () => {
     ))
   })
 
+  // Country is optional, so leaving it empty doesn't put the incomplete-profile dot on Settings
   it('does not mark a profile without a country as incomplete', async () => {
     api.getProfile.mockResolvedValue({
       age: 30, gender: 'male', height_cm: 180, weight_kg: 80, activity_level: 'moderate', country: null,
@@ -157,6 +162,7 @@ describe('SettingsPanel', () => {
     expect(screen.queryByText('●')).toBeNull()
   })
 
+  // Every theme in the theme list has a button in Settings
   it('offers all five themes', async () => {
     render(<SettingsPanel visible />)
     for (const label of ['Orange', 'Green', 'Teal', 'Blue', 'Purple']) {

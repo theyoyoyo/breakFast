@@ -27,6 +27,7 @@ const MEAL = {
 describe('MealBlock readiness', () => {
   beforeEach(() => { vi.mocked(checkMissingIngredients).mockReset() })
 
+  // A chat card names the items it lacks in its badge
   it('shows "not ready" with the missing items when something is not in the fridge', async () => {
     checkMissingIngredients.mockResolvedValue({ missing: ['Olives'] })
     render(<MealBlock meal={MEAL} />)
@@ -41,18 +42,21 @@ describe('MealBlock readiness', () => {
     expect(screen.queryByText('#7')).toBeNull()
   })
 
+  // A chat card whose items are all in the fridge gets the green badge
   it('shows "ready" when everything is in the fridge', async () => {
     checkMissingIngredients.mockResolvedValue({ missing: [] })
     render(<MealBlock meal={MEAL} />)
     expect(await screen.findByTitle('Ready — everything is in your fridge')).toBeInTheDocument()
   })
 
+  // An item the user marked as obtained no longer keeps the card from being ready
   it('counts items marked as obtained as available', async () => {
     checkMissingIngredients.mockResolvedValue({ missing: ['Olives'] })
     render(<MealBlock meal={{ ...MEAL, obtained: ['Olives'] }} />)
     expect(await screen.findByTitle('Ready — everything is in your fridge')).toBeInTheDocument()
   })
 
+  // When the fridge check can't be reached the card shows no badge rather than a wrong one
   it('shows no indicator when the check fails', async () => {
     checkMissingIngredients.mockRejectedValue(new Error('offline'))
     render(<MealBlock meal={MEAL} />)

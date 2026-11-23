@@ -37,6 +37,7 @@ describe('DecidePanel', () => {
     getRatings.mockResolvedValue([{ product_name: 'Olives' }, { product_name: 'Bread' }])
   })
 
+  // A meal can't be logged as eaten while an item isn't in the fridge, and the note says which one
   it('disables Confirm and names the missing items', async () => {
     checkMissingIngredients.mockResolvedValue({ missing: ['Olives'] })
     render(<DecidePanel meal={MEAL} onClose={() => {}} />)
@@ -45,6 +46,7 @@ describe('DecidePanel', () => {
     expect(screen.queryByRole('button', { name: 'Ate out' })).toBeNull()
   })
 
+  // Removing the missing item frees Confirm without throwing away the user's other edits
   it('enables Confirm once the missing item is removed, without resetting edits', async () => {
     checkMissingIngredients.mockResolvedValueOnce({ missing: ['Olives'] }).mockResolvedValue({ missing: [] })
     render(<DecidePanel meal={MEAL} onClose={() => {}} />)
@@ -62,6 +64,7 @@ describe('DecidePanel', () => {
     expect([...row.querySelectorAll('button')].map(b => b.textContent)).toEqual(['Close', 'Save', 'Confirm'])
   })
 
+  // Items marked as obtained on the chat card count as available here, once the fridge check has answered
   it('carries marks from the selected chat meal', async () => {
     checkMissingIngredients.mockResolvedValue({ missing: ['Olives'] })
     render(<DecidePanel meal={{ ...MEAL, obtained: ['Olives'] }} onClose={() => {}} />)
@@ -120,6 +123,7 @@ describe('DecidePanel', () => {
     expect(screen.getByText('Bread')).toBeInTheDocument()
   })
 
+  // Back from the rating step returns to the edited menu, not the original one
   it('keeps edits when going back from the rating step', async () => {
     checkMissingIngredients.mockResolvedValue({ missing: [] })
     getRatings.mockResolvedValue([]) // nothing rated yet → Confirm opens the rating step

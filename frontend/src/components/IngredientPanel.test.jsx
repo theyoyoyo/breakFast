@@ -51,6 +51,7 @@ describe('IngredientPanel shopping suggestions', () => {
     api.getSuggestionList.mockResolvedValue({ items: [] })
   })
 
+  // Suggested products appear in the list and are saved to the server's suggestions list
   it('lists the suggested products', async () => {
     api.getShoppingSuggestions.mockResolvedValueOnce({
       suggestions: [{ name: 'Salmon', reason: 'Omega-3' }], lyric: null,
@@ -62,6 +63,7 @@ describe('IngredientPanel shopping suggestions', () => {
     expect(api.saveSuggestionList).toHaveBeenLastCalledWith([SALMON], [])
   })
 
+  // An empty answer gets a note instead of a silent, unchanged list
   it('says so when nothing new came back', async () => {
     render(<IngredientPanel visible />)
     fireEvent.click(await screen.findByRole('button', { name: /Suggest Shopping/ }))

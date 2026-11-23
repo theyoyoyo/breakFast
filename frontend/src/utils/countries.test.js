@@ -6,6 +6,7 @@ import { describe, it, expect } from 'vitest'
 import { COUNTRIES, countryCode } from './countries'
 
 describe('COUNTRIES', () => {
+  // The country list is sorted and each name appears once
   it('is alphabetical with no duplicates, so the dropdown is easy to scan', () => {
     const names = COUNTRIES.map(c => c.name)
     const sorted = [...names].sort((a, b) => a.localeCompare(b, 'en'))
@@ -13,6 +14,7 @@ describe('COUNTRIES', () => {
     expect(new Set(names).size).toBe(names.length)
   })
 
+  // The saved country name for Turkey is its official one, with its ISO code
   it('names Turkey the way the UN does', () => {
     expect(COUNTRIES).toContainEqual({ name: 'Türkiye', code: 'TR' })
   })
