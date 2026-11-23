@@ -16,6 +16,16 @@ export const nav = {
   alignItems: 'center',
 }
 
+// The app mark (and name, on wide screens) at the left of the tabs
+export const brand = {
+  display: 'flex',
+  alignItems: 'center',
+  alignSelf: 'center',
+  marginRight: 8,
+  paddingBottom: 6,
+  flexShrink: 0,
+}
+
 export const tab = (active, narrow) => ({
   padding: narrow ? '8px 10px' : '8px 18px',
   background: active ? 'var(--surface2)' : 'none',
@@ -26,6 +36,7 @@ export const tab = (active, narrow) => ({
   fontSize: 14,
   cursor: 'pointer',
   transition: 'color 0.15s',
+  whiteSpace: 'nowrap',
 })
 
 export const mainFull = {
@@ -97,4 +108,5 @@ export const logoutBtn = {
   fontSize: 12,
   cursor: 'pointer',
   transition: 'background 0.15s, color 0.15s, border-color 0.15s',
+  whiteSpace: 'nowrap',
 }

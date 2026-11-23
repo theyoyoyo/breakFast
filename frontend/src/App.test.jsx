@@ -105,6 +105,14 @@ describe('App tabs', () => {
     expect(window.location.hash).toBe('#favorites')
   })
 
+  // The app mark and name sit at the left of the tabs, before the first tab
+  it('shows the app name beside the tabs', async () => {
+    storeSession()
+    render(<App />)
+    const logo = await screen.findByRole('img', { name: 'break FAST' })
+    expect(logo.compareDocumentPosition(screen.getByTitle('Chat')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   // Logout leaves a plain link, and the next login starts on Chat
   it('starts the next login on Chat after Logout', async () => {
     storeSession()

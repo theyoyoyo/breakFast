@@ -4,7 +4,6 @@ import {
   getHabits, addHabit, deleteHabit,
 } from '../services/api'
 import * as s from './PreferencesPanel.styles'
-import Logo from './Logo'
 import { Plus } from 'lucide-react'
 
 function TagList({ items, onDelete, keyField = 'id', labelField = 'value' }) {
@@ -96,7 +95,6 @@ export default function PreferencesPanel() {
   return (
     <div style={s.container}>
       <div style={s.brandHeaderRow}>
-        <Logo withName height={26} />
         <span style={s.tabName}>Preferences</span>
       </div>
 

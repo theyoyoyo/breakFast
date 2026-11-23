@@ -6,6 +6,7 @@ import PreferencesPanel from './components/PreferencesPanel'
 import FavoritesPanel from './components/FavoritesPanel'
 import SettingsPanel from './components/SettingsPanel'
 import LoginScreen from './components/LoginScreen'
+import Logo from './components/Logo'
 import { logout, checkAuth, getPreferences, onSessionEnded, NetworkError } from './services/api'
 import { applyTheme } from './utils/theme'
 import { applyAppearance } from './utils/appearance'
@@ -42,7 +43,8 @@ function getStoredAuth() {
   return null
 }
 
-function useIsNarrow(breakpoint = 540) {
+// Below this width the tabs show icons only (the app mark beside them takes some room)
+function useIsNarrow(breakpoint = 760) {
   const [narrow, setNarrow] = useState(() => window.innerWidth < breakpoint)
   useEffect(() => {
     const onResize = () => setNarrow(window.innerWidth < breakpoint)
@@ -61,6 +63,8 @@ export default function App() {
   // The login screen says why it's back when the server refused the session
   const [sessionEnded, setSessionEnded] = useState(false)
   const narrow = useIsNarrow()
+  // The name beside the mark only where the tab names leave room for it
+  const roomy = !useIsNarrow(900)
 
   // A refused request already cleared the stored session: show the login with a note
   useEffect(() => onSessionEnded(() => {
@@ -157,6 +161,7 @@ export default function App() {
     <div style={s.app}>
       {offline && <div style={s.offlineBanner}>Backend unreachable — retrying...</div>}
       <nav style={s.nav}>
+        <span style={s.brand}><Logo withName={roomy} height={22} /></span>
         {TABS.map(({ key, label, Icon }) => (
           <button
             key={key}

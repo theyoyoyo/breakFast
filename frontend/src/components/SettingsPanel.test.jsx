@@ -74,11 +74,11 @@ describe('SettingsPanel', () => {
     await waitFor(() => expect(screen.queryByLabelText('Contents')).toBeNull())
   })
 
-  // The header shows the logo, like Chat, and the tab's name at the right
-  it('titles the tab with the app name and the tab name', async () => {
+  // The header names the tab; the app mark and name sit beside the tabs, not in the panel
+  it('titles the tab with its name', async () => {
     render(<SettingsPanel visible />)
-    const title = await screen.findByRole('img', { name: 'break FAST' })
-    expect(title.nextSibling).toHaveTextContent('Settings')
+    expect(await screen.findByText('Settings')).toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: 'break FAST' })).toBeNull()
   })
 
   it('names the weekly review toggle after what it does', async () => {

@@ -72,7 +72,7 @@ export const newSessionBtn = {
   fontSize: 12,
   color: 'var(--accent)',
   cursor: 'pointer',
-  marginLeft: 'auto',
+  whiteSpace: 'nowrap',
 }
 
 export const deleteSessionBtn = {
@@ -80,5 +80,5 @@ export const deleteSessionBtn = {
   borderRadius: 8,
   padding: '4px 10px',
   fontSize: 12,
-  marginLeft: 'auto',
+  whiteSpace: 'nowrap',
 }

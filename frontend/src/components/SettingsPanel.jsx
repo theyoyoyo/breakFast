@@ -23,7 +23,6 @@ import { useLanguage } from '../hooks/useLanguage'
 import { useSyncNotice } from '../hooks/useSyncNotice'
 import { useMode } from '../hooks/useMode'
 import * as s from './SettingsPanel.styles'
-import Logo from './Logo'
 import { Monitor, Sun, Moon, Plus } from 'lucide-react'
 
 // Appearance buttons: Auto shows a screen (it follows the device)
@@ -698,7 +697,6 @@ export default function SettingsPanel({ visible }) {
   return (
     <div style={s.container}>
       <div style={s.brandHeaderRow}>
-        <Logo withName height={26} />
         <span style={s.tabName}>Settings</span>
       </div>
 
