@@ -8,13 +8,17 @@ export const overlay = {
   display: 'flex',
   flexDirection: 'column',
   justifyContent: 'flex-end',
-  padding: 16,
+  // A sheet from the bottom edge: it covers the chat bar under it, with the chat dimmed above
+  padding: '16px 0 0',
 }
 
 export const panel = {
   background: 'var(--surface)',
   border: '1px solid var(--border)',
-  borderRadius: 16,
+  borderBottom: 'none',
+  borderLeft: 'none',
+  borderRight: 'none',
+  borderRadius: '16px 16px 0 0',
   padding: '20px',
   boxShadow: '0 -8px 32px rgba(0,0,0,0.3)',
   overflowY: 'auto',
