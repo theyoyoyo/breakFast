@@ -252,9 +252,9 @@ async def test_second_request_on_the_same_device_gets_the_note(stop_setup):
             ws.send_text(json.dumps({"message": "First", "session_id": "s1"}))
             assert ws.receive_json()["content"] == "Hel"
             ws.send_text(json.dumps({"message": "Suggest Breakfast", "type": "suggest", "session_id": "s1"}))
-            assert ws.receive_json() == {"type": "done", "content": BUSY_TEXTS["en"], "session_id": "s1"}
+            assert ws.receive_json() == {"type": "busy", "content": BUSY_TEXTS["en"], "session_id": "s1"}
             ws.send_text(json.dumps({"message": "Second", "session_id": "s2"}))
-            assert ws.receive_json() == {"type": "done", "content": BUSY_TEXTS["en"], "session_id": "s2"}
+            assert ws.receive_json() == {"type": "busy", "content": BUSY_TEXTS["en"], "session_id": "s2"}
             assert reply.calls == 1
             ws.send_text(json.dumps({"type": "stop"}))
             _until(ws, "stopped")
@@ -275,8 +275,8 @@ async def test_second_request_on_another_device_gets_the_note(stop_setup):
             assert phone.receive_json()["content"] == "Hel"
             desktop.send_text(json.dumps({"message": "Other", "session_id": "s2"}))
             # The phone's typed message was pushed to the desktop first
-            frames = _until(desktop, "done")
-            assert frames[-1] == {"type": "done", "content": BUSY_TEXTS["tr"], "session_id": "s2"}
+            frames = _until(desktop, "busy")
+            assert frames[-1] == {"type": "busy", "content": BUSY_TEXTS["tr"], "session_id": "s2"}
             assert reply.calls == 1
             # The phone's reply goes on, and the desktop can ask once it's done
             reply.go.set()
@@ -385,3 +385,117 @@ async def test_failed_save_closes_the_socket_and_frees_the_slot(stop_setup):
                 ws.receive_json()
     assert closed.value.code == 1011
     assert not chat_tasks.is_busy(user_id)
+
+
+# A request stopped before its task ever ran still frees the slot (a phone's tap can send Stop right behind Suggest)
+async def test_stop_before_the_task_runs_frees_the_slot():
+    ran = []
+
+    async def work():
+        ran.append(True)
+
+    request = chat_tasks.claim(7, "s1")
+    chat_tasks.start(7, request, work())
+    # No await between start and stop, so the task is cancelled before its first step
+    assert await chat_tasks.stop(request) is True
+    assert ran == []
+    assert not chat_tasks.is_busy(7)
+
+
+# Suggest and Stop sent back to back are both answered, the slot is free, and the next press runs
+async def test_suggest_then_stop_at_once_leaves_the_user_free(stop_setup):
+    app, token, user_id = stop_setup
+    with patch("routers.chat.run_suggestion_pipeline", _quick_pipeline):
+        with open_chat(TestClient(app), token) as ws:
+            ws.send_text(json.dumps({"message": "Suggest Breakfast", "type": "suggest", "session_id": "s1"}))
+            ws.send_text(json.dumps({"type": "stop"}))
+            _until(ws, "stopped")
+            assert not chat_tasks.is_busy(user_id)
+            ws.send_text(json.dumps({"message": "Suggest Breakfast", "type": "suggest", "session_id": "s1"}))
+            frames = _until(ws, "done")
+            assert all(f["type"] != "busy" for f in frames)
+            assert frames[-1]["content"] == "Fine."
+
+
+# A device that got the busy note is told once the running request ends, so it can clear the note
+async def test_busy_device_is_told_when_the_request_ends(stop_setup):
+    app, token, _ = stop_setup
+    reply = _HeldReply()
+
+    with patch("routers.chat.stream_response", reply), TestClient(app) as client:
+        with open_chat(client, token) as phone, open_chat(client, token) as desktop:
+            phone.send_text(json.dumps({"message": "First", "session_id": "s1"}))
+            assert phone.receive_json()["content"] == "Hel"
+            for _ in range(2):
+                desktop.send_text(json.dumps({"message": "Suggest Breakfast", "type": "suggest", "session_id": "s2"}))
+                assert _until(desktop, "busy")[-1]["session_id"] == "s2"
+            reply.go.set()
+            assert _until(phone, "done")[-1]["content"] == "Hello"
+            assert _until(desktop, "request_ended")[-1] == {"type": "request_ended"}
+            # Told once, though it got the note twice: the next frames answer its new message
+            desktop.send_text(json.dumps({"message": "Hi", "session_id": "s2"}))
+            assert "request_ended" not in [f["type"] for f in _until(desktop, "done")]
+
+
+# The busy device is told about a stopped request too
+async def test_busy_device_is_told_when_the_request_is_stopped(stop_setup):
+    app, token, _ = stop_setup
+    reply = _HeldReply()
+
+    with patch("routers.chat.stream_response", reply), TestClient(app) as client:
+        with open_chat(client, token) as phone, open_chat(client, token) as desktop:
+            phone.send_text(json.dumps({"message": "First", "session_id": "s1"}))
+            assert phone.receive_json()["content"] == "Hel"
+            desktop.send_text(json.dumps({"message": "Other", "session_id": "s2"}))
+            _until(desktop, "busy")
+            phone.send_text(json.dumps({"type": "stop"}))
+            _until(phone, "stopped")
+            assert _until(desktop, "request_ended")[-1] == {"type": "request_ended"}
+
+
+async def _retry_pipeline(**kwargs):
+    from services.pipeline import RETRY_TEXTS
+
+    yield {"type": "done", "content": RETRY_TEXTS["en"]}
+
+
+async def _saved_kinds() -> list[tuple]:
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        async with db.execute("SELECT role, kind FROM chat_messages ORDER BY id") as cur:
+            return [tuple(r) for r in await cur.fetchall()]
+
+
+# A press that got the retry note saves it as a notice, and the chat persona's next history leaves it out
+async def test_retry_note_is_saved_as_a_notice_and_read_by_no_persona(stop_setup):
+    from services.pipeline import RETRY_TEXTS
+
+    app, token, _ = stop_setup
+    histories = []
+
+    async def chat_model(system_prompt, history, message, **kwargs):
+        histories.append(history)
+        yield "Sure."
+
+    with patch("routers.chat.run_suggestion_pipeline", _retry_pipeline), patch("routers.chat.stream_response", chat_model):
+        with open_chat(TestClient(app), token) as ws:
+            ws.send_text(json.dumps({"message": "Suggest Breakfast", "type": "suggest", "session_id": "s1"}))
+            assert _until(ws, "done")[-1]["content"] == RETRY_TEXTS["en"]
+            ws.send_text(json.dumps({"message": "Something warm", "session_id": "s1"}))
+            _until(ws, "done")
+
+    assert await _saved_kinds() == [("user", None), ("assistant", "notice"), ("user", None), ("assistant", None)]
+    assert all(m["content"] != RETRY_TEXTS["en"] for m in histories[0])
+
+
+# A chat reply that is a lyric (Ollama down) is saved as a notice, and a real reply is plain
+async def test_lyric_reply_is_a_notice(stop_setup):
+    app, token, _ = stop_setup
+    with patch("routers.chat.stream_response", _unreachable_stream):
+        with open_chat(TestClient(app), token) as ws:
+            ws.send_text(json.dumps({"message": "Hi", "session_id": "s1"}))
+            _until(ws, "done")
+    with patch("routers.chat.stream_response", _quick_reply):
+        with open_chat(TestClient(app), token) as ws:
+            ws.send_text(json.dumps({"message": "Hi again", "session_id": "s1"}))
+            _until(ws, "done")
+    assert await _saved_kinds() == [("user", None), ("assistant", "notice"), ("user", None), ("assistant", None)]

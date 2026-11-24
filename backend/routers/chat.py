@@ -6,6 +6,8 @@ Messages are persisted to chat_messages table for session continuity.
 Each open socket is registered in services/chat_sync, so a saved reply reaches the user's other devices.
 Each request runs as a task the socket can stop ({"type": "stop"}), one per user at a time across their
 devices (services/chat_tasks), and every frame of a reply names its chat (session_id).
+A reply the app wrote instead of the model's (a retry or low-ingredient note, a lyric, the "tap
+Suggest" note) is saved as a notice (chat_messages.kind), which no persona reads (#283).
 """
 
 import asyncio
@@ -48,6 +50,10 @@ TOO_LONG_TEXTS = {
 def _session_id(value) -> str | None:
     """A session id a client sent, or None when it isn't a string of a sane length."""
     return value if isinstance(value, str) and len(value) <= SESSION_ID_MAX else None
+
+
+# chat_messages.kind of a reply the app wrote itself: shown like a reply, read by no persona
+NOTICE = "notice"
 
 
 # Shown when the session is deleted (on another device) while its reply is made: nothing is
@@ -97,11 +103,12 @@ async def _save_suggestion(db, user_id: int, session_id: str, meal_data: dict, l
         return row[0]
 
 
-async def _save_message(db, session_id: str, user_id: int, role: str, content: str) -> int:
-    """Persist a chat message and touch session updated_at. Returns the new message's id."""
+async def _save_message(db, session_id: str, user_id: int, role: str, content: str, kind: str | None = None) -> int:
+    """Persist a chat message and touch session updated_at. Returns the new message's id.
+    kind NOTICE marks a note the app wrote, kept out of every persona's input."""
     cur = await db.execute(
-        "INSERT INTO chat_messages (session_id, user_id, role, content) VALUES (?, ?, ?, ?)",
-        (session_id, user_id, role, content),
+        "INSERT INTO chat_messages (session_id, user_id, role, content, kind) VALUES (?, ?, ?, ?, ?)",
+        (session_id, user_id, role, content, kind),
     )
     # The session id comes from the client, so only the user's own session is touched
     await db.execute(
@@ -118,15 +125,15 @@ async def _load_session_history(db, session_id: str, user_id: int) -> list[dict]
     a message and its reply are saved in the same second, so by time a reply came before its message."""
     async with db.execute(
         """
-        SELECT role, content FROM chat_messages
-        WHERE session_id = ? AND user_id = ?
+        SELECT role, content, kind FROM chat_messages
+        WHERE session_id = ? AND user_id = ? AND kind IS NULL
         ORDER BY id DESC LIMIT 20
         """,
         (session_id, user_id),
     ) as cur:
         rows = await cur.fetchall()
     # Reverse to chat order
-    return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
+    return [{"role": r["role"], "content": r["content"], "kind": r["kind"]} for r in reversed(rows)]
 
 
 @router.websocket("/chat")
@@ -168,10 +175,20 @@ async def chat_endpoint(websocket: WebSocket):
         return cached_context.get("language", "en")
 
     async def send_note(texts: dict, note_session: str | None) -> None:
-        """Answer this device with a short note in the reply language (too long, busy): it ends the
+        """Answer this device with a short note in the reply language (too long): it ends the
         device's wait like a reply, reaches no model and isn't saved."""
         content = in_language(texts, await reply_language())
         await send_live({"type": "done", "content": content, "session_id": note_session})
+
+    async def send_busy(note_session: str | None) -> None:
+        """Answer a request refused while the user's last one runs: a busy notice, shown once on this
+        device and never saved, then {"type": "request_ended"} once that request ends (right after
+        the notice when it ended meanwhile), so the device clears it."""
+        content = in_language(chat_tasks.BUSY_TEXTS, await reply_language())
+        still_running = chat_tasks.watch(user_id, websocket)
+        await send_live({"type": "busy", "content": content, "session_id": note_session})
+        if not still_running:
+            await send_live({"type": "request_ended"})
 
     async def answer(request: chat_tasks.Request, prompt_type: str, user_message: str, language: str, work) -> None:
         """Make one reply as the request's task, then save and send it. `work` is the pipeline's events
@@ -182,6 +199,8 @@ async def chat_endpoint(websocket: WebSocket):
         sid = request.session_id
         try:
             response_text = ""
+            # The app wrote this reply itself, with no words of the model's: saved as a notice
+            notice = False
             if prompt_type == "suggest":
                 try:
                     async for event in work:
@@ -205,18 +224,24 @@ async def chat_endpoint(websocket: WebSocket):
                     response_text = "".join(full_response)
                 except LLMUnavailableError:
                     response_text = lyric_cycler.next()
+                    notice = True
                 except Exception:
                     logging.exception("Chat reply failed; replying with a lyric")
                     response_text = lyric_cycler.next()
+                    notice = True
                 # Meal cards come only from a Suggest press (#168): a chat reply keeps the text before
                 # any meal block, or points to Suggest when the block was all it wrote
-                response_text = drop_meal_block(response_text) or in_language(CHAT_SUGGEST_TEXTS, language)
+                kept = drop_meal_block(response_text)
+                notice = notice or not kept
+                response_text = kept or in_language(CHAT_SUGGEST_TEXTS, language)
 
             # The reply is made: from here Stop waits for the save instead of cutting it in half
             request.saving = True
 
             # A Suggest reply's ```json meal block is saved as a suggestion and becomes a new meal card
             meal_data = extract_json_block(response_text) if prompt_type == "suggest" else None
+            # A Suggest press without a meal got a note (retry, low ingredients, a lyric), not a menu
+            notice = notice or (prompt_type == "suggest" and not meal_data)
             saved_text = response_text
             async with get_db() as db:
                 still_owned = await owns_session(db, sid, user_id)
@@ -244,7 +269,7 @@ async def chat_endpoint(websocket: WebSocket):
             async with get_db() as db:
                 if prompt_type == "suggest":
                     await _save_message(db, sid, user_id, "user", user_message)
-                message_id = await _save_message(db, sid, user_id, "assistant", saved_text)
+                message_id = await _save_message(db, sid, user_id, "assistant", saved_text, NOTICE if notice else None)
                 if meal_data:
                     await db.execute(
                         "UPDATE chat_sessions SET selected_message_id = ? WHERE id = ? AND user_id = ?",
@@ -272,9 +297,8 @@ async def chat_endpoint(websocket: WebSocket):
                 await websocket.close(code=1011)
             except Exception:
                 pass
-        finally:
-            # Finished, failed, stopped or saved without its device: the slot is free again
-            chat_tasks.release(user_id, request)
+        # Finished, failed, stopped or saved without its device: the task's done callback frees the
+        # slot (chat_tasks.start), since a task stopped before it began never runs a finally here
 
     try:
         while True:
@@ -365,7 +389,7 @@ async def chat_endpoint(websocket: WebSocket):
             # One request per user at a time, on any of their devices: another one gets a note
             request = chat_tasks.claim(user_id, session_id)
             if request is None:
-                await send_note(chat_tasks.BUSY_TEXTS, session_id)
+                await send_busy(session_id)
                 if not client_live:
                     break
                 continue
@@ -413,10 +437,12 @@ async def chat_endpoint(websocket: WebSocket):
                         system_prompt, conversation_history, build_chat_message(user_message, language),
                         temperature=temperature, task="chat", language=language,
                     )
-                request.task = asyncio.create_task(answer(request, prompt_type, user_message, language, work))
+                chat_tasks.start(user_id, request, answer(request, prompt_type, user_message, language, work))
                 current = request
             except BaseException:
-                chat_tasks.release(user_id, request)
+                # Never started, so no done callback: end it here (its watchers are told too)
+                if request.task is None:
+                    chat_tasks.ended(user_id, request)
                 raise
 
     except WebSocketDisconnect:
