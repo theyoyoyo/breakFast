@@ -80,15 +80,7 @@ Anything still missing stays on the card, marked yellow, so you can get it. Code
 
 **When Ollama is down,** the AI features answer with a line from a short list of song lyrics instead of an error.
 
-### Engineering highlights
-
-- **Structured outputs.** The draft, the review and the shopping suggestions use Ollama's JSON schema mode, so the reply has the right shape. The reviser's ingredient names are limited to the fridge, so a swap can only bring in what you have.
-- **Code checks, not prompt policing.** Anything code can verify (fridge membership, the avoid list, units, JSON shape) is checked in code with exact name matching. Prompts state each rule once, with a short reason.
-- **Prompt test harness.** `backend/tools/prompt_check.py` runs the real prompts against a real model for a set of sample users and scores every reply in code. It covers suggestions, the review, shopping suggestions, chat replies and prep plans. Every run is logged and compared with the best earlier run, so a prompt change that scores worse is caught. The same harness compares candidate models.
-- **Deterministic scheduling.** The model estimates; tested Python code does the timing.
-- **Database migrations.** Numbered steps tracked with SQLite's `user_version`, each applied in one transaction. A database with data is backed up and integrity-checked before any step runs.
-- **Live sync.** Each user's open WebSocket connections get a small push when something changes, so other devices reload only what changed. No polling.
-- **Tests and CI.** pytest (with Ollama faked), Vitest, ruff and ESLint run on GitHub Actions for every pull request.
+More about how it is built (the personas, the engineering highlights and the project structure) is in [Architecture](docs/ARCHITECTURE.md).
 
 ---
 
@@ -208,67 +200,22 @@ The prompt test needs a running Ollama: `python -m tools.prompt_check` from `bac
 
 ---
 
-## Configuration
-
-All backend settings are environment variables, documented in [`.env.example`](.env.example).
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server |
-| `OLLAMA_MODEL` | `gemma4:e4b-it-qat` | Model for every call without its own |
-| `OLLAMA_MODEL_<KEY>` | none | A model for one task (`CHAT`, `SUGGESTION`, `REVIEW`, `ANALYST`, `SHOPPING`, `PLAN`, `WEEKLY`) or reply language (`EN`, `TR`) |
-| `OLLAMA_THINK`, `OLLAMA_THINK_<KEY>` | none | Ollama's think setting, `true` or `false`, for models that can think |
-| `OLLAMA_NUM_CTX` | `8192` | Context length sent with every call |
-| `OLLAMA_TIMEOUT` | `150` | Seconds a call may wait for Ollama |
-| `DATABASE_PATH` | `./breakFAST.db` | SQLite file, relative to `backend/` |
-| `CORS_ORIGINS` | `*` | Comma-separated allowed origins |
-| `SERVE_FRONTEND` | `false` | Serve `frontend/dist` from FastAPI |
-| `API_DOCS` | `false` | Serve `/docs`, `/redoc` and `/openapi.json` |
-| `DEMO_USER` | `false` | Create a `demo` user with an empty PIN and a starter fridge |
-
----
-
 ## Security
 
-break FAST is built for a trusted home network (LAN or Tailscale), not the open internet.
-
-- Login is a name and a numeric PIN, stored as a salted scrypt hash.
-- Logins are rate-limited with exponential backoff.
-- Session tokens are random, kept in memory and sent only in headers, never in URLs. Logging out ends that device's session on the server; a restart logs everyone out.
-- Every query is scoped to the logged-in user, with explicit session ownership validation.
-- Every request has size limits: text, lists, numbers and whole bodies are bounded, and a request over a limit is refused before it reaches the database or the model.
-- Error replies are fixed messages that never include exception text, stack traces or file paths.
-- Do not expose the server port to the public internet. Use Tailscale for remote access.
+break FAST is built for a trusted home network (LAN or Tailscale), not the open internet. Do not expose the server port publicly; use Tailscale for remote access. The [security model](docs/SECURITY_MODEL.md) describes login, sessions, request limits and error handling.
 
 ---
 
-## Project structure
+## Documentation
 
-```text
-breakFast/
-├── backend/
-│   ├── main.py, config.py    FastAPI app and settings
-│   ├── database.py           SQLite schema and migrations
-│   ├── auth.py, manage.py    PIN login, sessions and the admin CLI
-│   ├── routers/              one module per API area (chat WebSocket, meals, fridge, ...)
-│   ├── services/
-│   │   ├── personas/         one file per LLM persona
-│   │   ├── pipeline.py       draft → review → present
-│   │   ├── prep_plan.py      prep plan scheduling
-│   │   └── llm.py            Ollama calls and the lyric fallback
-│   ├── models/               request models, units, groups, appliances, limits
-│   ├── data/                 built-in food list
-│   ├── tools/                prompt test, model tests, model picker
-│   └── tests/                pytest suite
-├── frontend/
-│   ├── src/                  React app (components, hooks, services/api.js)
-│   ├── brand/                logo master files
-│   └── public/               PWA icons and favicons
-├── docs/                     server setup guide, model notes, screenshots
-├── .github/workflows/        CI
-├── CLAUDE.md                 product decisions and conventions
-└── setup.bat, start.bat, start-server.bat
-```
+| Guide | What is in it |
+|---|---|
+| [Architecture](docs/ARCHITECTURE.md) | The personas, engineering highlights and project structure |
+| [Configuration](docs/CONFIGURATION.md) | Every environment variable, and how to choose models |
+| [Security model](docs/SECURITY_MODEL.md) | Login, sessions, request limits and error handling |
+| [Server setup guide](docs/SETUPALL.md) | A step-by-step guide for a dedicated Windows server |
+| [Model picker](docs/MODEL_PICKER.md) | Pick the model for each task and reply language |
+| [Model tests](docs/MODEL_TESTS.md) | Candidate models and how they are compared |
 
 ---
 
