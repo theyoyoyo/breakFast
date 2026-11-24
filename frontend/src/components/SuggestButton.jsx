@@ -50,18 +50,20 @@ export default function SuggestButton({ onSuggest, disabled }) {
     onSuggest()
   }, [panelOpen, onSuggest])
 
-  const handlePointerUp = useCallback(() => {
-    clearTimeout(timerRef.current)
-    if (!longPressedRef.current && !disabled) tap()
-  }, [disabled, tap])
-
-  const handlePointerLeave = useCallback(() => {
+  const endPress = useCallback(() => {
     clearTimeout(timerRef.current)
   }, [])
 
-  // Enter or Space on the focused button (a click with no pointer behind it) suggests too
-  const handleClick = useCallback((e) => {
-    if (e.detail === 0 && !disabled) tap()
+  // A tap acts on its click, the last event of a tap, never on pointerup: the press swaps this
+  // button for Stop, and a phone sends the tap's click to whatever is under the finger by then,
+  // which would stop the press it just sent (#283). The click after a long press is the press's own
+  // end, so it does nothing. Enter or Space on the focused button clicks too.
+  const handleClick = useCallback(() => {
+    if (longPressedRef.current) {
+      longPressedRef.current = false
+      return
+    }
+    if (!disabled) tap()
   }, [disabled, tap])
 
   const handleMode = useCallback((mode) => {
@@ -100,8 +102,8 @@ export default function SuggestButton({ onSuggest, disabled }) {
         type="button"
         className="flex touch-none select-none items-center justify-center border-0 bg-transparent p-0 transition-transform active:scale-[0.92] disabled:cursor-not-allowed disabled:opacity-40"
         onPointerDown={handlePointerDown}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerLeave}
+        onPointerUp={endPress}
+        onPointerLeave={endPress}
         onClick={handleClick}
         disabled={disabled}
         title="Suggest breakfast (hold: modes)"

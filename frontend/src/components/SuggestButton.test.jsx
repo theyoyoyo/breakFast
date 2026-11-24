@@ -15,19 +15,31 @@ function longPress() {
   fireEvent.pointerDown(button())
   act(() => vi.advanceTimersByTime(1000))
   fireEvent.pointerUp(button())
+  fireEvent.click(button())
   vi.useRealTimers()
 }
 
 describe('SuggestButton', () => {
   afterEach(() => vi.useRealTimers())
 
-  // A short tap suggests a breakfast with no mode
+  // A short tap suggests a breakfast with no mode, on its click
   it('suggests on a tap', () => {
     const onSuggest = vi.fn()
     render(<SuggestButton onSuggest={onSuggest} />)
     fireEvent.pointerDown(button())
     fireEvent.pointerUp(button())
+    expect(onSuggest).not.toHaveBeenCalled()
+    fireEvent.click(button())
+    expect(onSuggest).toHaveBeenCalledTimes(1)
     expect(onSuggest).toHaveBeenCalledWith()
+  })
+
+  // Enter or Space on the focused button clicks it with no pointer behind, and suggests too
+  it('suggests from the keyboard', () => {
+    const onSuggest = vi.fn()
+    render(<SuggestButton onSuggest={onSuggest} />)
+    fireEvent.click(button(), { detail: 0 })
+    expect(onSuggest).toHaveBeenCalledTimes(1)
   })
 
   // A long press reveals the two modes instead of suggesting, and a pick suggests in that mode
@@ -56,7 +68,7 @@ describe('SuggestButton', () => {
     const onSuggest = vi.fn()
     render(<SuggestButton onSuggest={onSuggest} disabled />)
     longPress()
-    fireEvent.pointerUp(button())
+    fireEvent.click(button())
     expect(onSuggest).not.toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: 'Explore world cuisines' })).toBeNull()
   })

@@ -58,6 +58,16 @@ export const thinking = (side) => ({
   padding: '6px 4px',
 })
 
+// The short notice that the user's last request still runs: on the assistant's side, apart from the chat
+export const busyNote = {
+  alignSelf: 'flex-start',
+  color: 'var(--text-muted)',
+  fontSize: 13,
+  fontStyle: 'italic',
+  padding: '6px 4px',
+  maxWidth: '85%',
+}
+
 // The small note under a reply stopped part way
 export const stoppedNote = {
   alignSelf: 'flex-start',

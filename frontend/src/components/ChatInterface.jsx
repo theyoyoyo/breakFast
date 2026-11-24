@@ -129,8 +129,14 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
   // The chat that request belongs to: its reply shows only there, and stays there after a switch
   const [requestSession, setRequestSession] = useState(null)
   const requestSessionRef = useRef(null)
+  // True from a send until its request ends, read at once: two taps before the next render send once
+  const requestActiveRef = useRef(false)
   // The reply on its way answers a Suggest press: its progress shows on the user's side
   const [pendingSuggest, setPendingSuggest] = useState(false)
+  // The note that the user's last request still runs (here or on another device): { content, sessionId }.
+  // Shown once under its chat, never saved and kept apart from the messages, so a reload or a tab
+  // switch keeps it; it goes when the server says that request ended, or when the socket closes
+  const [busyNote, setBusyNote] = useState(null)
   // New, Delete, Back or Next running: the others wait (their buttons are off) until it's done
   const [sessionBusy, setSessionBusy] = useState(false)
   const sessionBusyRef = useRef(false)
@@ -328,6 +334,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
 
   // This device's request has ended: nothing on its way any more
   const endRequest = useCallback(() => {
+    requestActiveRef.current = false
     setStreamBuffer(null)
     setPendingSuggest(false)
     setPipelineStep(null)
@@ -403,6 +410,8 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
         if (wsRef.current !== ws) return
         endRequest()
         setConnected(false)
+        // Nor can the word that the running request ended, so its note goes now
+        setBusyNote(null)
         // A stopped request's confirmation can't arrive on this socket any more
         abortedRef.current = false
         stoppedLateRef.current = false
@@ -426,6 +435,14 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       onProgress: (step) => {
         if (!abortedRef.current) setPipelineStep(step)
       },
+      // This device's request was refused: the user's last one still runs. The wait for it ends, and
+      // the note replaces any earlier one, so repeated presses show it once
+      onBusy: (content, sessionId) => {
+        endRequest()
+        setBusyNote({ content, sessionId: sessionId ?? null })
+      },
+      // The request that made the note has ended (finished or stopped, on any device)
+      onRequestEnded: () => setBusyNote(null),
       // A session changed elsewhere: reload it if it's on screen, else only Back / Next may have changed
       onSessionUpdated: (changedId) => {
         if (changedId === sessionIdRef.current) setSyncPending(true)
@@ -480,7 +497,8 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
 
   const sendMessage = useCallback((text, type = 'chat', mode = null) => {
     const msg = text.trim()
-    if (!msg || streamBuffer !== null || analyzingIdx !== null) return
+    if (!msg || requestActiveRef.current || streamBuffer !== null || analyzingIdx !== null) return
+    requestActiveRef.current = true
 
     setMessages((prev) => [...prev, { role: 'user', content: msg }])
     setInput('')
@@ -804,6 +822,9 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
         )}
         {analyzingIdx !== null && (
           <div style={s.thinking('assistant')}>Analyzing…</div>
+        )}
+        {busyNote && (busyNote.sessionId === null || busyNote.sessionId === sessionId) && (
+          <div role="status" style={s.busyNote}>{busyNote.content}</div>
         )}
 
         <div ref={messagesEndRef} />
