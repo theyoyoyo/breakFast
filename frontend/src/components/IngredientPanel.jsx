@@ -468,8 +468,9 @@ function IngredientPanel({ refreshTrigger, visible }) {
   // Expired, or expiring within EXPIRING_DAYS: counted in red beside each group's count
   const isExpiring = (dateStr) => {
     if (!dateStr) return false
-    const soon = new Date(Date.now() + EXPIRING_DAYS * 86400000).toISOString().split('T')[0]
-    return dateStr <= soon
+    const soon = new Date()
+    soon.setDate(soon.getDate() + EXPIRING_DAYS)
+    return dateStr <= soon.toISOString().split('T')[0]
   }
 
   // Count of expired items the user previously acknowledged ("kept")

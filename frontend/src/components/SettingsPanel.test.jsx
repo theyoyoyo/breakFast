@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react'
 import SettingsPanel from './SettingsPanel'
 import * as api from '../services/api'
 import { emitSyncNotice } from '../hooks/useSyncNotice'
@@ -324,5 +324,16 @@ describe('SettingsPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     expect(await screen.findByText('Failed to delete old meals')).toBeInTheDocument()
     expect(api.getMeals).not.toHaveBeenCalled()
+  })
+
+  // Appearance and Theme are one section: light, dark or Auto on top and the color theme below, each title with its icon
+  it('shows light, dark and the theme in one Appearance section', async () => {
+    render(<SettingsPanel visible />)
+    const title = await screen.findByText('Appearance')
+    const section = title.parentElement
+    expect(within(section).getByRole('button', { name: 'Light' })).toBeInTheDocument()
+    expect(within(section).getByRole('button', { name: 'Orange' })).toBeInTheDocument()
+    expect(title.querySelector('svg')).not.toBeNull()
+    expect(screen.getByText('AI settings').querySelector('svg')).not.toBeNull()
   })
 })
