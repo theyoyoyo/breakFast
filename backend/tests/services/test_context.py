@@ -117,6 +117,22 @@ async def test_nutrients_from_a_recent_analysis_only(client, db):
     assert (await load_chat_context(db, user_id))["nutrients"] is None
 
 
+# The shopping context reads the nutrients of an analysis from the last 7 days only (#207)
+async def test_shopping_nutrients_from_a_recent_analysis_only(client, db):
+    from services.context import load_shopping_context
+
+    async with db.execute("SELECT id FROM users WHERE name = 'testuser'") as cur:
+        user_id = (await cur.fetchone())[0]
+    assert (await load_shopping_context(db, user_id))["nutrients"] is None
+
+    await _weekly_analysis(db, user_id, days_ago=3)
+    assert (await load_shopping_context(db, user_id))["nutrients"] == {"lacking": ["fiber"], "more_than_enough": ["sugar"]}
+
+    await db.execute("UPDATE weekly_summaries SET created_at = datetime('now', '-8 days')")
+    await db.commit()
+    assert (await load_shopping_context(db, user_id))["nutrients"] is None
+
+
 # The Settings switch governs only the weekly narrative; the nutrients reach the suggestions either way
 async def test_weekly_switch_governs_only_the_narrative(client, db):
     from services.context import load_chat_context

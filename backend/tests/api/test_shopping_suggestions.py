@@ -137,3 +137,36 @@ async def test_brought_back_item_may_be_suggested_again(client):
     with _llm(_reply("Salmon", "Kiwi")):
         data = await _suggest(client)
     assert [s["name"] for s in data["suggestions"]] == ["Salmon", "Kiwi"]
+
+
+async def _weekly_analysis(db, days_ago: int):
+    """An analysis of the test user's meals run `days_ago` days ago: fiber lacking, sugar more than enough."""
+    await db.execute(
+        "INSERT INTO weekly_summaries (user_id, week_key, narrative, scores, created_at, lacking, more_than_enough) "
+        "SELECT id, 'w', 'A sweet week', '[]', datetime('now', ?), '[\"fiber\"]', '[\"sugar\"]' "
+        "FROM users WHERE name = 'testuser'",
+        (f"-{days_ago} days",),
+    )
+    await db.commit()
+
+
+# Suggest Shopping and Suggest More both get the nutrients of an analysis from the last 7 days (#207)
+async def test_recent_analysis_nutrients_reach_every_press(client, db):
+    await _weekly_analysis(db, days_ago=2)
+    with _llm(_reply("Salmon"), _reply("Kiwi")) as llm:
+        await _suggest(client)
+        await _suggest(client, exclude=["Salmon"])
+    for call in llm.call_args_list:
+        assert "lacking fiber; more than enough sugar." in call.kwargs["system_prompt"]
+
+
+# An analysis older than 7 days, or none, gives the shopping prompt no nutrient line (#207)
+async def test_no_nutrient_line_without_a_recent_analysis(client, db):
+    with _llm(_reply("Salmon")) as llm:
+        await _suggest(client)
+    assert "Nutrients in recent breakfasts" not in llm.call_args.kwargs["system_prompt"]
+
+    await _weekly_analysis(db, days_ago=8)
+    with _llm(_reply("Salmon")) as llm:
+        await _suggest(client)
+    assert "Nutrients in recent breakfasts" not in llm.call_args.kwargs["system_prompt"]

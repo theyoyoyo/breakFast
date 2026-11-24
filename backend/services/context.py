@@ -157,10 +157,7 @@ async def load_chat_context(db, user_id: int) -> dict:
         {"narrative": analysis["narrative"], "scores": analysis["scores"]}
         if analysis and use_weekly_summary else None
     )
-    nutrients = (
-        {"lacking": analysis["lacking"], "more_than_enough": analysis["more_than_enough"]}
-        if analysis else None
-    )
+    nutrients = _nutrients(analysis)
 
     return {
         "ingredients": ingredients,
@@ -228,6 +225,13 @@ async def fetch_dishes(db, user_id: int) -> list[str]:
     return dish_names(meals)
 
 
+def _nutrients(analysis: dict | None) -> dict | None:
+    """The two nutrient lists of an analysis (services.weekly.fetch_recent_analysis), or None."""
+    if not analysis:
+        return None
+    return {"lacking": analysis["lacking"], "more_than_enough": analysis["more_than_enough"]}
+
+
 async def load_shopping_context(db, user_id: int) -> dict:
     """Load full context for the shopping persona. Saved favorite meals stand where recent meals
     were: they're the meals the user chose to keep."""
@@ -235,7 +239,7 @@ async def load_shopping_context(db, user_id: int) -> dict:
         ingredients, favorite_meals, prefs,
         (stated_habits, inferred_habits),
         health_rules, user_profile, supplements,
-        shopping_list, favorites, ratings, dishes,
+        shopping_list, favorites, ratings, dishes, analysis,
     ) = await asyncio.gather(
         fetch_ingredients(db, user_id),
         fetch_favorite_meals(db, user_id),
@@ -248,6 +252,8 @@ async def load_shopping_context(db, user_id: int) -> dict:
         fetch_favorite_ingredients(db, user_id),
         fetch_ratings(db, user_id),
         fetch_dishes(db, user_id),
+        # The latest weekly analysis of the last 7 days: its nutrients go in every press (#207)
+        fetch_recent_analysis(db, user_id),
     )
     avoid_list = [v for k, v in prefs.items() if k.startswith("avoid:")]
     filtered_prefs = _food_preferences(prefs)
@@ -265,6 +271,7 @@ async def load_shopping_context(db, user_id: int) -> dict:
         "supplements": supplements,
         "avoid_list": avoid_list,
         "shopping_list": shopping_list,
+        "nutrients": _nutrients(analysis),
         "favorites": favorites,
         "ratings": ratings,
         "country": (user_profile or {}).get("country"),
