@@ -197,6 +197,18 @@ async def chat_endpoint(websocket: WebSocket):
         The user's slot is freed however the task ends."""
         nonlocal session_id, cached_context
         sid = request.session_id
+
+        async def send_reply(event: dict) -> None:
+            """Send a frame of this reply to this device and to the user's sockets that opened while it
+            runs (a reloaded device, #287), and note where the reply stands for the next one to open."""
+            if event["type"] == "progress":
+                request.step = event.get("step")
+            elif event["type"] == "token":
+                request.content += event.get("content", "")
+            await send_live(event)
+            for follower in list(request.followers):
+                await chat_sync.send_to(follower, event)
+
         try:
             response_text = ""
             # The app wrote this reply itself, with no words of the model's: saved as a notice
@@ -205,7 +217,7 @@ async def chat_endpoint(websocket: WebSocket):
                 try:
                     async for event in work:
                         if event["type"] in ("progress", "token"):
-                            await send_live({**event, "session_id": sid})
+                            await send_reply({**event, "session_id": sid})
                         elif event["type"] == "done":
                             response_text = event["content"]
                 except LLMUnavailableError:
@@ -220,7 +232,7 @@ async def chat_endpoint(websocket: WebSocket):
                 try:
                     async for chunk in work:
                         full_response.append(chunk)
-                        await send_live({"type": "token", "content": chunk, "session_id": sid})
+                        await send_reply({"type": "token", "content": chunk, "session_id": sid})
                     response_text = "".join(full_response)
                 except LLMUnavailableError:
                     response_text = lyric_cycler.next()
@@ -250,7 +262,7 @@ async def chat_endpoint(websocket: WebSocket):
                 chat_tasks.release(user_id, request)
                 if session_id == sid:
                     session_id = None
-                await send_live({"type": "error", "code": "session_not_found", "message": SESSION_GONE_TEXT, "session_id": sid})
+                await send_reply({"type": "error", "code": "session_not_found", "message": SESSION_GONE_TEXT, "session_id": sid})
                 return
             if meal_data:
                 async with get_db() as db:
@@ -284,10 +296,10 @@ async def chat_endpoint(websocket: WebSocket):
             await chat_sync.notify_session_updated(user_id, sid, exclude=websocket)
 
             # message_id lets this device save later meal card edits into the message
-            await send_live({"type": "done", "content": response_text, "message_id": message_id, "session_id": sid})
+            await send_reply({"type": "done", "content": response_text, "message_id": message_id, "session_id": sid})
 
             if meal_data:
-                await send_live({"type": "meal_logged", "meal": meal_data, "session_id": sid})
+                await send_reply({"type": "meal_logged", "meal": meal_data, "session_id": sid})
                 cached_context = None
         except Exception:
             # Unexpected (the database, say): the socket closes, as it did before requests ran as
@@ -297,10 +309,19 @@ async def chat_endpoint(websocket: WebSocket):
                 await websocket.close(code=1011)
             except Exception:
                 pass
+            # The sockets that picked it up stop waiting as for a Stop, and reload the chat
+            for follower in list(request.followers):
+                await chat_sync.send_to(follower, {"type": "stopped", "session_id": sid})
         # Finished, failed, stopped or saved without its device: the task's done callback frees the
         # slot (chat_tasks.start), since a task stopped before it began never runs a finally here
 
     try:
+        # A request of the user's still running (this device reloaded while it ran, or another device
+        # sent it): this socket is told where it stands and gets its frames from now on (#287)
+        running = chat_tasks.follow(user_id, websocket)
+        if running is not None:
+            await send_live(running)
+
         while True:
             raw = await websocket.receive_text()
             if len(raw) > CHAT_FRAME_MAX:
@@ -319,15 +340,17 @@ async def chat_endpoint(websocket: WebSocket):
             # Stop: the user's running request ends (its model call is closed, nothing more is saved), and
             # the device is told once it has, so every frame of that request comes before this one. It
             # may run on another device: a device that got the busy note shows Stop for it, so "still
-            # working" always comes with a way to end it, and the request's own device is told too.
+            # working" always comes with a way to end it, and the request's own device is told too, as is
+            # every socket that picked it up when it opened (#287).
             if payload.get("type") == "stop":
                 stopped = chat_tasks.running(user_id) or current
                 current = None
                 if stopped is not None:
                     # Its slot is free once this returns, even when the task was stopped before it began
                     await chat_tasks.stop(stopped)
-                    if stopped.websocket is not None and stopped.websocket is not websocket:
-                        await chat_sync.send_to(stopped.websocket, {"type": "stopped", "session_id": stopped.session_id})
+                    for other in [stopped.websocket, *stopped.followers]:
+                        if other is not None and other is not websocket:
+                            await chat_sync.send_to(other, {"type": "stopped", "session_id": stopped.session_id})
                 await send_live({"type": "stopped", "session_id": stopped.session_id if stopped else None})
                 if not client_live:
                     break
@@ -393,7 +416,7 @@ async def chat_endpoint(websocket: WebSocket):
                 continue
 
             # One request per user at a time, on any of their devices: another one gets a note
-            request = chat_tasks.claim(user_id, session_id, websocket)
+            request = chat_tasks.claim(user_id, session_id, websocket, "suggest" if prompt_type == "suggest" else "chat")
             if request is None:
                 await send_busy(session_id)
                 if not client_live:
@@ -455,6 +478,7 @@ async def chat_endpoint(websocket: WebSocket):
         pass
     finally:
         chat_sync.unregister(user_id, websocket)
+        chat_tasks.unfollow(user_id, websocket)
         # A device that drops mid-reply without Stop: the reply still finishes and is saved
         if current is not None and current.task is not None and not current.task.done():
             await asyncio.wait({current.task})

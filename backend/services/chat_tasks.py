@@ -8,6 +8,11 @@ was stopped or its device dropped. A request that finds the slot taken gets BUSY
 which reaches no model and isn't saved: the device shows it as a short notice, and every socket
 that got one is told {"type": "request_ended"} once the running request ends (#283).
 
+A device that reloads while its request runs opens a new socket, which the request's frames didn't
+go to (#287). So the request keeps its kind, latest progress step and words so far, and a socket of
+the user's that opens meanwhile `follow`s it: one {"type": "running", "session_id", "kind", "step",
+"content"} frame says where the request stands, and the rest of its frames reach that socket too.
+
 The slot is freed by the task's done callback (`start`), not by code inside the task: a Stop that
 comes right after its request (a phone's tap sends the click to the Stop button that replaced
 Suggest) cancels the task before it has run, and a coroutine cancelled then never runs its own
@@ -35,6 +40,14 @@ class Request:
     session_id: str
     # The socket that sent it: told when another of the user's devices stops it
     websocket: WebSocket | None = None
+    # "suggest" (a Suggest press) or "chat" (a typed message's reply)
+    kind: str = "chat"
+    # The latest pipeline step sent ("drafting"…), or None before the first one
+    step: str | None = None
+    # The reply's words sent so far
+    content: str = ""
+    # The user's sockets opened while it runs (a reloaded device): they get its frames too
+    followers: list[WebSocket] = field(default_factory=list)
     task: asyncio.Task | None = None
     # True once the reply is made and being saved: Stop no longer cancels it, so the save is whole
     saving: bool = False
@@ -46,12 +59,12 @@ class Request:
 _running: dict[int, Request] = {}
 
 
-def claim(user_id: int, session_id: str, websocket: WebSocket | None = None) -> Request | None:
+def claim(user_id: int, session_id: str, websocket: WebSocket | None = None, kind: str = "chat") -> Request | None:
     """Take the user's slot for a new request, or None when one of theirs already runs.
     Synchronous, so two devices can't both take it."""
     if user_id in _running:
         return None
-    request = Request(session_id=session_id, websocket=websocket)
+    request = Request(session_id=session_id, websocket=websocket, kind=kind)
     _running[user_id] = request
     return request
 
@@ -97,6 +110,29 @@ def watch(user_id: int, websocket: WebSocket) -> bool:
     if not any(ws is websocket for ws in request.watchers):
         request.watchers.append(websocket)
     return True
+
+
+def follow(user_id: int, websocket: WebSocket) -> dict | None:
+    """A socket of the user's opened: when one of their requests runs, it gets that request's frames
+    from now on, and the returned {"type": "running", …} frame says where the request stands.
+    Synchronous, so no frame goes out between the snapshot and the socket joining. None when no
+    request runs, or its reply is made and being saved (session_updated brings it then)."""
+    request = _running.get(user_id)
+    if request is None or request.saving:
+        return None
+    if not any(ws is websocket for ws in request.followers):
+        request.followers.append(websocket)
+    return {
+        "type": "running", "session_id": request.session_id, "kind": request.kind,
+        "step": request.step, "content": request.content,
+    }
+
+
+def unfollow(user_id: int, websocket: WebSocket) -> None:
+    """A closed socket stops getting the running request's frames."""
+    request = _running.get(user_id)
+    if request is not None:
+        request.followers = [ws for ws in request.followers if ws is not websocket]
 
 
 def release(user_id: int, request: Request) -> None:
