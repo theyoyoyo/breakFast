@@ -42,6 +42,15 @@ async def notify_user(user_id: int, notice: dict, exclude: WebSocket | None = No
             unregister(user_id, websocket)
 
 
+async def send_to(websocket: WebSocket, frame: dict) -> None:
+    """Send one frame to one socket, ignoring a socket that has gone."""
+    try:
+        await websocket.send_json(frame)
+    except Exception:
+        # Gone without a clean disconnect yet: its device reloads when it reconnects
+        return
+
+
 async def notify_session_updated(user_id: int, session_id: str, exclude: WebSocket | None = None) -> None:
     """Tell the user's open chat sockets, except `exclude`, that a session's messages changed."""
     await notify_user(user_id, {"type": "session_updated", "session_id": session_id}, exclude)

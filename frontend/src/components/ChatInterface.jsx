@@ -391,6 +391,12 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       // The server has ended the stopped request, so all its frames are in: this device's next
       // request shows again, and one that had been saved already reloads the chat
       onStopped: () => {
+        if (!abortedRef.current && requestActiveRef.current) {
+          // Stopped from another of the user's devices: nothing more comes, and the chat reloads
+          // (a typed message stays saved)
+          endRequest()
+          setSyncPending(true)
+        }
         abortedRef.current = false
         setAborted(false)
         if (stoppedLateRef.current) {
@@ -639,6 +645,12 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
         setMessages((msgs) => [...msgs, { role: 'assistant', content: partial, stopped: true }])
       }
       endRequest()
+    } else if (busyNote && wsRef.current?.readyState === WebSocket.OPEN) {
+      // The user's request runs elsewhere (another device, or this one before its socket reopened):
+      // the server stops it, and the note goes once it has ended
+      abortedRef.current = true
+      setAborted(true)
+      wsRef.current.send(JSON.stringify({ type: 'stop' }))
     }
     // Cancel ongoing analysis
     if (analyzeAbortRef.current) {
@@ -647,7 +659,7 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       setAnalyzingIdx(null)
       setMessages(prev => [...prev, { role: 'assistant', content: '📊 [Analysis stopped]' }])
     }
-  }, [streamBuffer, endRequest])
+  }, [streamBuffer, busyNote, endRequest])
 
   const handleSuggest = useCallback((mode) => {
     sendMessage(SUGGEST_MESSAGES[mode] || SUGGEST_MESSAGES.default, 'suggest', mode || null)
@@ -733,8 +745,9 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     }
   }, [])
 
-  // True when anything is busy (this device's request in any chat, analyzing, or scheduling)
-  const isBusy = streamBuffer !== null || analyzingIdx !== null || schedulingIdx !== null
+  // True when anything is busy (this device's request in any chat, the user's request on another
+  // device while its busy note shows, analyzing, or scheduling): the bar shows Stop
+  const isBusy = streamBuffer !== null || busyNote !== null || analyzingIdx !== null || schedulingIdx !== null
   // The request on its way belongs to the chat on screen, so its reply shows here
   const streamHere = streamBuffer !== null && (requestSession === null || requestSession === sessionId)
   // A reload waits for a reply on its way into this chat, an analysis or a plan, for a stopped

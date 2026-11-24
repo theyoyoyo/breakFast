@@ -33,6 +33,8 @@ class Request:
     """A user's request in its slot: the chat it answers and the task making the reply."""
 
     session_id: str
+    # The socket that sent it: told when another of the user's devices stops it
+    websocket: WebSocket | None = None
     task: asyncio.Task | None = None
     # True once the reply is made and being saved: Stop no longer cancels it, so the save is whole
     saving: bool = False
@@ -44,12 +46,12 @@ class Request:
 _running: dict[int, Request] = {}
 
 
-def claim(user_id: int, session_id: str) -> Request | None:
+def claim(user_id: int, session_id: str, websocket: WebSocket | None = None) -> Request | None:
     """Take the user's slot for a new request, or None when one of theirs already runs.
     Synchronous, so two devices can't both take it."""
     if user_id in _running:
         return None
-    request = Request(session_id=session_id)
+    request = Request(session_id=session_id, websocket=websocket)
     _running[user_id] = request
     return request
 
@@ -101,6 +103,11 @@ def release(user_id: int, request: Request) -> None:
     """Free the user's slot if this request holds it (safe to call more than once)."""
     if _running.get(user_id) is request:
         del _running[user_id]
+
+
+def running(user_id: int) -> Request | None:
+    """The request holding the user's slot, sent from any of their devices, or None."""
+    return _running.get(user_id)
 
 
 def is_busy(user_id: int) -> bool:

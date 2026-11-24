@@ -499,3 +499,25 @@ async def test_lyric_reply_is_a_notice(stop_setup):
             ws.send_text(json.dumps({"message": "Hi again", "session_id": "s1"}))
             _until(ws, "done")
     assert await _saved_kinds() == [("user", None), ("assistant", "notice"), ("user", None), ("assistant", None)]
+
+
+# A device that got the busy note can stop the request running on another device: the model call ends, both devices hear it, the slot is free
+async def test_busy_device_stops_the_other_devices_request(stop_setup):
+    app, token, user_id = stop_setup
+    reply = _HeldReply()
+
+    with patch("routers.chat.stream_response", reply), TestClient(app) as client:
+        with open_chat(client, token) as phone, open_chat(client, token) as desktop:
+            phone.send_text(json.dumps({"message": "First", "session_id": "s1"}))
+            assert phone.receive_json()["content"] == "Hel"
+            desktop.send_text(json.dumps({"message": "Suggest Breakfast", "type": "suggest", "session_id": "s2"}))
+            _until(desktop, "busy")
+            desktop.send_text(json.dumps({"type": "stop"}))
+            frames = _until(desktop, "stopped")
+            assert frames[-1] == {"type": "stopped", "session_id": "s1"}
+            assert _until(phone, "stopped")[-1] == {"type": "stopped", "session_id": "s1"}
+            assert reply.cancelled.is_set()
+            assert not chat_tasks.is_busy(user_id)
+
+    # The typed message stays, and no reply is saved
+    assert (await _saved())["messages"] == {"s1": [("user", "First")]}

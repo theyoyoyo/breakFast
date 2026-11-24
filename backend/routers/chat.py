@@ -316,12 +316,18 @@ async def chat_endpoint(websocket: WebSocket):
             if not isinstance(payload, dict):
                 payload = {"message": raw}
 
-            # Stop: this socket's request ends (its model call is closed, nothing more is saved), and
-            # the device is told once it has, so every frame of that request comes before this one
+            # Stop: the user's running request ends (its model call is closed, nothing more is saved), and
+            # the device is told once it has, so every frame of that request comes before this one. It
+            # may run on another device: a device that got the busy note shows Stop for it, so "still
+            # working" always comes with a way to end it, and the request's own device is told too.
             if payload.get("type") == "stop":
-                stopped, current = current, None
+                stopped = chat_tasks.running(user_id) or current
+                current = None
                 if stopped is not None:
+                    # Its slot is free once this returns, even when the task was stopped before it began
                     await chat_tasks.stop(stopped)
+                    if stopped.websocket is not None and stopped.websocket is not websocket:
+                        await chat_sync.send_to(stopped.websocket, {"type": "stopped", "session_id": stopped.session_id})
                 await send_live({"type": "stopped", "session_id": stopped.session_id if stopped else None})
                 if not client_live:
                     break
@@ -387,7 +393,7 @@ async def chat_endpoint(websocket: WebSocket):
                 continue
 
             # One request per user at a time, on any of their devices: another one gets a note
-            request = chat_tasks.claim(user_id, session_id)
+            request = chat_tasks.claim(user_id, session_id, websocket)
             if request is None:
                 await send_busy(session_id)
                 if not client_live:

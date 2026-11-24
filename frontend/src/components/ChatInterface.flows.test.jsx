@@ -639,18 +639,40 @@ describe('ChatInterface while a request runs', () => {
     await waitFor(() => expect(getSessionMessages).toHaveBeenCalledTimes(2)) // then the chat reloads
   })
 
-  // A refused press shows the note once, however often it's pressed, and Suggest comes back
-  it('shows the busy note once for repeated presses', async () => {
+  // A refused press shows the note once with Stop in Suggest's place, so the user can't stack notes and can end the running request
+  it('shows the busy note once, with Stop', async () => {
     await renderChat()
     fireEvent.click(suggest())
     serverSends('onBusy', BUSY, 's2')
-    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull()
-    fireEvent.click(suggest())
-    serverSends('onBusy', BUSY, 's2')
-    fireEvent.click(suggest())
-    serverSends('onBusy', BUSY, 's2')
+    serverSends('onBusy', BUSY, 's2') // a late repeat replaces the note
     expect(screen.getAllByText(BUSY)).toHaveLength(1)
-    expect(socket.frames).toHaveLength(3)
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Suggest breakfast' })).toBeNull()
+    expect(screen.queryByText('Thinking…')).toBeNull()
+  })
+
+  // Stop under the busy note stops the user's request on the server, and Suggest comes back once it has ended
+  it('stops the running request from the busy note', async () => {
+    await renderChat()
+    fireEvent.click(suggest())
+    serverSends('onBusy', BUSY, 's2')
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+    expect(socket.frames.at(-1)).toEqual({ type: 'stop' })
+    serverSends('onStopped', 's1')
+    serverSends('onRequestEnded')
+    expect(screen.queryByText(BUSY)).toBeNull()
+    expect(suggest()).toBeInTheDocument()
+  })
+
+  // A Stop pressed on another device ends this device's wait: Stop and the progress go, and the chat reloads
+  it('ends the wait when another device stops the request', async () => {
+    await renderChat()
+    fireEvent.click(suggest())
+    serverSends('onProgress', 'drafting')
+    serverSends('onStopped', 's2')
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull()
+    expect(screen.queryByText('Drafting…')).toBeNull()
+    await waitFor(() => expect(getSessionMessages).toHaveBeenCalledTimes(2))
   })
 
   // A chat reload while the other request runs keeps the note, and it goes once that request ends
