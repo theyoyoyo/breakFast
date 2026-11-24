@@ -23,11 +23,11 @@ Each morning break FAST suggests a full breakfast menu from what is in your frid
 From a demo account, at phone width. Most screens are in dark mode; Preferences and Settings are in light mode. Click an image to see it full size.
 
 | Chat: discover today's breakfast | Prep plan: one synchronized timeline | Fridge: what you have, what to buy | Analysis: nutrient coverage of a meal |
-|---|---|---|---|
+|:---:|:---:|:---:|:---:|
 | <a href="docs/screenshots/chat.jpg"><img src="docs/screenshots/chat.jpg" alt="The chat: a suggested menu card, then a new suggestion after the user says they don't want potatoes" width="190" height="361"></a> | <a href="docs/screenshots/prep-plan.jpg"><img src="docs/screenshots/prep-plan.jpg" alt="A prep plan: each dish's steps in time order, one color per dish, every dish ready at 0:16" width="190" height="361"></a> | <a href="docs/screenshots/fridge.jpg"><img src="docs/screenshots/fridge.jpg" alt="The Fridge tab: ingredient groups, expiry dates and the shopping suggestions list" width="190" height="361"></a> | <a href="docs/screenshots/meal-analysis.jpg"><img src="docs/screenshots/meal-analysis.jpg" alt="A meal's nutrition analysis in the chat: narrative, daily coverage and a nutrition table" width="190" height="361"></a> |
 
 | Weekly review: scores and nutrient gaps | Favorites: your saved meals | Preferences: taste and limits | Settings: profile and supplements |
-|---|---|---|---|
+|:---:|:---:|:---:|:---:|
 | <a href="docs/screenshots/weekly-review.jpg"><img src="docs/screenshots/weekly-review.jpg" alt="The weekly review: a short summary and four scores" width="190" height="361"></a> | <a href="docs/screenshots/favorites.jpg"><img src="docs/screenshots/favorites.jpg" alt="Saved favorite meals, one opened to show its dishes and the Send to Chat button" width="190" height="361"></a> | <a href="docs/screenshots/preferences.jpg"><img src="docs/screenshots/preferences.jpg" alt="Preferences in light mode: favorites, dislikes, the avoid list and habits" width="190" height="361"></a> | <a href="docs/screenshots/settings.jpg"><img src="docs/screenshots/settings.jpg" alt="Settings in light mode: profile, two example supplements, AI settings and appearance" width="190" height="361"></a> |
 
 ---
