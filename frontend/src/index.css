@@ -256,6 +256,11 @@
     padding: 0;
   }
 
+  /* No blue tap flash over buttons on phones; keyboard focus keeps its :focus-visible outline */
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   html, body, #root {
     height: 100%;
     height: 100dvh;
