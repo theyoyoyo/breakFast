@@ -18,7 +18,8 @@ export const editorHeader = {
 export const nameInput = {
   flex: 1,
   minWidth: 120,
-  fontSize: 18,
+  // Smaller on a phone; 16px at least, so an iPhone doesn't zoom in when it's tapped
+  fontSize: 'clamp(16px, 4.2vw, 18px)',
   fontWeight: 700,
   color: 'var(--accent)',
   background: 'var(--surface2)',
@@ -80,14 +81,21 @@ export const prepTimeUnit = {
   color: 'var(--text-muted)',
 }
 
-// ℹ️ beside the time: opens how the suggestion meant each dish to be made
+// The meal's icon at the header's right
+export const mealIcon = {
+  fontSize: 22,
+  lineHeight: 1,
+  flexShrink: 0,
+}
+
+// ℹ️ between Close and Save: opens how the suggestion meant each dish to be made, above the buttons
 export const detailsBtn = (isOpen) => ({
   background: isOpen ? 'var(--surface2)' : 'none',
   border: '1px solid var(--border)',
-  borderRadius: 6,
+  borderRadius: 10,
   cursor: 'pointer',
-  fontSize: 14,
-  padding: '3px 6px',
+  fontSize: 16,
+  padding: '0 12px',
   lineHeight: 1,
   flexShrink: 0,
 })
@@ -96,8 +104,7 @@ export const detailsBox = {
   display: 'flex',
   flexDirection: 'column',
   gap: 8,
-  marginTop: -6,
-  marginBottom: 14,
+  marginTop: 14,
   padding: '10px 12px',
   background: 'var(--surface2)',
   border: '1px solid var(--border)',
@@ -256,12 +263,6 @@ export const itemActions = {
 // Trash button on item rows (shared delete look)
 export const deleteBtn = { ...sharedDeleteBtn, fontSize: 16 }
 
-export const dishBadge = {
-  fontSize: 16,
-  flexShrink: 0,
-  marginRight: 6,
-}
-
 // ▶ Ingredients: --border nearly matches the row, so the outline is the muted text color at 70%
 // (3.5:1 on --surface2, was 1.1:1; text colors are the same in every theme)
 export const expandBtn = (isOpen) => ({
@@ -326,7 +327,8 @@ export const addInput = {
   background: 'var(--surface2)',
   border: '1px solid var(--border)',
   borderRadius: 10,
-  padding: '10px 14px',
+  // Slimmer than an item row: the box needs no more room than its text
+  padding: '6px 12px',
   color: 'var(--text)',
   fontSize: 15,
   outline: 'none',
@@ -336,9 +338,10 @@ export const addBtn = {
   background: 'var(--surface2)',
   border: '1px solid var(--border)',
   borderRadius: 10,
-  padding: '10px 16px',
+  padding: '6px 12px',
   color: 'var(--text)',
-  fontSize: 18,
+  // Smaller on a phone
+  fontSize: 'clamp(14px, 3.8vw, 16px)',
   fontWeight: 600,
   cursor: 'pointer',
   flexShrink: 0,

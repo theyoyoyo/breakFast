@@ -148,3 +148,38 @@ def test_drop_meal_block():
     assert drop_meal_block('Quick one!\n\n```json\n{"menu": []}\n```') == "Quick one!"
     assert drop_meal_block("```json\n{}\n```") == ""
     assert drop_meal_block("Tap Suggest when you're ready.") == "Tap Suggest when you're ready."
+
+
+def _notice(text: str) -> dict:
+    return {"role": "assistant", "content": text, "kind": "notice"}
+
+
+# A note the app wrote (a retry note, a lyric) is no part of the Suggest block or the chat persona's history
+def test_notices_reach_no_persona():
+    from services.pipeline import RETRY_TEXTS
+
+    rows = [_user("Something warm."), _notice(RETRY_TEXTS["en"]), _app(_card(PLATE)), _notice("A lyric line")]
+    assert chat_entries(rows) == [
+        "User (latest message): Something warm.",
+        "Menu shown: Breakfast plate. Dishes: Scrambled eggs. Items: Eggs, Butter, Cucumber",
+    ]
+    history = chat_history(rows)
+    assert len(history) == 2
+    assert history[0]["content"] == "Something warm."
+    assert all(RETRY_TEXTS["en"] not in m["content"] and "lyric" not in m["content"] for m in history)
+
+
+# A notice saved in the database is left out of the block the server reads for a Suggest press
+async def test_load_leaves_saved_notices_out(client, db):
+    session_id = (await client.post("/sessions/")).json()["session_id"]
+    await client.post(f"/sessions/{session_id}/messages", json={"role": "user", "content": "Something warm."})
+    async with db.execute("SELECT id FROM users WHERE name = 'testuser'") as cur:
+        user_id = (await cur.fetchone())[0]
+    await db.execute(
+        "INSERT INTO chat_messages (session_id, user_id, role, content, kind) VALUES (?, ?, 'assistant', ?, 'notice')",
+        (session_id, user_id, "Please press Suggest again."),
+    )
+    await db.commit()
+
+    block = await load_chat_block(db, session_id, user_id)
+    assert block.split("\n\n", 1)[1].splitlines() == ["- #1 User (latest message): Something warm."]

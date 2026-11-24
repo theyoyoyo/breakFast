@@ -126,6 +126,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     role        TEXT    NOT NULL CHECK(role IN ('user', 'assistant')),
     content     TEXT    NOT NULL,
     ate_draft   TEXT,           -- JSON meal: the card's "Today I ate" version, saved with Save
+    kind        TEXT,           -- 'notice': a reply the app wrote (retry note, lyric), read by no persona
     created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -483,6 +484,11 @@ async def _weekly_nutrients(db) -> None:
     )
 
 
+async def _message_kind(db) -> None:
+    """Step 6 (#283): a chat message can be a notice the app wrote; older messages are all plain."""
+    await _add_column(db, "chat_messages", "kind", "TEXT")
+
+
 # (number, what it does, step). The number is the PRAGMA user_version once the step has run.
 MIGRATIONS = [
     (1, "group picks and the built-in food list", _regroup),
@@ -490,6 +496,7 @@ MIGRATIONS = [
     (3, "rows left without their parent row", _drop_orphans),
     (4, "a favorite's icon", _favorite_emoji),
     (5, "a weekly analysis's days and nutrients, a meal's last edit", _weekly_nutrients),
+    (6, "a chat message's kind (app notices)", _message_kind),
 ]
 
 

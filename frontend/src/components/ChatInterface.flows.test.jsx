@@ -605,3 +605,108 @@ describe('ChatInterface Suggest', () => {
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull() // the editor closed
   })
 })
+
+describe('ChatInterface while a request runs', () => {
+  const BUSY = "I'm still working on your last request. Please wait for it to finish, or stop it first."
+  const suggest = () => screen.getByRole('button', { name: 'Suggest breakfast' })
+
+  // A tap acts on its click: the cloche stays until then, so the tap's click can't land on Stop
+  it('swaps Suggest for Stop only on the tap\'s click', async () => {
+    await renderChat()
+    fireEvent.pointerDown(suggest())
+    fireEvent.pointerUp(suggest())
+    expect(socket.frames).toEqual([])
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull()
+    fireEvent.click(suggest())
+    expect(socket.frames).toEqual([{ message: 'Suggest Breakfast', type: 'suggest', session_id: 's2' }])
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument()
+  })
+
+  // Stop and the progress stay through every pipeline step and a push for the chat, until the reply comes
+  it('keeps Stop and the progress until the reply', async () => {
+    await renderChat()
+    fireEvent.click(suggest())
+    serverSends('onProgress', 'drafting')
+    serverSends('onSessionUpdated', 's2')
+    serverSends('onProgress', 'analyzing')
+    await act(async () => {})
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument()
+    expect(screen.getByText('Analyzing nutrition…')).toBeInTheDocument()
+    expect(getSessionMessages).toHaveBeenCalledTimes(1) // the push waits for the reply
+    serverSends('onProgress', 'finalizing')
+    serverSends('onDone', suggestionReply('A warm omelette.', OMELETTE_MENU), 12, 's2')
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull()
+    await waitFor(() => expect(getSessionMessages).toHaveBeenCalledTimes(2)) // then the chat reloads
+  })
+
+  // A refused press shows the note once with Stop in Suggest's place, so the user can't stack notes and can end the running request
+  it('shows the busy note once, with Stop', async () => {
+    await renderChat()
+    fireEvent.click(suggest())
+    serverSends('onBusy', BUSY, 's2')
+    serverSends('onBusy', BUSY, 's2') // a late repeat replaces the note
+    expect(screen.getAllByText(BUSY)).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Suggest breakfast' })).toBeNull()
+    expect(screen.queryByText('Thinking…')).toBeNull()
+  })
+
+  // Stop under the busy note stops the user's request on the server, and Suggest comes back once it has ended
+  it('stops the running request from the busy note', async () => {
+    await renderChat()
+    fireEvent.click(suggest())
+    serverSends('onBusy', BUSY, 's2')
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+    expect(socket.frames.at(-1)).toEqual({ type: 'stop' })
+    serverSends('onStopped', 's1')
+    serverSends('onRequestEnded')
+    expect(screen.queryByText(BUSY)).toBeNull()
+    expect(suggest()).toBeInTheDocument()
+  })
+
+  // A Stop pressed on another device ends this device's wait: Stop and the progress go, and the chat reloads
+  it('ends the wait when another device stops the request', async () => {
+    await renderChat()
+    fireEvent.click(suggest())
+    serverSends('onProgress', 'drafting')
+    serverSends('onStopped', 's2')
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull()
+    expect(screen.queryByText('Drafting…')).toBeNull()
+    await waitFor(() => expect(getSessionMessages).toHaveBeenCalledTimes(2))
+  })
+
+  // A chat reload while the other request runs keeps the note, and it goes once that request ends
+  it('keeps the busy note through a reload until the request ends', async () => {
+    await renderChat()
+    fireEvent.click(suggest())
+    serverSends('onBusy', BUSY, 's2')
+    getSessionMessages.mockImplementation(() => Promise.resolve([...MESSAGES.s2, { id: 4, role: 'user', content: 'Typed on the phone' }]))
+    serverSends('onSessionUpdated', 's2')
+    await screen.findByText('Typed on the phone')
+    expect(screen.getByText(BUSY)).toBeInTheDocument()
+    serverSends('onRequestEnded')
+    expect(screen.queryByText(BUSY)).toBeNull()
+  })
+
+  // The busy note belongs to the chat it was pressed in, and shows again on the way back
+  it('shows the busy note only in its own chat', async () => {
+    await renderChat()
+    fireEvent.click(suggest())
+    serverSends('onBusy', BUSY, 's2')
+    fireEvent.click(screen.getByTitle('Previous session'))
+    await screen.findByText('Older chat answer')
+    expect(screen.queryByText(BUSY)).toBeNull()
+    fireEvent.click(screen.getByTitle('Next session'))
+    await screen.findByText('Hello')
+    expect(screen.getByText(BUSY)).toBeInTheDocument()
+  })
+
+  // The socket closing drops the note, since the word that the request ended can't come on it any more
+  it('drops the busy note when the socket closes', async () => {
+    await renderChat()
+    fireEvent.click(suggest())
+    serverSends('onBusy', BUSY, 's2')
+    serverSends('onClose')
+    expect(screen.queryByText(BUSY)).toBeNull()
+  })
+})
