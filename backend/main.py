@@ -4,7 +4,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from auth import require_user
@@ -29,6 +29,7 @@ from routers import (
     shopping,
 )
 from services.insights import refresh_insights
+from services.stoppable import STOPPED_STATUS, RequestStopped
 from utils import resolve_static_file
 
 
@@ -120,6 +121,13 @@ async def validation_error(request: Request, exc: RequestValidationError):
     or the validation library's details."""
     detail = [{"loc": list(e.get("loc", ())), "msg": e.get("msg", "Invalid value")} for e in exc.errors()]
     return JSONResponse({"detail": detail}, status_code=422)
+
+
+@app.exception_handler(RequestStopped)
+async def request_stopped(request: Request, exc: RequestStopped):
+    """A model call the app stopped (#288): its client is gone, so a bare status ends the request
+    without an error in the log (services/stoppable.py logs it at info level)."""
+    return Response(status_code=STOPPED_STATUS)
 
 
 # Added before CORS, so CORS wraps it and a refused request still carries the CORS headers

@@ -8,7 +8,7 @@ import json
 import logging
 from datetime import date as dt_date
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from auth import require_user
@@ -21,6 +21,7 @@ from services.insights import PATTERN_DAYS
 from services.knowledge import format_history_for_weekly_review
 from services.llm import LLMUnavailableError, chat_json, lyric_cycler
 from services.personas.weekly_analyst import build_weekly_analyst_prompt_with_meals
+from services.stoppable import RequestStopped, unless_stopped
 from services.weekly import (
     MEALS_IN_WINDOW,
     WEEKLY_SCHEMA,
@@ -87,12 +88,12 @@ async def get_weekly_review_status(user_id: int = Depends(require_user)):
 
 
 @router.post("/weekly-review", response_model=WeeklyReviewResponse)
-async def generate_weekly_review(user_id: int = Depends(require_user)):
+async def generate_weekly_review(request: Request, user_id: int = Depends(require_user)):
     """Run the weekly analyst on the 7 days up to today and keep the analysis.
 
     It replaces the analysis from the same calendar week, if any. Without a meal in those days
     there is nothing to analyze: 422. A lyric comes back, and nothing is kept, while Ollama is
-    unreachable.
+    unreachable. The app's Stop ends the call, and nothing is kept or replaced (#288).
     """
     today = dt_date.today()
     week_key = week_of(today)
@@ -131,12 +132,15 @@ async def generate_weekly_review(user_id: int = Depends(require_user)):
     user_message = "Please review this week's breakfasts and provide your assessment."
 
     try:
-        reply = await chat_json(
+        # A Stop (the client gone) cancels the call and ends the route here, before anything is kept
+        reply = await unless_stopped(request, chat_json(
             system_prompt, [{"role": "user", "content": user_message}], WEEKLY_SCHEMA,
             temperature=0.3, task="weekly", language=language,
-        )
+        ))
     except LLMUnavailableError:
         return WeeklyReviewResponse(narrative=lyric_cycler.next(), scores=[], week_key=week_key, cached=False)
+    except RequestStopped:
+        raise
     except Exception:
         logging.exception("Weekly analyst call failed")
         raise HTTPException(status_code=500, detail=WEEKLY_REVIEW_FAILED) from None
@@ -146,6 +150,7 @@ async def generate_weekly_review(user_id: int = Depends(require_user)):
         logging.warning("Weekly analyst reply could not be read: %r", reply[:500])
         raise HTTPException(status_code=500, detail=WEEKLY_REVIEW_FAILED)
 
+    # One transaction (the week's old analysis out, the new one in), committed once: whole or not at all
     async with get_db() as db:
         await save_analysis(db, user_id, analysis, start, end, week_key)
         await db.commit()
