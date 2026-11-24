@@ -18,6 +18,10 @@ import {
   onSessionEnded,
   getRemovedSuggestionCount,
   bringBackRemovedSuggestions,
+  getShoppingSuggestions,
+  generateWeeklyReview,
+  analyzeMeal,
+  isAbortError,
 } from './api'
 
 
@@ -111,6 +115,37 @@ describe('ended session', () => {
     }
     expect(localStorage.getItem('bf_token')).toBe('tok-1')
     expect(ended).not.toHaveBeenCalled()
+  })
+
+  // A call its caller stopped throws an AbortError, not a NetworkError, and keeps the session
+  it('throws an AbortError for a stopped call and keeps the session', async () => {
+    storeSession('tok-1')
+    vi.stubGlobal('fetch', vi.fn((url, options) => new Promise((_, reject) => {
+      options.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+    })))
+    const controller = new AbortController()
+    const call = generateWeeklyReview({ signal: controller.signal })
+    controller.abort()
+    const err = await call.catch((e) => e)
+    expect(isAbortError(err)).toBe(true)
+    expect(err).not.toBeInstanceOf(NetworkError)
+    expect(localStorage.getItem('bf_token')).toBe('tok-1')
+    expect(ended).not.toHaveBeenCalled()
+  })
+})
+
+describe('stoppable model calls', () => {
+  // The three model calls pass their signal on to fetch, so a Stop aborts the request
+  it('passes the signal to fetch', async () => {
+    const fetchMock = mockFetch(200, {})
+    vi.stubGlobal('fetch', fetchMock)
+    const { signal } = new AbortController()
+    await getShoppingSuggestions(['Kiwi'], { signal })
+    await generateWeeklyReview({ signal })
+    await analyzeMeal('Oats', [], 1, { signal })
+    for (const path of ['/shopping/suggestions/generate', '/meals/weekly-review', '/analyst/analyze']) {
+      expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining(path), expect.objectContaining({ method: 'POST', signal }))
+    }
   })
 })
 
