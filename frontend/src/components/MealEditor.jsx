@@ -639,11 +639,9 @@ export default function MealEditor({
 function UnitSelect({ unit, units, language, onChange }) {
   const value = localizeUnit(unit || countUnit(language), language)
   const options = units.includes(value) ? units : [...units, value]
-  const width = `${Math.max(...options.flatMap(u => u.split(' ')).map(word => word.length)) + 2}ch`
   return (
-    <span style={{ ...s.unitPicker, width }}>
+    <span style={s.unitPicker} title={value}>
       <span style={s.unitText} aria-hidden="true">{value}</span>
-      <span aria-hidden="true">▾</span>
       <select style={s.unitSelect} value={value} onChange={(e) => onChange(e.target.value)}>
         {options.map(u => <option key={u} value={u}>{unitWithSize(u)}</option>)}
       </select>

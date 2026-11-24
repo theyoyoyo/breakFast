@@ -198,29 +198,30 @@ export const unitLabel = {
   marginRight: 8,
 }
 
-// Styled to look like the static unitLabel — blends in, no border chrome.
-// The plain unit and a chevron; the real select lies invisibly on top.
+// The unit in a thin box that shows it can be changed: at most 5 characters wide, a longer unit ends
+// in "…" (the open list shows it whole), so the item's name keeps the row. The real select lies
+// invisibly on top.
 export const unitPicker = {
   position: 'relative',
   display: 'flex',
   alignItems: 'center',
-  justifyContent: 'space-between',
-  gap: 2,
-  fontSize: 13,
+  fontSize: 12,
   color: 'var(--text-muted)',
   cursor: 'pointer',
   flexShrink: 0,
-  minWidth: 30,
-  // A long unit wraps on a phone instead of taking the name's room
-  maxWidth: 'clamp(44px, 17vw, 110px)',
+  width: 'calc(5ch + 10px)',
+  border: '1px solid var(--border)',
+  borderRadius: 6,
+  padding: '3px 4px',
   marginLeft: 4,
   marginRight: 6,
 }
 
-// Two-word units ("tea glass", "yemek kaşığı") take two lines; a long unknown unit breaks instead of overflowing
 export const unitText = {
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
   lineHeight: 1.2,
-  overflowWrap: 'anywhere',
 }
 
 // Covers the picker so a tap opens the native list, which shows spoon and glass sizes
