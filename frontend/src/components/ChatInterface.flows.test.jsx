@@ -710,3 +710,57 @@ describe('ChatInterface while a request runs', () => {
     expect(screen.queryByText(BUSY)).toBeNull()
   })
 })
+
+describe('ChatInterface picking up a running request', () => {
+  const running = (fields) => serverSends('onRunning', { sessionId: 's2', step: null, content: '', ...fields })
+
+  // A Suggest press still running when the socket opens (a reload) brings back its progress and Stop, and its card ends them
+  it('shows a running Suggest press with its progress and Stop until its card', async () => {
+    await renderChat()
+    running({ kind: 'suggest', step: 'drafting' })
+    expect(screen.getByText('Drafting…')).toHaveStyle({ alignSelf: 'flex-end' }) // on the user's side, as if pressed here
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument()
+    serverSends('onProgress', 'analyzing', 's2')
+    expect(screen.getByText('Analyzing nutrition…')).toBeInTheDocument()
+    serverSends('onDone', suggestionReply('A warm omelette.', OMELETTE_MENU), 12, 's2')
+    serverSends('onMealLogged', OMELETTE_MENU, 's2')
+    expect(await screen.findByText('Sunday Omelette')).toBeInTheDocument()
+    expect(screen.queryByText('Analyzing nutrition…')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull()
+  })
+
+  // A chat reply still streaming shows its words so far, grows with later tokens and stays once done
+  it('shows a running chat reply with its words so far and Stop until it is done', async () => {
+    await renderChat()
+    running({ kind: 'chat', content: 'Warm oats' })
+    expect(screen.getByText('Warm oats')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument()
+    serverSends('onToken', ' with honey', 's2')
+    expect(screen.getByText('Warm oats with honey')).toBeInTheDocument()
+    serverSends('onDone', 'Warm oats with honey.', 7, 's2')
+    expect(screen.getByText('Warm oats with honey.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull()
+  })
+
+  // Stop on the picked-up request tells the server, and its confirmation lets Suggest come back
+  it('stops the picked-up request', async () => {
+    await renderChat()
+    running({ kind: 'suggest', step: 'drafting' })
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+    expect(socket.frames).toEqual([{ type: 'stop' }])
+    expect(screen.queryByText('Drafting…')).toBeNull()
+    serverSends('onStopped', 's2')
+    expect(screen.getByRole('button', { name: 'Suggest breakfast' })).toBeInTheDocument()
+  })
+
+  // A request running in another chat keeps Stop on screen but shows its progress only in its own chat
+  it('shows a request running in another chat only there', async () => {
+    await renderChat()
+    running({ sessionId: 's1', kind: 'suggest', step: 'drafting' })
+    expect(screen.queryByText('Drafting…')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument()
+    fireEvent.click(screen.getByTitle('Previous session'))
+    await screen.findByText('Older chat answer')
+    expect(screen.getByText('Drafting…')).toBeInTheDocument()
+  })
+})

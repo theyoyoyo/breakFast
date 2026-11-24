@@ -521,3 +521,138 @@ async def test_busy_device_stops_the_other_devices_request(stop_setup):
 
     # The typed message stays, and no reply is saved
     assert (await _saved())["messages"] == {"s1": [("user", "First")]}
+
+
+class _HeldPipeline:
+    """The suggestion pipeline: its first step at once, the rest once the test sets `go`; Stop cancels it meanwhile."""
+
+    def __init__(self):
+        self.go = threading.Event()
+        self.cancelled = threading.Event()
+
+    async def __call__(self, **kwargs):
+        yield {"type": "progress", "step": "drafting"}
+        try:
+            await _wait_for(self.go)
+        except asyncio.CancelledError:
+            self.cancelled.set()
+            raise
+        yield {"type": "progress", "step": "analyzing"}
+        yield {"type": "done", "content": MEAL_REPLY}
+
+
+# A socket opened while a Suggest press runs (a reloaded phone) is told where it stands, then gets its later frames and its card
+async def test_reopened_socket_picks_up_the_running_suggest(stop_setup):
+    app, token, _ = stop_setup
+    pipeline = _HeldPipeline()
+
+    with patch("routers.chat.run_suggestion_pipeline", pipeline), TestClient(app) as client:
+        with open_chat(client, token) as old:
+            old.send_text(json.dumps({"message": "Suggest Breakfast", "type": "suggest", "session_id": "s1"}))
+            assert old.receive_json()["step"] == "drafting"
+            with open_chat(client, token) as reloaded:
+                assert reloaded.receive_json() == {
+                    "type": "running", "session_id": "s1", "kind": "suggest", "step": "drafting", "content": "",
+                }
+                pipeline.go.set()
+                frames = _until(reloaded, "meal_logged")
+                reply = [f for f in frames if f["type"] != "session_updated"]
+                assert [(f["type"], f["session_id"]) for f in reply] == [
+                    ("progress", "s1"), ("done", "s1"), ("meal_logged", "s1"),
+                ]
+                assert reply[0]["step"] == "analyzing"
+                assert reply[1]["message_id"] is not None
+            assert _until(old, "meal_logged")[-1]["meal"]["menu_name"] == "Plate"
+
+
+# A socket opened while a chat reply streams gets the words so far in the running frame, then the later tokens and the reply
+async def test_reopened_socket_picks_up_the_streaming_reply(stop_setup):
+    app, token, _ = stop_setup
+    reply = _HeldReply()
+
+    with patch("routers.chat.stream_response", reply), TestClient(app) as client:
+        with open_chat(client, token) as old:
+            old.send_text(json.dumps({"message": "Something warm?", "session_id": "s1"}))
+            assert old.receive_json()["content"] == "Hel"
+            with open_chat(client, token) as reloaded:
+                assert reloaded.receive_json() == {
+                    "type": "running", "session_id": "s1", "kind": "chat", "step": None, "content": "Hel",
+                }
+                reply.go.set()
+                frames = [f for f in _until(reloaded, "done") if f["type"] != "session_updated"]
+                assert frames[0] == {"type": "token", "content": "lo", "session_id": "s1"}
+                assert [(f["type"], f["content"], f["session_id"]) for f in frames[1:]] == [("done", "Hello", "s1")]
+            _until(old, "done")
+
+
+# Stop from the reopened socket cancels the request: the model call ends, both sockets hear it, nothing is saved and the slot is free
+async def test_reopened_socket_stops_the_running_request(stop_setup):
+    app, token, user_id = stop_setup
+    pipeline = _HeldPipeline()
+
+    with patch("routers.chat.run_suggestion_pipeline", pipeline), TestClient(app) as client:
+        with open_chat(client, token) as old:
+            old.send_text(json.dumps({"message": "Suggest Breakfast", "type": "suggest", "session_id": "s1"}))
+            old.receive_json()
+            with open_chat(client, token) as reloaded:
+                assert reloaded.receive_json()["type"] == "running"
+                reloaded.send_text(json.dumps({"type": "stop"}))
+                assert reloaded.receive_json() == {"type": "stopped", "session_id": "s1"}
+                assert pipeline.cancelled.is_set()
+                assert not chat_tasks.is_busy(user_id)
+            assert _until(old, "stopped")[-1] == {"type": "stopped", "session_id": "s1"}
+
+    assert await _saved() == {"messages": {}, "suggestions": 0, "selected": {"s1": None, "s2": None}}
+
+
+# A socket opened while nothing runs gets no running frame: its first frame answers its own Stop
+async def test_socket_opened_while_idle_gets_no_running_frame(stop_setup):
+    app, token, _ = stop_setup
+    with open_chat(TestClient(app), token) as ws:
+        ws.send_text(json.dumps({"type": "stop"}))
+        assert ws.receive_json() == {"type": "stopped", "session_id": None}
+
+
+# Another user's socket opened while a request runs gets no running frame, none of its frames, and its Stop leaves that request running
+async def test_other_user_never_picks_up_the_running_request(stop_setup):
+    app, token, user_id = stop_setup
+    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        cur = await db.execute("INSERT INTO users (name, pin_hash) VALUES ('bob', ?)", (hash_pin("654321"),))
+        await db.commit()
+        bob_token = create_token(cur.lastrowid)
+    reply = _HeldReply()
+
+    with patch("routers.chat.stream_response", reply), TestClient(app) as client:
+        with open_chat(client, token) as ada:
+            ada.send_text(json.dumps({"message": "Something warm?", "session_id": "s1"}))
+            assert ada.receive_json()["content"] == "Hel"
+            with open_chat(client, bob_token) as bob:
+                bob.send_text(json.dumps({"type": "stop"}))
+                assert bob.receive_json() == {"type": "stopped", "session_id": None}
+                assert chat_tasks.is_busy(user_id) and not reply.cancelled.is_set()
+                reply.go.set()
+                assert _until(ada, "done")[-1]["content"] == "Hello"
+                # Bob's next frame answers his own Stop again: nothing of Ada's reply reached him
+                bob.send_text(json.dumps({"type": "stop"}))
+                assert bob.receive_json() == {"type": "stopped", "session_id": None}
+
+
+# A request that fails unexpectedly tells the sockets that picked it up it has ended, as a Stop would, and frees the slot
+async def test_reopened_socket_is_told_when_the_request_fails(stop_setup):
+    app, token, user_id = stop_setup
+    pipeline = _HeldPipeline()
+
+    async def broken_save(*args, **kwargs):
+        raise RuntimeError("database gone")
+
+    with patch("routers.chat.run_suggestion_pipeline", pipeline), patch("routers.chat._save_message", broken_save), \
+         TestClient(app) as client:
+        with open_chat(client, token) as old:
+            old.send_text(json.dumps({"message": "Suggest Breakfast", "type": "suggest", "session_id": "s1"}))
+            old.receive_json()
+            with open_chat(client, token) as reloaded:
+                assert reloaded.receive_json()["type"] == "running"
+                pipeline.go.set()
+                assert _until(reloaded, "stopped")[-1] == {"type": "stopped", "session_id": "s1"}
+    # The slot is freed by the task's done callback, right after that frame: checked once the sockets closed
+    assert not chat_tasks.is_busy(user_id)
