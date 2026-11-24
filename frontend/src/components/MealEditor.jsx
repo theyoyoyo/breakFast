@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Star } from 'lucide-react'
+import { mealEmoji } from '../utils/emoji'
 import { normalizeItem, unitsFor, countUnit, localizeUnit, unitWithSize, resolveUnit, rememberUnit, menuKey } from '../utils/ingredients'
 import { checkMissingIngredients, getFavorites } from '../services/api'
 import { useLanguage } from '../hooks/useLanguage'
@@ -34,6 +35,7 @@ const DISH_OBTAINED_HINT = 'Missing ingredients are marked as obtained — tap t
  *   (the star is filled when a favorite has the meal's name and food, so it's right for meals saved
  *   earlier too; a name another favorite has saves nothing and shows a note)
  *
+ *   emoji        — the meal's icon, shown at the header's right (default: the meal's own, as its card shows it)
  * extraActions may be a function: (buildCurrentMeal) => ReactNode
  */
 export default function MealEditor({
@@ -43,6 +45,7 @@ export default function MealEditor({
   showPrepTime = true,
   editPrepTime = true,
   extraActions,
+  emoji,
   menuMode = false,
   onFavorite,
   onUnfavorite,
@@ -420,39 +423,15 @@ export default function MealEditor({
             <span style={s.prepTimeUnit}>min</span>
           </div>
         )}
-        {prepDetails.length > 0 && (
-          <button
-            style={s.detailsBtn(detailsOpen)}
-            onClick={() => setDetailsOpen(open => !open)}
-            title="Preparation details"
-            aria-expanded={detailsOpen}
-          >ℹ️</button>
-        )}
+        {/* The meal's icon, as its card shows it (dishes get none) */}
+        <span style={s.mealIcon} role="img" aria-label="Meal icon">
+          {emoji || mealEmoji(meal, meal?.menu_name || meal?.meal_name || 'Meal')}
+        </span>
       </div>
 
       {showTakenNote && (
         <div style={s.favNote} role="status">
           &quot;{mealName.trim()}&quot; is already in Favorites. Rename this meal to save it, or edit that favorite in Favorites.
-        </div>
-      )}
-
-      {detailsOpen && prepDetails.length > 0 && (
-        <div style={s.detailsBox}>
-          {prepDetails.map(({ dish, method, serveWith, notes, swaps }, di) => (
-            <div key={di}>
-              <div style={s.detailsDish}>{dish}</div>
-              {method && <div style={s.detailsMethod}>{method}</div>}
-              {serveWith && <div style={s.detailsLine}>Serve with: {serveWith}</div>}
-              {notes.map((sub, ni) => (
-                <div key={`prep-${ni}`} style={s.detailsLine}>{sub.name}: {sub.prep.trim()}</div>
-              ))}
-              {swaps.map((sub, wi) => (
-                <div key={`swap-${wi}`} style={s.detailsLine}>
-                  {sub.name}: instead of {replacedName(sub)} (not in your fridge)
-                </div>
-              ))}
-            </div>
-          ))}
         </div>
       )}
 
@@ -475,7 +454,6 @@ export default function MealEditor({
                 // A tap opens or closes the ingredients, the space beside the name included; its buttons
                 // and the marked name itself keep the tap to themselves
                 <div style={s.dishRow} onClick={() => toggleDish(idx)}>
-                  <span style={s.dishBadge}>🍳</span>
                   <span style={{ ...s.itemText, fontWeight: 500 }}>
                     {dishMarks.length === 0 ? (
                       <span>{item.name}</span>
@@ -592,8 +570,36 @@ export default function MealEditor({
         )}
       </div>
 
+      {detailsOpen && prepDetails.length > 0 && (
+        <div style={s.detailsBox}>
+          {prepDetails.map(({ dish, method, serveWith, notes, swaps }, di) => (
+            <div key={di}>
+              <div style={s.detailsDish}>{dish}</div>
+              {method && <div style={s.detailsMethod}>{method}</div>}
+              {serveWith && <div style={s.detailsLine}>Serve with: {serveWith}</div>}
+              {notes.map((sub, ni) => (
+                <div key={`prep-${ni}`} style={s.detailsLine}>{sub.name}: {sub.prep.trim()}</div>
+              ))}
+              {swaps.map((sub, wi) => (
+                <div key={`swap-${wi}`} style={s.detailsLine}>
+                  {sub.name}: instead of {replacedName(sub)} (not in your fridge)
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
       <div style={s.actions}>
         <button style={s.closeBtn} onClick={onClose}>Close</button>
+        {prepDetails.length > 0 && (
+          <button
+            style={s.detailsBtn(detailsOpen)}
+            onClick={() => setDetailsOpen(open => !open)}
+            title="Preparation details"
+            aria-expanded={detailsOpen}
+          >ℹ️</button>
+        )}
         {typeof extraActions === 'function' ? extraActions(buildCurrentMeal) : extraActions}
         {onSave && <button style={s.saveBtn} onClick={handleSave}>Save</button>}
       </div>

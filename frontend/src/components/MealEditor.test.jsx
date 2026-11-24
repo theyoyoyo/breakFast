@@ -187,7 +187,7 @@ describe('MealEditor dish rows', () => {
     expect(screen.queryByText('Yumurta')).toBeNull()
     fireEvent.click(screen.getByText('Menemen'))
     expect(screen.getByText('Yumurta')).toBeInTheDocument()
-    fireEvent.click(screen.getByText('🍳').parentElement)
+    fireEvent.click(screen.getByText('Menemen').closest('span').parentElement.parentElement)
     expect(screen.queryByText('Yumurta')).toBeNull()
   })
 
@@ -861,5 +861,37 @@ describe('MealEditor number boxes', () => {
     expect(eggs()).toMatchObject({ name: 'Yumurta', amount: 200 })
     fireEvent.change(screen.getByLabelText('Amount of Yumurta'), { target: { value: '' } })
     expect(eggs()).toMatchObject({ name: 'Yumurta', amount: 1 })
+  })
+})
+
+describe('MealEditor layout', () => {
+  const PREP_MEAL = {
+    menu_name: 'Porridge',
+    emoji: '🥣',
+    menu: [{ name: 'Porridge', method: 'Simmer the oats', ingredients: [{ name: 'Oats', amount: 1, unit: 'glass' }] }],
+  }
+
+  // The meal's own icon sits in the header, and a dish row carries no icon of its own
+  it('shows the meal icon in the header and none on dishes', () => {
+    render(<MealEditor meal={PREP_MEAL} menuMode />)
+    expect(screen.getByRole('img', { name: 'Meal icon' })).toHaveTextContent('🥣')
+    expect(screen.getAllByText('🥣')).toHaveLength(1)
+    expect(screen.queryByText('🍳')).toBeNull()
+  })
+
+  // A meal without a saved icon shows the one its chat card shows, from its name
+  it('falls back to the icon from the meal name', async () => {
+    const { emojiFor } = await import('../utils/emoji')
+    render(<MealEditor meal={{ ...PREP_MEAL, emoji: undefined }} menuMode />)
+    expect(screen.getByRole('img', { name: 'Meal icon' })).toHaveTextContent(emojiFor('Porridge'))
+  })
+
+  // The info button sits in the button row, between Close and Save, and its panel opens above the buttons
+  it('puts the info button between Close and Save', () => {
+    render(<MealEditor meal={PREP_MEAL} menuMode onSave={vi.fn()} onClose={vi.fn()} />)
+    const buttons = within(screen.getByRole('button', { name: 'Close' }).parentElement).getAllByRole('button')
+    expect(buttons.map(b => b.textContent)).toEqual(['Close', 'ℹ️', 'Save'])
+    fireEvent.click(screen.getByTitle('Preparation details'))
+    expect(screen.getByText('Simmer the oats')).toBeInTheDocument()
   })
 })

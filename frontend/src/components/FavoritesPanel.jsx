@@ -153,6 +153,7 @@ export default function FavoritesPanel({ visible, onSendToChat }) {
                     <EmojiPicker value={editEmoji} onChange={setEditEmoji} />
                     <MealEditor
                       meal={editingMeal}
+                      emoji={editEmoji}
                       onSave={handleEditorSave}
                       onClose={() => setEditingId(null)}
                       showPrepTime={true}
