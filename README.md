@@ -1,28 +1,34 @@
 # break FAST
 
-**A local-first AI breakfast planner for a home and its trusted circle.**
+**A local-first AI breakfast planner. It cooks from the fridge you actually have and times every dish to be ready together.**
 
 [![CI](https://github.com/theyoyoyo/breakFast/actions/workflows/ci.yml/badge.svg)](https://github.com/theyoyoyo/breakFast/actions/workflows/ci.yml)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)
 ![Node.js 22.13+](https://img.shields.io/badge/node-22.13%2B-339933.svg)
 
-break FAST knows what is in your fridge, which appliances your kitchen has, your health context and your habits. Each morning it suggests a full breakfast menu made from what you have, and a prep plan timed so every dish is ready at the same moment.
+Each morning break FAST suggests a full breakfast menu from what is in your fridge, shaped by your appliances, health context and habits, and a prep plan timed so every dish is ready at the same moment. It is a FastAPI backend and a React PWA you open on your phone. The AI runs on your own hardware through [Ollama](https://ollama.com), so there is no cloud API and your data stays at home. Several people can share one instance, each with their own data.
 
-It is a FastAPI backend and a React PWA you open on your phone. The AI runs on your own hardware through [Ollama](https://ollama.com), so there is no cloud API and your data stays at home. Several people can share one instance, each with their own data.
+## Why it's different
+
+- **It starts from your kitchen.** A recipe app starts from recipes and a chatbot from a blank prompt. break FAST builds every menu only from what you have, pantry basics included, and marks the few items you would still need to get.
+- **Code checks the AI.** The model drafts and reviews a menu; plain code verifies the fridge, the avoid list and the units, and keeps the revision only if it is no worse than the draft.
+- **One timeline for the whole menu.** A recipe gives steps for one dish. Here the model only splits each dish into steps and estimates them, and a tested scheduler works backwards from the finish so one cook, your appliances and the waiting time add up to everything ready at once.
+- **It knows you, quietly.** Health rules, an avoid list, supplements, ratings and the last 30 days of meals shape each suggestion without being repeated back to you.
+- **Local and private.** The model runs on your own hardware. No cloud API, no subscription, and each person's data is separate.
 
 ---
 
 ## Screenshots
 
-From a demo account, at phone width, in dark mode. Click an image to see it full size.
+From a demo account, at phone width. Most screens are in dark mode; Preferences and Settings are in light mode. Click an image to see it full size.
 
-| Chat and a suggested menu | Prep plan | Fridge | Weekly review |
+| Chat: discover today's breakfast | Prep plan: one synchronized timeline | Fridge: what you have, what to buy | Analysis: nutrient coverage of a meal |
 |---|---|---|---|
-| <img src="docs/screenshots/chat.jpg" alt="The chat: a suggested menu card, then a new suggestion after the user says they don't want potatoes" width="190"> | <img src="docs/screenshots/prep-plan.jpg" alt="A prep plan: each dish's steps in time order, one color per dish, every dish ready at 0:16" width="190"> | <img src="docs/screenshots/fridge.jpg" alt="The Fridge tab: ingredient groups, expiry dates and the shopping suggestions list" width="190"> | <img src="docs/screenshots/weekly-review.jpg" alt="The weekly review: a short summary and four scores" width="190"> |
+| <a href="docs/screenshots/chat.jpg"><img src="docs/screenshots/chat.jpg" alt="The chat: a suggested menu card, then a new suggestion after the user says they don't want potatoes" width="190"></a> | <a href="docs/screenshots/prep-plan.jpg"><img src="docs/screenshots/prep-plan.jpg" alt="A prep plan: each dish's steps in time order, one color per dish, every dish ready at 0:16" width="190"></a> | <a href="docs/screenshots/fridge.jpg"><img src="docs/screenshots/fridge.jpg" alt="The Fridge tab: ingredient groups, expiry dates and the shopping suggestions list" width="190"></a> | <a href="docs/screenshots/meal-analysis.jpg"><img src="docs/screenshots/meal-analysis.jpg" alt="A meal's nutrition analysis in the chat: narrative, daily coverage and a nutrition table" width="190"></a> |
 
-| Meal analysis | Favorites | Settings |
-|---|---|---|
-| <img src="docs/screenshots/meal-analysis.jpg" alt="A meal's nutrition analysis in the chat: narrative, daily coverage and a nutrition table" width="190"> | <img src="docs/screenshots/favorites.jpg" alt="Saved favorite meals, one opened to show its dishes and the Send to Chat button" width="190"> | <img src="docs/screenshots/settings.jpg" alt="Settings: profile, supplements, AI settings and appearance" width="190"> |
+| Weekly review: scores and nutrient gaps | Favorites: your saved meals | Preferences: taste and limits | Settings: profile and supplements |
+|---|---|---|---|
+| <a href="docs/screenshots/weekly-review.jpg"><img src="docs/screenshots/weekly-review.jpg" alt="The weekly review: a short summary and four scores" width="190"></a> | <a href="docs/screenshots/favorites.jpg"><img src="docs/screenshots/favorites.jpg" alt="Saved favorite meals, one opened to show its dishes and the Send to Chat button" width="190"></a> | <a href="docs/screenshots/preferences.jpg"><img src="docs/screenshots/preferences.jpg" alt="Preferences in light mode: favorites, dislikes, the avoid list and habits" width="190"></a> | <a href="docs/screenshots/settings.jpg"><img src="docs/screenshots/settings.jpg" alt="Settings in light mode: profile, two example supplements, AI settings and appearance" width="190"></a> |
 
 ---
 
@@ -47,24 +53,37 @@ From a demo account, at phone width, in dark mode. Click an image to see it full
 
 ## How it works
 
+For every request the backend loads the user's context and hands it to one of seven personas. The model answers in a fixed shape, and code checks and schedules what it returns.
+
 ```mermaid
 flowchart LR
-    subgraph Devices["Phone or desktop browser"]
-        UI["React PWA"]
-    end
-    subgraph Server["Home server (LAN or Tailscale)"]
-        API["FastAPI backend"]
-        DB[("SQLite")]
-        LLM["Ollama (local model)"]
-        FB["Lyric fallback"]
-    end
-    UI -- "REST + WebSocket" --> API
-    API --> DB
-    API -- "HTTP" --> LLM
-    API -. "if Ollama is down" .-> FB
+    UI["React PWA<br/>phone or desktop"] -- "REST + WebSocket" --> API["FastAPI backend<br/>on your home server"]
+    API --> DB[("SQLite")]
+    API --> CTX["Per-user context<br/>fridge, profile, health rules,<br/>avoid list, appliances, chat"]
+    CTX --> P["Seven personas<br/>chat, suggestion, reviser, analyst,<br/>weekly, shopping, planner"]
+    P -- "structured outputs" --> LLM["Ollama<br/>local model"]
+    LLM -- "replies" --> CODE["Code that checks the model<br/>fridge, avoid list, units,<br/>prep scheduling"]
 ```
 
-For every request the backend loads the user's context (fridge, recent meals, profile, supplements, health rules, avoid list, appliances, language) and hands it to one of seven personas, each in its own file under `backend/services/personas/`: chat, suggestion, reviser, nutrition analyst, weekly analyst, shopping and prep planner.
+The model judges and estimates; code verifies and does the math. In the two main flows, orange steps are model calls and blue steps are plain code.
+
+**The Suggest flow**
+
+```mermaid
+flowchart LR
+    S1["Draft a menu<br/>from the fridge"]:::model --> S2["Check fridge,<br/>avoid list, units"]:::code --> S3["Revise what<br/>the check found"]:::model --> S4["Keep the revision<br/>only if no worse"]:::code --> S5["Write the reply<br/>from the final menu"]:::model
+    classDef model fill:#ffe3bf,stroke:#c26a00,color:#222
+    classDef code fill:#d6e6ff,stroke:#2f62b5,color:#222
+```
+
+**The prep plan flow**
+
+```mermaid
+flowchart LR
+    T1["Split each dish into steps,<br/>estimate minutes and appliance"]:::model --> T2["Schedule backwards from the finish:<br/>one cook, one step per appliance,<br/>waiting steps overlap"]:::code --> T3["Try other orders,<br/>keep the best plan"]:::code
+    classDef model fill:#ffe3bf,stroke:#c26a00,color:#222
+    classDef code fill:#d6e6ff,stroke:#2f62b5,color:#222
+```
 
 **Suggestions: Draft → Revise → Present.**
 
@@ -78,8 +97,6 @@ Anything still missing stays on the card, marked yellow, so you can get it. Code
 
 **Prep plan.** The model only splits each dish into steps and estimates them: the action, its minutes, hands-on or waiting, and an appliance. Plain code does the scheduling. It works backwards from the finish time: one cook does hands-on steps one at a time, an appliance holds one step at a time, and waiting steps (boiling, baking) leave the cook free for other dishes. A short search tries other orders and keeps a shorter plan, or an equally short one where hot food waits less.
 
-**When Ollama is down,** the AI features answer with a line from a short list of song lyrics instead of an error.
-
 More about how it is built (the personas, the engineering highlights and the project structure) is in [Architecture](docs/ARCHITECTURE.md).
 
 ---
@@ -91,7 +108,6 @@ More about how it is built (the personas, the engineering highlights and the pro
 | Frontend | React 18, Vite, Tailwind CSS v4, PWA (vite-plugin-pwa) |
 | Backend | Python, FastAPI, WebSockets |
 | Local LLM | Ollama; one default model, or a model per task or reply language |
-| LLM fallback | Song lyric cycling |
 | Database | SQLite (aiosqlite) |
 | Remote access | Tailscale |
 | Tests | pytest, Vitest, GitHub Actions |
@@ -224,7 +240,7 @@ break FAST is built for a trusted home network (LAN or Tailscale), not the open 
 - **Habit onboarding:** ask about morning routines, one question at a time.
 - **Fridge quick-add:** one tap to log basics and items you had before.
 - **Voice input:** the microphone in the chat bar is a placeholder for now.
-- **UI redesign:** a new layout on Tailwind CSS (light and dark mode are already in).
+- **UI redesign:** a new layout built on Tailwind CSS.
 
 ---
 
