@@ -1,74 +1,103 @@
 # break FAST
 
-**A local-first, multi-user AI breakfast planner that runs on your own hardware.**
+**A local-first AI breakfast planner. It cooks from the fridge you actually have and times every dish to be ready together.**
 
-break FAST knows what is in each person's fridge, which kitchen appliances they own, their health goals, supplements and eating habits, and turns that into a concrete breakfast menu every morning, plus a prep plan timed so everything is ready at the same moment. It is a FastAPI backend and a React PWA you open from your phone, backed by a local LLM through [Ollama](https://ollama.com). There is no cloud API, no subscription and no data leaving the house. Several people can share one instance, each with fully isolated data.
-
+[![CI](https://github.com/theyoyoyo/breakFast/actions/workflows/ci.yml/badge.svg)](https://github.com/theyoyoyo/breakFast/actions/workflows/ci.yml)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)
-![FastAPI](https://img.shields.io/badge/FastAPI-009688.svg)
-![React 18](https://img.shields.io/badge/React-18-61dafb.svg)
-![Ollama](https://img.shields.io/badge/LLM-Ollama-black.svg)
+![Node.js 22.13+](https://img.shields.io/badge/node-22.13%2B-339933.svg)
+
+Each morning break FAST suggests a full breakfast menu from what is in your fridge, shaped by your appliances, health context and habits, and a prep plan timed so every dish is ready at the same moment. It is a FastAPI backend and a React PWA you open on your phone. The AI runs on your own hardware through [Ollama](https://ollama.com), so there is no cloud API and your data stays at home. Several people can share one instance, each with their own data.
+
+## Why it's different
+
+- **It starts from your kitchen.** A recipe app starts from recipes and a chatbot from a blank prompt. break FAST builds every menu only from what you have, pantry basics included, and marks the few items you would still need to get.
+- **Code checks the AI.** The model drafts and reviews a menu; plain code verifies the fridge, the avoid list and the units, and keeps the revision only if it is no worse than the draft.
+- **One timeline for the whole menu.** A recipe gives steps for one dish. Here the model only splits each dish into steps and estimates them, and a tested scheduler works backwards from the finish so one cook, your appliances and the waiting time add up to everything ready at once.
+- **It knows you, quietly.** Health rules, an avoid list, supplements, ratings and the last 30 days of meals shape each suggestion without being repeated back to you.
+- **Local and private.** The model runs on your own hardware. No cloud API, no subscription, and each person's data is separate.
 
 ---
 
 ## Screenshots
 
-<!--
-  Add images to docs/screenshots/ and uncomment the table below.
-  Suggested shots (phone width ~420px): chat with a suggested menu, the prep plan,
-  the fridge tab, the weekly nutrition review.
+From a demo account, at phone width. Most screens are in dark mode; Preferences and Settings are in light mode. Click an image to see it full size.
 
-| Chat & suggestion | Prep plan | Fridge | Weekly review |
-|---|---|---|---|
-| ![Chat](docs/screenshots/chat.png) | ![Prep plan](docs/screenshots/prep-plan.png) | ![Fridge](docs/screenshots/fridge.png) | ![Weekly review](docs/screenshots/weekly.png) |
--->
+| Chat: discover today's breakfast | Prep plan: one synchronized timeline | Fridge: what you have, what to buy | Analysis: nutrient coverage of a meal |
+|:---:|:---:|:---:|:---:|
+| <a href="docs/screenshots/chat.jpg"><img src="docs/screenshots/chat.jpg" alt="The chat: a suggested menu card, then a new suggestion after the user says they don't want potatoes" width="190" height="361"></a> | <a href="docs/screenshots/prep-plan.jpg"><img src="docs/screenshots/prep-plan.jpg" alt="A prep plan: each dish's steps in time order, one color per dish, every dish ready at 0:16" width="190" height="361"></a> | <a href="docs/screenshots/fridge.jpg"><img src="docs/screenshots/fridge.jpg" alt="The Fridge tab: ingredient groups, expiry dates and the shopping suggestions list" width="190" height="361"></a> | <a href="docs/screenshots/meal-analysis.jpg"><img src="docs/screenshots/meal-analysis.jpg" alt="A meal's nutrition analysis in the chat: narrative, daily coverage and a nutrition table" width="190" height="361"></a> |
 
-*Screenshots coming soon.*
+| Weekly review: scores and nutrient gaps | Favorites: your saved meals | Preferences: taste and limits | Settings: profile and supplements |
+|:---:|:---:|:---:|:---:|
+| <a href="docs/screenshots/weekly-review.jpg"><img src="docs/screenshots/weekly-review.jpg" alt="The weekly review: a short summary and four scores" width="190" height="361"></a> | <a href="docs/screenshots/favorites.jpg"><img src="docs/screenshots/favorites.jpg" alt="Saved favorite meals, one opened to show its dishes and the Send to Chat button" width="190" height="361"></a> | <a href="docs/screenshots/preferences.jpg"><img src="docs/screenshots/preferences.jpg" alt="Preferences in light mode: favorites, dislikes, the avoid list and habits" width="190" height="361"></a> | <a href="docs/screenshots/settings.jpg"><img src="docs/screenshots/settings.jpg" alt="Settings in light mode: profile, two example supplements, AI settings and appearance" width="190" height="361"></a> |
 
 ---
 
 ## Features
 
-- **Menus built from your fridge.** One tap on *Suggest* produces a full breakfast menu using only what you have, basics like salt and oil included. A code check catches anything else and sends it back to be replaced. Long-press for *favorites* (comfort food) or *explore* (something new from world cuisines).
-- **Draft, review, refine.** Every suggestion goes through a three-step pipeline: a draft, an internal nutrition review, then a refined final menu, with live progress streamed over a WebSocket.
-- **Prep plan where everything finishes together.** The plan uses only your appliances and is timed so the eggs, tea and toast are all ready at the same moment.
-- **Nutrition analysis per meal.** Calories, protein, fiber and micronutrients, plus a check against supplement upper limits. Results are cached per meal.
-- **Weekly nutrition review.** A holistic seven-day review with four scores and a short narrative.
-- **Fridge management.** Ingredient groups (including a pantry for basics and long-life items), expiry tracking, a staples list, a shopping list and AI shopping suggestions.
-- **Health-aware, silently.** Per-user health rules with priorities, a hard *avoid* list, physical profile and supplements taken today all shape suggestions without being lectured back at you.
-- **Learns from behaviour.** The last 30 days of meals are distilled into inferred habits: what the user already eats often and their average prep time.
-- **Breakfast chat.** A friendly assistant with persistent chat sessions and voice input (Web Speech API).
-- **Logging and history.** "Today I ate", saved favorite meals, ratings and meal history.
-- **English by default, Turkish optional.** The AI answers in the language you choose; the interface is in English.
+- **Menus from your fridge.** Tap *Suggest* for a full breakfast menu built only from what you have, salt and oil included. Long-press it for *Favorites* (familiar food that fits your taste) or *Explore* (something new from world cuisines).
+- **Chat first, then Suggest.** The chat helps you work out what you want this morning, one question at a time. The Suggest button then builds the menu and follows what you wrote.
+- **Prep plan where everything finishes together.** Each dish is broken into its real steps and scheduled around one cook and your appliances, so the eggs, toast and tea are ready at once.
+- **Editable meal cards.** Change dishes, items, amounts and units. Anything not in your fridge is marked yellow, and you can mark it as obtained.
+- **Fridge management.** Eleven ingredient groups (a Pantry group for basics), expiry dates, a staples list and a shopping list. A built-in list of about 600 foods, in English and Turkish, puts a new item in its group; your own choice always wins.
+- **Shopping suggestions.** Specific products to buy, aware of the date and your country, that never repeat what you have or have already seen.
+- **Nutrition analysis per meal.** Calories, macros, fiber and micronutrients, with a check against supplement upper limits.
+- **Weekly review.** A seven-day review with four scores and a short summary. It also notes which nutrients were lacking or more than enough, and the next suggestions take that into account.
+- **Health-aware, quietly.** Health rules with priorities, an avoid list, a physical profile and today's supplements shape every suggestion without being repeated back to you.
+- **Learns from what you eat.** The last 30 days of logged meals show what you eat often and how long you usually spend cooking.
+- **"Today I ate".** Log the meal as you actually ate it, rate it and save favorites.
+- **Sync across devices.** Open the app on your phone and laptop: chat, the selected meal card, supplements and shopping suggestions update on both.
+- **Your look.** Five color themes, and Auto, Light or Dark appearance.
+- **English or Turkish** AI replies. The interface is in English; units follow the chosen language.
 
 ---
 
 ## How it works
 
+For every request the backend loads the user's context and hands it to one of seven personas. The model answers in a fixed shape, and code checks and schedules what it returns.
+
 ```mermaid
 flowchart LR
-    subgraph Devices["Phone or desktop browser"]
-        UI["React PWA"]
-    end
-    subgraph Server["Home server (LAN or Tailscale)"]
-        API["FastAPI backend"]
-        DB[("SQLite")]
-        LLM["Ollama: gemma4:e4b-it-qat"]
-        FB["Lyric fallback"]
-    end
-    UI -- "REST + WebSocket" --> API
-    API --> DB
-    API -- "streaming HTTP" --> LLM
-    API -. "if Ollama is down" .-> FB
+    UI["React PWA<br/>phone or desktop"] -- "REST + WebSocket" --> API["FastAPI backend<br/>on your home server"]
+    API --> DB[("SQLite")]
+    API --> CTX["Per-user context<br/>fridge, profile, health rules,<br/>avoid list, appliances, chat"]
+    CTX --> P["Seven personas<br/>chat, suggestion, reviser, analyst,<br/>weekly, shopping, planner"]
+    P -- "structured outputs" --> LLM["Ollama<br/>local model"]
+    LLM -- "replies" --> CODE["Code that checks the model<br/>fridge, avoid list, units,<br/>prep scheduling"]
 ```
 
-The backend loads each user's context (inventory, recent meals, profile, supplements, health rules, avoid list, appliances, language) and injects it into one of seven LLM personas, each in its own file under `backend/services/personas/`: chat, suggestion, pipeline analyst, nutrition analyst, weekly analyst, shopping and prep planner.
+The model judges and estimates; code verifies and does the math. In the two main flows, orange steps are model calls and blue steps are plain code.
 
-### Engineering highlights
+**The Suggest flow**
 
-**GenAI approach.** Grounding every prompt in that per-user context at request time is a lightweight form of retrieval, with no vector store. Suggestions go through a draft, critique and refine loop. Hard constraints (avoid list, fridge-only, appliances) are absolute, and health rules carry priorities so a 7B model knows what to trade off. The model makes the judgment calls and plain code does the math: for prep plans it only breaks the menu into tasks and estimates times, and a deterministic, unit-tested scheduler times them so everything finishes together.
+```mermaid
+flowchart LR
+    S1["Draft a menu<br/>from the fridge"]:::model --> S2["Check fridge,<br/>avoid list, units"]:::code --> S3["Revise what<br/>the check found"]:::model --> S4["Keep the revision<br/>only if no worse"]:::code --> S5["Write the reply<br/>from the final menu"]:::model
+    classDef model fill:#ffe3bf,stroke:#c26a00,color:#222
+    classDef code fill:#d6e6ff,stroke:#2f62b5,color:#222
+```
 
-**Engineering.** Every query is scoped to the logged-in user, tokens stream from Ollama to the browser over a WebSocket, and analyses and prep plans are cached per meal. When Ollama is down, AI features answer with a song parody instead of an error. About 290 backend tests (pytest, LLM mocked) and Vitest unit tests cover the code and the prompts.
+**The prep plan flow**
+
+```mermaid
+flowchart LR
+    T1["Split each dish into steps,<br/>estimate minutes and appliance"]:::model --> T2["Schedule backwards from the finish:<br/>one cook, one step per appliance,<br/>waiting steps overlap"]:::code --> T3["Try other orders,<br/>keep the best plan"]:::code
+    classDef model fill:#ffe3bf,stroke:#c26a00,color:#222
+    classDef code fill:#d6e6ff,stroke:#2f62b5,color:#222
+```
+
+**Suggestions: Draft → Revise → Present.**
+
+1. **Draft.** The suggestion persona writes a menu from the fridge.
+2. **Check and revise.** Code checks the draft: items not in the fridge, items on the avoid list, units the app doesn't know. The reviser gets that list and fixes it. A missing item is swapped for something in your fridge that does the same job, or kept as written when nothing fits. Code keeps the revised menu only if it is no worse than the draft.
+3. **Present.** A short reply is written from the final menu alone.
+
+Anything still missing stays on the card, marked yellow, so you can get it. Code doesn't remove a missing item to make the menu pass its own check.
+
+**Chat and Suggest.** The chat talks; it doesn't write menus. When you press Suggest, the server reads the chat: your typed messages and the meal cards shown so far, newest last. Your words then come before habits and favorites, and a new menu differs from the ones already shown. Health rules and the avoid list still hold.
+
+**Prep plan.** The model only splits each dish into steps and estimates them: the action, its minutes, hands-on or waiting, and an appliance. Plain code does the scheduling. It works backwards from the finish time: one cook does hands-on steps one at a time, an appliance holds one step at a time, and waiting steps (boiling, baking) leave the cook free for other dishes. A short search tries other orders and keeps a shorter plan, or an equally short one where hot food waits less.
+
+More about how it is built (the personas, the engineering highlights and the project structure) is in [Architecture](docs/ARCHITECTURE.md).
 
 ---
 
@@ -76,14 +105,12 @@ The backend loads each user's context (inventory, recent meals, profile, supplem
 
 | Layer | Choice |
 |---|---|
-| Frontend | React 18, Vite, PWA (vite-plugin-pwa) |
+| Frontend | React 18, Vite, Tailwind CSS v4, PWA (vite-plugin-pwa) |
 | Backend | Python, FastAPI, WebSockets |
-| Local LLM | Ollama + Gemma 4 E4B (configurable per task and language) |
-| LLM fallback | Song-lyric cycling |
+| Local LLM | Ollama; one default model, or a model per task or reply language |
 | Database | SQLite (aiosqlite) |
-| Voice | Web Speech API |
 | Remote access | Tailscale |
-| Tests | pytest, Vitest |
+| Tests | pytest, Vitest, GitHub Actions |
 
 ---
 
@@ -99,24 +126,27 @@ The backend loads each user's context (inventory, recent meals, profile, supplem
 
 ### Windows quick start
 
-Run `setup.bat` once (installs dependencies, creates `.env`, pulls the model), then `start.bat` (opens the backend and the frontend in two terminals). Then create a user (see [Admin CLI](#admin-cli)) and open <http://localhost:5173>.
+1. Run `setup.bat` once. It creates `.env`, installs the dependencies and pulls the default model.
+2. Create a user (see [Admin CLI](#admin-cli)).
+3. Run `start.bat`. It opens the backend and the frontend in two windows.
+4. Open <http://localhost:5173>.
 
 ### Manual setup (any OS)
 
 ```bash
 git clone https://github.com/theyoyoyo/breakFast.git
 cd breakFast
-cp .env.example .env            # every variable is documented inside
+cp .env.example .env              # every variable is documented inside
 
 # Backend
 cd backend
 python -m venv .venv
-source .venv/bin/activate       # Windows: .venv\Scripts\activate
+source .venv/bin/activate         # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-python manage.py add-user "Alice"   # asks for a PIN of 6-10 digits
+python manage.py add-user "Alice" # asks for a PIN
 python -m uvicorn main:app --host 0.0.0.0 --port 8000
 
-# Frontend (in a second terminal)
+# Frontend (second terminal)
 cd frontend
 npm install
 npm run dev
@@ -130,44 +160,39 @@ Open <http://localhost:5173> and log in with the name and PIN you created.
 ollama pull gemma4:e4b-it-qat
 ```
 
-To use another model, pull it and set `OLLAMA_MODEL` in `.env`; a task or reply language can have its own (`OLLAMA_MODEL_<KEY>`), or pick them on the server with `python -m tools.model_picker`, which needs no restart (see [Choosing models](docs/SETUPALL.md#choosing-models-admin-optional)). Without Ollama the app still runs; AI features answer with the lyric fallback.
+This is the default model. To use another one, pull it and set `OLLAMA_MODEL` in `.env`. A task or reply language can have its own model (`OLLAMA_MODEL_<KEY>`), and on the server `python -m tools.model_picker` (from `backend/`) picks them without a restart. See [Choosing models](docs/SETUPALL.md#choosing-models-admin-optional).
 
 ### Just trying it out?
 
-Set `DEMO_USER=true` in `.env` to get a `demo` account with an empty PIN and a small starter fridge (salt, oils, butter, eggs, bread…). Keep it off on any instance other people can reach.
+Set `DEMO_USER=true` in `.env` for a `demo` account with an empty PIN and a small starter fridge. Keep it off on any instance other people can reach.
 
 ### Production: one server, one port
 
 ```bash
-cd frontend && npm run build    # outputs frontend/dist
+cd frontend && npm run build      # builds frontend/dist
 # set SERVE_FRONTEND=true in .env, then:
 cd ../backend && python -m uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-FastAPI now serves the app and the API together at `http://<server>:8000`. On Windows, `start-server.bat` does the same and waits for Ollama first. [`docs/SETUPALL.md`](docs/SETUPALL.md) is a step-by-step guide for a dedicated Windows server, including autostart, firewall and Tailscale.
+FastAPI then serves the app and the API together on port 8000. On Windows, `start-server.bat` does the same. [`docs/SETUPALL.md`](docs/SETUPALL.md) is a step-by-step guide for a dedicated Windows server, with autostart, firewall and Tailscale.
 
-### Remote access
-
-Install [Tailscale](https://tailscale.com) on the server and your devices, then open `http://<tailscale-ip>:8000` from anywhere. It is encrypted and needs no port forwarding.
+For remote access, install [Tailscale](https://tailscale.com) on the server and your devices and open the server's Tailscale address on port 8000. It is encrypted and needs no port forwarding.
 
 ---
 
 ## Admin CLI
 
-Users are managed on the server; there is no sign-up page.
+There is no sign-up page. Users are managed on the server, from `backend/`:
 
 ```bash
-cd backend
-python manage.py add-user "Alice"                      # asks for a 6-10 digit PIN; add --admin for an admin user
-python manage.py set-pin "Alice"                       # change a PIN (or reset a forgotten one)
+python manage.py add-user "Alice"     # asks for a PIN; --admin for an admin user
+python manage.py set-pin "Alice"      # change or reset a PIN
 python manage.py list-users
-python manage.py delete-user "Alice"                   # also deletes all of Alice's data
-python manage.py backup-db                             # timestamped copy next to the database, safe while the server runs
+python manage.py delete-user "Alice"  # also deletes all of Alice's data
+python manage.py backup-db            # checked copy next to the database, safe while the server runs
 ```
 
-To restore a backup, stop the backend, delete `breakFAST.db-wal` and `breakFAST.db-shm` if they're there, then copy the backup over `breakFAST.db`. A leftover `-wal` file would be read into the restored database.
-
-When an update changes the database, the backend backs it up by itself before the change, at its next start: `breakFAST_before_migration_<time>_v<version>.db` next to the database, the newest three kept. It is restored the same way. Only the backend's start updates the database: after an update the CLI commands above stop with a message until the backend has started once.
+The backend also backs up the database by itself before an update changes it. To restore a backup, stop the backend, delete any `breakFAST.db-wal` and `breakFAST.db-shm` files, then copy the backup over `breakFAST.db`.
 
 ---
 
@@ -178,83 +203,44 @@ When an update changes the database, the backend backs it up by itself before th
 cd backend
 pip install -r requirements-dev.txt
 python -m pytest
-python -m ruff check .          # lint rules in ruff.toml
+python -m ruff check .
 
 # Frontend
 cd frontend
 npm test
 npm run build
-npm run lint                    # ESLint on every file; CI fails on new warnings
+npm run lint
 ```
 
-Prompt quality is measured against a real model: `python -m tools.prompt_check` (from `backend/`) runs the suggestion pipeline for sample users and scores every reply in code: JSON, fridge-only, prepared items, units. See [BONUS C in the setup guide](docs/SETUPALL.md#bonus-c--test-prompts-from-another-pc-optional-for-development).
+The prompt test needs a running Ollama: `python -m tools.prompt_check` from `backend/`. See [BONUS C in the setup guide](docs/SETUPALL.md#bonus-c--test-prompts-from-another-pc-optional-for-development).
 
 ---
 
-## Configuration
+## Security
 
-All backend settings are environment variables, documented in [`.env.example`](.env.example).
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server |
-| `OLLAMA_MODEL` | `gemma4:e4b-it-qat` | Model for every persona, unless a task or language has its own |
-| `OLLAMA_THINK` | none (`false` for the default model) | Ollama's think field for every call without its own |
-| `OLLAMA_MODEL_<TASK or LANGUAGE>` | none | A model for one task (`SHOPPING`, `PLAN`, …) or reply language (`TR`), with `OLLAMA_THINK_<KEY>`; the model picker's `backend/model_settings.json` wins over it |
-| `DATABASE_PATH` | `./breakFAST.db` | SQLite file, relative to `backend/` whatever folder the backend or the CLI starts from; the start prints its full path |
-| `CORS_ORIGINS` | `*` | Comma-separated allowed origins |
-| `SERVE_FRONTEND` | `false` | Serve `frontend/dist` from FastAPI |
-| `API_DOCS` | `false` | Serve `/docs`, `/redoc` and `/openapi.json` |
-| `DEMO_USER` | `false` | Create a `demo` user with an empty PIN and a starter fridge |
+break FAST is built for a trusted home network (LAN or Tailscale), not the open internet. Do not expose the server port publicly; use Tailscale for remote access. The [security model](docs/SECURITY_MODEL.md) describes login, sessions, request limits and error handling.
 
 ---
 
-## Security model
+## Documentation
 
-break FAST is built for a trusted home network (LAN or Tailscale), not the open internet:
-
-- Users log in with a name and a PIN of 6 to 10 digits, stored as a salted scrypt hash. Hashes from older versions (plain SHA-256) still work and are upgraded on the next login, and PINs shorter than 6 digits from before the rule keep working until `set-pin` replaces them.
-- Failed logins are rate limited with exponential backoff, per name on each IP. Other users on that device, and the same user on other devices, can still log in.
-- Session tokens are random 256-bit values kept in memory, so everyone logs in again after a server restart.
-- Tokens travel only in headers, never in URLs, so they stay out of logs: REST calls send them in `Authorization`, and the chat WebSocket in `Sec-WebSocket-Protocol`.
-- Logging out ends the session on the server as well as on the device, so its token can't be used again. Each device has its own session, so the user's other devices stay logged in.
-- Every request has size limits: text, lists, numbers and whole bodies are bounded, and a request over a limit is refused before it reaches the database or the model.
-- Do not expose port 8000 to the public internet. Use Tailscale for remote access.
-
----
-
-## Project structure
-
-```text
-breakFast/
-├── backend/
-│   ├── main.py            FastAPI app, routers, static frontend serving
-│   ├── database.py        SQLite schema and migrations
-│   ├── auth.py            PIN hashing and bearer tokens
-│   ├── manage.py          admin CLI
-│   ├── routers/           one module per API area (chat WebSocket, meals, fridge, ...)
-│   ├── services/
-│   │   ├── personas/      one file per LLM persona
-│   │   ├── pipeline.py    draft → revise → present suggestion pipeline
-│   │   ├── context.py     per-user context loaders for prompts
-│   │   ├── insights.py    behavioural pattern extraction
-│   │   └── llm.py         Ollama streaming and lyric fallback
-│   └── tests/             pytest suite
-├── frontend/src/
-│   ├── components/        React UI (chat, fridge, preferences, settings, ...)
-│   ├── services/api.js    REST and WebSocket client
-│   └── hooks/useVoice.js  Web Speech API
-├── docs/                  server setup guide
-├── CLAUDE.md              product decisions and conventions (context for AI-assisted development)
-└── setup.bat, start.bat, start-server.bat   Windows helpers
-```
+| Guide | What is in it |
+|---|---|
+| [Architecture](docs/ARCHITECTURE.md) | The personas, engineering highlights and project structure |
+| [Configuration](docs/CONFIGURATION.md) | Every environment variable, and how to choose models |
+| [Security model](docs/SECURITY_MODEL.md) | Login, sessions, request limits and error handling |
+| [Server setup guide](docs/SETUPALL.md) | A step-by-step guide for a dedicated Windows server |
+| [Model picker](docs/MODEL_PICKER.md) | Pick the model for each task and reply language |
+| [Model tests](docs/MODEL_TESTS.md) | Candidate models and how they are compared |
 
 ---
 
 ## Roadmap
 
-- Habit onboarding: ask about routines one question at a time
-- Appliance-aware prep plans that stagger tasks sharing one appliance
+- **Habit onboarding:** ask about morning routines, one question at a time.
+- **Fridge quick-add:** one tap to log basics and items you had before.
+- **Voice input:** the microphone in the chat bar is a placeholder for now.
+- **UI redesign:** a new layout built on Tailwind CSS.
 
 ---
 
