@@ -9,6 +9,9 @@ draft and the reviser both get the block, placed last in their message.
 
 The chat persona reads the same session as its history, with each meal card as its one line, and
 its reply loses any meal block before it is saved: meal cards come only from a Suggest press (#168).
+
+Neither reads a notice (chat_messages.kind = 'notice', #283): a reply the app wrote itself, such
+as a retry note or a lyric, is shown in the chat but is no part of the conversation.
 """
 
 from services.fridge import meal_ingredient_names
@@ -63,11 +66,18 @@ def _meal_card(content: str) -> dict | None:
     return None
 
 
+def _is_notice(row: dict) -> bool:
+    """A note the app wrote (a retry or low-ingredient note, a lyric): no persona reads it."""
+    return row.get("kind") == "notice"
+
+
 def chat_entries(rows: list[dict]) -> list[str]:
     """The session's messages (oldest first) as the block's lines: typed messages and meal cards.
     The user's latest typed message is marked, since it wins over earlier ones."""
     entries, latest = [], None
     for row in rows:
+        if _is_notice(row):
+            continue
         content = str(row.get("content") or "").strip()
         if row.get("role") == "user":
             if content and content not in _BUTTON_TEXTS:
@@ -103,11 +113,11 @@ def format_chat_block(rows: list[dict]) -> str | None:
 async def load_chat_block(db, session_id: str, user_id: int) -> str | None:
     """The chat block of the user's session, from its saved messages in chat order."""
     async with db.execute(
-        "SELECT role, content FROM chat_messages WHERE session_id = ? AND user_id = ? ORDER BY id",
+        "SELECT role, content, kind FROM chat_messages WHERE session_id = ? AND user_id = ? ORDER BY id",
         (session_id, user_id),
     ) as cur:
         rows = await cur.fetchall()
-    return format_chat_block([{"role": r["role"], "content": r["content"]} for r in rows])
+    return format_chat_block([{"role": r["role"], "content": r["content"], "kind": r["kind"]} for r in rows])
 
 
 # What a chat reply says when it was nothing but a meal block: the menu comes from a Suggest press
@@ -121,9 +131,12 @@ _FENCE = "```json"
 def chat_history(rows: list[dict]) -> list[dict]:
     """The session's messages as the chat persona's history: each meal card becomes its one line
     after the reply's own text, so the chat knows which menus were shown but has no meal JSON to
-    copy into its reply (the 7B model copied it into every reply after a Suggest press)."""
+    copy into its reply (the 7B model copied it into every reply after a Suggest press). Notices
+    are left out: the app wrote them, so they are no reply of the chat's."""
     history = []
     for row in rows:
+        if _is_notice(row):
+            continue
         content = str(row.get("content") or "")
         meal = _meal_card(content) if row.get("role") == "assistant" else None
         if meal:

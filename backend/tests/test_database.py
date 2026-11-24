@@ -531,3 +531,20 @@ async def test_existing_demo_user_loses_admin(db_path, monkeypatch):
     monkeypatch.setattr(database, "DEMO_USER", True)
     await database.init_db()
     assert _query(db_path, "SELECT name, is_admin FROM users ORDER BY name") == [("Alice", 1), ("demo", 0)]
+
+
+# Step 6 gives chat messages a kind, and the messages saved before it stay plain (no kind)
+async def test_step_6_adds_the_message_kind(db_path):
+    await database.init_db()
+    with closing(sqlite3.connect(db_path)) as db:
+        db.execute("INSERT INTO users (id, name, pin_hash) VALUES (1, 'Alice', 'x')")
+        db.execute("INSERT INTO chat_sessions (id, user_id) VALUES ('s1', 1)")
+        db.execute("ALTER TABLE chat_messages DROP COLUMN kind")
+        db.execute("INSERT INTO chat_messages (session_id, user_id, role, content) VALUES ('s1', 1, 'assistant', 'Hi')")
+        db.execute("PRAGMA user_version = 5")
+        db.commit()
+
+    await database.init_db()
+    assert "kind" in _columns(db_path)["chat_messages"]
+    assert _query(db_path, "SELECT content, kind FROM chat_messages") == [("Hi", None)]
+    assert _query(db_path, "PRAGMA user_version") == [(LATEST,)]
