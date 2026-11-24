@@ -39,6 +39,8 @@ Personas, each run for a sample user (tools/prompt_samples.py):
   items it dropped and the prep words it wrote (#176). A case's item nobody eats on its own
   (`lone`) still on the menu by itself with no `serve_with` is flagged (alone); the note says
   which dish it joined, and every final's note lists the items served with another one (#263).
+  A dish or menu still named after a draft ingredient the review swapped or dropped is
+  labeled (named, #193), which the kale case invites.
 - chat: the typed messages of a --scenario (chat by default, or pressed) sent to the chat
   persona one at a time, with the chat so far as history. The chat talks and menus come
   only from a Suggest press (#168), so a reply with food amounts, numbered steps or a
@@ -160,8 +162,8 @@ PERSONAS = {
 STAGES = PERSONAS["suggest"]["stages"]
 # Bumped when a check changes what counts as clean, so a test is compared only with tests scored the same way
 # (7 was used by an unmerged branch's tests; 8 was the review's alone check before an item could name the one it's
-# served with, #263)
-CHECKS = 9
+# served with, #263; 9 was the named check before it read the menu's name and the draft's ingredients, #193)
+CHECKS = 10
 _TURKISH_LETTERS = set("çğıöşüÇĞİÖŞÜ")
 
 # Shopping names that aren't one specific product: alternatives, examples or filler words
@@ -270,25 +272,36 @@ def amount_problems(meal: dict) -> list[str]:
     return found
 
 
-def named_dishes(meal: dict, inventory: list[dict]) -> list[str]:
+def _variants(names) -> set[str]:
+    """Every word variant of these names (the fridge check's _tokens)."""
+    return {v for name in names for word in _tokens(str(name)) for v in word}
+
+
+def named_dishes(meal: dict, inventory: list[dict], draft: dict | None = None) -> list[str]:
     """Dishes whose name has a word of a fridge item that none of their ingredients has, with those words:
-    "Chia porridge (chia)". Words that name no fridge item ("pudding", "cake") are left alone. Only a
-    label for reading the log: a word can sit in a fridge name by chance."""
-    fridge = {v for i in inventory if i.get("name") for word in _tokens(i["name"]) for v in word}
+    "Chia porridge (chia)", and the menu's name with such a word that none of the menu's food has. Given
+    the draft, the words of the draft's ingredients count too, so a dish or menu still named after an item
+    the review swapped or dropped is caught: "Blueberry pancakes (blueberry)" made with strawberries (#193).
+    Words that name no fridge or draft item ("pudding", "cake") are left alone. Only a label for reading
+    the log: a word can sit in a fridge name by chance."""
+    food = _variants(i["name"] for i in inventory if i.get("name"))
+    if isinstance(draft, dict):
+        food |= _variants(meal_ingredient_names(draft))
+
+    def lacking(name: str, used: set[str]) -> str:
+        words = [
+            word for word, variants in zip(_words(name), _tokens(name))
+            if variants & food and not variants & used and not variants & _NOT_FOOD
+        ]
+        return f"{name} ({', '.join(words)})" if words else ""
+
     found = []
     for item in meal.get("menu") or []:
         subs = [s for s in item.get("ingredients") or [] if isinstance(s, dict)] if isinstance(item, dict) else []
-        if not subs:
-            continue
-        used = {v for s in subs for word in _tokens(str(s.get("name", ""))) for v in word}
-        name = str(item.get("name", ""))
-        lacking = [
-            word for word, variants in zip(_words(name), _tokens(name))
-            if variants & fridge and not variants & used and not variants & _NOT_FOOD
-        ]
-        if lacking:
-            found.append(f"{name} ({', '.join(lacking)})")
-    return found
+        if subs:
+            found.append(lacking(str(item.get("name", "")), _variants(s.get("name", "") for s in subs)))
+    found.append(lacking(str(meal.get("menu_name") or ""), _variants(meal_ingredient_names(meal))))
+    return [f for f in found if f]
 
 
 def turkish_words(text: str, sample: dict) -> list[str]:
@@ -404,7 +417,7 @@ def check_reply(text: str, sample: dict, scenario: dict | None = None, draft: st
             "units": unknown_units(meal, sample["language"]),
             "amounts": amount_problems(meal),
             "avoided": find_avoided(meal, sample["avoid_list"]),
-            "named": named_dishes(meal, sample["ingredients"]),
+            "named": named_dishes(meal, sample["ingredients"], extract_json_block(draft or "")),
             "turkish": turkish_words(text, sample),
             **asked,
             "menu": [],

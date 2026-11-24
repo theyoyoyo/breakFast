@@ -34,7 +34,8 @@ in the sample's reply language, and mixed has no chat: en and tr cover it (#178)
 PLAN_CASES are menus for the prep plan test, shaped the way the Prep Plan button sends them.
 
 REVIEW_CASES are fixed drafts with items the fridge lacks, sent to the reviser alone (#148): a
-missing dish ingredient another fridge item can replace, one nothing replaces, a fridge item
+missing dish ingredient another fridge item can replace, one nothing replaces, a dish and the
+menu named after a missing item a fridge item replaces (#193), a fridge item
 written with a cut on either side (big_fridge keeps "Turkey slices"), a favorite's fridge item
 the review must keep, prep words to fix (#176), and items nobody eats on their own, served alone
 beside the food they go with (#263).
@@ -649,6 +650,12 @@ REVIEW_CASES = {
                         _dish("Blueberry pancakes", "", ("Flour", 1, "glass"), ("Eggs", 2, "pcs"), ("Milk", 1, "glass"),
                               ("Baking powder", 1, "tsp"), ("Blueberries", 80, "g"), ("Maple syrup", 2, "tbsp")),
                         _served("Orange juice", 1, "glass")),
+    # A dish and the menu named after a missing item a fridge item replaces (#193): the kale gives way to the
+    # spinach, and then "Kale" in either name no longer says what's there, so the names follow the food
+    "kale": _review("en", "Kale morning", 15,
+                    _dish("Kale and cheddar omelette", "", ("Eggs", 3, "pcs"), ("Kale", 1, "handful", "chopped"),
+                          ("Cheddar", 30, "g", "grated"), ("Butter", 1, "tsp")),
+                    _served("Whole wheat bread", 1, "slice"), _served("Tea", 1, "tea glass")),
     # Prep words (#176): a fridge item written with a cut (Diced onion), the fridge item with the cut in prep; a part
     # of one (Egg whites) and a product (Smoked cheddar), kept as written unless a swap does the same job, since a
     # rename loses the part; a word that changes nothing (mixed) and one that belongs to the bread (toasted), dropped;

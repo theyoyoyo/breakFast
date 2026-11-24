@@ -250,6 +250,65 @@ def test_dishes_named_after_what_they_lack():
     assert check_reply(text, EN)["issues"]["named"] == ["Banana oat porridge (banana)"]
 
 
+# Given the draft, a dish still named after a draft ingredient the review swapped or dropped is flagged, though the
+# fridge lacks that item (#193): the swapped blueberries, the dropped salmon; without the draft it isn't
+def test_dishes_named_after_a_swapped_or_dropped_draft_item():
+    def ing(name, **extra):
+        return {"name": name, "amount": 1, "unit": "pcs", **extra}
+    draft = _reply(
+        {"name": "Blueberry pancakes", "ingredients": [ing("Flour"), ing("Eggs"), ing("Blueberries")]},
+        {"name": "Salmon frittata", "ingredients": [ing("Eggs"), ing("Smoked salmon"), ing("White cheese")]},
+    )
+    final = _reply(
+        {"name": "Blueberry pancakes", "ingredients": [ing("Flour"), ing("Eggs"), ing("Strawberries", replaces="Blueberries")]},
+        {"name": "Salmon frittata", "ingredients": [ing("Eggs"), ing("White cheese")]},
+    )
+    assert check_reply(final, EN, draft=draft)["issues"]["named"] == [
+        "Blueberry pancakes (blueberry)", "Salmon frittata (salmon)",
+    ]
+    assert check_reply(final, EN)["issues"]["named"] == []
+    renamed = _reply(
+        {"name": "Strawberry pancakes", "ingredients": [ing("Flour"), ing("Eggs"), ing("Strawberries", replaces="Blueberries")]},
+        {"name": "Cheese frittata", "ingredients": [ing("Eggs"), ing("White cheese")]},
+    )
+    assert check_reply(renamed, EN, draft=draft)["issues"]["named"] == []
+
+
+# The menu's name is held to the whole menu's food: a word of a fridge or draft item no item has is flagged, one the
+# menu uses or that names no food ("morning") isn't (#193)
+def test_menu_named_after_what_it_lacks():
+    def meal(menu_name, *food):
+        return "```json\n" + json.dumps({"menu_name": menu_name, "menu": [
+            {"name": "Omelette", "ingredients": [{"name": n, "amount": 1, "unit": "pcs"} for n in food]},
+        ]}) + "\n```"
+    draft = meal("Kale morning", "Eggs", "Kale")
+    assert check_reply(meal("Kale morning", "Eggs", "Spinach"), EN, draft=draft)["issues"]["named"] == ["Kale morning (kale)"]
+    assert check_reply(meal("Banana morning", "Eggs"), EN)["issues"]["named"] == ["Banana morning (banana)"]
+    assert check_reply(meal("Spinach morning", "Eggs", "Spinach"), EN, draft=draft)["issues"]["named"] == []
+
+
+# The kale review case invites a stale name (#193): its dish and menu are named after the missing kale, which the
+# fridge's spinach replaces, so a review that swaps it and keeps both names is flagged, and one that renames them isn't
+def test_kale_case_flags_a_stale_name():
+    case = REVIEW_CASES["kale"]
+    assert find_missing_ingredients(case["draft"], case["ingredients"]) == ["Kale"]
+    assert any(same_name("Spinach", i["name"]) for i in case["ingredients"])
+    draft = pipeline._meal_reply("", case["draft"])
+    def reply(menu_name, dish_name):
+        dish = {"name": dish_name, "method": "Whisk, wilt, fold", "ingredients": [
+            {"name": "Eggs", "amount": 3, "unit": "pcs"},
+            {"name": "Spinach", "amount": 1, "unit": "handful", "prep": "chopped", "replaces": "Kale"},
+            {"name": "Cheddar", "amount": 30, "unit": "g", "prep": "grated"},
+            {"name": "Butter", "amount": 1, "unit": "tsp"},
+        ]}
+        served = [{"name": n, "amount": 1, "unit": u, "ingredients": []} for n, u in (("Whole wheat bread", "slice"), ("Tea", "tea glass"))]
+        return "```json\n" + json.dumps({"menu_name": menu_name, "menu": [dish, *served]}) + "\n```"
+    stale = check_review(reply("Kale morning", "Kale and cheddar omelette"), case, draft)
+    assert stale["issues"]["named"] == ["Kale and cheddar omelette (kale)", "Kale morning (kale)"]
+    fresh = check_review(reply("Spinach morning", "Spinach and cheddar omelette"), case, draft)
+    assert is_clean(fresh), describe(fresh)
+
+
 # One run returns the draft and the final reply; draft-only closes the pipeline before the review
 async def test_suggest_once_collects_draft_and_final():
     calls = []
@@ -731,25 +790,25 @@ async def test_plan_once_sends_the_menu_with_its_methods():
     assert set(calls) == {0.3}
 
 
-def _pancakes(*ingredients) -> str:
+def _pancakes(*ingredients, name: str = "Strawberry pancakes") -> str:
     """The pancakes review case's reply with the dish made of these ingredients, beside its orange juice."""
-    dish = {"name": "Blueberry pancakes", "method": "Mix, fry", "ingredients": [
+    dish = {"name": name, "method": "Mix, fry", "ingredients": [
         {"name": n, "amount": 1, "unit": "glass", **extra} for n, extra in ingredients
     ]}
     return _reply(dish, {"name": "Orange juice", "amount": 1, "unit": "glass", "ingredients": []})
 
 
-# A review that swaps the missing blueberries for strawberries and marks it is clean, its note naming the swap; one
-# that keeps them notes them as still missing, and one that brings in a food from outside the fridge and the draft
-# (raspberries) is flagged, its note naming the fridge food it dropped (the maple syrup)
+# A review that swaps the missing blueberries for strawberries, marks it and renames the dish is clean, its note
+# naming the swap; one that keeps them notes them as still missing, and one that brings in a food from outside the
+# fridge and the draft (raspberries) is flagged, its note naming the fridge food it dropped (the maple syrup)
 def test_review_scores_swaps_and_outside_names():
     case = REVIEW_CASES["pancakes"]
     draft = pipeline._meal_reply("", case["draft"])
     base = [("Flour", {}), ("Eggs", {}), ("Milk", {}), ("Baking powder", {}), ("Maple syrup", {})]
     swapped = check_review(_pancakes(*base, ("Strawberries", {"replaces": "Blueberries"})), case, draft)
     assert is_clean(swapped), describe(swapped)
-    assert swapped["note"] == "replaced Strawberries for Blueberries (Blueberry pancakes)"
-    kept = check_review(_pancakes(*base, ("Blueberries", {})), case, draft)
+    assert swapped["note"] == "replaced Strawberries for Blueberries (Strawberry pancakes)"
+    kept = check_review(_pancakes(*base, ("Blueberries", {}), name="Blueberry pancakes"), case, draft)
     assert is_clean(kept) and kept["note"] == "still missing: Blueberries"
     outside = check_review(_pancakes(*base[:4], ("Mango", {})), case, draft)
     assert outside["issues"]["outside"] == ["Mango"]
