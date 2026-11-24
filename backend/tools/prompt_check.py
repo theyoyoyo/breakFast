@@ -807,6 +807,7 @@ def shopping_prompt(sample: dict, hints: list[str]) -> str:
         avoid_list=sample["avoid_list"],
         shopping_list=sample["shopping_list"],
         ratings=sample["ratings"],
+        nutrients=sample["nutrients"],
         language=sample["language"],
         country=sample.get("country"),
     )

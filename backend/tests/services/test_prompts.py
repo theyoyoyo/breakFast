@@ -849,6 +849,39 @@ class TestShoppingPrompt:
         prompt = build_shopping_prompt([], today=self.DAY)
         assert "27 October 2026" in prompt
 
+    NUTRIENTS = {"lacking": ["fiber", "vitamin C"], "more_than_enough": ["salt"]}
+
+    def test_nutrient_line_beside_the_gaps(self):
+        """A recent analysis's nutrients follow the nutritional-gaps wording: lacking ones worth buying for (#207)."""
+        prompt = build_shopping_prompt([], nutrients=self.NUTRIENTS)
+        gaps = prompt.index("Consider nutritional gaps")
+        line = prompt.index("Nutrients in recent breakfasts")
+        assert gaps < line < prompt.index("RESPONSE FORMAT")
+        assert "lacking fiber, vitamin C; more than enough salt." in prompt
+        assert "lacking ones are worth buying for; the ones with more than enough need no more" in prompt
+
+    def test_nutrient_line_is_not_a_drawn_hint(self):
+        """The nutrient line is in every press, whatever taste hints this press drew (#207)."""
+        for hints in ([], ["Likes Pancakes"], ["Keeps around: Cheddar", "Habit: tea"]):
+            assert "lacking fiber, vitamin C" in build_shopping_prompt(hints, nutrients=self.NUTRIENTS)
+
+    def test_no_nutrients_keeps_the_prompt_as_before(self):
+        """Without an analysis, or with nothing marked, the prompt is byte-identical to the one without the line (#207)."""
+        plain = build_shopping_prompt(["Likes Pancakes"], today=self.DAY)
+        assert "Nutrients in recent breakfasts" not in plain
+        assert "by current supplements.\n\n" in plain
+        for nutrients in (None, {}, {"lacking": [], "more_than_enough": []}):
+            assert build_shopping_prompt(["Likes Pancakes"], nutrients=nutrients, today=self.DAY) == plain
+
+    def test_nutrient_line_names_no_food(self):
+        """The line's own words name no food from the built-in food list: the model picks the products (#207)."""
+        from services.ingredient_groups import CATALOG
+        from services.personas.shopping import NUTRIENT_LINE
+
+        words = NUTRIENT_LINE.lower()
+        foods = {n.lower() for foods in CATALOG.values() for food in foods for n in food["en"] + food["tr"]}
+        assert not [f for f in foods if re.search(rf"\b{re.escape(f)}\b", words)]
+
     def test_suggestion_prompt_gets_date_and_country(self):
         """The suggestion prompt's seasonality hint uses the same date and country."""
         prompt = build_suggestion_prompt([], [], {}, [], country="Türkiye", today=self.DAY)

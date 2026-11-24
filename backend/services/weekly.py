@@ -4,8 +4,9 @@ The weekly analysis (#206): its reply schema and parser, and how analyses are ke
 Each analysis covers the 7 days up to the day it ran and is filed under the calendar week it ran
 in (Monday to Sunday by the server's local date: its ISO week, `week_key`). A new one replaces
 only the one from the same week, so the latest run of a week wins and a week that has ended keeps
-its last one; analyses older than six months are deleted. The suggestion draft and the reviser read the nutrients of the latest
-one when it ran in the last 7 days; the nudge tells the user a new one has something to read.
+its last one; analyses older than six months are deleted. The suggestion draft, the reviser and
+the shopping prompt (#207) read the nutrients of the latest one when it ran in the last 7 days;
+the nudge tells the user a new one has something to read.
 """
 
 import json

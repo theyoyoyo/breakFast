@@ -3,7 +3,8 @@ Shopping persona — professional shopping advisor.
 
 Shopping consultant for a breakfast pantry that fits the user (about 10-15 items).
 Each press gets a random share of the user's taste hints here and of their fridge in
-the request (services.shopping.pick_input); the limits are always in.
+the request (services.shopping.pick_input); the limits and the latest weekly nutrients
+are always in.
 Ollama shapes the reply with services.shopping.SUGGESTIONS_SCHEMA, and code
 drops items the user already has, has listed, has seen or avoids.
 """
@@ -16,6 +17,7 @@ from services.knowledge import (
     format_supplements,
     format_today,
     format_user_profile,
+    marked_nutrients,
 )
 from services.shopping import LOW_RATING
 
@@ -75,7 +77,7 @@ Supplements: {supplements}
 
 Consider nutritional gaps that food could fill, especially nutrients not covered \
 by current supplements.
-
+{nutrients}
 ═══════════════════════════════════════════════════════════════
 RESPONSE FORMAT
 ═══════════════════════════════════════════════════════════════
@@ -118,6 +120,21 @@ FINAL_REMINDER = (
 )
 
 
+# The latest weekly analysis's nutrients (#207), beside the gaps above in every press. Nutrient
+# names only: the model picks the products.
+NUTRIENT_LINE = (
+    "Nutrients in recent breakfasts, estimated from logged meals: {marked}. Products rich in the "
+    "lacking ones are worth buying for; the ones with more than enough need no more."
+)
+
+
+def _format_nutrients(nutrients: dict | None) -> str:
+    """The nutrient line and its line break, or "" (so the prompt is as before) when nothing is
+    marked or there is no analysis from the last 7 days."""
+    marked = marked_nutrients(nutrients)
+    return NUTRIENT_LINE.format(marked=marked) + "\n" if marked else ""
+
+
 def _format_shopping_list(items: list[str] | None) -> str:
     if not items:
         return "CURRENT SHOPPING LIST: (empty)"
@@ -139,12 +156,14 @@ def build_shopping_prompt(
     avoid_list: list[str] | None = None,
     shopping_list: list[str] | None = None,
     ratings: list[dict] | None = None,
+    nutrients: dict | None = None,
     language: str = "en",
     country: str | None = None,
     today: date | None = None,
 ) -> str:
     """Build the shopping persona system prompt from this press's taste hints (see
-    services.shopping.pick_input) and the limits, which every press gets."""
+    services.shopping.pick_input) and the limits, which every press gets, like `nutrients` (the
+    latest weekly analysis's lists when it ran in the last 7 days, services.context)."""
     dislikes = [v for k, v in (user_preferences or {}).items() if k.startswith("dislike:")]
     low_rated = [r["product_name"] for r in ratings or [] if r.get("rating", 10) <= LOW_RATING][:10]
     return SHOPPING_TEMPLATE.format(
@@ -156,6 +175,7 @@ def build_shopping_prompt(
         health_rules=format_health_rules(health_rules or []),
         user_profile=format_user_profile(user_profile),
         supplements=format_supplements(supplements),
+        nutrients=_format_nutrients(nutrients),
         avoid_list=format_avoid_list(avoid_list),
         shopping_list=_format_shopping_list(shopping_list),
     ) + FINAL_REMINDER.format(lang_instruction=_lang(language))

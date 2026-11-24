@@ -291,6 +291,7 @@ async def get_shopping_suggestions(
                 avoid_list=ctx["avoid_list"],
                 shopping_list=ctx["shopping_list"],
                 ratings=ctx["ratings"],
+                nutrients=ctx["nutrients"],
                 language=ctx["language"],
                 country=ctx["country"],
             )
