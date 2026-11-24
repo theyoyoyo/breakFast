@@ -447,6 +447,19 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
       },
       // The request that made the note has ended (finished or stopped, on any device)
       onRequestEnded: () => setBusyNote(null),
+      // One of the user's requests was running when this socket opened (this device reloaded while it
+      // ran, or another device sent it): shown as this device's own, in its own chat, with its progress
+      // or its words so far and Stop; its frames follow and end it as usual (#287). A message of this
+      // device's waiting for the socket goes on its own way (it gets the busy note).
+      onRunning: ({ sessionId, kind, step, content }) => {
+        if (requestActiveRef.current) return
+        requestActiveRef.current = true
+        setPendingSuggest(kind === 'suggest')
+        requestSessionRef.current = sessionId
+        setRequestSession(sessionId)
+        setPipelineStep(step)
+        setStreamBuffer(content)
+      },
       // A session changed elsewhere: reload it if it's on screen, else only Back / Next may have changed
       onSessionUpdated: (changedId) => {
         if (changedId === sessionIdRef.current) setSyncPending(true)

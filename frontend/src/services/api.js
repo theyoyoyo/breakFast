@@ -436,7 +436,7 @@ export const getSchedule = (meal_name, steps, ingredients, meal_id = null, menu 
  */
 export function createChatSocket({
   onToken, onDone, onMealLogged, onError, onClose, onProgress, onStopped, onSessionUpdated, onNotice,
-  onBusy, onRequestEnded,
+  onBusy, onRequestEnded, onRunning,
 } = {}) {
   const token = getToken()
   const ws = new WebSocket(`${WS_URL}/chat`, token ? ['bearer', token] : ['bearer'])
@@ -454,6 +454,10 @@ export function createChatSocket({
       // that request has ended (#283)
       else if (msg.type === 'busy') onBusy?.(msg.content, msg.session_id)
       else if (msg.type === 'request_ended') onRequestEnded?.()
+      // One of the user's requests was running when this socket opened (a reload): its frames follow (#287)
+      else if (msg.type === 'running') {
+        onRunning?.({ sessionId: msg.session_id ?? null, kind: msg.kind, step: msg.step ?? null, content: msg.content ?? '' })
+      }
       // The server refused the reply (its chat was deleted meanwhile): shown as the reply, so the chat stops waiting
       else if (msg.type === 'error') onDone?.(msg.message, undefined, msg.session_id)
       else if (msg.type) onNotice?.(msg)
