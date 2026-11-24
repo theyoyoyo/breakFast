@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { getWeeklyReview, generateWeeklyReview, getWeeklyReviewStatus } from '../services/api'
+import useStoppable, { stopLabel } from '../hooks/useStoppable'
 import ConfirmDialog from './ui/confirm-dialog'
 import * as s from './WeeklySummary.styles'
 
 export default function WeeklySummary({ onBack }) {
   const [review, setReview] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [generating, setGenerating] = useState(false)
+  // While the analysis runs its button stops it; leaving the page stops it too (#288)
+  const { running: generating, stopped, run, stop } = useStoppable()
   const [error, setError] = useState(null)
   // The server's word: a meal of the last 7 days is newer than the latest analysis (or there is none)
   const [nudge, setNudge] = useState(false)
@@ -27,12 +29,17 @@ export default function WeeklySummary({ onBack }) {
     getWeeklyReviewStatus().then((r) => setNudge(Boolean(r?.nudge))).catch(() => {})
   }, [])
 
+  // A tap while it runs stops it: the page stays as it was and nothing is kept
   const handleGenerate = async () => {
-    setGenerating(true)
+    if (generating) {
+      stop()
+      return
+    }
     setError(null)
     try {
-      const data = await generateWeeklyReview()
-      setReview(data)
+      const call = await run(null, (signal) => generateWeeklyReview({ signal }))
+      if (call.stopped) return
+      setReview(call.value)
       setNudge(false)
     } catch (err) {
       if (err?.status === 422) {
@@ -42,8 +49,6 @@ export default function WeeklySummary({ onBack }) {
       } else {
         setError('Failed to generate weekly review.')
       }
-    } finally {
-      setGenerating(false)
     }
   }
 
@@ -89,9 +94,8 @@ export default function WeeklySummary({ onBack }) {
               <button
                 style={s.refreshBtn}
                 onClick={handleGenerate}
-                disabled={generating}
               >
-                {generating ? '…' : '↺ Analyze again'}
+                {generating ? stopLabel('Analyzing…') : '↺ Analyze again'}
               </button>
             </div>
           </div>
@@ -109,15 +113,15 @@ export default function WeeklySummary({ onBack }) {
           <button
             style={{ ...s.refreshBtn, alignSelf: 'center', marginTop: 8 }}
             onClick={handleGenerate}
-            disabled={generating}
           >
-            {generating ? 'Analyzing…' : 'Analyze this week'}
+            {generating ? stopLabel('Analyzing…') : 'Analyze this week'}
           </button>
         )}
 
         {generating && (
           <span style={s.empty}>Analyzing your week…</span>
         )}
+        {stopped && <span role="status" style={s.empty}>Stopped</span>}
       </div>
 
       <ConfirmDialog

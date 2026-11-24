@@ -11,7 +11,7 @@ import logging
 import random
 from typing import Optional
 
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, Request
 from pydantic import BaseModel, Field
 
 from auth import require_user
@@ -32,6 +32,7 @@ from services.shopping import (
     recently_removed,
     shopping_request,
 )
+from services.stoppable import RequestStopped, unless_stopped
 
 router = APIRouter(prefix="/shopping", tags=["shopping"])
 
@@ -258,6 +259,7 @@ SUGGESTIONS_FAILED = "Could not get suggestions. Please try again."
 
 @router.post("/suggestions/generate")
 async def get_shopping_suggestions(
+    request: Request,
     body: ShoppingSuggestionsRequest | None = None,
     user_id: int = Depends(require_user),
 ):
@@ -267,6 +269,8 @@ async def get_shopping_suggestions(
     already shown (`exclude`), on the avoid list or removed from the suggestions
     list in the last 7 days is dropped by exact name.
     When a whole reply is repeats, the model is asked once more.
+    Nothing is saved here: the app adds the items to its list (PUT /suggestions), and the app's
+    Stop ends the model call on the server too (#288).
     """
     shown = list(body.exclude) if body else []
 
@@ -299,16 +303,19 @@ async def get_shopping_suggestions(
                 language=ctx["language"],
                 country=ctx["country"],
             )
-            reply = await chat_json(
+            # A Stop (the client gone) cancels the call and ends the route here
+            reply = await unless_stopped(request, chat_json(
                 system_prompt=prompt,
                 messages=[{"role": "user", "content": shopping_request(ctx["language"], shown, fridge)}],
                 schema=SUGGESTIONS_SCHEMA,
                 temperature=0.6,
                 task="shopping",
                 language=ctx["language"],
-            )
+            ))
         except LLMUnavailableError:
             return {"suggestions": [], "lyric": lyric_cycler.next()}
+        except RequestStopped:
+            raise
         except Exception:
             logging.exception("Shopping LLM call failed")
             return {"suggestions": [], "lyric": lyric_cycler.next(), "error": SUGGESTIONS_FAILED}

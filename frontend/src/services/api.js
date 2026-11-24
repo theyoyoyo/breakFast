@@ -13,6 +13,9 @@ export class NetworkError extends Error {
   constructor() { super('Cannot reach server') }
 }
 
+/** True for the error of a call its caller stopped (its AbortController's signal): no error to show. */
+export const isAbortError = (err) => err?.name === 'AbortError'
+
 /** Too many failed logins: `retryAfter` is the server's wait in seconds (0 when unknown). */
 export class LoginLimitError extends Error {
   constructor(retryAfter) {
@@ -53,7 +56,11 @@ export function onSessionEnded(handler) {
 // Shared fetch helper — avoids repeating ok-check + json() everywhere
 // ---------------------------------------------------------------------------
 
-/** Fetch a URL, throw on non-2xx, and return parsed JSON (or undefined for 204). */
+/**
+ * Fetch a URL, throw on non-2xx, and return parsed JSON (or undefined for 204).
+ * A call stopped through `options.signal` throws an AbortError (see `isAbortError`), never a
+ * NetworkError, and never ends the session.
+ */
 async function apiFetch(url, options = {}) {
   const token = getToken()
   const headers = {
@@ -63,7 +70,8 @@ async function apiFetch(url, options = {}) {
   let r
   try {
     r = await fetch(url, { ...options, headers })
-  } catch {
+  } catch (err) {
+    if (isAbortError(err) || options.signal?.aborted) throw abortError()
     throw new NetworkError()
   }
   if (!r.ok) {
@@ -76,6 +84,10 @@ async function apiFetch(url, options = {}) {
   }
   if (r.status === 204) return undefined
   return r.json()
+}
+
+function abortError() {
+  return new DOMException('The call was stopped', 'AbortError')
 }
 
 /** POST / PUT with a JSON body. */
@@ -155,8 +167,9 @@ export const getExpiredCount = () =>
 export const handleExpiredAction = (delete_ids, keep_ids, shopping_ids) =>
   apiFetch(`${BASE_URL}/ingredients/expired/action`, json('POST', { delete_ids, keep_ids, shopping_ids }))
 
-export const getShoppingSuggestions = (exclude = []) =>
-  apiFetch(`${BASE_URL}/shopping/suggestions/generate`, json('POST', { exclude }))
+/** Suggest Shopping / Suggest More; `signal` stops it (the server stops the model call too). */
+export const getShoppingSuggestions = (exclude = [], { signal } = {}) =>
+  apiFetch(`${BASE_URL}/shopping/suggestions/generate`, { ...json('POST', { exclude }), signal })
 
 // The Fridge tab's suggestions list, kept on the server → { items: [{ name, reason, checked }] }
 export const getSuggestionList = () =>
@@ -242,8 +255,9 @@ export const deleteOldMeals = () =>
 export const getWeeklyReview = () =>
   apiFetch(`${BASE_URL}/meals/weekly-review`)
 
-export const generateWeeklyReview = () =>
-  apiFetch(`${BASE_URL}/meals/weekly-review`, { method: 'POST' })
+/** Run the weekly analysis; `signal` stops it (the server stops the model call too, and keeps nothing). */
+export const generateWeeklyReview = ({ signal } = {}) =>
+  apiFetch(`${BASE_URL}/meals/weekly-review`, { method: 'POST', signal })
 
 /** `{nudge}`: true when a meal of the last 7 days is newer than the latest weekly analysis (or there is none). */
 export const getWeeklyReviewStatus = () =>
@@ -392,8 +406,9 @@ export const deleteFavorite = (id) =>
 // Analyst
 // ---------------------------------------------------------------------------
 
-export const analyzeMeal = (meal_name, ingredients, meal_id = null) =>
-  apiFetch(`${BASE_URL}/analyst/analyze`, json('POST', { meal_name, ingredients, meal_id }))
+/** A meal's nutrition analysis; `signal` stops it (the server stops the model call too, and caches nothing). */
+export const analyzeMeal = (meal_name, ingredients, meal_id = null, { signal } = {}) =>
+  apiFetch(`${BASE_URL}/analyst/analyze`, { ...json('POST', { meal_name, ingredients, meal_id }), signal })
 
 // ---------------------------------------------------------------------------
 // Scheduler

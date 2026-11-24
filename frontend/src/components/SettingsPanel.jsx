@@ -24,6 +24,7 @@ import { COUNTRIES, countryCode } from '../utils/countries'
 import { useLanguage } from '../hooks/useLanguage'
 import { useSyncNotice } from '../hooks/useSyncNotice'
 import { useMode } from '../hooks/useMode'
+import useStoppable, { stopLabel } from '../hooks/useStoppable'
 import { formatDateTime } from '../utils/date'
 import * as s from './SettingsPanel.styles'
 import { Monitor, Sun, Moon, Plus, UserRound, Bot, Palette, CookingPot, CalendarDays, History, HeartPulse, Star } from 'lucide-react'
@@ -87,7 +88,8 @@ export default function SettingsPanel({ visible }) {
   // Meal history state
   const [meals, setMeals] = useState([])
   const [editingMealId, setEditingMealId] = useState(null)
-  const [analyzingMealId, setAnalyzingMealId] = useState(null)
+  // The meal whose analysis runs (its button stops it, #288), and the one just stopped
+  const { running: analyzingMealId, stopped: stoppedMealId, run: runAnalysis, stop: stopAnalysis } = useStoppable()
   const [expandedAnalysisId, setExpandedAnalysisId] = useState(null)
   const [llmFallbackLyric, setLlmFallbackLyric] = useState(null) // shown when LLM is down
 
@@ -482,11 +484,13 @@ export default function SettingsPanel({ visible }) {
     return id
   }
 
+  // A stopped analysis shows nothing new, and the server caches nothing
   const handleAnalyzeMeal = async (meal) => {
-    setAnalyzingMealId(meal.id)
     setLlmFallbackLyric(null)
     try {
-      const result = await analyzeMeal(meal.meal_name, meal.ingredients, meal.id)
+      const call = await runAnalysis(meal.id, (signal) => analyzeMeal(meal.meal_name, meal.ingredients, meal.id, { signal }))
+      if (call.stopped) return
+      const result = call.value
       if (result.fallback) {
         // LLM unavailable — show lyric, don't touch cached_nutrition so meal reverts to "Analyze"
         setLlmFallbackLyric(result.analysis_text)
@@ -499,7 +503,6 @@ export default function SettingsPanel({ visible }) {
         ))
       }
     } catch { /* network error — fail silently */ }
-    setAnalyzingMealId(null)
   }
 
   const profileIncomplete = profileLoaded && (
@@ -547,7 +550,15 @@ export default function SettingsPanel({ visible }) {
                   </div>
                   <div style={s.mealActions}>
                     {!markedForDelete && analyzingMealId === meal.id && (
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)', padding: '2px 4px' }}>Analyzing…</span>
+                      <button
+                        style={{ ...s.editMealBtn, fontSize: 11, padding: '2px 8px', color: 'var(--text-muted)' }}
+                        onClick={(e) => { e.stopPropagation(); stopAnalysis() }}
+                      >
+                        {stopLabel('Analyzing…')}
+                      </button>
+                    )}
+                    {!markedForDelete && analyzingMealId !== meal.id && stoppedMealId === meal.id && (
+                      <span role="status" style={{ fontSize: 11, color: 'var(--text-muted)', padding: '2px 4px' }}>Stopped</span>
                     )}
                     {!markedForDelete && analyzingMealId !== meal.id && !meal.cached_nutrition && (
                       <button
