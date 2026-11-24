@@ -72,4 +72,11 @@ describe('SuggestButton', () => {
     expect(onSuggest).not.toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: 'Explore world cuisines' })).toBeNull()
   })
+
+  // A long press opens no context menu and selects no text on the Suggest button
+  it('blocks the context menu on a long press', () => {
+    render(<SuggestButton onSuggest={vi.fn()} />)
+    expect(fireEvent.contextMenu(button())).toBe(false)
+    expect(button().style.userSelect).toBe('none')
+  })
 })

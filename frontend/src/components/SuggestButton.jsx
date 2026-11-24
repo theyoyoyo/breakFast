@@ -11,6 +11,10 @@ import explore3 from '../assets/chat/explore@3x.webp'
 
 const LONG_PRESS_MS = 1000
 
+// A long press opens the modes, not the phone's callout, text selection or context menu
+const NO_CALLOUT = { WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }
+const preventMenu = (e) => e.preventDefault()
+
 const srcSet = (a, b, c) => `${a} 1x, ${b} 2x, ${c} 3x`
 
 // The two Suggest modes a long press reveals. Their pictures share one canvas and scale,
@@ -104,8 +108,10 @@ export default function SuggestButton({ onSuggest, disabled }) {
         onPointerDown={handlePointerDown}
         onPointerUp={endPress}
         onPointerLeave={endPress}
+        onContextMenu={preventMenu}
         onClick={handleClick}
         disabled={disabled}
+        style={NO_CALLOUT}
         title="Suggest breakfast (hold: modes)"
         aria-label="Suggest breakfast"
       >

@@ -7,6 +7,7 @@ import {
   getFavoriteIngredients, addFavoriteIngredient, removeFavoriteIngredient,
 } from '../services/api'
 import { useSyncNotice } from '../hooks/useSyncNotice'
+import { formatShortDate } from '../utils/date'
 import ShoppingListPanel from './ShoppingListPanel'
 import FavoriteIngredientsPanel from './FavoriteIngredientsPanel'
 import ConfirmPrompt from './ConfirmPrompt'
@@ -454,15 +455,7 @@ function IngredientPanel({ refreshTrigger, visible }) {
     </>
   )
 
-  const formatExpiry = (dateStr) => {
-    if (!dateStr) return null
-    try {
-      const d = new Date(dateStr + 'T00:00:00')
-      return d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })
-    } catch {
-      return dateStr
-    }
-  }
+  const formatExpiry = formatShortDate
 
   const isExpired = (dateStr) => {
     if (!dateStr) return false

@@ -24,6 +24,7 @@ import { COUNTRIES, countryCode } from '../utils/countries'
 import { useLanguage } from '../hooks/useLanguage'
 import { useSyncNotice } from '../hooks/useSyncNotice'
 import { useMode } from '../hooks/useMode'
+import { formatDateTime } from '../utils/date'
 import * as s from './SettingsPanel.styles'
 import { Monitor, Sun, Moon, Plus } from 'lucide-react'
 
@@ -524,7 +525,7 @@ export default function SettingsPanel({ visible }) {
                 <div style={{ ...s.mealHeader, cursor: 'default' }}>
                   <div style={s.mealInfo}>
                     <span style={{ ...s.mealName, textDecoration: markedForDelete ? 'line-through' : 'none' }}>{meal.meal_name}</span>
-                    <span style={s.mealDate}>{new Date(meal.logged_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                    <span style={s.mealDate}>{formatDateTime(meal.logged_at)}</span>
                   </div>
                   <div style={s.mealActions}>
                     {!markedForDelete && analyzingMealId === meal.id && (
