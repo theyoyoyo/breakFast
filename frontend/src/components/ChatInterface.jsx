@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react'
 import { createChatSocket, checkAuth, getActiveSession, createSession, deleteSession, listSessions, getSessionMessages, saveSessionMessage, updateSessionMessage, saveAteDraft, selectSessionMessage, getTodaySupplements, toggleSupplement, analyzeMeal, getSchedule } from '../services/api'
-import { useVoice } from '../hooks/useVoice'
 import { emitSyncNotice, useSyncNotice } from '../hooks/useSyncNotice'
 import ChatBar from './ChatBar'
 import DecidePanel from './DecidePanel'
@@ -177,7 +176,6 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
   const queuedSendRef = useRef(null)
   const messagesRef = useRef(messages)
   const analyzeAbortRef = useRef(null)
-  const { isListening, startListening, stopListening, supported: voiceSupported } = useVoice()
 
   // Inject a meal into chat (used by favorites send-to-chat)
   const injectMealToChat = useCallback((meal, introText) => {
@@ -613,17 +611,6 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
     }
   }), [runSessionAction, showSession])
 
-  const handleMic = () => {
-    if (isListening) {
-      stopListening()
-    } else {
-      startListening((transcript) => {
-        setInput(transcript)
-        sendMessage(transcript)
-      })
-    }
-  }
-
   const handleStop = useCallback(() => {
     // Stop the request on its way: the server ends its model call and saves no reply (a typed
     // message stays saved). What came so far stays on screen, marked as stopped, until the chat
@@ -875,7 +862,6 @@ export default forwardRef(function ChatInterface({ onMealLogged, visible }, ref)
           if (!decideOpen) setDecideIdx(checkedMeal ? checkedMealIdx : null)
           setDecideOpen(prev => !prev)
         }}
-        voice={{ supported: voiceSupported, listening: isListening, onMic: handleMic }}
       />
     </div>
   )

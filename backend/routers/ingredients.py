@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from auth import require_user
 from database import get_db
+from db_helpers import fridge_names
 from models.ingredient import INGREDIENT_GROUPS, Ingredient, IngredientCreate, IngredientUpdate
 from models.limits import BULK_ITEMS_MAX, Id, SizedDict
 from services.fridge import find_missing_ingredients
@@ -57,13 +58,15 @@ async def add_ingredient(body: IngredientCreate, user_id: int = Depends(require_
     """
     _validate_group(body.group_name)
     async with get_db() as db:
-        group = body.group_name or (await resolve_groups(db, user_id, [body.name]))[body.name]
-        await db.execute(_UPSERT_SQL, (user_id, body.name, body.expiry_date, group))
-        await remember(db, user_id, body.name, group, picked=bool(body.group_name))
+        # Capital first letters, or the user's item of that name in any case
+        name = (await fridge_names(db, user_id, [body.name]))[body.name]
+        group = body.group_name or (await resolve_groups(db, user_id, [name]))[name]
+        await db.execute(_UPSERT_SQL, (user_id, name, body.expiry_date, group))
+        await remember(db, user_id, name, group, picked=bool(body.group_name))
         await db.commit()
         async with db.execute(
             "SELECT * FROM ingredient_inventory WHERE user_id = ? AND name = ?",
-            (user_id, body.name),
+            (user_id, name),
         ) as cur:
             return dict(await cur.fetchone())
 

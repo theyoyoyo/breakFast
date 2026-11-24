@@ -26,10 +26,28 @@ import { useSyncNotice } from '../hooks/useSyncNotice'
 import { useMode } from '../hooks/useMode'
 import { formatDateTime } from '../utils/date'
 import * as s from './SettingsPanel.styles'
-import { Monitor, Sun, Moon, Plus } from 'lucide-react'
+import { Monitor, Sun, Moon, Plus, UserRound, Bot, Palette, CookingPot, CalendarDays, History, HeartPulse, Star } from 'lucide-react'
+import supp1 from '../assets/chat/supplements@1x.webp'
+import supp2 from '../assets/chat/supplements@2x.webp'
+import supp3 from '../assets/chat/supplements@3x.webp'
 
 // Appearance buttons: Auto shows a screen (it follows the device)
 const APPEARANCE_ICONS = { auto: Monitor, light: Sun, dark: Moon }
+
+// A section's title with its small icon in front
+function SectionTitle({ icon, children }) {
+  return <div style={{ ...s.sectionLabel, display: 'flex', alignItems: 'center', gap: 6 }}>{icon}{children}</div>
+}
+
+// A sub-page button's text with its icon in front (the icon is decoration: the name stays the text)
+function NavLabel({ icon: Icon, children }) {
+  return (
+    <span className="inline-flex items-center justify-center gap-2">
+      <Icon size={16} aria-hidden="true" />
+      {children}
+    </span>
+  )
+}
 
 // Display names for the stored supplement frequency values
 const FREQUENCY_LABELS = { daily: 'Daily', sometimes: 'Occasional' }
@@ -716,10 +734,10 @@ export default function SettingsPanel({ visible }) {
 
         {/* Profile */}
         <div style={s.section}>
-          <div style={s.sectionLabel}>
+          <SectionTitle icon={<UserRound size={15} aria-hidden="true" />}>
             Profile
-            {profileIncomplete && <span style={{ color: 'var(--c-red)', marginLeft: 6, fontSize: 10 }}>●</span>}
-          </div>
+            {profileIncomplete && <span style={{ color: 'var(--c-red)', fontSize: 10 }}>●</span>}
+          </SectionTitle>
           {/* Age + Gender and Height + Weight: four in a row where they fit, two by two on a phone */}
           <div style={s.profileRow}>
             <div style={s.profilePair}>
@@ -833,7 +851,9 @@ export default function SettingsPanel({ visible }) {
 
         {/* Supplements */}
         <div style={s.section}>
-          <div style={s.sectionLabel}>Supplements</div>
+          <SectionTitle icon={<img src={supp1} srcSet={`${supp1} 1x, ${supp2} 2x, ${supp3} 3x`} alt="" className="block h-[18px] w-auto" draggable={false} />}>
+            Supplements
+          </SectionTitle>
           {supplements.length === 0 && <span style={s.empty}>No supplements yet</span>}
           {supplements.map((sup) => (
             <div key={sup.id} style={s.suppRow}>
@@ -911,7 +931,7 @@ export default function SettingsPanel({ visible }) {
 
         {/* AI settings: reply language, weekly review, removed shopping suggestions */}
         <div style={s.section}>
-          <div style={s.sectionLabel}>AI settings</div>
+          <SectionTitle icon={<Bot size={15} aria-hidden="true" />}>AI settings</SectionTitle>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
             {/* Two equal choices, not on/off: the track never fills, the knob sits by the chosen one,
                 which is bold in the accent */}
@@ -975,9 +995,9 @@ export default function SettingsPanel({ visible }) {
           )}
         </div>
 
-        {/* Appearance — light or dark; Auto follows the device */}
+        {/* Appearance — light or dark on top (Auto follows the device), the color theme below */}
         <div style={s.section}>
-          <div style={s.sectionLabel}>Appearance</div>
+          <SectionTitle icon={<Palette size={15} aria-hidden="true" />}>Appearance</SectionTitle>
           <div style={s.themeRow}>
             {APPEARANCES.map(a => {
               const Icon = APPEARANCE_ICONS[a.key]
@@ -994,11 +1014,8 @@ export default function SettingsPanel({ visible }) {
               )
             })}
           </div>
-        </div>
-
-        {/* Theme — only the accent colors change */}
-        <div style={s.section}>
-          <div style={s.sectionLabel}>Theme</div>
+          {/* Theme: only the accent colors change */}
+          <div className="mt-3 text-xs font-semibold text-fg-muted">Theme</div>
           <div style={s.themeRow}>
             {THEMES.map(t => (
               <button
@@ -1017,14 +1034,14 @@ export default function SettingsPanel({ visible }) {
         {/* Kitchen — navigates to sub-page */}
         <div style={s.section}>
           <button style={s.navBtn} onClick={() => setView('kitchen')}>
-            Kitchen →
+            <NavLabel icon={CookingPot}>Kitchen →</NavLabel>
           </button>
         </div>
 
         {/* Weekly Summary — navigates to sub-page */}
         <div style={s.section}>
           <button style={s.healthRulesBtn} onClick={() => setView('weekly')}>
-            Weekly Summary →
+            <NavLabel icon={CalendarDays}>Weekly Summary →</NavLabel>
             {weeklyNudge && (
               <span className="mt-1 block text-xs font-semibold normal-case tracking-normal">
                 Get your weekly analysis!
@@ -1036,21 +1053,21 @@ export default function SettingsPanel({ visible }) {
         {/* Meal History — navigates to sub-page */}
         <div style={s.section}>
           <button style={s.healthRulesBtn} onClick={() => setView('meals')}>
-            Meal History ({meals.length}) →
+            <NavLabel icon={History}>Meal History ({meals.length}) →</NavLabel>
           </button>
         </div>
 
         {/* Health Rules — navigates to sub-page */}
         <div style={s.section}>
           <button style={s.healthRulesBtn} onClick={() => setView('health-rules')}>
-            Health Rules ({healthRules.length}) →
+            <NavLabel icon={HeartPulse}>Health Rules ({healthRules.length}) →</NavLabel>
           </button>
         </div>
 
         {/* Ratings — navigates to sub-page */}
         <div style={s.section}>
           <button style={s.ratingsBtn} onClick={() => setView('ratings')}>
-            Ratings ({ratings.length}) →
+            <NavLabel icon={Star}>Ratings ({ratings.length}) →</NavLabel>
           </button>
         </div>
 

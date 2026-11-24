@@ -639,13 +639,15 @@ describe('MealEditor units', () => {
     expect(screen.getByText('tbsp')).toBeInTheDocument()
   })
 
-  // Two-word units wrap, so the column is only as wide as the longest single word ("handful", "bardağı")
-  it('keeps the unit column as wide as the longest word of any unit, in both languages', () => {
+  // The unit box is 5 characters wide in both languages, a longer unit ends in "…", and the whole unit stays in its title and the open list
+  it('keeps the unit box 5 characters wide and the whole unit in its title', () => {
     render(<MealEditor meal={UNIT_MEAL} menuMode />)
-    const widths = () => screen.getAllByRole('combobox').map(select => select.parentElement.style.width)
-    expect(widths()).toEqual(['9ch', '9ch'])
+    const pickers = () => screen.getAllByRole('combobox').map(select => select.parentElement)
+    expect(pickers().map(p => p.style.width)).toEqual(['calc(5ch + 10px)', 'calc(5ch + 10px)'])
+    expect(pickers().map(p => p.textContent)).not.toContain(expect.stringContaining('▾'))
     act(() => { applyLanguage('tr') })
-    expect(widths()).toEqual(['9ch', '9ch'])
+    expect(pickers().map(p => p.style.width)).toEqual(['calc(5ch + 10px)', 'calc(5ch + 10px)'])
+    expect(pickers()[1].title).toBe(pickers()[1].querySelector('span').textContent)
   })
 
   // Showing a unit in another language doesn't rewrite it: only the unit the user picks changes on save
@@ -893,5 +895,35 @@ describe('MealEditor layout', () => {
     expect(buttons.map(b => b.textContent)).toEqual(['Close', 'ℹ️', 'Save'])
     fireEvent.click(screen.getByTitle('Preparation details'))
     expect(screen.getByText('Simmer the oats')).toBeInTheDocument()
+  })
+})
+
+describe('MealEditor plain prep words', () => {
+  const MEAL_PREP = {
+    menu_name: 'Eggs',
+    menu: [{ name: 'Scrambled eggs', ingredients: [
+      { name: 'Eggs', amount: 2, unit: 'pcs', prep: 'beaten' },
+      { name: 'Salt', amount: 1, unit: 'pinch', prep: 'as needed' },
+      { name: 'Pepper', amount: 1, unit: 'pinch', prep: 'To taste' },
+    ] }],
+  }
+
+  // Prep words that only say "some" stay out of the info panel, while the saved meal keeps them for the prep plan
+  it('leaves as needed and to taste out of the info panel', () => {
+    let saved = null
+    render(<MealEditor meal={MEAL_PREP} menuMode onSave={(meal) => { saved = meal }} onClose={vi.fn()} />)
+    fireEvent.click(screen.getByTitle('Preparation details'))
+    expect(screen.getByText('Eggs: beaten')).toBeInTheDocument()
+    expect(screen.queryByText(/as needed/)).toBeNull()
+    expect(screen.queryByText(/To taste/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(saved.menu[0].ingredients.map(sub => sub.prep)).toEqual(['beaten', 'as needed', 'To taste'])
+  })
+
+  // A dish whose only prep words are plain ones has nothing for the info button to show
+  it('has no info button when only plain prep words are left', () => {
+    const plain = { ...MEAL_PREP, menu: [{ ...MEAL_PREP.menu[0], ingredients: MEAL_PREP.menu[0].ingredients.slice(1) }] }
+    render(<MealEditor meal={plain} menuMode onClose={vi.fn()} />)
+    expect(screen.queryByTitle('Preparation details')).toBeNull()
   })
 })

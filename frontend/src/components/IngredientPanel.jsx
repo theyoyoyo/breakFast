@@ -13,6 +13,9 @@ import FavoriteIngredientsPanel from './FavoriteIngredientsPanel'
 import ConfirmPrompt from './ConfirmPrompt'
 import * as s from './IngredientPanel.styles'
 
+// An item expiring this many days from today counts as expiring in its group's header
+const EXPIRING_DAYS = 3
+
 // ---------------------------------------------------------------------------
 // Fixed ingredient groups (mirrors backend INGREDIENT_GROUPS)
 // ---------------------------------------------------------------------------
@@ -462,6 +465,14 @@ function IngredientPanel({ refreshTrigger, visible }) {
     return dateStr <= new Date().toISOString().split('T')[0]
   }
 
+  // Expired, or expiring within EXPIRING_DAYS: counted in red beside each group's count
+  const isExpiring = (dateStr) => {
+    if (!dateStr) return false
+    const soon = new Date()
+    soon.setDate(soon.getDate() + EXPIRING_DAYS)
+    return dateStr <= soon.toISOString().split('T')[0]
+  }
+
   // Count of expired items the user previously acknowledged ("kept")
   const keptCount = ingredients.filter(i => i.expiry_acknowledged && isExpired(i.expiry_date)).length
 
@@ -558,6 +569,14 @@ function IngredientPanel({ refreshTrigger, visible }) {
                 />
                 <span style={s.groupHeaderText}>{groupName}</span>
                 <span style={s.groupCount}>{groupItems.length}</span>
+                {(() => {
+                  const expiring = groupItems.filter(i => isExpiring(i.expiry_date)).length
+                  return expiring > 0 && (
+                    <span style={s.groupExpiring} title={`${expiring} expired or expiring within ${EXPIRING_DAYS} days`}>
+                      ({expiring})
+                    </span>
+                  )
+                })()}
               </div>
               {!isCollapsed && groupItems.map((ing) => (
                 editingId === ing.id ? (

@@ -1,5 +1,6 @@
+import { createPortal } from 'react-dom'
 import { useState, useEffect } from 'react'
-import { Star } from 'lucide-react'
+import { Star, Trash2 } from 'lucide-react'
 import { mealEmoji } from '../utils/emoji'
 import { normalizeItem, unitsFor, countUnit, localizeUnit, unitWithSize, resolveUnit, rememberUnit, menuKey } from '../utils/ingredients'
 import { checkMissingIngredients, getFavorites } from '../services/api'
@@ -12,6 +13,14 @@ const TEMPLATE_MISSING_HINT = 'Not in your fridge'
 const DISH_MISSING_HINT = 'Some ingredients are not in your fridge'
 const DISH_MISSING_TAP_HINT = 'Some ingredients are not in your fridge — tap the name once you have them'
 const DISH_OBTAINED_HINT = 'Missing ingredients are marked as obtained — tap to undo'
+
+// Prep words that only say "some" ("as needed", "to taste"): ℹ️ leaves them out, since every cook knows
+// it. The meal keeps them, so the prep plan still gets them.
+const PLAIN_PREP = new Set([
+  'as needed', 'to taste', 'as desired', 'as you like', 'optional', 'some',
+  'isteğe göre', 'isteğe bağlı', 'göz kararı', 'damak zevkine göre', 'yeteri kadar', 'yeterince', 'arzuya göre',
+])
+const tellsTheCook = (prep) => typeof prep === 'string' && prep.trim() !== '' && !PLAIN_PREP.has(prep.trim().toLowerCase())
 
 /**
  * Shared meal editor component used by MealBlock, FavoritesPanel, and SettingsPanel.
@@ -36,6 +45,8 @@ const DISH_OBTAINED_HINT = 'Missing ingredients are marked as obtained — tap t
  *   earlier too; a name another favorite has saves nothing and shows a note)
  *
  *   emoji        — the meal's icon, shown at the header's right (default: the meal's own, as its card shows it)
+ *   starTarget   — an element to put the ☆ in instead of the header ("Today I ate" puts it at the left of its
+ *                  title row); the meal's icon then takes the star's place, left of the name
  * extraActions may be a function: (buildCurrentMeal) => ReactNode
  */
 export default function MealEditor({
@@ -46,6 +57,7 @@ export default function MealEditor({
   editPrepTime = true,
   extraActions,
   emoji,
+  starTarget,
   menuMode = false,
   onFavorite,
   onUnfavorite,
@@ -340,7 +352,7 @@ export default function MealEditor({
           dish: item.name,
           method: currentMethod(item),
           serveWith: servedWith(item, items),
-          notes: (item.ingredients || []).filter(sub => typeof sub.prep === 'string' && sub.prep.trim()),
+          notes: (item.ingredients || []).filter(sub => tellsTheCook(sub.prep)),
           swaps: isSimpleItem(item) ? [] : (item.ingredients || []).filter(sub => replacedName(sub)),
         }))
         .filter(({ method, serveWith, notes, swaps }) => method || serveWith || notes.length > 0 || swaps.length > 0)
@@ -383,21 +395,31 @@ export default function MealEditor({
 
   // ── Render ───────────────────────────────────────────────────────────────
 
+  // ☆ / ⭐ (with onFavorite), in the header or in the caller's starTarget
+  const star = onFavorite ? (
+        <button
+          style={s.favStar}
+          onClick={handleFavorite}
+          disabled={favSaving || favorites === null || (isFav && (!onUnfavorite || favMatch.id == null))}
+          title={isFav ? 'Remove from favorites' : 'Add to favorites'}
+          aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
+          aria-pressed={isFav}
+        >
+          <Star size={22} {...(isFav ? s.favStarOn : s.favStarOff)} />
+        </button>
+  ) : null
+  // The meal's icon, as its card shows it (dishes get none)
+  const icon = (
+    <span style={s.mealIcon} role="img" aria-label="Meal icon">
+      {emoji || mealEmoji(meal, meal?.menu_name || meal?.meal_name || 'Meal')}
+    </span>
+  )
+
   return (
     <div style={s.editorContainer}>
+      {star && starTarget && createPortal(star, starTarget)}
       <div style={s.editorHeader}>
-        {onFavorite && (
-          <button
-            style={s.favStar}
-            onClick={handleFavorite}
-            disabled={favSaving || favorites === null || (isFav && (!onUnfavorite || favMatch.id == null))}
-            title={isFav ? 'Remove from favorites' : 'Add to favorites'}
-            aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
-            aria-pressed={isFav}
-          >
-            <Star size={22} {...(isFav ? s.favStarOn : s.favStarOff)} />
-          </button>
-        )}
+        {starTarget ? icon : star}
         <input
           style={s.nameInput}
           value={mealName}
@@ -423,10 +445,7 @@ export default function MealEditor({
             <span style={s.prepTimeUnit}>min</span>
           </div>
         )}
-        {/* The meal's icon, as its card shows it (dishes get none) */}
-        <span style={s.mealIcon} role="img" aria-label="Meal icon">
-          {emoji || mealEmoji(meal, meal?.menu_name || meal?.meal_name || 'Meal')}
-        </span>
+        {!starTarget && icon}
       </div>
 
       {showTakenNote && (
@@ -482,14 +501,13 @@ export default function MealEditor({
                     >
                       {isOpen ? '▲ Ingredients' : '▶ Ingredients'}
                     </button>
-                    <button style={s.deleteBtn} onClick={(e) => { e.stopPropagation(); handleDelete(idx) }} title="Delete">🗑️</button>
+                    <button style={s.deleteBtn} onClick={(e) => { e.stopPropagation(); handleDelete(idx) }} title="Delete" aria-label="Delete"><Trash2 size={15} aria-hidden="true" /></button>
                   </div>
                 </div>
               ) : (
                 // ── Simple item row ───────────────────────────────────────
                 <div style={s.itemRow}>
                   <div style={s.qtyGroup}>
-                    <button style={s.arrowBtn} onClick={() => handleQtyStep(idx, -1)}>▼</button>
                     <input
                       style={s.qtyInput}
                       type="text"
@@ -499,12 +517,15 @@ export default function MealEditor({
                       onChange={(e) => handleQtyChange(idx, e.target.value)}
                       onBlur={() => handleQtyBlur(idx)}
                     />
-                    <button style={s.arrowBtn} onClick={() => handleQtyStep(idx, 1)}>▲</button>
+                    <div style={s.stepper}>
+                      <button style={s.arrowBtn} onClick={() => handleQtyStep(idx, 1)}>▲</button>
+                      <button style={s.arrowBtn} onClick={() => handleQtyStep(idx, -1)}>▼</button>
+                    </div>
                   </div>
                   <UnitSelect unit={item.unit} units={units} language={language} onChange={(unit) => handleUnitChange(idx, unit)} />
                   {nameCell(item.name)}
                   <div style={s.itemActions}>
-                    <button style={s.deleteBtn} onClick={() => handleDelete(idx)} title="Delete">🗑️</button>
+                    <button style={s.deleteBtn} onClick={() => handleDelete(idx)} title="Delete" aria-label="Delete"><Trash2 size={15} aria-hidden="true" /></button>
                   </div>
                 </div>
               )}
@@ -515,7 +536,6 @@ export default function MealEditor({
                   {(item.ingredients || []).map((sub, si) => (
                     <div key={si} style={s.subRow}>
                       <div style={s.qtyGroup}>
-                        <button style={s.arrowBtn} onClick={() => handleSubQtyStep(idx, si, -1)}>▼</button>
                         <input
                           style={s.qtyInput}
                           type="text"
@@ -525,12 +545,15 @@ export default function MealEditor({
                           onChange={(e) => handleSubQtyChange(idx, si, e.target.value)}
                           onBlur={() => handleSubQtyBlur(idx, si)}
                         />
-                        <button style={s.arrowBtn} onClick={() => handleSubQtyStep(idx, si, 1)}>▲</button>
+                        <div style={s.stepper}>
+                          <button style={s.arrowBtn} onClick={() => handleSubQtyStep(idx, si, 1)}>▲</button>
+                          <button style={s.arrowBtn} onClick={() => handleSubQtyStep(idx, si, -1)}>▼</button>
+                        </div>
                       </div>
                       <UnitSelect unit={sub.unit} units={units} language={language} onChange={(unit) => handleSubUnitChange(idx, si, unit)} />
                       {nameCell(sub.name, replacedName(sub))}
                       <div style={s.itemActions}>
-                        <button style={s.deleteBtn} onClick={() => handleSubDelete(idx, si)} title="Delete">🗑️</button>
+                        <button style={s.deleteBtn} onClick={() => handleSubDelete(idx, si)} title="Delete" aria-label="Delete"><Trash2 size={15} aria-hidden="true" /></button>
                       </div>
                     </div>
                   ))}
@@ -616,11 +639,9 @@ export default function MealEditor({
 function UnitSelect({ unit, units, language, onChange }) {
   const value = localizeUnit(unit || countUnit(language), language)
   const options = units.includes(value) ? units : [...units, value]
-  const width = `${Math.max(...options.flatMap(u => u.split(' ')).map(word => word.length)) + 2}ch`
   return (
-    <span style={{ ...s.unitPicker, width }}>
+    <span style={s.unitPicker} title={value}>
       <span style={s.unitText} aria-hidden="true">{value}</span>
-      <span aria-hidden="true">▾</span>
       <select style={s.unitSelect} value={value} onChange={(e) => onChange(e.target.value)}>
         {options.map(u => <option key={u} value={u}>{unitWithSize(u)}</option>)}
       </select>

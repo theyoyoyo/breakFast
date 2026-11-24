@@ -1,4 +1,4 @@
-import { secondaryColor, colors, deleteBtn as sharedDeleteBtn } from '../styles/common'
+import { secondaryColor, colors } from '../styles/common'
 
 export const editorContainer = {
   display: 'flex',
@@ -144,7 +144,7 @@ export const itemRow = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  padding: '10px 12px',
+  padding: '8px 10px',
   background: 'var(--surface2)',
   borderRadius: 10,
   fontSize: 15,
@@ -153,6 +153,7 @@ export const itemRow = {
 // A tap anywhere on a dish row opens or closes its ingredients
 export const dishRow = { ...itemRow, cursor: 'pointer' }
 
+// The amount and its ▲ / ▼ stacked beside it: narrow, so the item's name keeps most of the row
 export const qtyGroup = {
   display: 'flex',
   alignItems: 'center',
@@ -160,12 +161,18 @@ export const qtyGroup = {
   flexShrink: 0,
 }
 
+export const stepper = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 1,
+}
+
 export const qtyInput = {
-  width: 38,
+  width: 34,
   background: 'var(--surface)',
   border: '1px solid var(--border)',
   borderRadius: 6,
-  padding: '4px 4px',
+  padding: '3px 2px',
   color: 'var(--text)',
   fontSize: 14,
   textAlign: 'center',
@@ -177,8 +184,8 @@ export const arrowBtn = {
   border: '1px solid var(--border)',
   borderRadius: 4,
   cursor: 'pointer',
-  fontSize: 10,
-  padding: '2px 5px',
+  fontSize: 8,
+  padding: '1px 4px',
   color: 'var(--text-muted)',
   lineHeight: 1,
 }
@@ -191,28 +198,30 @@ export const unitLabel = {
   marginRight: 8,
 }
 
-// Styled to look like the static unitLabel — blends in, no border chrome.
-// The plain unit and a chevron; the real select lies invisibly on top.
+// The unit in a thin box that shows it can be changed: at most 5 characters wide, a longer unit ends
+// in "…" (the open list shows it whole), so the item's name keeps the row. The real select lies
+// invisibly on top.
 export const unitPicker = {
   position: 'relative',
   display: 'flex',
   alignItems: 'center',
-  justifyContent: 'space-between',
-  gap: 2,
-  fontSize: 13,
+  fontSize: 12,
   color: 'var(--text-muted)',
   cursor: 'pointer',
   flexShrink: 0,
-  minWidth: 30,
-  maxWidth: 110,
-  marginLeft: 6,
+  width: 'calc(5ch + 10px)',
+  border: '1px solid var(--border)',
+  borderRadius: 6,
+  padding: '3px 4px',
+  marginLeft: 4,
   marginRight: 6,
 }
 
-// Two-word units ("tea glass", "yemek kaşığı") take two lines; a long unknown unit breaks instead of overflowing
 export const unitText = {
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
   lineHeight: 1.2,
-  overflowWrap: 'anywhere',
 }
 
 // Covers the picker so a tap opens the native list, which shows spoon and glass sizes
@@ -260,8 +269,17 @@ export const itemActions = {
   flexShrink: 0,
 }
 
-// Trash button on item rows (shared delete look)
-export const deleteBtn = { ...sharedDeleteBtn, fontSize: 16 }
+// Trash on item rows: a small red icon, no box, so the name keeps the row
+export const deleteBtn = {
+  background: 'none',
+  border: 'none',
+  padding: 4,
+  color: colors.danger,
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  lineHeight: 1,
+}
 
 // ▶ Ingredients: --border nearly matches the row, so the outline is the muted text color at 70%
 // (3.5:1 on --surface2, was 1.1:1; text colors are the same in every theme)
@@ -291,7 +309,7 @@ export const subRow = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  padding: '6px 10px',
+  padding: '6px 8px',
   background: 'var(--surface)',
   borderRadius: 8,
   fontSize: 13,

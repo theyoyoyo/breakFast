@@ -22,6 +22,8 @@ import * as s from './DecidePanel.styles'
 export default function DecidePanel({ meal, saved, onSave, onClose, onConfirm, supplements = [], onToggleSupplement }) {
   // Phase: 'edit' = MealEditor open, 'rate' = star-rating unrated items
   const [phase, setPhase] = useState('edit')
+  // The title row's spot for the editor's ☆ (a callback ref, so the editor renders into it once it's there)
+  const [starSlot, setStarSlot] = useState(null)
   const [ratings, setRatings] = useState({})
   const [existingRatings, setExistingRatings] = useState([])
   const [saving, setSaving] = useState(false)
@@ -217,6 +219,8 @@ export default function DecidePanel({ meal, saved, onSave, onClose, onConfirm, s
     <div style={s.overlay} onClick={handleOverlayClick}>
       <div style={s.panel} onClickCapture={handlePanelClickCapture}>
         <div style={{ ...s.panelHeader, position: 'relative' }}>
+          {/* The editor's ☆ sits here, at the left of the title row, so the meal name has the editor's whole row */}
+          <span ref={setStarSlot} className="absolute left-0 top-1/2 flex -translate-y-1/2" />
           Today I ate
           <TodaySupplements
             open={suppOpen}
@@ -228,6 +232,7 @@ export default function DecidePanel({ meal, saved, onSave, onClose, onConfirm, s
         </div>
         <MealEditor
           meal={editorMeal}
+          starTarget={starSlot}
           onFavorite={handleFavorite}
           onUnfavorite={deleteFavorite}
           onClose={onClose}

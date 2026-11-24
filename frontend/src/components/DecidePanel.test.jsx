@@ -225,3 +225,21 @@ describe('DecidePanel', () => {
     })
   })
 })
+
+describe('DecidePanel title row', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getRatings.mockResolvedValue([])
+    checkMissingIngredients.mockResolvedValue({ missing: [] })
+  })
+
+  // The star sits in the title row beside "Today I ate", and the meal icon takes its place left of the name
+  it('puts the star in the title row and the icon beside the name', async () => {
+    render(<DecidePanel meal={{ ...MEAL, emoji: '🥐' }} onClose={() => {}} />)
+    const star = await screen.findByRole('button', { name: 'Add to favorites' })
+    expect(star.closest('div').textContent).toContain('Today I ate')
+    const icon = screen.getByRole('img', { name: 'Meal icon' })
+    expect(icon).toHaveTextContent('🥐')
+    expect(icon.nextElementSibling).toHaveValue('Test Breakfast')
+  })
+})

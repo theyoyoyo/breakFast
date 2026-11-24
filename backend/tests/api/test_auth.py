@@ -343,14 +343,14 @@ async def test_user_data_isolation(tmp_path, monkeypatch):
         # User1 adds an ingredient
         await client.post(
             "/ingredients/",
-            json={"name": "eggs", "quantity": "6", "unit": "pcs"},
+            json={"name": "Eggs", "quantity": "6", "unit": "pcs"},
             headers=h1,
         )
 
         # User1 sees it
         r = await client.get("/ingredients/", headers=h1)
         assert len(r.json()) == 1
-        assert r.json()[0]["name"] == "eggs"
+        assert r.json()[0]["name"] == "Eggs"
 
         # User2 does NOT see it
         r = await client.get("/ingredients/", headers=h2)

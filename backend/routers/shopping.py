@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from auth import require_user
 from database import get_db
+from db_helpers import fridge_names
 from models.limits import BULK_ITEMS_MAX, Id, Name, Note, ShortText
 from services import chat_sync
 from services.context import load_shopping_context
@@ -139,12 +140,15 @@ async def bought_items(body: BoughtRequest, user_id: int = Depends(require_user)
         ) as cur:
             items = [dict(r) for r in await cur.fetchall()]
 
-        # Add each as an ingredient, in the user's group for it, else the food list's
-        groups = await resolve_groups(db, user_id, [item["item_name"] for item in items])
+        # Add each as an ingredient (capital first letters, or the user's item of that name in any
+        # case), in the user's group for it, else the food list's
+        names = await fridge_names(db, user_id, [item["item_name"] for item in items])
+        groups = await resolve_groups(db, user_id, list(names.values()))
 
         for item in items:
             expiry = (body.expiry_dates or {}).get(item["item_name"])
-            group = groups[item["item_name"]]
+            name = names[item["item_name"]]
+            group = groups[name]
             await db.execute(
                 """INSERT INTO ingredient_inventory (user_id, name, expiry_date, group_name)
                    VALUES (?, ?, ?, ?)
@@ -152,9 +156,9 @@ async def bought_items(body: BoughtRequest, user_id: int = Depends(require_user)
                        expiry_date = excluded.expiry_date,
                        group_name = excluded.group_name,
                        updated_at = datetime('now')""",
-                (user_id, item["item_name"], expiry, group),
+                (user_id, name, expiry, group),
             )
-            await remember(db, user_id, item["item_name"], group, picked=False)
+            await remember(db, user_id, name, group, picked=False)
 
         # Remove bought items from shopping list
         await db.execute(
