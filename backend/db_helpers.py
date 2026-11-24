@@ -64,3 +64,33 @@ def row_to_favorite(row) -> dict:
         d[field] = parse_json_field(d.get(field), [])
     d["menu_items"] = parse_json_field(d.get("menu_items"), None)
     return d
+
+
+def capitalize_words(name: str, language: str = "en") -> str:
+    """A new fridge item's name with a capital first letter on every word ("greek yogurt" → "Greek
+    Yogurt", #285). Only a lowercase first letter changes, so the rest of a word stays as written
+    ("BBQ" stays); Turkish capitalizes "i" as "İ"."""
+    def cap(word: str) -> str:
+        if not word or not word[0].islower():
+            return word
+        first = "İ" if language == "tr" and word[0] == "i" else word[0].upper()
+        return first + word[1:]
+    return " ".join(cap(word) for word in name.split(" "))
+
+
+async def fridge_names(db, user_id: int, names: list[str]) -> dict[str, str]:
+    """The name each new fridge item is stored under: the user's item of that name when there is one
+    (any case, so a re-added "yumurta" updates "Yumurta" instead of adding a second row), else the
+    name with capital first letters in the user's reply language."""
+    async with db.execute("SELECT name FROM ingredient_inventory WHERE user_id = ?", (user_id,)) as cur:
+        have = {row["name"].casefold(): row["name"] for row in await cur.fetchall()}
+    async with db.execute(
+        "SELECT value FROM user_preferences WHERE user_id = ? AND key = 'response_language'", (user_id,),
+    ) as cur:
+        row = await cur.fetchone()
+    language = row["value"] if row else "en"
+    stored = {}
+    for name in names:
+        written = capitalize_words(name, language)
+        stored[name] = have.get(written.casefold()) or have.get(name.casefold()) or written
+    return stored

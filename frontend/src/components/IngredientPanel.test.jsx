@@ -253,3 +253,26 @@ describe('IngredientPanel fridge rows', () => {
     expect(screen.getByDisplayValue('Pickles')).toBeInTheDocument()
   })
 })
+
+describe('IngredientPanel group counts', () => {
+  const day = (offset) => new Date(Date.now() + offset * 86400000).toISOString().split('T')[0]
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    api.getSuggestionList.mockResolvedValue({ items: [] })
+  })
+
+  // A group with items expired or expiring within 3 days shows how many in red parentheses; a group without shows none
+  it('shows the expiring count beside a group count', async () => {
+    api.getIngredients.mockResolvedValue([
+      { id: 1, name: 'Milk', group_name: '🐄 Animal Products', expiry_date: day(-1) },
+      { id: 2, name: 'Yogurt', group_name: '🐄 Animal Products', expiry_date: day(2) },
+      { id: 3, name: 'Cheese', group_name: '🐄 Animal Products', expiry_date: day(20) },
+      { id: 4, name: 'Salt', group_name: '🫙 Pantry', expiry_date: null },
+    ])
+    render(<IngredientPanel visible />)
+    const expiring = await screen.findByTitle('2 expired or expiring within 3 days')
+    expect(expiring).toHaveTextContent('(2)')
+    expect(screen.getAllByTitle(/expiring within/)).toHaveLength(1)
+  })
+})

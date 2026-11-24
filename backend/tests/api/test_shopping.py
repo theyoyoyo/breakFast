@@ -11,21 +11,21 @@ async def test_list_empty_on_fresh_db(client):
 
 # An item added to the shopping list comes back with its name and an id
 async def test_add_item(client):
-    r = await client.post("/shopping/", json={"item_name": "eggs"})
+    r = await client.post("/shopping/", json={"item_name": "Eggs"})
     assert r.status_code == 201
     data = r.json()
-    assert data["item_name"] == "eggs"
+    assert data["item_name"] == "Eggs"
     assert "id" in data
 
 
 # Adding an item already on the list keeps one row
 async def test_add_duplicate_ignored(client):
-    await client.post("/shopping/", json={"item_name": "milk"})
-    r = await client.post("/shopping/", json={"item_name": "milk"})
+    await client.post("/shopping/", json={"item_name": "Milk"})
+    r = await client.post("/shopping/", json={"item_name": "Milk"})
     assert r.status_code == 201
     # Should still be only one item
     listed = (await client.get("/shopping/")).json()
-    milks = [i for i in listed if i["item_name"] == "milk"]
+    milks = [i for i in listed if i["item_name"] == "Milk"]
     assert len(milks) == 1
 
 
@@ -69,8 +69,8 @@ async def test_bought_empty_ids(client):
 # Bought items move from the shopping list into the fridge
 async def test_bought_adds_to_ingredients_and_removes_from_list(client):
     # Add items to shopping list
-    item1 = (await client.post("/shopping/", json={"item_name": "yogurt"})).json()
-    item2 = (await client.post("/shopping/", json={"item_name": "bread"})).json()
+    item1 = (await client.post("/shopping/", json={"item_name": "Yogurt"})).json()
+    item2 = (await client.post("/shopping/", json={"item_name": "Bread"})).json()
 
     # Buy them
     r = await client.post("/shopping/bought", json={"ids": [item1["id"], item2["id"]]})
@@ -84,42 +84,42 @@ async def test_bought_adds_to_ingredients_and_removes_from_list(client):
     # Items should be in ingredients
     ingredients = (await client.get("/ingredients/")).json()
     names = [i["name"] for i in ingredients]
-    assert "yogurt" in names
-    assert "bread" in names
+    assert "Yogurt" in names
+    assert "Bread" in names
 
 
 # A bought item's best before date reaches its fridge item
 async def test_bought_with_expiry_dates(client):
-    item = (await client.post("/shopping/", json={"item_name": "milk"})).json()
+    item = (await client.post("/shopping/", json={"item_name": "Milk"})).json()
 
     r = await client.post("/shopping/bought", json={
         "ids": [item["id"]],
-        "expiry_dates": {"milk": "2026-04-15"},
+        "expiry_dates": {"Milk": "2026-04-15"},
     })
     assert r.status_code == 200
 
     # Check ingredient has the expiry date
     ingredients = (await client.get("/ingredients/")).json()
-    milk = [i for i in ingredients if i["name"] == "milk"][0]
+    milk = [i for i in ingredients if i["name"] == "Milk"][0]
     assert milk["expiry_date"] == "2026-04-15"
 
 
 # Buying an item already in the fridge updates its expiry instead of adding a second row
 async def test_bought_upserts_existing_ingredient(client):
     # Add an ingredient first
-    await client.post("/ingredients/", json={"name": "eggs"})
+    await client.post("/ingredients/", json={"name": "Eggs"})
 
     # Add same item to shopping list and buy it
-    item = (await client.post("/shopping/", json={"item_name": "eggs"})).json()
+    item = (await client.post("/shopping/", json={"item_name": "Eggs"})).json()
     r = await client.post("/shopping/bought", json={
         "ids": [item["id"]],
-        "expiry_dates": {"eggs": "2026-05-01"},
+        "expiry_dates": {"Eggs": "2026-05-01"},
     })
     assert r.status_code == 200
 
     # Should still be one ingredient, with updated expiry
     ingredients = (await client.get("/ingredients/")).json()
-    eggs_list = [i for i in ingredients if i["name"] == "eggs"]
+    eggs_list = [i for i in ingredients if i["name"] == "Eggs"]
     assert len(eggs_list) == 1
     assert eggs_list[0]["expiry_date"] == "2026-05-01"
 
@@ -127,16 +127,16 @@ async def test_bought_upserts_existing_ingredient(client):
 async def test_bought_restores_group_from_memory(client):
     """Buying an item restores its group from memory if previously assigned."""
     # Add ingredient with explicit group, then delete it
-    created = (await client.post("/ingredients/", json={"name": "kasar", "group_name": "🐄 Animal Products"})).json()
+    created = (await client.post("/ingredients/", json={"name": "Kasar", "group_name": "🐄 Animal Products"})).json()
     await client.delete(f"/ingredients/{created['id']}")
 
     # Add to shopping list and buy
-    item = (await client.post("/shopping/", json={"item_name": "kasar"})).json()
+    item = (await client.post("/shopping/", json={"item_name": "Kasar"})).json()
     await client.post("/shopping/bought", json={"ids": [item["id"]]})
 
     # Check ingredient has restored group
     ingredients = (await client.get("/ingredients/")).json()
-    kasar = [i for i in ingredients if i["name"] == "kasar"][0]
+    kasar = [i for i in ingredients if i["name"] == "Kasar"][0]
     assert kasar["group_name"] == "🐄 Animal Products"
 
 

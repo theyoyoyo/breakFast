@@ -11,31 +11,31 @@ async def test_list_empty_on_fresh_db(client):
 
 # An item added without a date is stored with its name, an id and no expiry
 async def test_add_ingredient(client):
-    r = await client.post("/ingredients/", json={"name": "eggs"})
+    r = await client.post("/ingredients/", json={"name": "Eggs"})
     assert r.status_code == 201
     data = r.json()
-    assert data["name"] == "eggs"
+    assert data["name"] == "Eggs"
     assert data["expiry_date"] is None
     assert "id" in data
 
 
 # An item added with an expiry date keeps that date
 async def test_add_ingredient_with_expiry(client):
-    r = await client.post("/ingredients/", json={"name": "yogurt", "expiry_date": "2026-04-01"})
+    r = await client.post("/ingredients/", json={"name": "Yogurt", "expiry_date": "2026-04-01"})
     assert r.status_code == 201
     data = r.json()
-    assert data["name"] == "yogurt"
+    assert data["name"] == "Yogurt"
     assert data["expiry_date"] == "2026-04-01"
 
 
 # Adding a name already in the fridge updates its expiry instead of adding a second row
 async def test_add_same_name_upserts(client):
-    await client.post("/ingredients/", json={"name": "milk"})
-    r = await client.post("/ingredients/", json={"name": "milk", "expiry_date": "2026-04-05"})
+    await client.post("/ingredients/", json={"name": "Milk"})
+    r = await client.post("/ingredients/", json={"name": "Milk", "expiry_date": "2026-04-05"})
     assert r.status_code == 201
     # Should still be one record, with updated expiry
     listed = await client.get("/ingredients/")
-    milks = [i for i in listed.json() if i["name"] == "milk"]
+    milks = [i for i in listed.json() if i["name"] == "Milk"]
     assert len(milks) == 1
     assert milks[0]["expiry_date"] == "2026-04-05"
 
@@ -64,25 +64,25 @@ async def test_expired_returns_empty_when_no_expiry(client):
 
 async def test_expired_returns_expired_items(client):
     """Items with expiry_date in the past should be returned."""
-    await client.post("/ingredients/", json={"name": "old_yogurt", "expiry_date": "2020-01-01"})
+    await client.post("/ingredients/", json={"name": "Old_yogurt", "expiry_date": "2020-01-01"})
     await client.post("/ingredients/", json={"name": "fresh_eggs"})
     r = await client.get("/ingredients/expired")
     assert r.status_code == 200
     expired = r.json()
     names = [i["name"] for i in expired]
-    assert "old_yogurt" in names
+    assert "Old_yogurt" in names
     assert "fresh_eggs" not in names
 
 
 async def test_expired_always_returns_unacknowledged(client):
     """Calling expired multiple times still returns the same unacknowledged items."""
-    await client.post("/ingredients/", json={"name": "old_milk", "expiry_date": "2020-01-01"})
+    await client.post("/ingredients/", json={"name": "Old_milk", "expiry_date": "2020-01-01"})
     r1 = await client.get("/ingredients/expired")
     assert len(r1.json()) > 0
     # Second call returns the same items (no longer gated per day)
     r2 = await client.get("/ingredients/expired")
     assert len(r2.json()) > 0
-    assert r2.json()[0]["name"] == "old_milk"
+    assert r2.json()[0]["name"] == "Old_milk"
 
 
 async def test_expired_count_endpoint(client):
@@ -117,11 +117,11 @@ async def test_expired_action_delete(client):
 
 async def test_expired_action_keep(client):
     """Keep action acknowledges expiry — item stays in inventory but disappears from expired list."""
-    created = (await client.post("/ingredients/", json={"name": "old_honey", "expiry_date": "2020-01-01"})).json()
+    created = (await client.post("/ingredients/", json={"name": "Old_honey", "expiry_date": "2020-01-01"})).json()
 
     # Should appear in expired list
     expired = (await client.get("/ingredients/expired")).json()
-    assert any(i["name"] == "old_honey" for i in expired)
+    assert any(i["name"] == "Old_honey" for i in expired)
 
     # Keep it
     r = await client.post("/ingredients/expired/action", json={"keep_ids": [created["id"]]})
@@ -129,11 +129,11 @@ async def test_expired_action_keep(client):
 
     # Should NOT appear in expired list anymore
     expired = (await client.get("/ingredients/expired")).json()
-    assert all(i["name"] != "old_honey" for i in expired)
+    assert all(i["name"] != "Old_honey" for i in expired)
 
     # But should still be in inventory
     listed = (await client.get("/ingredients/")).json()
-    assert any(i["name"] == "old_honey" for i in listed)
+    assert any(i["name"] == "Old_honey" for i in listed)
 
     # Count should also be 0
     r = await client.get("/ingredients/expired-count")
@@ -142,17 +142,17 @@ async def test_expired_action_keep(client):
 
 async def test_expired_action_shopping(client):
     """Shopping action removes from inventory and adds to shopping list."""
-    created = (await client.post("/ingredients/", json={"name": "expired_milk", "expiry_date": "2020-01-01"})).json()
+    created = (await client.post("/ingredients/", json={"name": "Expired_milk", "expiry_date": "2020-01-01"})).json()
     r = await client.post("/ingredients/expired/action", json={"shopping_ids": [created["id"]]})
     assert r.json()["to_shopping"] == 1
 
     # Should be gone from inventory
     listed = (await client.get("/ingredients/")).json()
-    assert all(i["name"] != "expired_milk" for i in listed)
+    assert all(i["name"] != "Expired_milk" for i in listed)
 
     # Should be in shopping list
     shopping = (await client.get("/shopping/")).json()
-    assert any(i["item_name"] == "expired_milk" for i in shopping)
+    assert any(i["item_name"] == "Expired_milk" for i in shopping)
 
 
 async def test_expired_action_mixed(client):
@@ -176,7 +176,7 @@ async def test_expired_action_mixed(client):
 
 async def test_add_ingredient_default_group(client):
     """Adding a name the food list doesn't know, without group_name, defaults to Other."""
-    r = await client.post("/ingredients/", json={"name": "Grandma's spice mix"})
+    r = await client.post("/ingredients/", json={"name": "Grandma's Spice Mix"})
     assert r.status_code == 201
     assert r.json()["group_name"] == "🍽️ Other"
 
@@ -222,15 +222,15 @@ async def _names(db) -> dict[str, str]:
 
 # Every added name is recorded, but only a move is a pick: an Auto add and an expiry-only edit aren't
 async def test_memory_records_names_and_marks_picks(client, db):
-    created = (await client.post("/ingredients/", json={"name": "Grandma's spice mix"})).json()
+    created = (await client.post("/ingredients/", json={"name": "Grandma's Spice Mix"})).json()
     await client.post("/ingredients/", json={"name": "Tomatoes"})
     await client.patch(f"/ingredients/{created['id']}", json={
-        "name": "Grandma's spice mix", "expiry_date": "2026-12-01", "group_name": "🍽️ Other",
+        "name": "Grandma's Spice Mix", "expiry_date": "2026-12-01", "group_name": "🍽️ Other",
     })
-    assert await _names(db) == {"Grandma's spice mix": "🍽️ Other", "Tomatoes": "🥬 Produce"}
+    assert await _names(db) == {"Grandma's Spice Mix": "🍽️ Other", "Tomatoes": "🥬 Produce"}
     assert await _picks(db) == {}
     await client.patch(f"/ingredients/{created['id']}", json={"group_name": "🧂 Spices"})
-    assert await _picks(db) == {"Grandma's spice mix": "🧂 Spices"}
+    assert await _picks(db) == {"Grandma's Spice Mix": "🧂 Spices"}
 
 
 # An Auto add of a name the user picked a group for keeps the pick
@@ -254,13 +254,13 @@ async def test_rename_keeps_the_group_as_a_pick(client):
 
 # Memory matches by exact name too, and a new pick replaces the earlier one for the same name (kept as a name)
 async def test_memory_matches_the_same_name(client, db):
-    created = (await client.post("/ingredients/", json={"name": "Peanut butter", "group_name": "🍯 Sweets"})).json()
+    created = (await client.post("/ingredients/", json={"name": "PEANUT BUTTER", "group_name": "🍯 Sweets"})).json()
     await client.delete(f"/ingredients/{created['id']}")
-    r = await client.post("/ingredients/", json={"name": "peanut butter"})
+    r = await client.post("/ingredients/", json={"name": "Peanut Butter"})
     assert r.json()["group_name"] == "🍯 Sweets"
     await client.patch(f"/ingredients/{r.json()['id']}", json={"group_name": "🌱 Plant-Based"})
-    assert await _picks(db) == {"peanut butter": "🌱 Plant-Based"}
-    assert set(await _names(db)) == {"Peanut butter", "peanut butter"}
+    assert await _picks(db) == {"Peanut Butter": "🌱 Plant-Based"}
+    assert set(await _names(db)) == {"PEANUT BUTTER", "Peanut Butter"}
 
 
 # A rename to a name another item has is refused with 409, and both items stay as they were
@@ -326,7 +326,7 @@ async def test_add_ingredient_with_group(client):
 
 async def test_update_ingredient_group(client):
     """PATCH can change an ingredient's group."""
-    created = (await client.post("/ingredients/", json={"name": "Grandma's spice mix"})).json()
+    created = (await client.post("/ingredients/", json={"name": "Grandma's Spice Mix"})).json()
     assert created["group_name"] == "🍽️ Other"
     r = await client.patch(f"/ingredients/{created['id']}", json={"group_name": "🧂 Spices"})
     assert r.status_code == 200
@@ -374,3 +374,56 @@ async def test_check_ignores_other_users_fridge(client, db):
     meal = {"menu": [{"name": "Avocado", "amount": 1, "unit": "adet", "ingredients": []}]}
     r = await client.post("/ingredients/check", json={"meal": meal})
     assert r.json() == {"missing": ["Avocado"]}
+
+
+# Every word of a new item's name gets a capital first letter; capitals already there stay, and Turkish capitalizes i as İ
+def test_capitalize_words():
+    from db_helpers import capitalize_words
+
+    assert capitalize_words("greek yogurt") == "Greek Yogurt"
+    assert capitalize_words("iPhone case") == "IPhone Case"
+    assert capitalize_words("BBQ sauce") == "BBQ Sauce"
+    assert capitalize_words("incir reçeli", "tr") == "İncir Reçeli"
+    assert capitalize_words("incir", "en") == "Incir"
+
+
+async def _user_id(db) -> int:
+    async with db.execute("SELECT id FROM users WHERE name = 'testuser'") as cur:
+        return (await cur.fetchone())[0]
+
+
+# An item added in lowercase is stored with capitals, and adding it again in any case updates that one item
+async def test_add_capitalizes_and_keeps_one_item(client):
+    r = await client.post("/ingredients/", json={"name": "greek yogurt"})
+    assert r.json()["name"] == "Greek Yogurt"
+    await client.post("/ingredients/", json={"name": "GREEK YOGURT", "expiry_date": "2026-12-01"})
+    items = (await client.get("/ingredients/")).json()
+    assert [(i["name"], i["expiry_date"]) for i in items] == [("Greek Yogurt", "2026-12-01")]
+
+
+# An item saved in lowercase before the rule is updated when added again, not doubled
+async def test_add_updates_an_older_lowercase_item(client, db):
+    await db.execute(
+        "INSERT INTO ingredient_inventory (user_id, name, group_name) VALUES (?, 'yumurta', '🐄 Animal Products')",
+        (await _user_id(db),),
+    )
+    await db.commit()
+    await client.post("/ingredients/", json={"name": "yumurta", "expiry_date": "2026-12-01"})
+    items = (await client.get("/ingredients/")).json()
+    assert [(i["name"], i["expiry_date"]) for i in items] == [("yumurta", "2026-12-01")]
+
+
+# A Turkish user's new item capitalizes i the Turkish way
+async def test_add_capitalizes_in_the_reply_language(client, db):
+    await db.execute(
+        "INSERT INTO user_preferences (user_id, key, value) VALUES (?, 'response_language', 'tr')", (await _user_id(db),),
+    )
+    await db.commit()
+    assert (await client.post("/ingredients/", json={"name": "incir"})).json()["name"] == "İncir"
+
+
+# Items bought from the shopping list go into the fridge with capitals too
+async def test_bought_items_are_capitalized(client):
+    item = (await client.post("/shopping/", json={"item_name": "frozen peas"})).json()
+    await client.post("/shopping/bought", json={"ids": [item["id"]]})
+    assert [i["name"] for i in (await client.get("/ingredients/")).json()] == ["Frozen Peas"]

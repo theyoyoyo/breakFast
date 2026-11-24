@@ -170,6 +170,14 @@ export const groupCount = {
   fontWeight: 500,
 }
 
+// Beside the count: how many of the group's items are expired or expire soon (semantic red)
+export const groupExpiring = {
+  fontSize: 11,
+  fontWeight: 700,
+  color: 'var(--c-red)',
+  marginLeft: 4,
+}
+
 export const row = {
   display: 'flex',
   alignItems: 'center',
