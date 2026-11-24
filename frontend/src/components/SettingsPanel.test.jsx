@@ -32,6 +32,13 @@ vi.mock('../services/api', () => {
   }
 })
 
+// A call that runs until its caller stops it: rejects with an AbortError then, like a stopped fetch
+function untilStopped(signal) {
+  return new Promise((_, reject) => {
+    signal.addEventListener('abort', () => reject(new DOMException('The call was stopped', 'AbortError')))
+  })
+}
+
 describe('SettingsPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -335,5 +342,26 @@ describe('SettingsPanel', () => {
     expect(within(section).getByRole('button', { name: 'Orange' })).toBeInTheDocument()
     expect(title.querySelector('svg')).not.toBeNull()
     expect(screen.getByText('AI settings').querySelector('svg')).not.toBeNull()
+  })
+
+  // While a meal's analysis runs its button says "Analyzing… (stop)"; a tap stops it, Analyze returns and nothing new shows
+  it('stops a meal analysis with a tap on its running button', async () => {
+    let stopSignal
+    api.getMeals.mockResolvedValue([{ id: 1, meal_name: 'Oats', ingredients: [] }])
+    api.analyzeMeal.mockImplementationOnce((name, ingredients, id, { signal }) => {
+      stopSignal = signal
+      return untilStopped(signal)
+    })
+    render(<SettingsPanel visible />)
+    fireEvent.click(await screen.findByRole('button', { name: /Meal History \(1\)/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Analyze' }))
+    const running = await screen.findByRole('button', { name: 'Analyzing… (stop)' })
+
+    fireEvent.click(running)
+    expect(stopSignal.aborted).toBe(true)
+    expect(await screen.findByRole('button', { name: 'Analyze' })).toBeInTheDocument()
+    expect(screen.getByText('Stopped')).toBeInTheDocument()
+    await act(async () => {})
+    expect(screen.queryByRole('button', { name: /^Analysis/ })).toBeNull()
   })
 })

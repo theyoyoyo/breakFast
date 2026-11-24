@@ -28,6 +28,13 @@ vi.mock('../services/api', () => {
   }
 })
 
+// A call that runs until its caller stops it: rejects with an AbortError then, like a stopped fetch
+function untilStopped(signal) {
+  return new Promise((_, reject) => {
+    signal.addEventListener('abort', () => reject(new DOMException('The call was stopped', 'AbortError')))
+  })
+}
+
 const SALMON = { name: 'Salmon', reason: 'Omega-3', checked: true }
 const KIWI = { name: 'Kiwi', reason: 'In season', checked: false }
 const OATS = { name: 'Rolled oats', reason: 'Fiber', checked: true }
@@ -78,7 +85,7 @@ describe('IngredientPanel shopping suggestions', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: /Suggest More/ }))
     expect(await screen.findByText('Rolled oats')).toBeInTheDocument()
-    expect(api.getShoppingSuggestions).toHaveBeenCalledWith(['Salmon', 'Kiwi'])
+    expect(api.getShoppingSuggestions).toHaveBeenCalledWith(['Salmon', 'Kiwi'], { signal: expect.any(AbortSignal) })
     expect(api.saveSuggestionList).toHaveBeenLastCalledWith([SALMON, KIWI, OATS], [])
     expect(checkboxFor('Kiwi')).not.toBeChecked()
   })
@@ -274,5 +281,26 @@ describe('IngredientPanel group counts', () => {
     const expiring = await screen.findByTitle('2 expired or expiring within 3 days')
     expect(expiring).toHaveTextContent('(2)')
     expect(screen.getAllByTitle(/expiring within/)).toHaveLength(1)
+  })
+
+  // While suggestions run the button says "Thinking… (stop)"; a tap stops the call, the button returns and nothing new or no error shows
+  it('stops Suggest Shopping with a tap on its running button', async () => {
+    let stopSignal
+    api.getShoppingSuggestions.mockImplementationOnce((exclude, { signal }) => {
+      stopSignal = signal
+      return untilStopped(signal)
+    })
+    render(<IngredientPanel visible />)
+    fireEvent.click(await screen.findByRole('button', { name: /Suggest Shopping/ }))
+    const running = await screen.findByRole('button', { name: 'Thinking… (stop)' })
+    expect(running).toBeEnabled()
+
+    fireEvent.click(running)
+    expect(stopSignal.aborted).toBe(true)
+    expect(await screen.findByRole('button', { name: /Suggest Shopping/ })).toBeInTheDocument()
+    expect(screen.getByText('Stopped')).toBeInTheDocument()
+    await act(async () => {})
+    expect(screen.queryByText('Failed to get suggestions')).toBeNull()
+    expect(api.saveSuggestionList).not.toHaveBeenCalled()
   })
 })

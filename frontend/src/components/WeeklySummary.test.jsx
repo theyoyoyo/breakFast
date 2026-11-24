@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import WeeklySummary from './WeeklySummary'
 import * as api from '../services/api'
 
@@ -19,6 +19,13 @@ function refused(status) {
   const err = new Error(`API error ${status}`)
   err.status = status
   return err
+}
+
+// A call that runs until its caller stops it: rejects with an AbortError then, like a stopped fetch
+function untilStopped(signal) {
+  return new Promise((_, reject) => {
+    signal.addEventListener('abort', () => reject(new DOMException('The call was stopped', 'AbortError')))
+  })
 }
 
 const REVIEW = {
@@ -71,5 +78,41 @@ describe('WeeklySummary', () => {
     expect(await screen.findByText(REVIEW.narrative)).toBeInTheDocument()
     await waitFor(() => expect(api.getWeeklyReviewStatus).toHaveBeenCalled())
     expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  // While the analysis runs its button says "Analyzing… (stop)"; a tap stops it, the button returns and no error shows
+  it('stops the weekly analysis with a tap on its running button', async () => {
+    let stopSignal
+    api.generateWeeklyReview.mockImplementationOnce(({ signal }) => {
+      stopSignal = signal
+      return untilStopped(signal)
+    })
+    render(<WeeklySummary onBack={() => {}} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Analyze this week' }))
+    const running = await screen.findByRole('button', { name: 'Analyzing… (stop)' })
+    expect(running).toBeEnabled()
+
+    fireEvent.click(running)
+    expect(stopSignal.aborted).toBe(true)
+    expect(await screen.findByRole('button', { name: 'Analyze this week' })).toBeInTheDocument()
+    expect(screen.getByText('Stopped')).toBeInTheDocument()
+    expect(screen.queryByText('Analyzing your week…')).toBeNull()
+    await act(async () => {})
+    expect(screen.queryByText(/Failed to generate/)).toBeNull()
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+  })
+
+  // Leaving the page while the analysis runs stops it, so the server stops the model call too
+  it('stops a running analysis when the page closes', async () => {
+    let stopSignal
+    api.generateWeeklyReview.mockImplementationOnce(({ signal }) => {
+      stopSignal = signal
+      return untilStopped(signal)
+    })
+    const { unmount } = render(<WeeklySummary onBack={() => {}} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Analyze this week' }))
+    await screen.findByRole('button', { name: 'Analyzing… (stop)' })
+    unmount()
+    expect(stopSignal.aborted).toBe(true)
   })
 })

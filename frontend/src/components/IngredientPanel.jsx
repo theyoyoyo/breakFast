@@ -7,6 +7,7 @@ import {
   getFavoriteIngredients, addFavoriteIngredient, removeFavoriteIngredient,
 } from '../services/api'
 import { useSyncNotice } from '../hooks/useSyncNotice'
+import useStoppable, { stopLabel } from '../hooks/useStoppable'
 import { formatShortDate } from '../utils/date'
 import ShoppingListPanel from './ShoppingListPanel'
 import FavoriteIngredientsPanel from './FavoriteIngredientsPanel'
@@ -87,7 +88,8 @@ function IngredientPanel({ refreshTrigger, visible }) {
   const [suggestions, setSuggestions] = useState([])
   // The list starts collapsed (▲) and opens when new suggestions arrive
   const [suggestionsCollapsed, setSuggestionsCollapsed] = useState(true)
-  const [suggestionsLoading, setSuggestionsLoading] = useState(false)
+  // Suggest Shopping / Suggest More while the AI thinks: a tap on the button stops it (#288)
+  const { running: suggestionsLoading, stopped: suggestionsStopped, run: runSuggest, stop: stopSuggest } = useStoppable()
   const [shoppingListOpen, setShoppingListOpen] = useState(false)
   const [lyricBanner, setLyricBanner] = useState(null)
   const [noNewSuggestions, setNoNewSuggestions] = useState(false) // the AI only had repeats
@@ -366,13 +368,19 @@ function IngredientPanel({ refreshTrigger, visible }) {
   // Shopping handlers: Suggest Shopping / Suggest More add new items at the end, checked;
   // items already listed keep their checks. The server leaves out what's listed (`exclude`)
   // and what was removed with × in the last 7 days.
+  // A tap while it runs stops it: nothing new shows and nothing is saved
   const handleSuggest = async () => {
+    if (suggestionsLoading) {
+      stopSuggest()
+      return
+    }
     try {
       setError(null)
-      setSuggestionsLoading(true)
       setLyricBanner(null)
       setNoNewSuggestions(false)
-      const result = await getShoppingSuggestions(suggestionsRef.current.map(s => s.name))
+      const call = await runSuggest(null, (signal) => getShoppingSuggestions(suggestionsRef.current.map(s => s.name), { signal }))
+      if (call.stopped) return
+      const result = call.value
 
       if (result.lyric) {
         // LLM is down
@@ -394,8 +402,6 @@ function IngredientPanel({ refreshTrigger, visible }) {
       }
     } catch {
       setError('Failed to get suggestions')
-    } finally {
-      setSuggestionsLoading(false)
     }
   }
 
@@ -446,7 +452,7 @@ function IngredientPanel({ refreshTrigger, visible }) {
   }
 
   const suggestButtonLabel = suggestionsLoading
-    ? <><Loader size={13} style={{ animation: 'spin 1s linear infinite' }} /> Thinking…</>
+    ? <><Loader size={13} style={{ animation: 'spin 1s linear infinite' }} /> {stopLabel('Thinking…')}</>
     : suggestions.length > 0
       ? <><Sparkles size={13} /> Suggest More</>
       : <><Sparkles size={13} /> Suggest Shopping</>
@@ -455,6 +461,7 @@ function IngredientPanel({ refreshTrigger, visible }) {
     <>
       {lyricBanner && <div style={s.lyricBanner}>{lyricBanner}</div>}
       {noNewSuggestions && <div style={s.suggestNote}>No new items this time. Try again in a moment.</div>}
+      {suggestionsStopped && <div role="status" style={s.suggestNote}>Stopped</div>}
     </>
   )
 
@@ -762,13 +769,8 @@ function IngredientPanel({ refreshTrigger, visible }) {
       {suggestions.length === 0 && (
         <div style={s.suggestSection}>
           <button
-            style={{
-              ...s.suggestBtn,
-              opacity: suggestionsLoading ? 0.6 : 1,
-              cursor: suggestionsLoading ? 'default' : 'pointer',
-            }}
+            style={{ ...s.suggestBtn, opacity: suggestionsLoading ? 0.75 : 1, cursor: 'pointer' }}
             onClick={handleSuggest}
-            disabled={suggestionsLoading}
           >
             {suggestButtonLabel}
           </button>
@@ -872,18 +874,13 @@ function IngredientPanel({ refreshTrigger, visible }) {
                   Send to List{selectedSuggestionCount > 0 ? ` (${selectedSuggestionCount})` : ''}
                 </button>
                 <button
-                  style={{
-                    ...s.suggestMoreBtn,
-                    opacity: suggestionsLoading ? 0.6 : 1,
-                    cursor: suggestionsLoading ? 'default' : 'pointer',
-                  }}
+                  style={{ ...s.suggestMoreBtn, opacity: suggestionsLoading ? 0.75 : 1, cursor: 'pointer' }}
                   onClick={handleSuggest}
-                  disabled={suggestionsLoading}
                 >
                   {suggestButtonLabel}
                 </button>
               </div>
-              {(lyricBanner || noNewSuggestions) && <div style={s.suggestionsNotes}>{suggestNotes}</div>}
+              {(lyricBanner || noNewSuggestions || suggestionsStopped) && <div style={s.suggestionsNotes}>{suggestNotes}</div>}
             </>
           )}
         </div>
